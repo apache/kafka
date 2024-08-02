@@ -28,8 +28,6 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.internals.ApiUtils;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -46,7 +44,8 @@ import java.util.Properties;
 
 /**
  * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
- * {@link Transformer}, and {@link ValueTransformer} implementations.
+ * {@link org.apache.kafka.streams.kstream.Transformer}, and {@link org.apache.kafka.streams.kstream.ValueTransformer}
+ * implementations.
  * <p>
  * The tests for this class (org.apache.kafka.streams.MockProcessorContextTest) include several behavioral
  * tests that serve as example usage.
@@ -55,8 +54,10 @@ import java.util.Properties;
  * It simply captures any data it witnesses.
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
+ *
+ * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.MockProcessorContext} instead.
  */
-@SuppressWarnings("deprecation") // not deprecating old PAPI Context, since it is still in use by Transformers.
+@Deprecated
 public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
