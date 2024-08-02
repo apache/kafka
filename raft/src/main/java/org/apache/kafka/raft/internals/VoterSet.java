@@ -426,4 +426,8 @@ public final class VoterSet {
 
         return new VoterSet(voterNodes);
     }
+
+    public static VoterSet fromMap(Map<Integer, VoterNode> voters) {
+        return new VoterSet(new HashMap<>(voters));
+    }
 }
