@@ -65,6 +65,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * @see KStream#join(GlobalKTable, KeyValueMapper, ValueJoiner)
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
  */
+@FunctionalInterface
 public interface GlobalKTable<K, V> {
     /**
      * Get the name of the local state store that can be used to query this {@code GlobalKTable}.

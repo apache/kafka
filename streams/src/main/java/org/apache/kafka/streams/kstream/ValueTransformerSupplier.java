@@ -36,6 +36,7 @@ import org.apache.kafka.streams.processor.ConnectedStoreProvider;
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)
  */
+@FunctionalInterface
 public interface ValueTransformerSupplier<V, VR> extends ConnectedStoreProvider {
 
     /**
