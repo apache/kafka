@@ -70,6 +70,7 @@ DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
 NEW_GROUP_COORDINATOR_ENABLE="group.coordinator.new.enable"
+GROUP_COORDINATOR_REBALANCE_PROTOCOLS="group.coordinator.rebalance.protocols"
 
 """
 From KafkaConfig.scala
