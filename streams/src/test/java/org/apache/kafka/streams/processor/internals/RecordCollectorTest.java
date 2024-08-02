@@ -1635,7 +1635,7 @@ public class RecordCollectorTest {
     public void shouldThrowStreamsExceptionWhenSerializationFailedAndProductionExceptionHandlerThrows() {
         try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
             final RecordCollector collector = newRecordCollector(new ProductionExceptionHandlerMock(
-                null, // indicates to throw exception
+                true,
                 context,
                 sinkNodeName,
                 taskId,
@@ -1687,7 +1687,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             new ProductionExceptionHandlerMock(
-                null, // indicates to throw exception
+                true,
                 context,
                 sinkNodeName,
                 taskId,
@@ -1867,6 +1867,7 @@ public class RecordCollectorTest {
 
     public static class ProductionExceptionHandlerMock implements ProductionExceptionHandler {
         private final Optional<ProductionExceptionHandlerResponse> response;
+        private boolean shouldThrowException;
         private InternalProcessorContext<Void, Void> expectedContext;
         private String expectedProcessorNodeId;
         private TaskId expectedTaskId;
@@ -1886,6 +1887,16 @@ public class RecordCollectorTest {
             this.expectedTaskId = taskId;
         }
 
+        public ProductionExceptionHandlerMock(final boolean shouldThrowException,
+                                              final InternalProcessorContext<Void, Void> context,
+                                              final String processorNodeId,
+                                              final TaskId taskId,
+                                              final SerializationExceptionOrigin origin) {
+            this(Optional.empty(), context, processorNodeId, taskId);
+            this.expectedSerializationExceptionOrigin = origin;
+            this.shouldThrowException = shouldThrowException;
+        }
+
         public ProductionExceptionHandlerMock(final Optional<ProductionExceptionHandlerResponse> response,
                                               final InternalProcessorContext<Void, Void> context,
                                               final String processorNodeId,
@@ -1893,6 +1904,7 @@ public class RecordCollectorTest {
                                               final SerializationExceptionOrigin origin) {
             this(response, context, processorNodeId, taskId);
             this.expectedSerializationExceptionOrigin = origin;
+            this.shouldThrowException = false;
         }
 
         @Override
@@ -1900,7 +1912,7 @@ public class RecordCollectorTest {
                                                          final ProducerRecord<byte[], byte[]> record,
                                                          final Exception exception) {
             assertInputs(context, exception);
-            if (response == null) {
+            if (shouldThrowException) {
                 throw new RuntimeException("CRASH");
             }
             return response.orElse(null);
@@ -1913,7 +1925,7 @@ public class RecordCollectorTest {
                                                                                final SerializationExceptionOrigin origin) {
             assertInputs(context, exception);
             assertEquals(expectedSerializationExceptionOrigin, origin);
-            if (response == null) {
+            if (shouldThrowException) {
                 throw new RuntimeException("CRASH");
             }
             return response.orElse(null);
