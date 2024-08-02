@@ -34,20 +34,22 @@ import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * TODO: document this.
+ * This type implements the protocol for updating a voter from a KRaft partition.
  *
- * 1. Wait until there are no uncommitted add or remove voter records. Note that the implementation
- *    may just return a REQUEST_TIMED_OUT error if there are pending operations.
- * 2. Wait for the LeaderChangeMessage control record from the current epoch to get committed. Note
- *    that the implementation may just return a REQUEST_TIMED_OUT error if there are pending operations.
- * 3. Check that the updated voter supports the current kraft.version.
- * 4. If the replica id tracked doesn't have a replica directory id, update it with the replica
- *    directory id provided in the request.
- * 5. Append the updated VotersRecord to the log if the finalized kraft.version is greater than 0.
- * 6. The KRaft internal listener will read this record from the log and update the voter's
- *    information. This includes updating the endpoint used by the KRaft NetworkClient.
- * 7. Wait for the VotersRecord to commit using the majority of the new set of voters.
- * 8. Send the UpdateVoter response to the client.
+ * 1. Check that the leader has fenced the previous leader(s) by checking that the HWM is known,
+ *    otherwise return the REQUEST_TIMED_OUT error.
+ * 2. Check that the cluster supports kraft.version 1, otherwise return the UNSUPPORTED_VERSION error.
+ * 3. Check that there are no uncommitted voter changes, otherwise return the REQUEST_TIMED_OUT error.
+ * 4. Check that the updated voter still supports the currently finalized kraft.version, otherwise
+ *    return the INVALID_REQUEST error.
+ * 5. Check that the updated voter is still listening on the default listener.
+ * 6. Append the updated VotersRecord to the log. The KRaft internal listener will read this
+ *    uncommitted record from the log and update the voter in the set of voters.
+ * 7. Wait for the VotersRecord to commit using the majority of the voters. Return a
+ *    REQUEST_TIMED_OUT error if it doesn't commit in time.
+ * 8. Send the UpdateVoter successful response to the voter.
+ *
+ * KAFKA-16538 is going to add support for handling this RPC when the kraft.version is 0.
  */
 public final class UpdateVoterHandler {
     private final OptionalInt localId;

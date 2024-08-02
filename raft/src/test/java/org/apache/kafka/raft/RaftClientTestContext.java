@@ -1202,11 +1202,14 @@ public final class RaftClientTestContext {
     List<RaftRequest.Outbound> collectEndQuorumRequests(
         int epoch,
         Set<Integer> destinationIdSet,
-        // TODO: preferredSuccessors should be a list of replica keys
-        Optional<List<Integer>> preferredSuccessorsOpt
+        Optional<List<ReplicaKey>> preferredCandidates
     ) {
         List<RaftRequest.Outbound> endQuorumRequests = new ArrayList<>();
         Set<Integer> collectedDestinationIdSet = new HashSet<>();
+
+        Optional<List<Integer>> preferredSuccessorsOpt = preferredCandidates
+            .map(list -> list.stream().map(ReplicaKey::id).collect(Collectors.toList()));
+
         for (RaftRequest.Outbound raftMessage : channel.drainSendQueue()) {
             if (raftMessage.data() instanceof EndQuorumEpochRequestData) {
                 EndQuorumEpochRequestData request = (EndQuorumEpochRequestData) raftMessage.data();
@@ -1218,6 +1221,16 @@ public final class RaftClientTestContext {
                 assertEquals(localIdOrThrow(), partitionRequest.leaderId());
                 preferredSuccessorsOpt.ifPresent(preferredSuccessors ->
                     assertEquals(preferredSuccessors, partitionRequest.preferredSuccessors())
+                );
+                preferredCandidates.ifPresent(preferred ->
+                    assertEquals(
+                        preferred,
+                        partitionRequest
+                            .preferredCandidates()
+                            .stream()
+                            .map(replica -> ReplicaKey.of(replica.candidateId(), replica.candidateDirectoryId()))
+                            .collect(Collectors.toList())
+                    )
                 );
 
                 collectedDestinationIdSet.add(raftMessage.destination().id());
