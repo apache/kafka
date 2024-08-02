@@ -71,7 +71,12 @@ public enum KRaftVersion implements FeatureVersion {
 
     @Override
     public Map<String, Short> dependencies() {
-        return Collections.emptyMap();
+        if (this.featureLevel == 0) {
+            return Collections.emptyMap();
+        } else {
+            return Collections.singletonMap(
+                MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_9_IV0.featureLevel());
+        }
     }
 
     public short quorumStateVersion() {
