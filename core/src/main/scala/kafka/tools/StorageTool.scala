@@ -119,7 +119,7 @@ object StorageTool extends Logging {
       case None => Option(config.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).
         foreach(v => formatter.setReleaseVersion(MetadataVersion.fromVersionString(v.toString)))
     }
-    Option(namespace.getString("initial_voters")).
+    Option(namespace.getString("initial_controllers")).
       foreach(v => formatter.setInitialVoters(DynamicVoters.parse(v)))
     if (namespace.getBoolean("standalone")) {
       formatter.setInitialVoters(createStandaloneDynamicVoters(config))
