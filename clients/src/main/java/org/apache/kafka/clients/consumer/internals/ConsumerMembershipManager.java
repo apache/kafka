@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -38,7 +37,6 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -262,11 +260,11 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Signals to the membership manager that reconciliation is in progress so that
+     * Signals to the membership manager that reconciliation has started so that
      * actions specific to group type can be performed.
      */
     @Override
-    protected CompletableFuture<Void> signalReconciliationInProgress() {
+    protected CompletableFuture<Void> signalReconciliationStarted() {
         // Issue a commit request that will be retried until it succeeds, fails with a
         // non-retriable error, or the time limit expires. Retry on stale member epoch error, in a
         // best effort to commit the offsets in the case where the epoch might have changed while
@@ -276,11 +274,11 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Signals to the membership manager that reconciliation is completed so that
+     * Signals to the membership manager that reconciliation is completing so that
      * actions specific to group type can be performed.
      */
     @Override
-    protected void signalReconciliationCompleted() {
+    protected void signalReconciliationCompleting() {
         // Reschedule the auto commit starting from now that the member has a new assignment.
         commitRequestManager.resetAutoCommitTimer();
     }
@@ -345,40 +343,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     public Optional<String> serverAssignor() {
         return this.serverAssignor;
-    }
-
-    /**
-     * Update a new assignment by setting the assigned partitions in the member subscription.
-     * This will mark the newly added partitions as pending callback, to prevent fetching records
-     * or updating positions for them while the callback runs.
-     *
-     * @param assignedPartitions Full assignment, to update in the subscription state
-     * @param addedPartitions    Newly added partitions
-     */
-    private void updateSubscriptionAwaitingCallback(SortedSet<TopicIdPartition> assignedPartitions,
-                                                    SortedSet<TopicPartition> addedPartitions) {
-        Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
-        subscriptions.assignFromSubscribedAwaitingCallback(assignedTopicPartitions, addedPartitions);
-    }
-
-    /**
-     * Mark partitions as 'pending revocation', to effectively stop fetching while waiting for
-     * the commit offsets request to complete, and ensure the application's position don't get
-     * ahead of the committed positions. This mark will ensure that:
-     * <ul>
-     *     <li>No new fetches will be sent out for the partitions being revoked</li>
-     *     <li>Previous in-flight fetch requests that may complete while the partitions are being revoked won't be processed.</li>
-     * </ul>
-     */
-    private void markPendingRevocationToPauseFetching(Set<TopicPartition> partitionsToRevoke) {
-        // When asynchronously committing offsets prior to the revocation of a set of partitions, there will be a
-        // window of time between when the offset commit is sent and when it returns and revocation completes. It is
-        // possible for pending fetches for these partitions to return during this time, which means the application's
-        // position may get ahead of the committed position prior to revocation. This can cause duplicate consumption.
-        // To prevent this, we mark the partitions as "pending revocation," which stops the Fetcher from sending new
-        // fetches or returning data from previous fetches to the user.
-        log.debug("Marking partitions pending for revocation: {}", partitionsToRevoke);
-        subscriptions.markPendingRevocation(partitionsToRevoke);
     }
 
     private CompletableFuture<Void> invokeOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
@@ -508,20 +472,12 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         }
     }
 
-    /**
-     * Returns the epoch a member uses to join the group. This is group-type specific.
-     *
-     * @return the epoch to join the group
-     */
+    @Override
     public int joinGroupEpoch() {
         return ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
     }
 
-    /**
-     * Returns the epoch a member uses to leave the group. This is group-type specific.
-     *
-     * @return the epoch to leave the group
-     */
+    @Override
     public int leaveGroupEpoch() {
         return groupInstanceId.isPresent() ?
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :

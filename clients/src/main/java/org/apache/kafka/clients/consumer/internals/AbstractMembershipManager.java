@@ -59,12 +59,12 @@ import static java.util.Collections.unmodifiableList;
 public abstract class AbstractMembershipManager<R> implements RequestManager {
 
     /**
-     * TopicPartition comparator based on topic name and partition id.
+     * TopicPartition comparator based on topic name and partition.
      */
     static final Utils.TopicPartitionComparator TOPIC_PARTITION_COMPARATOR = new Utils.TopicPartitionComparator();
 
     /**
-     * TopicIdPartition comparator based on topic name and partition id (ignoring ID while sorting,
+     * TopicIdPartition comparator based on topic name and partition (ignoring topic ID while sorting,
      * as this is sorted mainly for logging purposes).
      */
     static final Utils.TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR = new Utils.TopicIdPartitionComparator();
@@ -179,8 +179,8 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
      * when the timer is reset, only when it completes releasing its assignment.
      */
     private CompletableFuture<Void> staleMemberAssignmentRelease;
-    
-    /*
+
+    /**
      * Measures successful rebalance latency and number of failed rebalances.
      */
     private final RebalanceMetricsManager metricsManager;
@@ -415,7 +415,7 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
     }
 
     /**
-     * Transition the member to the FAILED state and update the member info as required. This is
+     * Transition the member to the FATAL state and update the member info as required. This is
      * invoked when un-recoverable errors occur (ex. when the heartbeat returns a non-retriable
      * error)
      */
@@ -514,9 +514,9 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
     }
 
     /**
-     * Release assignment and transition to {@link MemberState#PREPARE_LEAVING} so that a heartbeat
-     * request is sent indicating the broker that the member wants to leave the group. This is
-     * expected to be invoked when the user calls the unsubscribe API.
+     * Transition to {@link MemberState#PREPARE_LEAVING} to release the assignment. Once completed,
+     * transition to {@link MemberState#LEAVING} to send the heartbeat request and leave the group.
+     * This is expected to be invoked when the user calls the unsubscribe API.
      *
      * @return Future that will complete when the callback execution completes and the heartbeat
      * to leave the group has been sent out.
@@ -698,7 +698,7 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
     public void maybeRejoinStaleMember() {
         isPollTimerExpired = false;
         if (state == MemberState.STALE) {
-            log.debug("Expired poll timer has been reset so stale member {} will rejoin the group" +
+            log.debug("Expired poll timer has been reset so stale member {} will rejoin the group " +
                 "when it completes releasing its previous assignment.", memberIdInfoForLog());
             staleMemberAssignmentRelease.whenComplete((__, error) -> transitionToJoining());
         }
@@ -717,8 +717,8 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
         CompletableFuture<Void> callbackResult = signalPartitionsLost(subscriptions.assignedPartitions());
         staleMemberAssignmentRelease = callbackResult.whenComplete((result, error) -> {
             if (error != null) {
-                log.error("onPartitionsLost callback invocation failed while releasing assignment" +
-                    " after member left group due to expired poll timer.", error);
+                log.error("onPartitionsLost callback invocation failed while releasing assignment " +
+                    "after member left group due to expired poll timer.", error);
             }
             clearAssignment();
             log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
@@ -757,8 +757,8 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
         final LocalAssignment resolvedAssignment = new LocalAssignment(currentTargetAssignment.localEpoch, assignedTopicIdPartitions);
 
         if (!currentAssignment.isNone() && resolvedAssignment.partitions.equals(currentAssignment.partitions)) {
-            log.debug("There are unresolved partitions, and the resolvable fragment of the target assignment {} is equal to the current "
-                + "assignment. Bumping the local epoch of the assignment and acknowledging the partially resolved assignment",
+            log.debug("There are unresolved partitions, and the resolvable fragment of the target assignment {} is equal to the current " +
+                "assignment. Bumping the local epoch of the assignment and acknowledging the partially resolved assignment",
                 resolvedAssignment.partitions);
             currentAssignment = resolvedAssignment;
             transitionTo(MemberState.ACKNOWLEDGING);
@@ -802,7 +802,7 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
         // be retried until it succeeds, fails with non-retriable error, or timer expires.
         CompletableFuture<Void> commitResult;
 
-        commitResult = signalReconciliationInProgress();
+        commitResult = signalReconciliationStarted();
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {
@@ -876,7 +876,7 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
                 if (reconciliationInProgress && !maybeAbortReconciliation()) {
                     currentAssignment = resolvedAssignment;
 
-                    signalReconciliationCompleted();
+                    signalReconciliationCompleting();
 
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
@@ -910,18 +910,18 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
     }
 
     /**
-     * Signals to the membership manager that reconciliation is in progress so that
+     * Signals to the membership manager that reconciliation has started so that
      * actions specific to group type can be performed.
      */
-    protected CompletableFuture<Void> signalReconciliationInProgress() {
+    protected CompletableFuture<Void> signalReconciliationStarted() {
         return CompletableFuture.completedFuture(null);
     }
 
     /**
-     * Signals to the membership manager that reconciliation is completed so that
+     * Signals to the membership manager that reconciliation is completing so that
      * actions specific to group type can be performed.
      */
-    protected void signalReconciliationCompleted() {
+    protected void signalReconciliationCompleting() {
     }
 
     /**
@@ -933,7 +933,7 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
     }
 
     /** Signals to the membership manager that the assignment has been lost so that
-     * actions sepcific to the group type can be performed.
+     * actions specific to the group type can be performed.
      */
     protected CompletableFuture<Void> signalPartitionsLost(Set<TopicPartition> partitionsLost) {
         return CompletableFuture.completedFuture(null);
@@ -1304,16 +1304,16 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
 
     /**
      * During normal operation of the {@link Consumer}, a request manager may need to send out network requests.
-     * Implementations can return {@link NetworkClientDelegate.PollResult their need for network I/O} by returning the requests here.
-     * This method is called within a single-threaded context from
+     * Implementations can return {@link NetworkClientDelegate.PollResult their need for network I/O} by returning
+     * the requests here. This method is called within a single-threaded context from
      * {@link ConsumerNetworkThread the consumer's network I/O thread}. As such, there should be no need for
      * synchronization protection in this method's implementation.
      *
      * <p/>
      *
-     * <em>Note</em>: no network I/O occurs in this method. The method itself should not block for any reason. This
-     * method is called from the consumer's network I/O thread, so quick execution of this method in <em>all</em>
-     * request managers is critical to ensure that we can heartbeat in a timely fashion.
+     * <em>Note</em>: For a membership manager, this method is used to reconcile assignments received from the
+     * group coordinator. It never returns requests to send itself, because a heartbeat request manager is responsible
+     * for that aspect of the protocol.
      *
      * @param currentTimeMs The current system time at which the method was called; useful for determining if
      *                      time-sensitive operations should be performed

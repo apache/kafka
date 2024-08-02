@@ -52,9 +52,9 @@ public class ConsumerRebalanceMetricsManager extends RebalanceMetricsManager {
         super(CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 
         rebalanceLatencyAvg = createMetric(metrics, "rebalance-latency-avg",
-                "The average time taken for a group to complete a rebalance");
+                "The average time in ms taken for a group to complete a rebalance");
         rebalanceLatencyMax = createMetric(metrics, "rebalance-latency-max",
-                "The max time taken for a group to complete a rebalance");
+                "The max time in ms taken for a group to complete a rebalance");
         rebalanceLatencyTotal = createMetric(metrics, "rebalance-latency-total",
                 "The total number of milliseconds spent in rebalances");
         rebalanceTotal = createMetric(metrics, "rebalance-total",

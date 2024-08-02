@@ -179,20 +179,12 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         }
     }
 
-    /**
-     * Returns the epoch a member uses to join the group. This is group-type specific.
-     *
-     * @return the epoch to join the group
-     */
+    @Override
     public int joinGroupEpoch() {
         return ShareGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
     }
 
-    /**
-     * Returns the epoch a member uses to leave the group. This is group-type specific.
-     *
-     * @return the epoch to leave the group
-     */
+    @Override
     public int leaveGroupEpoch() {
         return ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
     }
