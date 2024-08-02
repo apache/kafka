@@ -29,7 +29,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.metadata.storage.Formatter
+import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
 import org.apache.kafka.raft.DynamicVoters
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ReplicationConfigs
@@ -45,6 +45,9 @@ object StorageTool extends Logging {
     try {
       exitCode = execute(args, System.out)
     } catch {
+      case e: FormatterException =>
+        exitCode = 1
+        message = Some(e.getMessage)
       case e: TerseFailure =>
         exitCode = 1
         message = Some(e.getMessage)
@@ -137,8 +140,12 @@ object StorageTool extends Logging {
     if (config.controllerListeners.isEmpty) {
       throw new RuntimeException("No controller listeners found.")
     }
-    DynamicVoters.parse(s"${config.nodeId}@${config.controllerListeners.head.host}:" +
-      s"${config.controllerListeners.head.port}:${Uuid.randomUuid()}")
+    val host = if (config.controllerListeners.head.host == null) {
+      "localhost"
+    } else {
+      config.controllerListeners.head.host
+    }
+    DynamicVoters.parse(s"${config.nodeId}@${host}:${port}:${Uuid.randomUuid()}")
   }
 
   def parseArguments(args: Array[String]): Namespace = {
