@@ -1257,6 +1257,7 @@ object GroupMetadataManager {
   }
 
   // Formatter for use with tools to read group metadata history
+  @Deprecated
   class GroupMetadataMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {

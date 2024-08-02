@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonConverter;
@@ -25,62 +23,25 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
-import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.util.Objects;
 import java.util.Optional;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
-public class TransactionLogMessageFormatter implements MessageFormatter {
-
-    private static final String VERSION = "version";
-    private static final String DATA = "data";
-    private static final String KEY = "key";
-    private static final String VALUE = "value";
-    private static final String UNKNOWN = "unknown";
+public class TransactionLogMessageFormatter extends ApiMessageFormatter {
 
     @Override
-    public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
-        ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+    protected JsonNode readToKeyJson(ByteBuffer byteBuffer, short version) {
+        return readToTransactionLogKey(byteBuffer)
+                .map(logKey -> TransactionLogKeyJsonConverter.write(logKey, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
+    }
 
-        byte[] key = consumerRecord.key();
-        if (Objects.nonNull(key)) {
-            short keyVersion = ByteBuffer.wrap(key).getShort();
-            JsonNode dataNode = readToTransactionLogKey(ByteBuffer.wrap(key))
-                    .map(logKey -> TransactionLogKeyJsonConverter.write(logKey, keyVersion))
-                    .orElseGet(() -> new TextNode(UNKNOWN));
-            json.putObject(KEY)
-                    .put(VERSION, keyVersion)
-                    .set(DATA, dataNode);
-        } else {
-            json.set(KEY, NullNode.getInstance());
-        }
-
-        byte[] value = consumerRecord.value();
-        if (Objects.nonNull(value)) {
-            short valueVersion = ByteBuffer.wrap(value).getShort();
-            JsonNode dataNode = readToTransactionLogValue(ByteBuffer.wrap(value))
-                    .map(logValue -> TransactionLogValueJsonConverter.write(logValue, valueVersion))
-                    .orElseGet(() -> new TextNode(UNKNOWN));
-            json.putObject(VALUE)
-                    .put(VERSION, valueVersion)
-                    .set(DATA, dataNode);
-        } else {
-            json.set(VALUE, NullNode.getInstance());
-        }
-
-        try {
-            output.write(json.toString().getBytes(UTF_8));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    @Override
+    protected JsonNode readToValueJson(ByteBuffer byteBuffer, short version) {
+        return readToTransactionLogValue(byteBuffer)
+                .map(logValue -> TransactionLogValueJsonConverter.write(logValue, version))
+                .orElseGet(() -> new TextNode(UNKNOWN));
     }
 
     private Optional<TransactionLogKey> readToTransactionLogKey(ByteBuffer byteBuffer) {
