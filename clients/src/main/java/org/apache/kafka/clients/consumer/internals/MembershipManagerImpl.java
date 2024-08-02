@@ -633,7 +633,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     // Visible for testing
     String memberIdInfoForLog() {
-        return (memberId == null || memberId.isEmpty()) ? "without ID" : memberId;
+        return (memberId == null || memberId.isEmpty()) ? "<no ID>" : memberId;
     }
 
     /**
