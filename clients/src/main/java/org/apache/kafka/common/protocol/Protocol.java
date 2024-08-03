@@ -52,7 +52,7 @@ public class Protocol {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
             } else if (type instanceof TaggedFields) {
-                b.append("TAG_BUFFER ");
+                b.append("TAGGED_FIELDS ");
             } else {
                 b.append(field.def.name);
                 b.append(" ");
@@ -103,6 +103,9 @@ public class Protocol {
         b.append("<th>Description</th>\n");
         b.append("</tr>");
         for (BoundField field : fields) {
+            if (field.def.type instanceof TaggedFields) {
+                continue; // TaggedFields is a terminal symbol. Exclude from table.
+            }
             b.append("<tr>\n");
             b.append("<td>");
             b.append(field.def.name);

@@ -174,7 +174,10 @@ public class TaggedFields extends DocumentedType {
 
     @Override
     public String documentation() {
-        return "Represents a series of tagged fields.";
+        return "Represents a sequence of tagged fields. First the length N + 1 is given as an UNSIGNED_VARINT. " +
+            "Then N tag field instances follow. A tag field is a triplet of a tag, a length, and data. " +
+            "The tag is an UNSIGNED_VARINT. The length F + 1 is given as an UNSIGNED_VARINT. " +
+            "Null data is represented as a length of 0, otherwise F bytes of data follow.";
     }
 
     /**

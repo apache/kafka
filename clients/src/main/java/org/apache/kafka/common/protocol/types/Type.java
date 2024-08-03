@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.Optional;
 
 /**
@@ -1116,7 +1117,8 @@ public abstract class Type {
             UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
-            RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
+            RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING),
+            new TaggedFields(Collections.emptyMap())};
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");
