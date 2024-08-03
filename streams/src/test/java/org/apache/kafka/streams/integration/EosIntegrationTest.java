@@ -39,6 +39,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -1177,7 +1178,9 @@ public class EosIntegrationTest {
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
 
         streams.setUncaughtExceptionHandler((t, e) -> {
-            if (uncaughtException != null || !e.getMessage().contains("Injected test exception")) {
+            if (uncaughtException != null ||
+                !(e instanceof StreamsException) ||
+                !e.getCause().getMessage().equals("Injected test exception.")) {
                 e.printStackTrace(System.err);
                 hasUnexpectedError = true;
             }

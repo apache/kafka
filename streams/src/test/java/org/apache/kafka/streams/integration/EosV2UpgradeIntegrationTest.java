@@ -35,6 +35,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -952,8 +953,9 @@ public class EosV2UpgradeIntegrationTest {
             } else {
                 int exceptionCount = exceptionCounts.get(appDir);
                 // should only have our injected exception or commit exception, and 2 exceptions for each stream
-                if (++exceptionCount > 2 || !(e instanceof RuntimeException) ||
-                    !(e.getMessage().contains("test exception"))) {
+                if (++exceptionCount > 2 ||
+                    !(e instanceof StreamsException) ||
+                    !(e.getCause().getMessage().endsWith(" test exception."))) {
                     // The exception won't cause the test fail since we actually "expected" exception thrown and failed the stream.
                     // So, log to stderr for debugging when the exception is not what we expected, and fail in the main thread
                     e.printStackTrace(System.err);
