@@ -933,7 +933,6 @@ public class RemoteLogManager implements Closeable {
             logger.info("Copying {} to remote storage.", logFileName);
 
             long endOffset = nextSegmentBaseOffset - 1;
-            int tieredEpoch = 0;
             File producerStateSnapshotFile = log.producerStateManager().fetchSnapshot(nextSegmentBaseOffset).orElse(null);
 
             List<EpochEntry> epochEntries = getLeaderEpochEntries(log, segment.baseOffset(), nextSegmentBaseOffset);
@@ -942,7 +941,7 @@ public class RemoteLogManager implements Closeable {
 
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(segmentId, segment.baseOffset(), endOffset,
                     segment.largestTimestamp(), brokerId, time.milliseconds(), segment.log().sizeInBytes(),
-                    segmentLeaderEpochs, tieredEpoch);
+                    segmentLeaderEpochs);
 
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
 

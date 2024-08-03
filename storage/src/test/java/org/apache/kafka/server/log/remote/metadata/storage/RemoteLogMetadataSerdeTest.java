@@ -72,7 +72,7 @@ public class RemoteLogMetadataSerdeTest {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1, 
                 time.milliseconds(), 1024, Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})),
-                COPY_SEGMENT_STARTED, segLeaderEpochs, 0);
+                COPY_SEGMENT_STARTED, segLeaderEpochs);
     }
 
     private RemoteLogSegmentMetadataUpdate createRemoteLogSegmentMetadataUpdate() {
