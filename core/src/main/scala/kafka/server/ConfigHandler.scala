@@ -26,14 +26,14 @@ import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.server.config.{ReplicationConfigs, QuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs, ZooKeeperInternals}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
-import org.apache.kafka.storage.internals.log.ThrottledReplicaListValidator
+import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
 import scala.annotation.nowarn
@@ -68,25 +68,61 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     }
 
     val logs = logManager.logsByTopic(topic)
-    val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
+    val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
+    val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
-    logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
-    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
+    // kafkaController is only defined in Zookeeper's mode
+    logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+      wasRemoteLogEnabled, kafkaController.isDefined)
+    maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
 
-  private[server] def maybeBootstrapRemoteLogComponents(topic: String,
-                                                        logs: Seq[UnifiedLog],
-                                                        wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
+  private[server] def maybeUpdateRemoteLogComponents(topic: String,
+                                                     logs: Seq[UnifiedLog],
+                                                     wasRemoteLogEnabled: Boolean,
+                                                     wasCopyDisabled: Boolean): Unit = {
     val isRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
+    val isCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
+    val isDeleteOnDisable = logs.exists(_.config.remoteLogDeleteOnDisable())
+
+    val (leaderPartitions, followerPartitions) =
+      logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
+
     // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
-    if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
-      val (leaderPartitions, followerPartitions) =
-        logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
+    // When remote log is enabled, or remote copy is enabled, we should create RLM tasks accordingly via `onLeadershipChange`.
+    if (isRemoteLogEnabled && (!wasRemoteLogEnabled || (wasCopyDisabled && !isCopyDisabled))) {
       val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
         rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
-    } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
-      warn(s"Disabling remote log on the topic: $topic is not supported.")
+    }
+
+    // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask
+    if (isRemoteLogEnabled && !wasCopyDisabled && isCopyDisabled) {
+      replicaManager.remoteLogManager.foreach(rlm => {
+        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava);
+      })
+    }
+
+    // Disabling remote log storage on this topic
+    if (wasRemoteLogEnabled && !isRemoteLogEnabled && isDeleteOnDisable) {
+      val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
+      leaderPartitions.foreach(partition => {
+        // delete remote logs and stop RemoteLogMetadataManager
+        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
+          deleteRemoteLog = true, stopRemoteLogMetadataManager = true))
+      })
+
+      followerPartitions.foreach(partition => {
+        // we need to cancel follower tasks and stop RemoteLogMetadataManager
+        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
+          deleteRemoteLog = false, stopRemoteLogMetadataManager = true))
+      })
+
+      // update the log start offset to local log start offset for the leader replicas
+      logs.filter(log => leaderPartitions.exists(p => p.topicPartition.equals(log.topicPartition)))
+        .foreach(log => log.maybeIncrementLogStartOffset(log.localLogStartOffset(), LogStartOffsetIncrementReason.SegmentDeletion))
+
+      replicaManager.remoteLogManager.foreach(rlm => rlm.stopPartitions(stopPartitions, (_, _) => {}))
     }
   }
 
