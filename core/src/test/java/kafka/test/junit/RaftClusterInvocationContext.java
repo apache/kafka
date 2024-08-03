@@ -232,7 +232,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             }
         }
 
-
         @Override
         public Map<Integer, KafkaBroker> brokers() {
             return clusterTestKit.brokers().entrySet()

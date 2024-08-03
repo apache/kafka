@@ -183,6 +183,10 @@ public interface ClusterInstance {
 
     //---------------------------[wait]---------------------------//
 
+    default void waitTopicDeletion(String topic) throws InterruptedException {
+        waitForTopic(topic, 0);
+    }
+
     void waitForReadyBrokers() throws InterruptedException;
 
     default void waitForTopic(String topic, int partitions) throws InterruptedException {
