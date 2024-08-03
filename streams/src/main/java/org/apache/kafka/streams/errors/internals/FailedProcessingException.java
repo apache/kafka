@@ -25,7 +25,12 @@ import org.apache.kafka.streams.errors.StreamsException;
 public class FailedProcessingException extends StreamsException {
     private static final long serialVersionUID = 1L;
 
+    public FailedProcessingException(final String errorMessage, final Exception exception) {
+        super(errorMessage, exception);
+    }
+
     public FailedProcessingException(final Exception exception) {
-        super(exception);
+        // we need to explicitly set `message` to `null` here
+        super(null, exception);
     }
 }

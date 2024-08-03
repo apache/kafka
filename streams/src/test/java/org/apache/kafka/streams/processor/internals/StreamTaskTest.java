@@ -53,6 +53,7 @@ import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler.ProcessingHandlerResponse;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -2661,17 +2662,20 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldPunctuateNotHandleFailProcessingExceptionAndThrowStreamsException() {
+    public void punctuateShouldNotHandleFailProcessingExceptionAndThrowStreamsException() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
-            LogAndFailExceptionHandler.class.getName(), LogAndContinueProcessingExceptionHandler.class.getName()));
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndContinueProcessingExceptionHandler.class.getName()
+        ));
 
-        final StreamsException streamsException = assertThrows(StreamsException.class, () ->
-            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
-                throw new FailedProcessingException(
-                    new RuntimeException("KABOOM!")
-                );
+        final StreamsException streamsException = assertThrows(
+            StreamsException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new FailedProcessingException(new RuntimeException("KABOOM!"));
             })
         );
 
@@ -2680,11 +2684,15 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldPunctuateNotHandleTaskCorruptedExceptionAndThrowItAsIs() {
+    public void punctuateShouldNotHandleTaskCorruptedExceptionAndThrowItAsIs() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
-            LogAndFailExceptionHandler.class.getName(), LogAndContinueProcessingExceptionHandler.class.getName()));
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndContinueProcessingExceptionHandler.class.getName()
+        ));
 
         final Set<TaskId> tasksIds = new HashSet<>();
         tasksIds.add(new TaskId(0, 0));
@@ -2695,8 +2703,9 @@ public class StreamTaskTest {
             }
         });
 
-        final TaskCorruptedException taskCorruptedException = assertThrows(TaskCorruptedException.class, () ->
-            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+        final TaskCorruptedException taskCorruptedException = assertThrows(
+            TaskCorruptedException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
                 throw expectedException;
             })
         );
@@ -2705,16 +2714,21 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldPunctuateNotHandleTaskMigratedExceptionAndThrowItAsIs() {
+    public void punctuateShouldNotHandleTaskMigratedExceptionAndThrowItAsIs() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
-            LogAndFailExceptionHandler.class.getName(), LogAndContinueProcessingExceptionHandler.class.getName()));
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndContinueProcessingExceptionHandler.class.getName()
+        ));
 
         final TaskMigratedException expectedException = new TaskMigratedException("TaskMigratedException", new RuntimeException("Task migrated cause"));
 
-        final TaskMigratedException taskCorruptedException = assertThrows(TaskMigratedException.class, () ->
-            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+        final TaskMigratedException taskCorruptedException = assertThrows(
+            TaskMigratedException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
                 throw expectedException;
             })
         );
@@ -2723,56 +2737,106 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldPunctuateNotThrowStreamsExceptionWhenProcessingExceptionHandlerRepliesWithContinue() {
+    public void punctuateShouldNotThrowStreamsExceptionWhenProcessingExceptionHandlerRepliesWithContinue() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
-            LogAndFailExceptionHandler.class.getName(), LogAndContinueProcessingExceptionHandler.class.getName()));
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndContinueProcessingExceptionHandler.class.getName()
+        ));
 
-        assertDoesNotThrow(() ->
-            task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
-                throw new KafkaException("KABOOM!");
-            })
-        );
+        task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+            throw new KafkaException("KABOOM!");
+        });
     }
 
     @Test
-    public void shouldPunctuateThrowStreamsExceptionWhenProcessingExceptionHandlerRepliesWithFail() {
+    public void punctuateShouldThrowStreamsExceptionWhenProcessingExceptionHandlerRepliesWithFail() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
-            LogAndFailExceptionHandler.class.getName(), LogAndFailProcessingExceptionHandler.class.getName()));
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            LogAndFailProcessingExceptionHandler.class.getName()
+        ));
 
-        final StreamsException streamsException = assertThrows(StreamsException.class,
+        final StreamsException streamsException = assertThrows(
+            StreamsException.class,
             () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
                 throw new KafkaException("KABOOM!");
-            }));
+            })
+        );
 
         assertInstanceOf(KafkaException.class, streamsException.getCause());
         assertEquals("KABOOM!", streamsException.getCause().getMessage());
     }
 
     @Test
-    public void shouldPunctuateThrowFailedProcessingExceptionWhenProcessingExceptionHandlerThrowsAnException() {
+    public void punctuateShouldThrowStreamsExceptionWhenProcessingExceptionHandlerReturnsNull() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        task = createStatelessTask(createConfig(AT_LEAST_ONCE, "100",
-                LogAndFailExceptionHandler.class.getName(), ProcessingExceptionHandlerMock.class.getName()));
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            NullProcessingExceptionHandler.class.getName()
+        ));
 
-        final FailedProcessingException streamsException = assertThrows(FailedProcessingException.class,
+        final StreamsException streamsException = assertThrows(
+            StreamsException.class,
             () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
                 throw new KafkaException("KABOOM!");
-            }));
+            })
+        );
 
-        assertInstanceOf(RuntimeException.class, streamsException.getCause());
+        assertEquals("Fatal user code error in processing error callback", streamsException.getMessage());
+        assertInstanceOf(NullPointerException.class, streamsException.getCause());
+        assertEquals("Invalid ProcessingExceptionHandler response.", streamsException.getCause().getMessage());
+    }
+
+    @Test
+    public void punctuateShouldThrowFailedProcessingExceptionWhenProcessingExceptionHandlerThrowsAnException() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatelessTask(createConfig(
+            AT_LEAST_ONCE,
+            "100",
+            LogAndFailExceptionHandler.class.getName(),
+            CrashingProcessingExceptionHandler.class.getName()
+        ));
+
+        final FailedProcessingException streamsException = assertThrows(
+            FailedProcessingException.class,
+            () -> task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, timestamp -> {
+                throw new KafkaException("KABOOM!");
+            })
+        );
+
+        assertEquals("Fatal user code error in processing error callback", streamsException.getMessage());
         assertEquals("KABOOM from ProcessingExceptionHandlerMock!", streamsException.getCause().getMessage());
     }
 
-    public static class ProcessingExceptionHandlerMock implements ProcessingExceptionHandler {
+    public static class CrashingProcessingExceptionHandler implements ProcessingExceptionHandler {
         @Override
-        public ProcessingExceptionHandler.ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+        public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
             throw new RuntimeException("KABOOM from ProcessingExceptionHandlerMock!");
         }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            // No-op
+        }
+    }
+
+    public static class NullProcessingExceptionHandler implements ProcessingExceptionHandler {
+        @Override
+        public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+            return null;
+        }
+
         @Override
         public void configure(final Map<String, ?> configs) {
             // No-op

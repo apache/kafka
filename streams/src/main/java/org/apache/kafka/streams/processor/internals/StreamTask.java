@@ -59,6 +59,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -807,7 +808,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             }
         } catch (final FailedProcessingException failedProcessingException) {
             // Do not keep the failed processing exception in the stack trace
-            handleException(failedProcessingException.getCause());
+            handleException(failedProcessingException.getMessage(), failedProcessingException.getCause());
         } catch (final StreamsException exception) {
             record = null;
             throw exception;
@@ -820,19 +821,25 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return true;
     }
 
-    private void handleException(final Throwable e) {
-        final StreamsException error = new StreamsException(
+    private void handleException(final Throwable originalException) {
+        handleException(
             String.format(
-                "Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
+                "Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
                 id(),
                 processorContext.currentNode().name(),
                 record.topic(),
                 record.partition(),
-                record.offset(),
-                getStacktraceString(e)
+                record.offset()
             ),
-            e
-        );
+            originalException);
+    }
+
+    private void handleException(final String errorMessage, final Throwable originalException) {
+        if (errorMessage == null) {
+            handleException(originalException);
+        }
+
+        final StreamsException error = new StreamsException(errorMessage, originalException);
         record = null;
 
         throw error;
@@ -920,11 +927,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         try {
             maybeMeasureLatency(() -> punctuator.punctuate(timestamp), time, punctuateLatencySensor);
+        } catch (final TimeoutException timeoutException) {
+            if (!eosEnabled) {
+                throw timeoutException;
+            } else {
+                record = null;
+                throw new TaskCorruptedException(Collections.singleton(id));
+            }
         } catch (final FailedProcessingException e) {
             throw createStreamsException(node.name(), e.getCause());
         } catch (final TaskCorruptedException | TaskMigratedException e) {
             throw e;
-        } catch (final Exception e) {
+        } catch (final RuntimeException processingException) {
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 null,
                 recordContext.topic(),
@@ -936,11 +950,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             );
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;
-
             try {
-                response = processingExceptionHandler.handle(errorHandlerContext, null, e);
-            } catch (final Exception fatalUserException) {
-                throw new FailedProcessingException(fatalUserException);
+                response = Objects.requireNonNull(
+                    processingExceptionHandler.handle(errorHandlerContext, null, processingException),
+                    "Invalid ProcessingExceptionHandler response."
+                );
+            } catch (final RuntimeException fatalUserException) {
+                log.error(
+                    "Processing error callback failed after processing error for record: {}",
+                    errorHandlerContext,
+                    processingException
+                );
+                throw new FailedProcessingException("Fatal user code error in processing error callback", fatalUserException);
             }
 
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
@@ -949,7 +970,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                         " continue after a processing error, please set the " +
                         PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
 
-                throw createStreamsException(node.name(), e);
+                throw createStreamsException(node.name(), processingException);
             } else {
                 droppedRecordsSensor.record();
             }
