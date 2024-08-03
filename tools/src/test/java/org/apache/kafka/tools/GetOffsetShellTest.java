@@ -95,6 +95,11 @@ public class GetOffsetShellTest {
     }
 
     private void setUpRemoteLogTopics() {
+        // In this method, we'll create 4 topics and produce records to the log like this:
+        // topicRLS1 -> 1 segment
+        // topicRLS2 -> 2 segments (1 local log segment + 1 segment in the remote storage)
+        // topicRLS3 -> 3 segments (1 local log segment + 2 segments in the remote storage)
+        // topicRLS4 -> 4 segments (1 local log segment + 3 segments in the remote storage)
         Map<String, String> rlsConfigs = new HashMap<>();
         rlsConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
         rlsConfigs.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1");
@@ -134,23 +139,22 @@ public class GetOffsetShellTest {
         serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         serverProperties.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, LocalTieredStorage.class.getName());
         serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "1000");
+        serverProperties.put(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, "1");
         serverProperties.put(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG, "1000");
         serverProperties.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100");
-
-        Map<String, String> zkProperties = new HashMap<>(serverProperties);
-        zkProperties.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "PLAINTEXT");
-
-        Map<String, String> raftProperties = new HashMap<>(serverProperties);
-        raftProperties.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "EXTERNAL");
+        serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "EXTERNAL");
 
         return Arrays.asList(
                 ClusterConfig.defaultBuilder()
                         .setTypes(Collections.singleton(ZK))
-                        .setServerProperties(zkProperties)
+                        .setServerProperties(serverProperties)
+                        // align listener name since in KafkaClusterTestKit the default broker listener name is EXTERNAL
+                        // while ZK is PLAINTEXT
+                        .setListenerName("EXTERNAL")
                         .build(),
                 ClusterConfig.defaultBuilder()
                         .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
-                        .setServerProperties(raftProperties)
+                        .setServerProperties(serverProperties)
                         .build());
     }
 
@@ -362,6 +366,7 @@ public class GetOffsetShellTest {
                     executeAndParse("--topic-partitions", "topic\\d+:0", "--time", time));
 
             // test topics enable remote log storage
+            // topicRLS1 has no result because there's no log segments being uploaded to the remote storage
             TestUtils.waitForCondition(() ->
                     Arrays.asList(
                             new Row("topicRLS2", 0, 0L),
