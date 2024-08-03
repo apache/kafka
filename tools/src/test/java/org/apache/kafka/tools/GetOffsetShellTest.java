@@ -148,8 +148,9 @@ public class GetOffsetShellTest {
                 ClusterConfig.defaultBuilder()
                         .setTypes(Collections.singleton(ZK))
                         .setServerProperties(serverProperties)
-                        // align listener name since in KafkaClusterTestKit the default broker listener name is EXTERNAL
-                        // while ZK is PLAINTEXT
+                        // we set REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP to EXTERNAL, so we need to
+                        // align listener name here as KafkaClusterTestKit (RAFT/CO_RAFT) the default
+                        // broker listener name is EXTERNAL while in ZK it is PLAINTEXT
                         .setListenerName("EXTERNAL")
                         .build(),
                 ClusterConfig.defaultBuilder()
