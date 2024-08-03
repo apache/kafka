@@ -164,7 +164,9 @@ public interface ConfigBackingStore {
         void onConnectorTargetStateChange(String connector);
 
         /**
-         * Invoked when the leader has distributed a new session key
+         * Invoked whenever a (possibly-stale) session key is read
+         * <p>
+         * <strong>Note:</strong> this method, unlike others, is invoked even during store startup.
          * @param sessionKey the {@link SessionKey session key}
          */
         void onSessionKeyUpdate(SessionKey sessionKey);
