@@ -27,7 +27,7 @@ import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
-import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor, TestUtils => JTestUtils}
+import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -913,29 +913,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCloseLeavesGroupOnInterrupt(quorum: String, groupProtocol: String): Unit = {
     val adminClient = createAdminClient()
     val consumer = createConsumer()
-    val groupId = consumerConfig.getProperty("group.id")
-
-    def hasMembers: Boolean = {
-      try {
-        val groupDescription = adminClient.describeConsumerGroups (Collections.singletonList (groupId) ).describedGroups.get (groupId).get
-        groupDescription.members.size() > 0
-      } catch {
-        case _: ExecutionException | _: InterruptedException =>
-          false
-      }
-    }
-
     val listener = new TestConsumerReassignmentListener()
     consumer.subscribe(List(topic).asJava, listener)
     awaitRebalance(consumer, listener)
 
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
-    TestUtils.waitUntilTrue(() => hasMembers, s"Consumer did not join the consumer group within ${JTestUtils.DEFAULT_MAX_WAIT_MS} of subscribe")
 
     try {
       Thread.currentThread().interrupt()
@@ -947,6 +934,26 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
-    TestUtils.waitUntilTrue(() => !hasMembers, s"Consumer did not leave the consumer group within ${JTestUtils.DEFAULT_MAX_WAIT_MS} of interrupt/close")
+
+    val config = new ConsumerConfig(consumerConfig)
+
+    // Set the wait timeout to be only *half* the configured session timeout. This way we can make sure that the
+    // consumer explicitly left the group as opposed to being kicked out by the broker.
+    val leaveGroupTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG) / 2
+
+    TestUtils.waitUntilTrue(
+      () => {
+        try {
+          val groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG)
+          val groupDescription = adminClient.describeConsumerGroups (Collections.singletonList (groupId) ).describedGroups.get (groupId).get
+          groupDescription.members.isEmpty
+        } catch {
+          case _: ExecutionException | _: InterruptedException =>
+            false
+        }
+      },
+      msg=s"Consumer did not leave the consumer group within $leaveGroupTimeoutMs of interrupt/close",
+      waitTimeMs=leaveGroupTimeoutMs
+    )
   }
 }
