@@ -19,10 +19,16 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Joined;
 
+import java.time.Duration;
+
 public class JoinedInternal<K, VLeft, VRight> extends Joined<K, VLeft, VRight>  {
 
     JoinedInternal(final Joined<K, VLeft, VRight> joined) {
         super(joined);
+    }
+
+    public Duration gracePeriod() {
+        return gracePeriod;
     }
 
     public Serde<K> keySerde() {
