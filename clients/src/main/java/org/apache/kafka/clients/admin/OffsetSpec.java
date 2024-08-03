@@ -73,18 +73,20 @@ public class OffsetSpec {
     }
 
     /**
-     * Used to retrieve the offset with the local log start offset,
-     * log start offset is the offset of a log above which reads are guaranteed to be served
-     * from the disk of the leader broker, when Tiered Storage is not enabled, it behaves the same
-     * as the earliest timestamp
+     * Used to retrieve the local log start offset.
+     * Local log start offset is the offset of a log above which reads
+     * are guaranteed to be served from the disk of the leader broker.
+     * <br/>
+     * Note: When tiered Storage is not enabled, it behaves the same as retrieving the earliest timestamp offset.
      */
     public static OffsetSpec earliestLocalSpec() {
         return new EarliestLocalSpec();
     }
 
     /**
-     * Used to retrieve the offset with the highest offset of data stored in remote storage,
-     * and when Tiered Storage is not enabled, we won't return any offset (i.e. Unknown offset)
+     * Used to retrieve the highest offset of data stored in remote storage.
+     * <br/>
+     * Note: When tiered storage is not enabled, we will return unknown offset.
      */
     public static OffsetSpec latestTierSpec() {
         return new LatestTierSpec();
