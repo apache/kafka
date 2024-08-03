@@ -514,7 +514,7 @@ public class GetOffsetShellTest {
 
     private List<Row> executeAndParse(String... args) {
         String out = ToolsTestUtils.captureStandardOut(() -> GetOffsetShell.mainNoExit(addBootstrapServer(args)));
-        System.out.println(out);
+
         return Arrays.stream(out.split(System.lineSeparator()))
                 .map(i -> i.split(":"))
                 .filter(i -> i.length >= 2)
