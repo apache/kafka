@@ -27,14 +27,14 @@ import org.apache.kafka.streams.KeyValue;
  * <li>map from an input record to a new key (with arbitrary key type as specified by {@code VR})</li>
  * </ul>
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
- * record of a stream (cf. {@link Transformer} for stateful record transformation).
+ * record of a stream (cf. {@link org.apache.kafka.streams.processor.api.Processor api.Processor} for stateful record transformation).
  * {@code KeyValueMapper} is a generalization of {@link ValueMapper}.
  *
  * @param <K>  key type
  * @param <V>  value type
  * @param <VR> mapped value type
  * @see ValueMapper
- * @see Transformer
+ * @see org.apache.kafka.streams.processor.api.Processor
  * @see KStream#map(KeyValueMapper)
  * @see KStream#flatMap(KeyValueMapper)
  * @see KStream#selectKey(KeyValueMapper)

@@ -14,22 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+package org.apache.kafka.metadata.storage;
 
-@SuppressWarnings("deprecation")
-public class NoopValueTransformer<K, V, VR> implements org.apache.kafka.streams.kstream.ValueTransformer<V, VR> {
-    @Override
-    public void init(final ProcessorContext context) {
+public class FormatterException extends RuntimeException {
+    public FormatterException(String what) {
+        super(what);
     }
 
-    @Override
-    public VR transform(final V value) {
-        return null;
-    }
-
-    @Override
-    public void close() {
+    public FormatterException(String what, Exception cause) {
+        super(what, cause);
     }
 }

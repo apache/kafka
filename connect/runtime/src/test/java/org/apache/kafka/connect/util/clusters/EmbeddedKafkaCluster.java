@@ -31,6 +31,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -639,8 +640,16 @@ public class EmbeddedKafkaCluster {
     }
 
     public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(Map<String, Object> consumerProps, String... topics) {
+        return createConsumerAndSubscribeTo(consumerProps, null, topics);
+    }
+
+    public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(Map<String, Object> consumerProps, ConsumerRebalanceListener rebalanceListener, String... topics) {
         KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
-        consumer.subscribe(Arrays.asList(topics));
+        if (rebalanceListener != null) {
+            consumer.subscribe(Arrays.asList(topics), rebalanceListener);
+        } else {
+            consumer.subscribe(Arrays.asList(topics));
+        }
         return consumer;
     }
 
