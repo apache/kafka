@@ -93,17 +93,14 @@ public class TopicConfig {
             "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `retention.bytes` value.";
 
-    public static final String REMOTE_LOG_DISABLE_POLICY_RETAIN = "retain";
-    public static final String REMOTE_LOG_DISABLE_POLICY_DELETE = "delete";
+    public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
+    public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
+            " and no more data uploading on a topic.";
 
-    public static final String REMOTE_LOG_DISABLE_POLICY_CONFIG = "remote.log.disable.policy";
-
-    public static final String REMOTE_LOG_DISABLE_POLICY_DOC = String.format("Determines whether tiered data for a topic should be retained or " +
-            "deleted after tiered storage disablement on a topic. The two valid options are \"%s\" and \"%s\". If %s is " +
-            "selected then all data in remote will be kept post-disablement and will only be deleted when it breaches expiration " +
-            "thresholds. If %s is selected then the data will be made inaccessible immediately by advancing the log start offset and will be " +
-            "deleted asynchronously.", REMOTE_LOG_DISABLE_POLICY_RETAIN, REMOTE_LOG_DISABLE_POLICY_DELETE,
-            REMOTE_LOG_DISABLE_POLICY_RETAIN, REMOTE_LOG_DISABLE_POLICY_DELETE);
+    public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
+    public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
+            "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
+            "set `remote.storage.enable` from true to false";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
