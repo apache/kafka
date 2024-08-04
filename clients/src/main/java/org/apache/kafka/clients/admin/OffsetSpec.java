@@ -27,7 +27,7 @@ public class OffsetSpec {
     public static class LatestSpec extends OffsetSpec { }
     public static class MaxTimestampSpec extends OffsetSpec { }
     public static class EarliestLocalSpec extends OffsetSpec { }
-    public static class LatestTierSpec extends OffsetSpec { }
+    public static class LatestTieredSpec extends OffsetSpec { }
     public static class TimestampSpec extends OffsetSpec {
         private final long timestamp;
 
@@ -79,7 +79,7 @@ public class OffsetSpec {
      * <br/>
      * Note: When tiered Storage is not enabled, it behaves the same as retrieving the earliest timestamp offset.
      */
-    public static OffsetSpec earliestLocalSpec() {
+    public static OffsetSpec earliestLocal() {
         return new EarliestLocalSpec();
     }
 
@@ -88,7 +88,7 @@ public class OffsetSpec {
      * <br/>
      * Note: When tiered storage is not enabled, we will return unknown offset.
      */
-    public static OffsetSpec latestTierSpec() {
-        return new LatestTierSpec();
+    public static OffsetSpec latestTiered() {
+        return new LatestTieredSpec();
     }
 }

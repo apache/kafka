@@ -144,18 +144,14 @@ public class GetOffsetShellTest {
         serverProperties.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100");
         serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "EXTERNAL");
 
-        return Arrays.asList(
+        return Collections.singletonList(
+                // we set REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP to EXTERNAL, so we need to
+                // align listener name here as KafkaClusterTestKit (KRAFT/CO_KRAFT) the default
+                // broker listener name is EXTERNAL while in ZK it is PLAINTEXT
                 ClusterConfig.defaultBuilder()
-                        .setTypes(Collections.singleton(ZK))
+                        .setTypes(Stream.of(ZK, KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                         .setServerProperties(serverProperties)
-                        // we set REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP to EXTERNAL, so we need to
-                        // align listener name here as KafkaClusterTestKit (KRAFT/CO_KRAFT) the default
-                        // broker listener name is EXTERNAL while in ZK it is PLAINTEXT
                         .setListenerName("EXTERNAL")
-                        .build(),
-                ClusterConfig.defaultBuilder()
-                        .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
-                        .setServerProperties(serverProperties)
                         .build());
     }
 
@@ -340,9 +336,22 @@ public class GetOffsetShellTest {
 
     @ClusterTemplate("withRemoteStorage")
     public void testGetOffsetsByEarliestLocalSpec() throws InterruptedException {
+        setUp();
         setUpRemoteLogTopics();
 
         for (String time : new String[] {"-4", "earliest-local"}) {
+            // test topics disable remote log storage
+            // as remote log disabled, broker return the same result as earliest offset
+            TestUtils.waitForCondition(() ->
+                    Arrays.asList(
+                            new Row("topic1", 0, 0L),
+                            new Row("topic2", 0, 0L),
+                            new Row("topic3", 0, 0L),
+                            new Row("topic4", 0, 0L))
+                            .equals(executeAndParse("--topic-partitions", "topic\\d+.*:0", "--time", time)),
+                    "testGetOffsetsByEarliestLocalSpec get topics with remote log disabled result not match");
+
+            // test topics enable remote log storage
             TestUtils.waitForCondition(() ->
                     Arrays.asList(
                             new Row("topicRLS1", 0, 0L),
@@ -350,7 +359,7 @@ public class GetOffsetShellTest {
                             new Row("topicRLS3", 0, 2L),
                             new Row("topicRLS4", 0, 3L))
                             .equals(executeAndParse("--topic-partitions", "topicRLS.*:0", "--time", time)),
-                    "testGetOffsetsByEarliestLocalSpec result not match");
+                    "testGetOffsetsByEarliestLocalSpec get topics with remote log enabled result not match");
         }
     }
 

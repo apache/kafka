@@ -132,7 +132,7 @@ public class GetOffsetShell {
                     .ofType(String.class);
             timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
                     .withRequiredArg()
-                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp")
+                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered")
                     .ofType(String.class)
                     .defaultsTo("latest");
             commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
@@ -284,9 +284,9 @@ public class GetOffsetShell {
             case "max-timestamp":
                 return OffsetSpec.maxTimestamp();
             case "earliest-local":
-                return OffsetSpec.earliestLocalSpec();
+                return OffsetSpec.earliestLocal();
             case "latest-tiered":
-                return OffsetSpec.latestTierSpec();
+                return OffsetSpec.latestTiered();
             default:
                 long timestamp;
 
@@ -304,9 +304,9 @@ public class GetOffsetShell {
                 } else if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                     return OffsetSpec.maxTimestamp();
                 } else if (timestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
-                    return OffsetSpec.earliestLocalSpec();
+                    return OffsetSpec.earliestLocal();
                 } else if (timestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
-                    return OffsetSpec.latestTierSpec();
+                    return OffsetSpec.latestTiered();
                 } else {
                     return OffsetSpec.forTimestamp(timestamp);
                 }
