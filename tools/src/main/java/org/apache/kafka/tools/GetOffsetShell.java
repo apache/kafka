@@ -275,7 +275,8 @@ public class GetOffsetShell {
         }
     }
 
-    private OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) throws TerseException {
+    // visible for tseting
+    static OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) throws TerseException {
         switch (listOffsetsTimestamp) {
             case "earliest":
                 return OffsetSpec.earliest();
@@ -294,7 +295,7 @@ public class GetOffsetShell {
                     timestamp = Long.parseLong(listOffsetsTimestamp);
                 } catch (NumberFormatException e) {
                     throw new TerseException("Malformed time argument " + listOffsetsTimestamp + ". " +
-                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp, or a specified long format timestamp");
+                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered, or a specified long format timestamp");
                 }
 
                 if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
