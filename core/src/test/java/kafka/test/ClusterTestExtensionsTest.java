@@ -30,6 +30,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -248,5 +249,20 @@ public class ClusterTestExtensionsTest {
         clusterInstance.startBroker(0);
         Assertions.assertTrue(clusterInstance.aliveBrokers().containsKey(0));
         Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
+    }
+
+
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
+    public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = clusterInstance.createAdminClient()) {
+            String testTopic = "testTopic";
+            admin.createTopics(Collections.singletonList(new NewTopic(testTopic, 1, (short) 1)));
+            clusterInstance.waitForTopic(testTopic, 1);
+            admin.deleteTopics(Collections.singletonList(testTopic));
+            clusterInstance.waitTopicDeletion(testTopic);
+            Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
+                    topic -> topic.name().equals(testTopic)
+            ));
+        }
     }
 }

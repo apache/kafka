@@ -2296,7 +2296,6 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
                 final long now = time.milliseconds();
-                log.warn("The DescribeTopicPartitions API is not supported, using Metadata API to describe topics.");
                 runnable.call(generateDescribeTopicsCallWithMetadataApi(topicNamesList, topicFutures, options, now), now);
                 return false;
             }
@@ -4861,6 +4860,10 @@ public class KafkaAdminClient extends AdminClient {
             return ListOffsetsRequest.EARLIEST_TIMESTAMP;
         } else if (offsetSpec instanceof OffsetSpec.MaxTimestampSpec) {
             return ListOffsetsRequest.MAX_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.EarliestLocalSpec) {
+            return ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.LatestTierSpec) {
+            return ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
         }
         return ListOffsetsRequest.LATEST_TIMESTAMP;
     }

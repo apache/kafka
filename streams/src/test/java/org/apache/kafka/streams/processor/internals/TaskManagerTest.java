@@ -55,6 +55,7 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
+import org.apache.log4j.Level;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -712,6 +713,35 @@ public class TaskManagerTest {
         verify(stateUpdater).add(reassignedActiveTask);
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+    }
+
+    @Test
+    public void shouldFirstHandleTasksInStateUpdaterThenSuspendedActiveTasksInTaskRegistry() {
+        final StreamTask reassignedActiveTask1 = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.SUSPENDED)
+            .withInputPartitions(taskId03Partitions).build();
+        final StreamTask reassignedActiveTask2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasks()).thenReturn(mkSet(reassignedActiveTask1));
+        when(stateUpdater.getTasks()).thenReturn(mkSet(reassignedActiveTask2));
+        when(stateUpdater.remove(reassignedActiveTask2.id()))
+            .thenReturn(CompletableFuture.completedFuture(new StateUpdater.RemovedTaskResult(reassignedActiveTask2)));
+
+        taskManager.handleAssignment(
+            mkMap(
+                mkEntry(reassignedActiveTask1.id(), reassignedActiveTask1.inputPartitions()),
+                mkEntry(reassignedActiveTask2.id(), taskId00Partitions)
+            ),
+            Collections.emptyMap()
+        );
+
+        final InOrder inOrder = inOrder(stateUpdater, tasks);
+        inOrder.verify(stateUpdater).remove(reassignedActiveTask2.id());
+        inOrder.verify(tasks).removeTask(reassignedActiveTask1);
+        inOrder.verify(stateUpdater).add(reassignedActiveTask1);
     }
 
     @Test
@@ -1477,6 +1507,7 @@ public class TaskManagerTest {
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
         verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), eq(timeoutException));
+        verify(stateUpdater).add(task);
         verify(tasks, never()).addTask(task);
         verify(task, never()).clearTaskTimeout();
         verifyNoInteractions(consumer);
@@ -4214,7 +4245,7 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
-            appender.setClassLoggerToDebug(TaskManager.class);
+            appender.setClassLogger(TaskManager.class, Level.DEBUG);
             taskManager.handleAssignment(taskId00Assignment, emptyMap());
             assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
             assertThat(task00.state(), is(Task.State.RUNNING));

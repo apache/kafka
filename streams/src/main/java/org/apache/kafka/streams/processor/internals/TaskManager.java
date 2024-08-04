@@ -508,15 +508,14 @@ public class TaskManager {
                                              final Set<Task> tasksToCloseClean,
                                              final Map<TaskId, RuntimeException> failedTasks) {
         handleTasksPendingInitialization();
-        handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         handleRestoringAndUpdatingTasks(activeTasksToCreate, standbyTasksToCreate, failedTasks);
+        handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
     }
 
     private void handleTasksPendingInitialization() {
         // All tasks pending initialization are not part of the usual bookkeeping
         for (final Task task : tasks.drainPendingTasksToInit()) {
-            task.suspend();
-            task.closeClean();
+            closeTaskClean(task, Collections.emptySet(), Collections.emptyMap());
         }
     }
 
@@ -980,9 +979,11 @@ public class TaskManager {
             task.clearTaskTimeout();
         } catch (final TimeoutException timeoutException) {
             task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+            stateUpdater.add(task);
             log.debug(
                 String.format(
-                    "Could not complete restoration for %s due to the following exception; will retry",
+                    "Could not complete restoration for %s due to the following exception; adding the task " +
+                        "back to the state updater and will retry",
                     task.id()),
                 timeoutException
             );

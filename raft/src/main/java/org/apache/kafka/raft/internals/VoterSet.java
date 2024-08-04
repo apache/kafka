@@ -145,10 +145,7 @@ public final class VoterSet {
      * Returns all of the voters.
      */
     public Set<VoterNode> voterNodes() {
-        return voters
-            .values()
-            .stream()
-            .collect(Collectors.toSet());
+        return new HashSet<>(voters.values());
     }
 
     /**
@@ -191,14 +188,18 @@ public final class VoterSet {
      *
      * This object is immutable. A new voter set is returned if the voter was removed.
      *
-     * A voter can be removed from the voter set if its id and directory id match.
+     * A voter can be removed from the voter set if its id and directory id match and there
+     * are more than one voter in the set of voters.
      *
      * @param voterKey the voter key
      * @return a new voter set if the voter was removed, otherwise {@code Optional.empty()}
      */
     public Optional<VoterSet> removeVoter(ReplicaKey voterKey) {
         VoterNode oldVoter = voters.get(voterKey.id());
-        if (oldVoter != null && Objects.equals(oldVoter.voterKey(), voterKey)) {
+        if (oldVoter != null &&
+            Objects.equals(oldVoter.voterKey(), voterKey) &&
+            voters.size() > 1
+        ) {
             HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
             newVoters.remove(voterKey.id());
 
@@ -324,7 +325,10 @@ public final class VoterSet {
             }
         }
 
-        Endpoints listeners() {
+        /**
+         * Returns the listeners of the voter node
+         */
+        public Endpoints listeners() {
             return listeners;
         }
 
@@ -362,6 +366,14 @@ public final class VoterSet {
                 listeners,
                 supportedKRaftVersion
             );
+        }
+
+        public static VoterNode of(
+            ReplicaKey voterKey,
+            Endpoints listeners,
+            SupportedVersionRange supportedKRaftVersion
+        ) {
+            return new VoterNode(voterKey, listeners, supportedKRaftVersion);
         }
     }
 
@@ -413,5 +425,9 @@ public final class VoterSet {
             );
 
         return new VoterSet(voterNodes);
+    }
+
+    public static VoterSet fromMap(Map<Integer, VoterNode> voters) {
+        return new VoterSet(new HashMap<>(voters));
     }
 }

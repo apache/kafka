@@ -18,8 +18,6 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -53,13 +51,13 @@ public class MockProcessorContextTest {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext();
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
         processor.init(context);
 
         processor.process("foo", 5L);
         processor.process("barbaz", 50L);
 
-        final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
+        final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
         assertEquals(new KeyValue<>("foo5", 8L), forwarded.next().keyValue());
         assertEquals(new KeyValue<>("barbaz50", 56L), forwarded.next().keyValue());
         assertFalse(forwarded.hasNext());
@@ -78,14 +76,14 @@ public class MockProcessorContextTest {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext();
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
 
         processor.init(context);
 
         processor.process("foo", 5L);
         processor.process("barbaz", 50L);
 
-        final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
+        final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
         assertEquals(new KeyValue<>("foo5", 8L), forwarded.next().keyValue());
         assertEquals(new KeyValue<>("barbaz50", 56L), forwarded.next().keyValue());
         assertFalse(forwarded.hasNext());
@@ -111,7 +109,7 @@ public class MockProcessorContextTest {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext();
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
 
         processor.init(context);
 
@@ -119,17 +117,17 @@ public class MockProcessorContextTest {
         processor.process("barbaz", 50L);
 
         {
-            final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
+            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
 
-            final CapturedForward forward1 = forwarded.next();
+            final org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward forward1 = forwarded.next();
             assertEquals(new KeyValue<>("start", -1L), forward1.keyValue());
             assertNull(forward1.childName());
 
-            final CapturedForward forward2 = forwarded.next();
+            final org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward forward2 = forwarded.next();
             assertEquals(new KeyValue<>("foo5", 8L), forward2.keyValue());
             assertEquals("george", forward2.childName());
 
-            final CapturedForward forward3 = forwarded.next();
+            final org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward forward3 = forwarded.next();
             assertEquals(new KeyValue<>("barbaz50", 56L), forward3.keyValue());
             assertEquals("pete", forward3.childName());
 
@@ -137,21 +135,21 @@ public class MockProcessorContextTest {
         }
 
         {
-            final Iterator<CapturedForward> forwarded = context.forwarded("george").iterator();
+            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded("george").iterator();
             assertEquals(new KeyValue<>("start", -1L), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("foo5", 8L), forwarded.next().keyValue());
             assertFalse(forwarded.hasNext());
         }
 
         {
-            final Iterator<CapturedForward> forwarded = context.forwarded("pete").iterator();
+            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded("pete").iterator();
             assertEquals(new KeyValue<>("start", -1L), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("barbaz50", 56L), forwarded.next().keyValue());
             assertFalse(forwarded.hasNext());
         }
 
         {
-            final Iterator<CapturedForward> forwarded = context.forwarded("steve").iterator();
+            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded("steve").iterator();
             assertEquals(new KeyValue<>("start", -1L), forwarded.next().keyValue());
             assertFalse(forwarded.hasNext());
         }
@@ -170,7 +168,7 @@ public class MockProcessorContextTest {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext();
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
 
         processor.init(context);
 
@@ -199,7 +197,7 @@ public class MockProcessorContextTest {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext();
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
 
         final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("my-state"),
@@ -241,7 +239,7 @@ public class MockProcessorContextTest {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext(config);
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext(config);
         processor.init(context);
 
         try {
@@ -256,7 +254,7 @@ public class MockProcessorContextTest {
 
         {
             processor.process("foo", 5L);
-            final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
+            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
             assertEquals(new KeyValue<>("appId", "testMetadata"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("taskId", new TaskId(0, 0)), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("topic", "t1"), forwarded.next().keyValue());
@@ -277,7 +275,7 @@ public class MockProcessorContextTest {
 
         {
             processor.process("bar", 50L);
-            final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
+            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
             assertEquals(new KeyValue<>("appId", "testMetadata"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("taskId", new TaskId(0, 0)), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("topic", "t1"), forwarded.next().keyValue());
@@ -297,7 +295,7 @@ public class MockProcessorContextTest {
 
         {
             processor.process("baz", 500L);
-            final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
+            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
             assertEquals(new KeyValue<>("appId", "testMetadata"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("taskId", new TaskId(0, 0)), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("topic", "t2"), forwarded.next().keyValue());
@@ -330,11 +328,11 @@ public class MockProcessorContextTest {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext();
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
 
         processor.init(context);
 
-        final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
+        final org.apache.kafka.streams.processor.MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
         assertEquals(1000L, capturedPunctuator.getIntervalMs());
         assertEquals(PunctuationType.WALL_CLOCK_TIME, capturedPunctuator.getType());
         assertFalse(capturedPunctuator.cancelled());
@@ -349,18 +347,18 @@ public class MockProcessorContextTest {
     public void fullConstructorShouldSetAllExpectedAttributes() {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testFullConstructor");
-        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
 
         final File dummyFile = new File("");
-        final MockProcessorContext context = new MockProcessorContext(config, new TaskId(1, 1), dummyFile);
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext(config, new TaskId(1, 1), dummyFile);
 
         assertEquals("testFullConstructor", context.applicationId());
         assertEquals(new TaskId(1, 1), context.taskId());
         assertEquals("testFullConstructor", context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG));
         assertEquals("testFullConstructor", context.appConfigsWithPrefix("application.").get("id"));
-        assertEquals(Serdes.String().getClass(), context.keySerde().getClass());
-        assertEquals(Serdes.Long().getClass(), context.valueSerde().getClass());
+        assertEquals(Serdes.StringSerde.class, context.keySerde().getClass());
+        assertEquals(Serdes.LongSerde.class, context.valueSerde().getClass());
         assertEquals(dummyFile, context.stateDir());
     }
 }

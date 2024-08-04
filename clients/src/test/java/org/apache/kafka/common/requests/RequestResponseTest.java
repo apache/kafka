@@ -98,7 +98,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
@@ -2347,7 +2347,7 @@ public class RequestResponseTest {
                             .setMaxNumOffsets(10)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else if (version == 1) {
@@ -2358,7 +2358,7 @@ public class RequestResponseTest {
                             .setTimestamp(1000000L)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false)
+                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false, false)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
@@ -2371,7 +2371,7 @@ public class RequestResponseTest {
                     .setName("test")
                     .setPartitions(singletonList(partition));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false, false)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else {
@@ -2875,7 +2875,7 @@ public class RequestResponseTest {
         topic2.assignments().add(new CreatableReplicaAssignment()
             .setPartitionIndex(1)
             .setBrokerIds(asList(2, 3, 4)));
-        topic2.configs().add(new CreateableTopicConfig()
+        topic2.configs().add(new CreatableTopicConfig()
             .setName("config1").setValue("value1"));
 
         return new CreateTopicsRequest.Builder(data).build(version);
