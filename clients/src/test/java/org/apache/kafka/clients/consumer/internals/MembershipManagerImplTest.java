@@ -2353,6 +2353,17 @@ public class MembershipManagerImplTest {
         assertEquals(-1d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
     }
 
+    @Test
+    public void testMemberIdInfoForLogs() {
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup(null, null);
+        assertTrue(membershipManager.memberId().isEmpty());
+        assertFalse(membershipManager.memberIdInfoForLog().isEmpty());
+
+        membershipManager = createMemberInStableState(null);
+        assertFalse(membershipManager.memberId().isEmpty());
+        assertEquals(membershipManager.memberId(), membershipManager.memberIdInfoForLog());
+    }
+
     private Object getMetricValue(Metrics metrics, MetricName name) {
         return metrics.metrics().get(name).metricValue();
     }
