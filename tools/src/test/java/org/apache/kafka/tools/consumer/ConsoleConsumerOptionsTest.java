@@ -686,6 +686,20 @@ public class ConsoleConsumerOptionsTest {
         assertInstanceOf(OffsetsMessageFormatter.class,
                 new ConsoleConsumerOptions(offsetsMessageFormatter).formatter());
     }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testNewAndDeprecateGroupMetadataMessageFormatter() throws Exception {
+        String[] deprecatedGroupMetadataMessageFormatter =
+                generateArgsForFormatter("kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter");
+        assertInstanceOf(kafka.coordinator.group.GroupMetadataManager.GroupMetadataMessageFormatter.class,
+                new ConsoleConsumerOptions(deprecatedGroupMetadataMessageFormatter).formatter());
+
+        String[] groupMetadataMessageFormatter =
+                generateArgsForFormatter("org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+        assertInstanceOf(GroupMetadataMessageFormatter.class,
+                new ConsoleConsumerOptions(groupMetadataMessageFormatter).formatter());
+    }
     
     private String[] generateArgsForFormatter(String formatter) {
         return new String[]{

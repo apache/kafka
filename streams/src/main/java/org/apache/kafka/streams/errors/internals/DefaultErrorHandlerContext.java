@@ -81,6 +81,18 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
         return taskId;
     }
 
+    @Override
+    public String toString() {
+        // we do exclude headers on purpose, to not accidentally log user data
+        return "ErrorHandlerContext{" +
+            "topic='" + topic + '\'' +
+            ", partition=" + partition +
+            ", offset=" + offset +
+            ", processorNodeId='" + processorNodeId + '\'' +
+            ", taskId=" + taskId +
+            '}';
+    }
+
     public Optional<ProcessorContext> processorContext() {
         return Optional.ofNullable(processorContext);
     }
