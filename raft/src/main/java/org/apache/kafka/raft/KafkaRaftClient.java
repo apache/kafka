@@ -556,7 +556,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logContext
         );
 
-        // Specialized remove voter handler
+        // Specialized update voter handler
         this.updateVoterHandler = new UpdateVoterHandler(
             nodeId,
             partitionState,
@@ -2069,10 +2069,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        Optional<Errors> leaderValidation = validateLeaderOnlyRequest(quorum.epoch());
-        if (leaderValidation.isPresent()) {
+        Optional<Errors> leaderValidationError = validateLeaderOnlyRequest(quorum.epoch());
+        if (leaderValidationError.isPresent()) {
             return completedFuture(
-                new AddRaftVoterResponseData().setErrorCode(leaderValidation.get().code())
+                new AddRaftVoterResponseData().setErrorCode(leaderValidationError.get().code())
             );
         }
 
@@ -2152,10 +2152,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        Optional<Errors> leaderValidation = validateLeaderOnlyRequest(quorum.epoch());
-        if (leaderValidation.isPresent()) {
+        Optional<Errors> leaderValidationError = validateLeaderOnlyRequest(quorum.epoch());
+        if (leaderValidationError.isPresent()) {
             return completedFuture(
-                new RemoveRaftVoterResponseData().setErrorCode(leaderValidation.get().code())
+                new RemoveRaftVoterResponseData().setErrorCode(leaderValidationError.get().code())
             );
         }
 
@@ -2192,11 +2192,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        Optional<Errors> leaderValidation = validateLeaderOnlyRequest(data.currentLeaderEpoch());
-        if (leaderValidation.isPresent()) {
+        Optional<Errors> leaderValidationError = validateLeaderOnlyRequest(data.currentLeaderEpoch());
+        if (leaderValidationError.isPresent()) {
             return completedFuture(
                 RaftUtil.updateVoterResponse(
-                    leaderValidation.get(),
+                    leaderValidationError.get(),
                     requestMetadata.listenerName(),
                     quorum.leaderAndEpoch(),
                     quorum.leaderEndpoints()

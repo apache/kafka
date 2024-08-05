@@ -96,7 +96,7 @@ public final class VoterSet {
     }
 
     /**
-     * Return true the provided voter node is a voter and would cause a change in the voter set.
+     * Return true if the provided voter node is a voter and would cause a change in the voter set.
      *
      * @param updatedVoterNode the updated voter node
      * @return true if the updated voter node is different than the node in the voter set; otherwise false.

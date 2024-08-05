@@ -1365,8 +1365,16 @@ public class RequestResponseTest {
     }
 
     private UpdateRaftVoterResponse createUpdateRaftVoterResponse() {
-        return new UpdateRaftVoterResponse(new UpdateRaftVoterResponseData().
-            setErrorCode((short) 0));
+        return new UpdateRaftVoterResponse(
+            new UpdateRaftVoterResponseData()
+                .setErrorCode((short) 0)
+                .setCurrentLeader(new UpdateRaftVoterResponseData.CurrentLeader()
+                    .setLeaderId(1)
+                    .setLeaderEpoch(2)
+                    .setHost("localhost")
+                    .setPort(9999)
+                )
+        );
     }
 
     private DescribeTopicPartitionsResponse createDescribeTopicPartitionsResponse() {
@@ -3020,7 +3028,7 @@ public class RequestResponseTest {
                             .setName("topic")
                             .setPartitions(Collections.singletonList(73))).iterator())))
                     .iterator());
-            return AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version);  
+            return AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version);
         }
     }
 
@@ -3029,7 +3037,7 @@ public class RequestResponseTest {
         AddPartitionsToTxnResponseData.AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
                 txnId, Collections.singletonMap(new TopicPartition("t", 0), Errors.NONE));
         AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setThrottleTimeMs(0);
-        
+
         if (version < 4) {
             data.setResultsByTopicV3AndBelow(result.topicResults());
         } else {
