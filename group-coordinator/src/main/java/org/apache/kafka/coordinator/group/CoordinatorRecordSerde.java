@@ -35,6 +35,10 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.group.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.runtime.Serializer;
@@ -139,6 +143,10 @@ public class CoordinatorRecordSerde implements Serializer<CoordinatorRecord>, De
                 return new ConsumerGroupTargetAssignmentMemberKey();
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentKey();
+            case 10:
+                return new ShareGroupMemberMetadataKey();
+            case 11:
+                return new ShareGroupMetadataKey();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
@@ -163,6 +171,10 @@ public class CoordinatorRecordSerde implements Serializer<CoordinatorRecord>, De
                 return new ConsumerGroupTargetAssignmentMemberValue();
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentValue();
+            case 10:
+                return new ShareGroupMemberMetadataValue();
+            case 11:
+                return new ShareGroupMetadataValue();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
