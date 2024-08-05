@@ -73,8 +73,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMI
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -99,6 +97,8 @@ public class CommitRequestManagerTest {
     private final long retryBackoffMs = 100;
     private final long retryBackoffMaxMs = 1000;
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
+    private static final String DEFAULT_GROUP_ID = "group-id";
+    private static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
     private final Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
     private LogContext logContext;

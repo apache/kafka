@@ -59,11 +59,11 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ShareConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
+import static org.apache.kafka.clients.consumer.internals.ShareConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS;
+import static org.apache.kafka.clients.consumer.internals.ShareConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.clients.consumer.internals.ShareConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -530,7 +530,7 @@ public class ShareHeartbeatRequestManagerTest {
     public void testHeartbeatState() {
         // The initial ShareGroupHeartbeatRequest sets most fields to their initial empty values
         ShareGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
-        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals(ShareConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
         assertEquals("", data.memberId());
         assertEquals(0, data.memberEpoch());
         assertEquals(Collections.emptyList(), data.subscribedTopicNames());
@@ -540,7 +540,7 @@ public class ShareHeartbeatRequestManagerTest {
         // Mock a response from the group coordinator, that supplies the member ID and a new epoch
         mockStableMember();
         data = heartbeatState.buildRequestData();
-        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals(ShareConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
         assertEquals(memberId, data.memberId());
         assertEquals(1, data.memberEpoch());
         assertNull(data.subscribedTopicNames());
@@ -553,7 +553,7 @@ public class ShareHeartbeatRequestManagerTest {
         membershipManager.onSubscriptionUpdated();
         membershipManager.transitionToFenced(); // And indirect way of moving to JOINING state
         data = heartbeatState.buildRequestData();
-        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals(ShareConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
         assertEquals(memberId, data.memberId());
         assertEquals(0, data.memberEpoch());
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
