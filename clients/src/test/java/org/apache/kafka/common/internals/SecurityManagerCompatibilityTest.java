@@ -37,18 +37,18 @@ public class SecurityManagerCompatibilityTest {
     @EnabledForJreRange(min = JRE.JAVA_8, max = JRE.JAVA_22)
     @Test
     public void testLegacyStrategyLoadable() throws ClassNotFoundException, NoSuchMethodException {
-        new SecurityManagerCompatibility.Legacy(SecurityManagerCompatibility.Loader.forName());
+        new LegacyStrategy(ReflectiveStrategy.Loader.forName());
     }
 
     @EnabledForJreRange(min = JRE.JAVA_18)
     @Test
     public void testModernStrategyLoadable() throws ClassNotFoundException, NoSuchMethodException {
-        new SecurityManagerCompatibility.Modern(SecurityManagerCompatibility.Loader.forName());
+        new ModernStrategy(ReflectiveStrategy.Loader.forName());
     }
 
     @Test
     public void testCompositeStrategyLoadable() {
-        new SecurityManagerCompatibility.Composite(SecurityManagerCompatibility.Loader.forName());
+        new CompositeStrategy(ReflectiveStrategy.Loader.forName());
     }
 
     @Test
@@ -95,41 +95,41 @@ public class SecurityManagerCompatibilityTest {
 
     @Test
     public void testLegacyStrategyThrowsWhenSecurityManagerRemoved() {
-        SecurityManagerCompatibility.Loader loader = simulateSecurityManagerRemoval();
-        assertThrows(ClassNotFoundException.class, () -> new SecurityManagerCompatibility.Legacy(loader));
+        ReflectiveStrategy.Loader loader = simulateSecurityManagerRemoval();
+        assertThrows(ClassNotFoundException.class, () -> new LegacyStrategy(loader));
     }
 
     @EnabledForJreRange(min = JRE.JAVA_18)
     @Test
     public void testModernStrategyLoadableWhenSecurityManagerRemoved() throws ClassNotFoundException, NoSuchMethodException {
-        SecurityManagerCompatibility.Loader loader = simulateSecurityManagerRemoval();
-        new SecurityManagerCompatibility.Modern(loader);
+        ReflectiveStrategy.Loader loader = simulateSecurityManagerRemoval();
+        new ModernStrategy(loader);
     }
 
     @Test
     public void testCompositeStrategyLoadableWhenSecurityManagerRemoved() {
-        SecurityManagerCompatibility.Loader loader = simulateSecurityManagerRemoval();
-        new SecurityManagerCompatibility.Composite(loader);
+        ReflectiveStrategy.Loader loader = simulateSecurityManagerRemoval();
+        new CompositeStrategy(loader);
     }
 
     @Test
     public void testLegacyStrategyCurrentThrowsWhenSecurityManagerUnsupported() throws ClassNotFoundException, NoSuchMethodException {
-        SecurityManagerCompatibility.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
-        SecurityManagerCompatibility legacy = new SecurityManagerCompatibility.Legacy(loader);
+        ReflectiveStrategy.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
+        SecurityManagerCompatibility legacy = new LegacyStrategy(loader);
         assertThrows(UnsupportedOperationException.class, legacy::current);
     }
 
     @Test
     public void testLegacyStrategyCallAsThrowsWhenSecurityManagerUnsupported() throws ClassNotFoundException, NoSuchMethodException {
-        SecurityManagerCompatibility.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
-        SecurityManagerCompatibility legacy = new SecurityManagerCompatibility.Legacy(loader);
+        ReflectiveStrategy.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
+        SecurityManagerCompatibility legacy = new LegacyStrategy(loader);
         assertThrows(UnsupportedOperationException.class, () -> legacy.callAs(null, () -> null));
     }
 
     @Test
     public void testCompositeStrategyDoPrivilegedWhenSecurityManagerUnsupported() {
-        SecurityManagerCompatibility.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
-        SecurityManagerCompatibility.Composite composite = new SecurityManagerCompatibility.Composite(loader);
+        ReflectiveStrategy.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
+        CompositeStrategy composite = new CompositeStrategy(loader);
         Object object = new Object();
         Object returned = composite.doPrivileged(() -> object);
         assertSame(object, returned);
@@ -137,32 +137,32 @@ public class SecurityManagerCompatibilityTest {
 
     @Test
     public void testCompositeStrategyCurrentWhenSecurityManagerUnsupported() {
-        SecurityManagerCompatibility.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
-        SecurityManagerCompatibility.Composite composite = new SecurityManagerCompatibility.Composite(loader);
+        ReflectiveStrategy.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
+        CompositeStrategy composite = new CompositeStrategy(loader);
         Object returned = composite.current();
         assertNull(returned);
     }
 
     @Test
     public void testCompositeStrategyCallAsWhenSecurityManagerUnsupported() {
-        SecurityManagerCompatibility.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
-        SecurityManagerCompatibility.Composite composite = new SecurityManagerCompatibility.Composite(loader);
+        ReflectiveStrategy.Loader loader = simulateMethodsThrowUnsupportedOperationExceptions();
+        CompositeStrategy composite = new CompositeStrategy(loader);
         Subject subject = new Subject();
         Subject returned = composite.callAs(subject, composite::current);
         assertSame(subject, returned);
     }
 
-    private SecurityManagerCompatibility.Loader simulateSecurityManagerRemoval() {
+    private ReflectiveStrategy.Loader simulateSecurityManagerRemoval() {
         return name -> {
             if (name.equals("java.security.AccessController")) {
                 throw new ClassNotFoundException();
             } else {
-                return SecurityManagerCompatibility.Loader.forName().loadClass(name);
+                return ReflectiveStrategy.Loader.forName().loadClass(name);
             }
         };
     }
 
-    private SecurityManagerCompatibility.Loader simulateMethodsThrowUnsupportedOperationExceptions() {
+    private ReflectiveStrategy.Loader simulateMethodsThrowUnsupportedOperationExceptions() {
         // WARNING: These assertions are here to prevent warnings about unused methods.
         // These methods are used reflectively, and can't be removed.
         assertThrows(UnsupportedOperationException.class, () -> UnsupportedOperations.doPrivileged(null));
@@ -178,7 +178,7 @@ public class SecurityManagerCompatibilityTest {
                 case "java.security.AccessControlContext":
                     return UnsupportedOperations.DummyContext.class;
                 default:
-                    return SecurityManagerCompatibility.Loader.forName().loadClass(name);
+                    return ReflectiveStrategy.Loader.forName().loadClass(name);
             }
         };
     }
