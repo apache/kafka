@@ -325,7 +325,10 @@ public final class VoterSet {
             }
         }
 
-        Endpoints listeners() {
+        /**
+         * Returns the listeners of the voter node
+         */
+        public Endpoints listeners() {
             return listeners;
         }
 
@@ -422,5 +425,9 @@ public final class VoterSet {
             );
 
         return new VoterSet(voterNodes);
+    }
+
+    public static VoterSet fromMap(Map<Integer, VoterNode> voters) {
+        return new VoterSet(new HashMap<>(voters));
     }
 }

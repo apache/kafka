@@ -307,8 +307,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             record.offset(),
                             record.partition(),
                             record.topic(),
-                            record.headers(),
-                            record);
+                            record.headers());
                     globalProcessorContext.setRecordContext(recordContext);
 
                     try {
@@ -320,7 +319,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 record.headers()));
                             restoreCount++;
                         }
-                    } catch (final Exception deserializationException) {
+                    } catch (final RuntimeException deserializationException) {
                         handleDeserializationFailure(
                             deserializationExceptionHandler,
                             globalProcessorContext,
@@ -331,7 +330,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 Thread.currentThread().getName(),
                                 globalProcessorContext.taskId().toString(),
                                 globalProcessorContext.metrics()
-                            )
+                            ),
+                            null
                         );
                     }
                 }
