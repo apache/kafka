@@ -260,7 +260,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
                 new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
-        try (ServerSocketChannel ss = ServerSocketChannel.open()) {
+        try (ServerSocketChannel ss = NetworkContext.provider().openServerSocketChannel()) {
             ss.bind(new InetSocketAddress(0));
 
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();

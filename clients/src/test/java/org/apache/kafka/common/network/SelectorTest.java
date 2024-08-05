@@ -194,7 +194,7 @@ public class SelectorTest {
     @Test
     public void testConnectionRefused() throws Exception {
         String node = "0";
-        ServerSocket nonListeningSocket = new ServerSocket(0);
+        ServerSocket nonListeningSocket = NetworkContext.serverFactory().createServerSocket(0);
         int nonListeningPort = nonListeningSocket.getLocalPort();
         selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
         while (selector.disconnected().containsKey(node)) {
@@ -441,7 +441,7 @@ public class SelectorTest {
         try (MockedConstruction<Selector.SelectorChannelMetadataRegistry> mockedMetadataRegistry =
                      mockConstruction(Selector.SelectorChannelMetadataRegistry.class)) {
             Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
-            final SocketChannel socketChannel = SocketChannel.open();
+            final SocketChannel socketChannel = NetworkContext.provider().openSocketChannel();
             socketChannel.configureBlocking(false);
             IOException e = assertThrows(IOException.class, () -> selector.register(channelId, socketChannel));
             assertTrue(e.getCause().getMessage().contains("Test exception"), "Unexpected exception: " + e);
@@ -690,7 +690,7 @@ public class SelectorTest {
         selector = new Selector(NetworkReceive.UNLIMITED, CONNECTION_MAX_IDLE_MS, metrics, time, "MetricGroup",
             new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
-        try (ServerSocketChannel ss = ServerSocketChannel.open()) {
+        try (ServerSocketChannel ss = NetworkContext.provider().openServerSocketChannel()) {
             ss.bind(new InetSocketAddress(0));
 
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
@@ -781,7 +781,7 @@ public class SelectorTest {
 
         SelectionKey selectionKey = mock(SelectionKey.class);
         when(kafkaChannel.selectionKey()).thenReturn(selectionKey);
-        SocketChannel socket = SocketChannel.open();
+        SocketChannel socket = NetworkContext.provider().openSocketChannel();
         when(selectionKey.channel()).thenReturn(socket);
         when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_CONNECT);
         when(selectionKey.attachment()).thenReturn(kafkaChannel);
@@ -824,7 +824,7 @@ public class SelectorTest {
     public void testInboundConnectionsCountInConnectionCreationMetric() throws Exception {
         int conns = 5;
 
-        try (ServerSocketChannel ss = ServerSocketChannel.open()) {
+        try (ServerSocketChannel ss = NetworkContext.provider().openServerSocketChannel()) {
             ss.bind(new InetSocketAddress(0));
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
 
@@ -851,7 +851,7 @@ public class SelectorTest {
             ClientInformation.UNKNOWN_NAME_OR_VERSION, ClientInformation.UNKNOWN_NAME_OR_VERSION);
         Map<String, String> knownNameAndVersion = softwareNameAndVersionTags("A", "B");
 
-        try (ServerSocketChannel ss = ServerSocketChannel.open()) {
+        try (ServerSocketChannel ss = NetworkContext.provider().openServerSocketChannel()) {
             ss.bind(new InetSocketAddress(0));
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
 

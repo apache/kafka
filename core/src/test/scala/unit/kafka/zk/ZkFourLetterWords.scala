@@ -17,8 +17,10 @@
 
 package kafka.zk
 
+import org.apache.kafka.common.network.NetworkContext
+
 import java.io.IOException
-import java.net.{SocketTimeoutException, Socket, InetAddress, InetSocketAddress}
+import java.net.{InetAddress, InetSocketAddress, SocketTimeoutException}
 
 /**
   * ZooKeeper responds to a small set of commands. Each command is composed of four letters. You issue the commands to
@@ -32,7 +34,7 @@ object ZkFourLetterWords {
     val hostAddress =
       if (host != null) new InetSocketAddress(host, port)
       else new InetSocketAddress(InetAddress.getByName(null), port)
-    val sock = new Socket()
+    val sock = NetworkContext.factory.createSocket()
     try {
       sock.connect(hostAddress, timeout)
       val outStream = sock.getOutputStream

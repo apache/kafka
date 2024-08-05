@@ -23,7 +23,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.message.ProduceRequestData
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ListenerName, NetworkContext}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
@@ -321,7 +321,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
   def connect(listener: String): Socket = {
     val listenerName = ListenerName.normalised(listener)
-    new Socket("localhost", brokers.head.socketServer.boundPort(listenerName))
+    NetworkContext.factory.createSocket("localhost", brokers.head.socketServer.boundPort(listenerName))
   }
 
   private def createAndVerifyConnection(listener: String = "PLAINTEXT"): Unit = {
