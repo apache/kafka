@@ -189,11 +189,11 @@
 
     <!-- Raft -->
     <suppress checks="NPathComplexity"
-              files="RecordsIterator.java"/>
+              files="(DynamicVoter|RecordsIterator).java"/>
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
-              files="(KafkaStreams|KStreamImpl|KTableImpl|InternalTopologyBuilder|StreamsPartitionAssignor|StreamThread|IQv2StoreIntegrationTest|KStreamImplTest|RocksDBStore).java"/>
+              files="(KafkaStreams|KStreamImpl|KTableImpl|InternalTopologyBuilder|StreamsPartitionAssignor|StreamThread|IQv2StoreIntegrationTest|KStreamImplTest|RocksDBStore|StreamTask).java"/>
 
     <suppress checks="MethodLength"
               files="KTableImpl.java"/>
@@ -325,7 +325,7 @@
     <suppress checks="(ParameterNumber|ClassDataAbstractionCoupling)"
               files="(QuorumController).java"/>
     <suppress checks="(CyclomaticComplexity|NPathComplexity)"
-              files="(PartitionRegistration|PartitionChangeBuilder).java"/>
+              files="(PartitionRegistration|PartitionChangeBuilder|ScramParser).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(ClientQuotasImage|KafkaEventQueue|MetadataDelta|QuorumController|ReplicationControlManager|KRaftMigrationDriver|ClusterControlManager|MetaPropertiesEnsemble).java"/>
     <suppress checks="NPathComplexity"

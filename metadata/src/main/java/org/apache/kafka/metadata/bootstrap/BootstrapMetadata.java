@@ -20,10 +20,13 @@ package org.apache.kafka.metadata.bootstrap;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -39,6 +42,36 @@ public class BootstrapMetadata {
     private final List<ApiMessageAndVersion> records;
     private final MetadataVersion metadataVersion;
     private final String source;
+
+    public static BootstrapMetadata fromVersions(
+        MetadataVersion metadataVersion,
+        Map<String, Short> featureVersions,
+        String source
+    ) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        records.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
+        List<String> featureNames = new ArrayList<>(featureVersions.size());
+        featureVersions.keySet().forEach(n -> {
+            // metadata.version is handled in a special way, and kraft.version generates no
+            // FeatureLevelRecord.
+            if (!(n.equals(MetadataVersion.FEATURE_NAME) ||
+                    n.equals(KRaftVersion.FEATURE_NAME))) {
+                featureNames.add(n);
+            }
+        });
+        featureNames.sort(String::compareTo);
+        for (String featureName : featureNames) {
+            short level = featureVersions.get(featureName);
+            if (level > 0) {
+                records.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                    setName(featureName).
+                    setFeatureLevel(level), (short) 0));
+            }
+        }
+        return new BootstrapMetadata(records, metadataVersion, source);
+    }
 
     public static BootstrapMetadata fromVersion(MetadataVersion metadataVersion, String source) {
         List<ApiMessageAndVersion> records = Collections.singletonList(
