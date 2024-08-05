@@ -1736,9 +1736,9 @@ public class SharePartitionManagerTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
         SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData1 = new SharePartitionManager.ShareFetchPartitionData(
-                fetchParams, groupId, memberId, Collections.emptyList(), new CompletableFuture<>(), partitionMaxBytes);
+                fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes);
         SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData2 = new SharePartitionManager.ShareFetchPartitionData(
-            fetchParams, groupId, memberId, Collections.singletonList(tp0), new CompletableFuture<>(), partitionMaxBytes);
+            fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes);
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
