@@ -44,7 +44,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -824,7 +823,6 @@ public class SelectorTest {
     @Test
     public void testInboundConnectionsCountInConnectionCreationMetric() throws Exception {
         int conns = 5;
-        List<Thread> threads = new ArrayList<>(conns);
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -833,17 +831,13 @@ public class SelectorTest {
             for (int i = 0; i < conns; i++) {
                 Thread sender = createSender(serverAddress, randomPayload(1));
                 sender.start();
-                threads.add(sender);
                 try (SocketChannel channel = ss.accept()) {
                     channel.configureBlocking(false);
                     selector.register(Integer.toString(i), channel);
+                } finally {
+                    sender.join();
                 }
             }
-        }
-
-        // Ensure all threads complete their execution
-        for (Thread thread : threads) {
-            thread.join();
         }
 
         assertEquals((double) conns, getMetric("connection-creation-total").metricValue());
