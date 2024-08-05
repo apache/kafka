@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 
 import javax.security.auth.Subject;
+import javax.security.auth.login.LoginException;
 
 import static java.util.Arrays.asList;
 
@@ -58,7 +59,7 @@ public class LoginManager {
     private int refCount;
 
     private LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
-                 LoginMetadata<?> loginMetadata) throws Exception {
+                 LoginMetadata<?> loginMetadata) throws LoginException {
         this.loginMetadata = loginMetadata;
         this.login = Utils.newInstance(loginMetadata.loginClass);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
@@ -97,7 +98,7 @@ public class LoginManager {
      */
     public static LoginManager acquireLoginManager(JaasContext jaasContext, String saslMechanism,
                                                    Class<? extends Login> defaultLoginClass,
-                                                   Map<String, ?> configs) throws Exception {
+                                                   Map<String, ?> configs) throws LoginException {
         Class<? extends Login> loginClass = configuredClassOrDefault(configs, jaasContext,
                 saslMechanism, SaslConfigs.SASL_LOGIN_CLASS, defaultLoginClass);
         Class<? extends AuthenticateCallbackHandler> defaultLoginCallbackHandlerClass = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM
