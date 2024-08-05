@@ -62,7 +62,6 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ScheduledTimeout;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
@@ -83,6 +82,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
@@ -13915,36 +13915,6 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testShareGroupMemberRejoinAfterFailover() {
-        String groupId = "fooup";
-        String memberId = Uuid.randomUuid().toString();
-
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withShareGroupAssignor(new NoOpPartitionAssignor())
-            .build();
-
-        context.replay(CoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 100));
-
-        // Member is not known after the failover.
-        assertThrows(UnknownMemberIdException.class, () ->
-            context.shareGroupHeartbeat(
-                new ShareGroupHeartbeatRequestData()
-                    .setGroupId(groupId)
-                    .setMemberId(memberId)
-                    .setMemberEpoch(100)
-                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
-
-        // Member joins with epoch 0 to re-join the group.
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId)
-                .setMemberEpoch(0)
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
-        assertEquals(101, result.response().memberEpoch());
-    }
-
-    @Test
     public void testShareGroupMemberJoinsEmptyGroupWithAssignments() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -14001,12 +13971,30 @@ public class GroupMetadataManagerTest {
         ShareGroupMember expectedMember = new ShareGroupMember.Builder(memberId)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            ))
             .build();
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             CoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, expectedMember),
-            CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 1)
+            CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                }
+            }),
+            CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 1),
+            CoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            )),
+            CoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, 1),
+            CoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
         assertRecordsEquals(expectedRecords, result.records());
@@ -14015,42 +14003,61 @@ public class GroupMetadataManagerTest {
     @Test
     public void testShareGroupLeavingMemberBumpsGroupEpoch() {
         String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
 
-        // A share group cannot have pre-defined members and member metadata as members and assignments
-        // are not persisted.
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+        Uuid zarTopicId = Uuid.randomUuid();
+        String zarTopicName = "zar";
+
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addTopic(zarTopicId, zarTopicName, 1)
+                .addRacks()
+                .build())
+            .withShareGroup(new ShareGroupBuilder(groupId, 10)
+                .withMember(new ShareGroupMember.Builder(memberId1)
+                        .setState(MemberState.STABLE)
+                        .setMemberEpoch(10)
+                        .setPreviousMemberEpoch(9)
+                        .setClientId("client")
+                        .setClientHost("localhost/127.0.0.1")
+                        .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                        .setAssignedPartitions(mkAssignment(
+                                mkTopicAssignment(fooTopicId, 0, 1, 2),
+                                mkTopicAssignment(barTopicId, 0, 1)))
+                        .build())
+                .withMember(new ShareGroupMember.Builder(memberId2)
+                        .setState(MemberState.STABLE)
+                        .setMemberEpoch(10)
+                        .setPreviousMemberEpoch(9)
+                        .setClientId("client")
+                        .setClientHost("localhost/127.0.0.1")
+                        // Use zar only here to ensure that metadata needs to be recomputed.
+                        .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+                        .setAssignedPartitions(mkAssignment(
+                                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                                mkTopicAssignment(barTopicId, 2)))
+                        .build())
+                .withAssignment(memberId1, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2),
+                        mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 2)))
+                .withAssignmentEpoch(10))
             .build();
 
-        assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.emptyMap()
-        ));
-
-        context.replay(CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 100));
-
-        // Member 1 joins the group.
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId1)
-                .setMemberEpoch(0)
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
-        assertEquals(101, result.response().memberEpoch());
-
-        // Member 2 joins the group.
-        result = context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId2)
-                .setMemberEpoch(0)
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
-        assertEquals(102, result.response().memberEpoch());
-
         // Member 2 leaves the consumer group.
-        result = context.shareGroupHeartbeat(
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
@@ -14065,8 +14072,17 @@ public class GroupMetadataManagerTest {
         );
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
-            CoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId, memberId2),
-            CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 103)
+                CoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord(groupId, memberId2),
+                CoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord(groupId, memberId2),
+                CoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId, memberId2),
+                // Subscription metadata is recomputed because zar is no longer there.
+                CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                    {
+                        put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    }
+                }),
+                CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 11)
         );
 
         assertRecordsEquals(expectedRecords, result.records());
@@ -14113,12 +14129,15 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testShareGroupDelete() {
+        String groupId = "share-group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroup(new ShareGroupBuilder(groupId, 10))
             .build();
-        context.groupMetadataManager.getOrMaybeCreatePersistedShareGroup("share-group-id", true);
 
-        List<CoordinatorRecord> expectedRecords = Collections.singletonList(
-            CoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord("share-group-id")
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+                CoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId),
+                CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId),
+                CoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId)
         );
         List<CoordinatorRecord> records = new ArrayList<>();
         context.groupMetadataManager.createGroupTombstoneRecords("share-group-id", records);
@@ -14135,17 +14154,15 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("share-range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
+            .withShareGroup(new ShareGroupBuilder(groupId, 10))
             .build();
-
-        assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.emptyMap()
-        ));
 
         context.replay(CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 10));
 
         assertEquals(ShareGroup.ShareGroupState.EMPTY, context.shareGroupState(groupId));
 
         context.replay(CoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
             .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .build()));
         context.replay(CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 11));
@@ -14159,6 +14176,7 @@ public class GroupMetadataManagerTest {
         assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
 
         context.replay(CoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
@@ -14167,6 +14185,7 @@ public class GroupMetadataManagerTest {
         assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
 
         context.replay(CoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, new ShareGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2, 3)))

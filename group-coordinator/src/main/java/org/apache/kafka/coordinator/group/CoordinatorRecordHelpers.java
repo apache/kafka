@@ -896,13 +896,13 @@ public class CoordinatorRecordHelpers {
             String memberId
     ) {
         return new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new ConsumerGroupCurrentMemberAssignmentKey()
-                                .setGroupId(groupId)
-                                .setMemberId(memberId),
-                        (short) 14
-                ),
-                null // Tombstone
+            new ApiMessageAndVersion(
+                new ShareGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                (short) 14
+            ),
+            null // Tombstone
         );
     }
 

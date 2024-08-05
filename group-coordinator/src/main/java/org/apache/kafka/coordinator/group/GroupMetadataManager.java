@@ -153,9 +153,9 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newCon
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupEpochRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
@@ -2563,6 +2563,8 @@ public class GroupMetadataManager {
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withTopicsImage(metadataImage.topics())
+                    .withTargetAssignmentRecordBuilder(CoordinatorRecordHelpers::newShareGroupTargetAssignmentRecord)
+                    .withTargetAssignmentEpochRecordBuilder(CoordinatorRecordHelpers::newShareGroupTargetAssignmentEpochRecord)
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             long startTimeMs = time.milliseconds();
