@@ -50,6 +50,7 @@ import java.util.Scanner;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * MetricsReporter that aggregates metrics data and reports it via HTTP requests to a configurable
@@ -96,7 +97,31 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                             "producer/consumer/streams/connect instance");
 
     public PushHttpMetricsReporter() {
-        time = Time.SYSTEM;
+        // This is for backward compatibility with older versions like 0.8.2 and 0.9,
+        // where Time.SYSTEM does not exist. Therefore, we need to implement it here.
+        // In PushHttpMetricsReporter, we only use the Time#milliseconds method, so we
+        // implement only that method here. Other methods will throw UnsupportedOperationException.
+        time = new Time() {
+            @Override
+            public long milliseconds() {
+                return System.currentTimeMillis();
+            }
+
+            @Override
+            public long nanoseconds() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void sleep(long ms) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) {
+                throw new UnsupportedOperationException();
+            }
+        };
         executor = Executors.newSingleThreadScheduledExecutor();
     }
 
