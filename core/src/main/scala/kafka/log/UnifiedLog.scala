@@ -1465,6 +1465,21 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
+   * Check if this partition has, or will have remote logs, so that we should not delete local logs immediately.
+   * We will make sure `remoteLogEnabled` and:
+   *  (1) remote copy is enabled, which means local logs will keep uploading to the remote storage.
+   *  (2) remote copy is disabled, which means there will be no more logs uploaded to the remote storage.
+   *      And check (log start offset != local log start offset), which means the remote storage is not empty. In this case,
+   *      we delete local logs that are already uploaded to the remote storage. And then, when remote storage is empty
+   *      (log start offset == local log start offset) we can treat this topic as "remote log is disabled" and start to delete local logs.
+   *
+   * @return true if this partition has (or will have) remote logs
+   */
+  private def hasRemoteLogs(): Boolean = {
+    remoteLogEnabled() && (!config.remoteCopyDisabled() || logStartOffset != localLogStartOffset())
+  }
+
+  /**
    * Find segments starting from the oldest until the user-supplied predicate is false.
    * A final segment that is empty will never be returned.
    *
@@ -1478,7 +1493,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // Segments are eligible for deletion when:
       //    1. they are uploaded to the remote storage
       //    2. log-start-offset was incremented higher than the largest offset in the candidate segment
-      if (remoteLogEnabled()) {
+      if (hasRemoteLogs()) {
         (upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage()) ||
           allowDeletionDueToLogStartOffsetIncremented
       } else {
@@ -1523,7 +1538,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def incrementStartOffset(startOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
-    if (remoteLogEnabled()) maybeIncrementLocalLogStartOffset(startOffset, reason)
+    if (hasRemoteLogs()) maybeIncrementLocalLogStartOffset(startOffset, reason)
     else maybeIncrementLogStartOffset(startOffset, reason)
   }
 
@@ -1571,7 +1586,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def deleteRetentionMsBreachedSegments(): Int = {
-    val retentionMs = localRetentionMs(config, remoteLogEnabled())
+    val retentionMs = localRetentionMs(config, hasRemoteLogs())
     if (retentionMs < 0) return 0
     val startMs = time.milliseconds
 
@@ -1583,7 +1598,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
-    val retentionSize: Long = localRetentionSize(config, remoteLogEnabled())
+    val retentionSize: Long = localRetentionSize(config, hasRemoteLogs())
     if (retentionSize < 0 || size < retentionSize) return 0
     var diff = size - retentionSize
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
@@ -2339,12 +2354,12 @@ object UnifiedLog extends Logging {
     }
   }
 
-  private[log] def localRetentionMs(config: LogConfig, remoteLogEnabled: Boolean): Long = {
-    if (remoteLogEnabled) config.remoteLogConfig.localRetentionMs else config.retentionMs
+  private[log] def localRetentionMs(config: LogConfig, hasRemoteLogs: Boolean): Long = {
+    if (hasRemoteLogs) config.remoteLogConfig.localRetentionMs else config.retentionMs
   }
 
-  private[log] def localRetentionSize(config: LogConfig, remoteLogEnabled: Boolean): Long = {
-    if (remoteLogEnabled) config.remoteLogConfig.localRetentionBytes else config.retentionSize
+  private[log] def localRetentionSize(config: LogConfig, hasRemoteLogs: Boolean): Long = {
+    if (hasRemoteLogs) config.remoteLogConfig.localRetentionBytes else config.retentionSize
   }
 
 }
