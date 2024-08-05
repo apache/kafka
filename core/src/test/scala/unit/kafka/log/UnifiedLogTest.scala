@@ -4213,7 +4213,7 @@ class UnifiedLogTest {
 
     // add remoteCopyDisabled = true
     val copyDisabledLogConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
-      fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteCopyDisabled = true)
+      fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteLogCopyDisable = true)
     log.updateConfig(copyDisabledLogConfig)
 
     // No local logs will be deleted even though local retention bytes is 1 because there are still logs in remote storage
@@ -4237,7 +4237,7 @@ class UnifiedLogTest {
 
     // add retentionMs = 1000
     val retentionMsConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionMs = 1, retentionMs = 1000,
-      fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteCopyDisabled = true)
+      fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteLogCopyDisable = true)
     log.updateConfig(retentionMsConfig)
 
     // Should not delete any logs because no logs expired
@@ -4281,9 +4281,9 @@ class UnifiedLogTest {
     // simulate calls to upload 3 segments to remote storage
     log.updateHighestOffsetInRemoteStorage(30)
 
-    // add remoteCopyDisabled = true
+    // add remoteLogCopyDisable = true
     val copyDisabledLogConfig = LogTestUtils.createLogConfig(localRetentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true,
-      remoteCopyDisabled = true)
+      remoteLogCopyDisable = true)
     log.updateConfig(copyDisabledLogConfig)
 
     // the local log should still be deleted and local log start offset should be increased
@@ -4294,7 +4294,7 @@ class UnifiedLogTest {
 
     // add retentionBytes = 1
     val retentionByteLogConfig = LogTestUtils.createLogConfig(localRetentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true,
-      remoteCopyDisabled = true, retentionBytes = 1)
+      remoteLogCopyDisable = true, retentionBytes = 1)
     log.updateConfig(retentionByteLogConfig)
 
     // No local logs will be deleted even though retention bytes is 1 because there are still logs in remote storage

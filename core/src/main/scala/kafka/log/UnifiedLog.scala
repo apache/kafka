@@ -1476,7 +1476,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @return true if this partition has (or will have) remote logs
    */
   private def hasRemoteLogs(): Boolean = {
-    remoteLogEnabled() && (!config.remoteCopyDisabled() || logStartOffset != localLogStartOffset())
+    remoteLogEnabled() && (!config.remoteLogCopyDisable() || logStartOffset != localLogStartOffset())
   }
 
   /**
