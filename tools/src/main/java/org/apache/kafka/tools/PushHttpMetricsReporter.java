@@ -73,7 +73,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
     }
 
     private final Object lock = new Object();
-    private final Time time;
+    private final Supplier<Long> currentTimeMillis;
     private final ScheduledExecutorService executor;
     // The set of metrics are updated in init/metricChange/metricRemoval
     private final Map<MetricName, KafkaMetric> metrics = new LinkedHashMap<>();
@@ -97,36 +97,17 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                             "producer/consumer/streams/connect instance");
 
     public PushHttpMetricsReporter() {
-        // This is for backward compatibility with older versions like 0.8 and 0.9,
-        // where Time.SYSTEM does not exist. Therefore, we need to implement it here.
-        // In PushHttpMetricsReporter, we only use the Time#milliseconds method, so we
-        // implement only that method here. Other methods will throw UnsupportedOperationException.
-        time = new Time() {
-            @Override
-            public long milliseconds() {
-                return System.currentTimeMillis();
-            }
-
-            @Override
-            public long nanoseconds() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void sleep(long ms) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        // In test_performance_services.py, we have system tests for Kafka versions 0.8.2 and 0.9.
+        // These tests always use the tools jar from the trunk branch, regardless of the Kafka version being tested,
+        // while the client jar aligns with the Kafka version specified in the test suite. To ensure these system test
+        // passed, we need to make this class compatible with older client jars. This discrepancy force us not to use
+        // `Time.SYSTEM` here as there is no such field in the older Kafka version.
+        currentTimeMillis = System::currentTimeMillis;
         executor = Executors.newSingleThreadScheduledExecutor();
     }
 
     PushHttpMetricsReporter(Time mockTime, ScheduledExecutorService mockExecutor) {
-        time = mockTime;
+        currentTimeMillis = mockTime::milliseconds;
         executor = mockExecutor;
     }
 
@@ -194,7 +175,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
     private class HttpReporter implements Runnable {
         @Override
         public void run() {
-            long now = time.milliseconds();
+            long now = currentTimeMillis.get();
             final List<MetricValue> samples;
             synchronized (lock) {
                 samples = new ArrayList<>(metrics.size());
