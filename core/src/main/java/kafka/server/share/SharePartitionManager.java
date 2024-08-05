@@ -429,6 +429,41 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     /**
+     * The acknowledgeSessionUpdate method is used to update the request epoch and lastUsed time of the share session.
+     * @param groupId The group id in the share fetch request.
+     * @param reqMetadata The metadata in the share acknowledge request.
+     */
+    public void acknowledgeSessionUpdate(String groupId, ShareFetchMetadata reqMetadata) {
+        if (reqMetadata.epoch() == ShareFetchMetadata.INITIAL_EPOCH) {
+            // ShareAcknowledge Request cannot have epoch as INITIAL_EPOCH (0)
+            throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+        } else if (reqMetadata.epoch() == ShareFetchMetadata.FINAL_EPOCH) {
+            ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
+            if (cache.remove(key) != null) {
+                log.debug("Removed share session with key " + key);
+            }
+        } else {
+            synchronized (cache) {
+                ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
+                ShareSession shareSession = cache.get(key);
+                if (shareSession == null) {
+                    log.debug("Share session error for {}: no such share session found", key);
+                    throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+                } else {
+                    if (shareSession.epoch != reqMetadata.epoch()) {
+                        log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
+                                shareSession.epoch, reqMetadata.epoch());
+                        throw  Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+                    } else {
+                        cache.touch(shareSession, time.milliseconds());
+                        shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * The cachedTopicIdPartitionsInShareSession method is used to get the cached topic-partitions in the share session.
      *
      * @param groupId The group id in the share fetch request.
