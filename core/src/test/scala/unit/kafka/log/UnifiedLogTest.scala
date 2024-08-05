@@ -4270,7 +4270,7 @@ class UnifiedLogTest {
     }
     assertEquals(5, log.logSegments.size)
     log.updateHighWatermark(log.logEndOffset)
-    // simulate calls to upload 3 segments to remote storage
+    // simulate calls to upload 2 segments to remote storage
     log.updateHighestOffsetInRemoteStorage(20)
 
     log.deleteOldSegments()
@@ -4278,7 +4278,7 @@ class UnifiedLogTest {
     assertEquals(0, log.logStartOffset)
     assertEquals(21, log.localLogStartOffset())
 
-    // simulate calls to upload 3 segments to remote storage
+    // simulate calls to upload the 3rd segments to remote storage
     log.updateHighestOffsetInRemoteStorage(30)
 
     // add remoteLogCopyDisable = true
