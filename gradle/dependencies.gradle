@@ -164,7 +164,7 @@ versions += [
   spotbugs: "4.8.0",
   zinc: "1.9.2",
   zookeeper: "3.8.4",
-  zstd: "1.5.6-3"
+  zstd: "1.5.6-4"
 ]
 
 libs += [
