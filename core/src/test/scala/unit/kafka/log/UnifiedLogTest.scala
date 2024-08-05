@@ -4189,25 +4189,32 @@ class UnifiedLogTest {
   }
 
   @Test
-  def testRetentionOnLocalLogDeletionWhenRemoteCopyDisabled(): Unit = {
+  def testRetentionOnLocalLogDeletionWhenRemoteLogCopyDisabled(): Unit = {
     def createRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)))
     val segmentBytes = createRecords.sizeInBytes()
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
           fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
 
-    // Given 10 segments of 1 message each
-    for (_ <- 0 until 10) {
+    // Given 6 segments of 1 message each
+    for (_ <- 0 until 6) {
       log.appendAsLeader(createRecords, leaderEpoch = 0)
     }
-    assertEquals(10, log.logSegments.size)
+    assertEquals(6, log.logSegments.size)
 
     log.updateHighWatermark(log.logEndOffset)
+
+    // Should not delete local log because highest remote storage offset is -1 (default value)
+    log.deleteOldSegments()
+    assertEquals(6, log.logSegments.size())
+    assertEquals(0, log.logStartOffset)
+    assertEquals(0, log.localLogStartOffset())
+
     // simulate calls to upload 2 segments to remote storage
     log.updateHighestOffsetInRemoteStorage(1)
 
     log.deleteOldSegments()
-    assertEquals(8, log.logSegments.size())
+    assertEquals(4, log.logSegments.size())
     assertEquals(0, log.logStartOffset)
     assertEquals(2, log.localLogStartOffset())
 
@@ -4216,43 +4223,51 @@ class UnifiedLogTest {
       fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteLogCopyDisable = true)
     log.updateConfig(copyDisabledLogConfig)
 
-    // No local logs will be deleted even though local retention bytes is 1 because there are still logs in remote storage
+    // No local logs will be deleted even though local retention bytes is 1 because we'll adopt retention.ms/bytes
+    // when remote.log.copy.disable = true
     log.deleteOldSegments()
-    assertEquals(8, log.logSegments.size())
+    assertEquals(4, log.logSegments.size())
     assertEquals(0, log.logStartOffset)
     assertEquals(2, log.localLogStartOffset())
 
     // simulate the remote logs are all deleted due to retention policy
     log.updateLogStartOffsetFromRemoteTier(2)
-    assertEquals(8, log.logSegments.size())
+    assertEquals(4, log.logSegments.size())
     assertEquals(2, log.logStartOffset)
     assertEquals(2, log.localLogStartOffset())
 
-    // try to delete local logs again, 3 segments will be deleted this time because log start offset == local log start offset,
-    // which means no remote storage is empty. We'll treat this log as local logs and use retention.bytes for retention policy.
+    // produce 3 more segments
+    for (_ <- 0 until 3) {
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
+    }
+    assertEquals(7, log.logSegments.size)
+    log.updateHighWatermark(log.logEndOffset)
+
+    // try to delete local logs again, 2 segments will be deleted this time because we'll adopt retention.ms/bytes (retention.bytes = 5)
+    // when remote.log.copy.disable = true
     log.deleteOldSegments()
     assertEquals(5, log.logSegments.size())
-    assertEquals(5, log.logStartOffset)
-    assertEquals(5, log.localLogStartOffset())
+    assertEquals(4, log.logStartOffset)
+    assertEquals(4, log.localLogStartOffset())
 
-    // add retentionMs = 1000
+    // add localRetentionMs = 1, retentionMs = 1000
     val retentionMsConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionMs = 1, retentionMs = 1000,
       fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteLogCopyDisable = true)
     log.updateConfig(retentionMsConfig)
 
-    // Should not delete any logs because no logs expired
+    // Should not delete any logs because no local logs expired using retention.ms = 1000
     mockTime.sleep(10)
     log.deleteOldSegments()
     assertEquals(5, log.logSegments.size())
-    assertEquals(5, log.logStartOffset)
-    assertEquals(5, log.localLogStartOffset())
+    assertEquals(4, log.logStartOffset)
+    assertEquals(4, log.localLogStartOffset())
 
     // Should delete all logs because all of them are expired based on retentionMs = 1000
     mockTime.sleep(1000)
     log.deleteOldSegments()
     assertEquals(1, log.logSegments.size())
-    assertEquals(10, log.logStartOffset)
-    assertEquals(10, log.localLogStartOffset())
+    assertEquals(9, log.logStartOffset)
+    assertEquals(9, log.localLogStartOffset())
   }
 
   @Test
@@ -4270,51 +4285,13 @@ class UnifiedLogTest {
     }
     assertEquals(5, log.logSegments.size)
     log.updateHighWatermark(log.logEndOffset)
-    // simulate calls to upload 2 segments to remote storage
-    log.updateHighestOffsetInRemoteStorage(20)
-
-    log.deleteOldSegments()
-    assertEquals(3, log.logSegments.size())
-    assertEquals(0, log.logStartOffset)
-    assertEquals(21, log.localLogStartOffset())
-
-    // simulate calls to upload the 3rd segments to remote storage
+    // simulate calls to upload 3 segments to remote storage
     log.updateHighestOffsetInRemoteStorage(30)
 
-    // add remoteLogCopyDisable = true
-    val copyDisabledLogConfig = LogTestUtils.createLogConfig(localRetentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true,
-      remoteLogCopyDisable = true)
-    log.updateConfig(copyDisabledLogConfig)
-
-    // the local log should still be deleted and local log start offset should be increased
     log.deleteOldSegments()
     assertEquals(2, log.logSegments.size())
     assertEquals(0, log.logStartOffset)
     assertEquals(31, log.localLogStartOffset())
-
-    // add retentionBytes = 1
-    val retentionByteLogConfig = LogTestUtils.createLogConfig(localRetentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true,
-      remoteLogCopyDisable = true, retentionBytes = 1)
-    log.updateConfig(retentionByteLogConfig)
-
-    // No local logs will be deleted even though retention bytes is 1 because there are still logs in remote storage
-    log.deleteOldSegments()
-    assertEquals(2, log.logSegments.size())
-    assertEquals(0, log.logStartOffset)
-    assertEquals(31, log.localLogStartOffset())
-
-    // simulate the remote logs are all deleted due to retention policy
-    log.updateLogStartOffsetFromRemoteTier(31)
-    assertEquals(2, log.logSegments.size())
-    assertEquals(31, log.logStartOffset)
-    assertEquals(31, log.localLogStartOffset())
-
-    // try to delete local logs again, 1 segment will be deleted this time because retentionBytes,
-    // and log start offset and local log start offset will both be updated
-    log.deleteOldSegments()
-    assertEquals(1, log.logSegments.size())
-    assertEquals(41, log.logStartOffset)
-    assertEquals(41, log.localLogStartOffset())
   }
 
   @Test
