@@ -723,8 +723,6 @@ class BrokerServer(
         CoreUtils.swallow(brokerTopicStats.close(), this)
       if (sharePartitionManager != null)
         CoreUtils.swallow(sharePartitionManager.close(), this)
-      if (persister != null)
-        CoreUtils.swallow(persister.stop(), this)
 
       isShuttingDown.set(false)
 
