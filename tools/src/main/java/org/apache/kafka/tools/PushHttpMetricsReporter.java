@@ -97,7 +97,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                             "producer/consumer/streams/connect instance");
 
     public PushHttpMetricsReporter() {
-        // This is for backward compatibility with older versions like 0.8.2 and 0.9,
+        // This is for backward compatibility with older versions like 0.8 and 0.9,
         // where Time.SYSTEM does not exist. Therefore, we need to implement it here.
         // In PushHttpMetricsReporter, we only use the Time#milliseconds method, so we
         // implement only that method here. Other methods will throw UnsupportedOperationException.
