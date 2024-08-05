@@ -478,6 +478,7 @@ subprojects {
       displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    systemProperty("junit.jupiter.extensions.autodetection.enabled", true)
 
     exclude testsToExclude
 
@@ -507,6 +508,7 @@ subprojects {
       displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    systemProperty("junit.jupiter.extensions.autodetection.enabled", true)
 
     exclude testsToExclude
 
@@ -535,6 +537,7 @@ subprojects {
       displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    systemProperty("junit.jupiter.extensions.autodetection.enabled", true)
 
     exclude testsToExclude
 
