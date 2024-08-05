@@ -89,36 +89,14 @@ public interface SecurityManagerCompatibility {
 
         @Override
         public <T> T doPrivileged(PrivilegedAction<T> action) {
-            try {
-                return (T) doPrivileged.invoke(null, action);
-            } catch (IllegalAccessException e) {
-                throw new UnsupportedOperationException(e);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof RuntimeException) {
-                    throw (RuntimeException) cause;
-                } else {
-                    throw new RuntimeException(cause);
-                }
-            }
+            return (T) invoke(doPrivileged, null, action);
         }
 
         /**
          * @return the result of AccessController.getContext(), of type AccessControlContext
          */
         private Object getContext() {
-            try {
-                return getContext.invoke(null);
-            } catch (IllegalAccessException e) {
-                throw new UnsupportedOperationException(e);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof RuntimeException) {
-                    throw (RuntimeException) cause;
-                } else {
-                    throw new RuntimeException(cause);
-                }
-            }
+            return invoke(getContext, null);
         }
 
         /**
@@ -126,18 +104,7 @@ public interface SecurityManagerCompatibility {
          * @return The result of Subject.getSubject(AccessControlContext)
          */
         private Subject getSubject(Object context) {
-            try {
-                return (Subject) getSubject.invoke(null, context);
-            } catch (IllegalAccessException e) {
-                throw new UnsupportedOperationException(e);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof RuntimeException) {
-                    throw (RuntimeException) cause;
-                } else {
-                    throw new RuntimeException(cause);
-                }
-            }
+            return (Subject) invoke(getSubject,null, context);
         }
 
         @Override
@@ -149,20 +116,7 @@ public interface SecurityManagerCompatibility {
          * @return The result of Subject.doAs(Subject, PrivilegedExceptionAction)
          */
         private <T> T doAs(Subject subject, PrivilegedExceptionAction<T> action) throws PrivilegedActionException {
-            try {
-                return (T) doAs.invoke(null, subject, action);
-            } catch (IllegalAccessException e) {
-                throw new UnsupportedOperationException(e);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof PrivilegedActionException) {
-                    throw (PrivilegedActionException) cause;
-                } else if (cause instanceof RuntimeException) {
-                    throw (RuntimeException) cause;
-                } else  {
-                    throw new RuntimeException(cause);
-                }
-            }
+            return (T) invoke(doAs, null, subject, action);
         }
 
         @Override
@@ -206,36 +160,12 @@ public interface SecurityManagerCompatibility {
 
         @Override
         public Subject current() {
-            try {
-                return (Subject) current.invoke(null);
-            } catch (IllegalAccessException e) {
-                throw new UnsupportedOperationException(e);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof RuntimeException) {
-                    throw (RuntimeException) cause;
-                } else {
-                    throw new RuntimeException(cause);
-                }
-            }
+            return (Subject) invoke(current, null);
         }
 
         @Override
         public <T> T callAs(Subject subject, Callable<T> action) throws CompletionException {
-            try {
-                return (T) callAs.invoke(null, subject, action);
-            } catch (IllegalAccessException e) {
-                throw new UnsupportedOperationException(e);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof CompletionException) {
-                    throw (CompletionException) cause;
-                } else if (cause instanceof RuntimeException) {
-                    throw (RuntimeException) cause;
-                } else {
-                    throw new RuntimeException(cause);
-                }
-            }
+            return (T) invoke(callAs, null, subject, action);
         }
     }
 
@@ -350,6 +280,21 @@ public interface SecurityManagerCompatibility {
         @Override
         public <T> T callAs(Subject subject, Callable<T> action) throws CompletionException {
             return performAction(compatibility -> compatibility.callAs(subject, action));
+        }
+    }
+
+    static Object invoke(Method method, Object obj, Object... args) {
+        try {
+            return method.invoke(obj, args);
+        } catch (IllegalAccessException e) {
+            throw new UnsupportedOperationException(e);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            } else {
+                throw new RuntimeException(cause);
+            }
         }
     }
 }
