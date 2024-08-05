@@ -53,7 +53,7 @@ import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogCon
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
@@ -154,13 +154,26 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val credentialInfo = scram.credentialInfos().get(0)
     assertEquals(ScramMechanism.SCRAM_SHA_256, credentialInfo.mechanism())
     assertEquals(4096, credentialInfo.iterations())
+  }
 
+  private def createInvalidAdminClient(): Admin = {
+    val config = createConfig
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
+    Admin.create(config)
+  }
+
+  @ParameterizedTest
+  @Timeout(30)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeUserScramCredentialsTimeout(quorum: String): Unit = {
+    client = createInvalidAdminClient()
     // test describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options)
     val exception = assertThrows(classOf[ExecutionException], () => {
       client.describeUserScramCredentials(Collections.singletonList("tom4"),
         new DescribeUserScramCredentialsOptions().timeoutMs(0)).all().get()
     })
     assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    client.close(time.Duration.ZERO)
   }
 
   private def consumeToExpectedNumber = (expectedNumber: Int) => {
@@ -347,63 +360,32 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     } finally abortProducer.close()
   }
 
-
   @ParameterizedTest
+  @Timeout(30)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeTransactionsTimeoutMs(quorum: String): Unit = {
-    client = createAdminClient
-    client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
-
+  def testDescribeTransactionsTimeout(quorum: String): Unit = {
+    client = createInvalidAdminClient()
     val transactionId = "foo"
-
-    val producer = TestUtils.createTransactionalProducer(transactionId, brokers)
-    try {
-      producer.initTransactions()
-      producer.beginTransaction()
-
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "k1".getBytes, "v1".getBytes()))
-      producer.flush()
-      producer.commitTransaction()
-
-      val exception = assertThrows(classOf[ExecutionException], () => {
-        client.describeTransactions(Collections.singleton(transactionId),
-            new DescribeTransactionsOptions().timeoutMs(0)).description(transactionId).get()
-      })
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally producer.close()
+    val exception = assertThrows(classOf[ExecutionException], () => {
+      client.describeTransactions(Collections.singleton(transactionId),
+        new DescribeTransactionsOptions().timeoutMs(0)).description(transactionId).get()
+    })
+    assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    client.close(time.Duration.ZERO)
   }
 
   @ParameterizedTest
+  @Timeout(30)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAbortTransactionTimeout(quorum: String): Unit = {
-    client = createAdminClient
-    client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
-
-    val producer = TestUtils.createTransactionalProducer("foo", brokers)
-    try {
-      producer.initTransactions()
-      producer.beginTransaction()
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "k1".getBytes, "v1".getBytes()))
-      producer.flush()
-      producer.commitTransaction()
-
-      producer.beginTransaction()
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "k2".getBytes, "v2".getBytes()))
-      producer.flush()
-
-      val transactionalProducer = client.describeProducers(Collections.singletonList(topicPartition))
-        .partitionResult(topicPartition).get().activeProducers().asScala.minBy(_.producerId())
-
-      val exception = assertThrows(classOf[ExecutionException], () => {
-        client.abortTransaction(
-          new AbortTransactionSpec(topicPartition,
-            transactionalProducer.producerId(),
-            transactionalProducer.producerEpoch().toShort,
-            transactionalProducer.coordinatorEpoch().getAsInt),
-          new AbortTransactionOptions().timeoutMs(0)).all().get()
-      })
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally producer.close()
+    client = createInvalidAdminClient()
+    val exception = assertThrows(classOf[ExecutionException], () => {
+      client.abortTransaction(
+        new AbortTransactionSpec(topicPartition, 1, 1, 1),
+        new AbortTransactionOptions().timeoutMs(0)).all().get()
+    })
+    assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    client.close(time.Duration.ZERO)
   }
 
   @ParameterizedTest
