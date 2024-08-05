@@ -4862,7 +4862,7 @@ public class KafkaAdminClient extends AdminClient {
             return ListOffsetsRequest.MAX_TIMESTAMP;
         } else if (offsetSpec instanceof OffsetSpec.EarliestLocalSpec) {
             return ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
-        } else if (offsetSpec instanceof OffsetSpec.LatestTierSpec) {
+        } else if (offsetSpec instanceof OffsetSpec.LatestTieredSpec) {
             return ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
         }
         return ListOffsetsRequest.LATEST_TIMESTAMP;

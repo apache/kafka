@@ -5864,7 +5864,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
-            env.adminClient().listOffsets(Collections.singletonMap(tp0, OffsetSpec.earliestLocalSpec()));
+            env.adminClient().listOffsets(Collections.singletonMap(tp0, OffsetSpec.earliestLocal()));
 
             TestUtils.waitForCondition(() -> env.kafkaClient().requests().stream().anyMatch(request ->
                 request.requestBuilder().apiKey().messageType == ApiMessageType.LIST_OFFSETS && request.requestBuilder().oldestAllowedVersion() == 9
@@ -5892,7 +5892,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
-            env.adminClient().listOffsets(Collections.singletonMap(tp0, OffsetSpec.latestTierSpec()));
+            env.adminClient().listOffsets(Collections.singletonMap(tp0, OffsetSpec.latestTiered()));
 
             TestUtils.waitForCondition(() -> env.kafkaClient().requests().stream().anyMatch(request ->
                     request.requestBuilder().apiKey().messageType == ApiMessageType.LIST_OFFSETS && request.requestBuilder().oldestAllowedVersion() == 9
