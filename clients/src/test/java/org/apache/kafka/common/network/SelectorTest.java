@@ -588,6 +588,25 @@ public class SelectorTest {
         }
     }
 
+    @Test
+    public void connectAuthenticationFailure() throws Exception {
+        final String channelId = "1";
+        final ChannelBuilder channelBuilder = mock(ChannelBuilder.class);
+        when(channelBuilder.buildChannel(eq(channelId), any(SelectionKey.class), anyInt(), any(MemoryPool.class),
+            any(ChannelMetadataRegistry.class))).thenThrow(new SaslAuthenticationException("Authentication Failure"));
+
+        Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        assertThrows(SaslAuthenticationException.class, () -> selector.connect(channelId, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE));
+
+        try {
+            verifyEmptyImmediatelyConnectedKeys(selector);
+            assertNull(selector.channel(channelId), "Channel not removed");
+            ensureEmptySelectorFields(selector);
+        } finally {
+            selector.close();
+        }
+    }
+
     /*
      * Verifies that a muted connection is expired on idle timeout even if there are pending
      * receives on the socket.
