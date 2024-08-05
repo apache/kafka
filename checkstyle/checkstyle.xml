@@ -113,6 +113,14 @@
       <property name="message" value="'System.exit': Should not directly call System.exit, but Exit.exit instead."/>
     </module>
 
+    <module name="Regexp">
+      <property name="id" value="useNetworkContext"/>
+      <property name="format" value="(SelectorProvider\.provider\(|SocketFactory\.getDefault\(|DatagramChannel\.open\(|Pipe\.open\(|Selector\.open\(|SocketChannel\.open\(|System\.inheritedChannel\(|new ServerSocket\(|new Socket\()"/>
+      <property name="illegalPattern" value="true"/>
+      <property name="ignoreComments" value="true"/>
+      <property name="message" value="Use NetworkContext static methods to access network resources"/>
+    </module>
+
     <!-- code quality -->
     <module name="MethodLength">
       <property name="max" value="170" />
