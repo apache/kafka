@@ -363,10 +363,12 @@ public class NioEchoServer extends Thread {
     }
 
     public void closeNewChannels() throws IOException {
-        for (SocketChannel channel : newChannels) {
-            channel.close();
+        synchronized (newChannels) {
+            for (SocketChannel channel : newChannels) {
+                channel.close();
+            }
+            newChannels.clear();
         }
-        newChannels.clear();
     }
 
     public void close() throws IOException, InterruptedException {
