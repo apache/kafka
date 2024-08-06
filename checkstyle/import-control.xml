@@ -78,7 +78,10 @@
       <allow pkg="net.jpountz.xxhash" />
       <allow pkg="org.xerial.snappy" />
       <allow pkg="org.apache.kafka.common.compress" />
-      <allow class="org.apache.kafka.common.record.CompressionType" exact-match="true" />
+      <allow class="org.apache.kafka.common.record.CompressionType" />
+      <allow class="org.apache.kafka.common.record.CompressionType.GZIP" />
+      <allow class="org.apache.kafka.common.record.CompressionType.LZ4" />
+      <allow class="org.apache.kafka.common.record.CompressionType.ZSTD" />
       <allow class="org.apache.kafka.common.record.RecordBatch" exact-match="true" />
     </subpackage>
 
@@ -152,6 +155,7 @@
     </subpackage>
 
     <subpackage name="record">
+      <allow class="org.apache.kafka.common.config.ConfigDef.Range.between" exact-match="true" />
       <allow pkg="org.apache.kafka.common.compress" />
       <allow pkg="org.apache.kafka.common.header" />
       <allow pkg="org.apache.kafka.common.record" />
