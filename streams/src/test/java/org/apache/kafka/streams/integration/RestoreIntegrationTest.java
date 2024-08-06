@@ -114,7 +114,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RestoreIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RestoreIntegrationTest.class);
 
-    private static final Duration RESTORATION_DELAY = Duration.ofSeconds(1);
+    private static final Duration RESTORATION_DELAY = Duration.ofMillis(500);
 
     private static final int NUM_BROKERS = 1;
 
@@ -580,7 +580,7 @@ public class RestoreIntegrationTest {
         validateReceivedMessages(sampleData, outputTopic);
 
         // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
-        kafkaStreams.close(Duration.ofMillis(IntegrationTestUtils.DEFAULT_TIMEOUT));
+        kafkaStreams.close(Duration.ofMillis(5000L));
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
