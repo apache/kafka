@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.TestUtils.meterCount
-import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{PrimitiveRef, Time}
@@ -1619,11 +1619,11 @@ class LogValidatorTest {
       List.fill(256)("data").mkString("").getBytes
     )
     // Records from the producer were created with gzip max level
-    val gzipMax: Compression = Compression.gzip().level(GzipCompression.MAX_LEVEL).build()
+    val gzipMax: Compression = Compression.gzip().level(CompressionType.GZIP.maxLevel()).build()
     val recordsGzipMax = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMax)
 
     // The topic is configured with gzip min level
-    val gzipMin: Compression = Compression.gzip().level(GzipCompression.MIN_LEVEL).build()
+    val gzipMin: Compression = Compression.gzip().level(CompressionType.GZIP.minLevel()).build()
     val recordsGzipMin = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMin)
 
     // ensure data compressed with gzip max and min is different
@@ -1657,11 +1657,11 @@ class LogValidatorTest {
       List.fill(256)("data").mkString("").getBytes
     )
     // Records from the producer were created with gzip max level
-    val gzipMax: Compression = Compression.gzip().level(GzipCompression.MAX_LEVEL).build()
+    val gzipMax: Compression = Compression.gzip().level(CompressionType.GZIP.maxLevel()).build()
     val recordsGzipMax = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMax)
 
     // The topic is configured with lz4 min level
-    val lz4Min: Compression = Compression.lz4().level(Lz4Compression.MIN_LEVEL).build()
+    val lz4Min: Compression = Compression.lz4().level(CompressionType.LZ4.minLevel()).build()
     val recordsLz4Min = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, lz4Min)
 
     val validator = new LogValidator(recordsGzipMax,
