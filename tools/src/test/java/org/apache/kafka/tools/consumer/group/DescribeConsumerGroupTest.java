@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
@@ -80,6 +81,8 @@ public class DescribeConsumerGroupTest {
     private static final List<List<String>> DESCRIBE_TYPE_STATE = Collections.singletonList(Collections.singletonList("--state"));
     private static final List<List<String>> DESCRIBE_TYPES = Stream.of(DESCRIBE_TYPE_OFFSETS, DESCRIBE_TYPE_MEMBERS, DESCRIBE_TYPE_STATE).flatMap(Collection::stream).collect(Collectors.toList());
     private ClusterInstance clusterInstance;
+    private static final List<String> HEADER = Arrays.asList("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID");
+
 
     private static List<ClusterConfig> generator() {
         Map<String, String> serverProperties = new HashMap<>();
@@ -297,16 +300,19 @@ public class DescribeConsumerGroupTest {
                 try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--all-groups"})) {
                     TestUtils.waitForCondition(() -> {
                         Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
-                        List<String> linesWithoutHeaders = Arrays.stream(res.getKey().trim().split("\n"))
-                                .filter(line -> !line.isEmpty() && !line.contains("CURRENT-OFFSET"))
+                        List<Map<String, String>> groupsDescription = Arrays.stream(res.getKey().trim().split("\n"))
+                                .filter(line -> !line.isEmpty() && !HEADER.stream().allMatch(line::contains))
+                                .map(this::convertGroupDescriptionOutIntoMap)
                                 .collect(Collectors.toList());
-                        Optional<List<String>> groupMetadata = linesWithoutHeaders.stream()
-                                .map(line -> Arrays.stream(line.split(" ")).filter(col -> !col.isEmpty()).collect(Collectors.toList()))
-                                .filter(line -> line.contains(topicToBeDeleted))
-                                .findAny();
-                        boolean groupCaughtUp = groupMetadata.map(metadata -> Collections.frequency(metadata, "1")).orElse(0) == 2;
+                        Map<String, String> groupMetadata = groupsDescription.stream()
+                                .filter(line -> line.containsValue(topicToBeDeleted))
+                                .findAny()
+                                .orElse(Collections.emptyMap());
+                        boolean groupCaughtUp = !groupMetadata.isEmpty() &&
+                                groupMetadata.get("LAG").equals("0") &&
+                                groupMetadata.get("LOG-END-OFFSET").equals("1");
 
-                        return linesWithoutHeaders.size() == groups.size() && groupCaughtUp;
+                        return groupsDescription.size() == groups.size() && groupCaughtUp;
                     }, "Expected a data row and no error in describe results.");
                 }
 
@@ -316,18 +322,20 @@ public class DescribeConsumerGroupTest {
                 try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--all-groups"})) {
                     TestUtils.waitForCondition(() -> {
                         Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
-                        List<String> linesWithoutHeaders = Arrays.stream(res.getKey().trim().split("\n"))
-                                .filter(line -> !line.isEmpty() && !line.contains("CURRENT-OFFSET"))
+                        List<Map<String, String>> groupsDescription = Arrays.stream(res.getKey().trim().split("\n"))
+                                .filter(line -> !line.isEmpty() && !HEADER.stream().allMatch(line::contains))
+                                .map(this::convertGroupDescriptionOutIntoMap)
                                 .collect(Collectors.toList());
-                        Optional<List<String>> groupMetadata = linesWithoutHeaders.stream()
-                                .map(line -> Arrays.stream(line.split(" ")).filter(col -> !col.isEmpty()).collect(Collectors.toList()))
-                                .filter(line -> line.contains(topicToBeDeleted))
-                                .findAny();
+                        Map<String, String> groupMetadata = groupsDescription.stream()
+                                .filter(line -> line.containsValue(topicToBeDeleted))
+                                .findAny()
+                                .orElse(Collections.emptyMap());
                         // "-" is used as placeholder when we can't calculate lag or fetch offset
-                        boolean noLagOrOffsetMetadata = groupMetadata.map(metadata -> Collections.frequency(metadata, "-")).orElse(0) == 3;
-
-                        return linesWithoutHeaders.size() == groups.size() && noLagOrOffsetMetadata;
-                    }, 4000, "Expected a data row and no error in describe results after deleting one of the consumed topics.");
+                        boolean noLagOrOffsetMetadata = !groupMetadata.isEmpty() &&
+                                groupMetadata.get("LAG").equals("-") &&
+                                groupMetadata.get("LOG-END-OFFSET").equals("-");
+                        return groupsDescription.size() == groups.size() && noLagOrOffsetMetadata;
+                    }, "Expected a data row and no error in describe results after deleting one of the consumed topics.");
                 }
             } finally {
                 for (AutoCloseable protocolConsumerGroupExecutor : protocolConsumerGroupExecutors) {
@@ -340,6 +348,17 @@ public class DescribeConsumerGroupTest {
         }
     }
 
+    private Map<String, String> convertGroupDescriptionOutIntoMap(String groupDescriptionLine) {
+        List<String> metadata = Arrays.stream(groupDescriptionLine.split(" ")).filter(col -> !col.isEmpty()).collect(Collectors.toList());
+        if (HEADER.size() != metadata.size()) {
+            return Collections.emptyMap();
+        }
+
+        // Create a map to hold the key-value pairs
+        return IntStream.range(0, HEADER.size())
+                .boxed()
+                .collect(Collectors.toMap(HEADER::get, metadata::get));
+    }
 
     @ClusterTemplate("generator")
     public void testDescribeOffsetsOfExistingGroup(ClusterInstance clusterInstance) throws Exception {
