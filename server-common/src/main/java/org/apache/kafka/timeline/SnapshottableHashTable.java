@@ -135,7 +135,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
 
     /**
      * Iterate over the values that currently exist in the hash table.
-     *
+     * <br>
      * You can use this iterator even if you are making changes to the map.
      * The changes may or may not be visible while you are iterating.
      */
@@ -185,7 +185,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
 
     /**
      * Iterate over the values that existed in the hash table during a specific snapshot.
-     *
+     * <br>
      * You can use this iterator even if you are making changes to the map.
      * The snapshot is immutable and will always show up the same.
      */
@@ -406,37 +406,6 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         } else {
             return new HistoricalIterator(baseElements(), snapshotRegistry.getSnapshot(epoch));
         }
-    }
-
-    String snapshottableToDebugString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append(String.format("SnapshottableHashTable{%n"));
-        bld.append("top tier: ");
-        bld.append(baseToDebugString());
-        bld.append(String.format(",%nsnapshot tiers: [%n"));
-        String prefix = "";
-        for (Iterator<Snapshot> iter = snapshotRegistry.iterator(); iter.hasNext(); ) {
-            Snapshot snapshot = iter.next();
-            bld.append(prefix);
-            bld.append("epoch ").append(snapshot.epoch()).append(": ");
-            HashTier<T> tier = snapshot.getDelta(this);
-            if (tier == null) {
-                bld.append("null");
-            } else {
-                bld.append("HashTier{");
-                bld.append("size=").append(tier.size);
-                bld.append(", deltaTable=");
-                if (tier.deltaTable == null) {
-                    bld.append("null");
-                } else {
-                    bld.append(tier.deltaTable.baseToDebugString());
-                }
-                bld.append("}");
-            }
-            bld.append(String.format("%n"));
-        }
-        bld.append(String.format("]}%n"));
-        return bld.toString();
     }
 
     @SuppressWarnings("unchecked")
