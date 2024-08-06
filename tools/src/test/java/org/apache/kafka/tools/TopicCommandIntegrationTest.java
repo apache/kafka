@@ -69,8 +69,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.collection.JavaConverters;
-
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -82,7 +80,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
 @Tag("integration")
-@SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 @ExtendWith(ClusterTestExtensions.class)
 public class TopicCommandIntegrationTest {
     private final short defaultReplicationFactor = 1;
@@ -679,9 +676,7 @@ public class TopicCommandIntegrationTest {
                     60000, "Delete topic fail in 60000 ms"
             );
 
-            kafka.utils.TestUtils.verifyTopicDeletion(null, topicWithCollidingChar, 1, JavaConverters.asScalaIteratorConverter(
-                            clusterInstance.brokers().values().iterator())
-                    .asScala().toBuffer());
+            clusterInstance.waitTopicDeletion(topicWithCollidingChar);
 
             // recreate same topic
             adminClient.createTopics(Collections.singletonList(new NewTopic(topicWithCollidingChar, defaultNumPartitions, defaultReplicationFactor)));
