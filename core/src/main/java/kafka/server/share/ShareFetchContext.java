@@ -48,7 +48,7 @@ public abstract class ShareFetchContext {
      * @param throttleTimeMs - The time to throttle the response.
      * @return - An empty throttled response.
      */
-    ShareFetchResponse throttleResponse(int throttleTimeMs) {
+    public ShareFetchResponse throttleResponse(int throttleTimeMs) {
         return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
                 Collections.emptyIterator(), Collections.emptyList()));
     }
@@ -65,7 +65,7 @@ public abstract class ShareFetchContext {
      * @param version - The version of the share fetch request.
      * @return - The size of the response.
      */
-    abstract int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates,
+    public abstract int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates,
                               short version);
 
     /**
@@ -76,11 +76,11 @@ public abstract class ShareFetchContext {
      * @param updates - The updates to be sent in the response.
      * @return - The share fetch response.
      */
-    abstract ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId, LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
+    public abstract ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId, LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
 
     /**
      * @return - The error-prone and valid topic id partitions in the share fetch request.
      */
-    abstract ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions();
+    public abstract ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions();
 
 }

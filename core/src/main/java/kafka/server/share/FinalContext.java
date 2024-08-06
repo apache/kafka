@@ -45,12 +45,12 @@ public class FinalContext extends ShareFetchContext {
     }
 
     @Override
-    int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates, short version) {
+    public int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates, short version) {
         return ShareFetchResponse.sizeOf(version, updates.entrySet().iterator());
     }
 
     @Override
-    ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
+    public ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
                                                      LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
         log.debug("Final context returning {}", partitionsToLogString(updates.keySet()));
         return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, 0,
@@ -58,7 +58,7 @@ public class FinalContext extends ShareFetchContext {
     }
 
     @Override
-    ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
+    public ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
         return new ErroneousAndValidPartitionData();
     }
 }

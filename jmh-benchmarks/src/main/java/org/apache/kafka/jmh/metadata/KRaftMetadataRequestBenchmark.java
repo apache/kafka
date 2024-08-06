@@ -199,6 +199,7 @@ public class KRaftMetadataRequestBenchmark {
                 setAuthorizer(Optional.empty()).
                 setQuotas(quotaManagers).
                 setFetchManager(fetchManager).
+                setSharePartitionManager(Optional.empty()).
                 setBrokerTopicStats(brokerTopicStats).
                 setClusterId("clusterId").
                 setTime(Time.SYSTEM).
