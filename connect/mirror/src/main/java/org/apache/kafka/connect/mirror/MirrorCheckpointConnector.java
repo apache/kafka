@@ -40,7 +40,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -132,7 +131,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     // divide consumer groups among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (Objects.isNull(knownConsumerGroups)) {
+        if (knownConsumerGroups == null) {
             // If knownConsumerGroup is null, it means the initial loading has not finished.
             // An exception should be thrown to trigger the retry behavior in the framework.
             log.debug("Initial consumer loading has not yet completed");
@@ -192,8 +191,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private void refreshConsumerGroups()
             throws InterruptedException, ExecutionException {
-        // Checking null to avoid NPE.
-        Set<String> knownConsumerGroups = Objects.isNull(this.knownConsumerGroups) ? Collections.emptySet() : this.knownConsumerGroups;
+        // If loadInitialConsumerGroups fails for any reason(e.g., timeout), knownConsumerGroups may be null.
+        // We still want this method to recover gracefully in such cases.
+        Set<String> knownConsumerGroups = this.knownConsumerGroups == null ? Collections.emptySet() : this.knownConsumerGroups;
         Set<String> consumerGroups = findConsumerGroups();
         Set<String> newConsumerGroups = new HashSet<>(consumerGroups);
         newConsumerGroups.removeAll(knownConsumerGroups);
