@@ -163,17 +163,18 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @Timeout(30)
+  @Timeout(10)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeUserScramCredentialsTimeout(quorum: String): Unit = {
     client = createInvalidAdminClient()
-    // test describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options)
-    val exception = assertThrows(classOf[ExecutionException], () => {
-      client.describeUserScramCredentials(Collections.singletonList("tom4"),
-        new DescribeUserScramCredentialsOptions().timeoutMs(0)).all().get()
-    })
-    assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    client.close(time.Duration.ZERO)
+    try {
+      // test describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options)
+      val exception = assertThrows(classOf[ExecutionException], () => {
+        client.describeUserScramCredentials(Collections.singletonList("tom4"),
+          new DescribeUserScramCredentialsOptions().timeoutMs(0)).all().get()
+      })
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
   }
 
   private def consumeToExpectedNumber = (expectedNumber: Int) => {
@@ -361,31 +362,33 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @Timeout(30)
+  @Timeout(10)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeTransactionsTimeout(quorum: String): Unit = {
     client = createInvalidAdminClient()
-    val transactionId = "foo"
-    val exception = assertThrows(classOf[ExecutionException], () => {
-      client.describeTransactions(Collections.singleton(transactionId),
-        new DescribeTransactionsOptions().timeoutMs(0)).description(transactionId).get()
-    })
-    assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    client.close(time.Duration.ZERO)
+    try {
+      val transactionId = "foo"
+      val exception = assertThrows(classOf[ExecutionException], () => {
+        client.describeTransactions(Collections.singleton(transactionId),
+          new DescribeTransactionsOptions().timeoutMs(0)).description(transactionId).get()
+      })
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
   }
 
   @ParameterizedTest
-  @Timeout(30)
+  @Timeout(10)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAbortTransactionTimeout(quorum: String): Unit = {
     client = createInvalidAdminClient()
-    val exception = assertThrows(classOf[ExecutionException], () => {
-      client.abortTransaction(
-        new AbortTransactionSpec(topicPartition, 1, 1, 1),
-        new AbortTransactionOptions().timeoutMs(0)).all().get()
-    })
-    assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    client.close(time.Duration.ZERO)
+    try {
+      val exception = assertThrows(classOf[ExecutionException], () => {
+        client.abortTransaction(
+          new AbortTransactionSpec(topicPartition, 1, 1, 1),
+          new AbortTransactionOptions().timeoutMs(0)).all().get()
+      })
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
   }
 
   @ParameterizedTest
