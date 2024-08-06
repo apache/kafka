@@ -21,7 +21,6 @@ import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent._
 import java.util.{List => JList}
-import com.yammer.metrics.core.MetricName
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.Logging
 import kafka.zookeeper.ZooKeeperClient._
@@ -36,7 +35,6 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper._
 import org.apache.zookeeper.client.ZKClientConfig
 
-import java.util
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
 
@@ -64,12 +62,7 @@ class ZooKeeperClient(connectString: String,
                       private[zookeeper] val clientConfig: ZKClientConfig,
                       name: String) extends Logging {
 
-  private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass) {
-    override def metricName(name: String, metricTags: util.Map[String, String]): MetricName = {
-      KafkaMetricsGroup.explicitMetricName(metricGroup, metricType, name, metricTags)
-    }
-  }
-
+  private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(metricGroup, metricType)
 
   this.logIdent = s"[ZooKeeperClient $name] "
   private val initializationLock = new ReentrantReadWriteLock()

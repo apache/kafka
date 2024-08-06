@@ -33,10 +33,8 @@ final class BrokerServerMetrics private (
 ) extends AutoCloseable {
   import BrokerServerMetrics._
 
-  private val batchProcessingTimeHistName = KafkaMetricsGroup.explicitMetricName("kafka.server",
-    "BrokerMetadataListener",
-    "MetadataBatchProcessingTimeUs",
-    Collections.emptyMap())
+  private val metricsGroup = new KafkaMetricsGroup("kafka.server","BrokerMetadataListener")
+  private val batchProcessingTimeHistName = metricsGroup.metricName("MetadataBatchProcessingTimeUs", Collections.emptyMap())
 
   /**
    * A histogram tracking the time in microseconds it took to process batches of events.
@@ -44,10 +42,7 @@ final class BrokerServerMetrics private (
   private val batchProcessingTimeHist =
     KafkaYammerMetrics.defaultRegistry().newHistogram(batchProcessingTimeHistName, true)
 
-  private val batchSizeHistName = KafkaMetricsGroup.explicitMetricName("kafka.server",
-    "BrokerMetadataListener",
-    "MetadataBatchSizes",
-    Collections.emptyMap())
+  private val batchSizeHistName = metricsGroup.metricName("MetadataBatchSizes", Collections.emptyMap())
 
   /**
    * A histogram tracking the sizes of batches that we have processed.
