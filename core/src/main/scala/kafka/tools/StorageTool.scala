@@ -190,8 +190,8 @@ object StorageTool extends Logging {
       help("Used to initialize a single-node quorum controller quorum.").
       action(storeTrue())
     reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I").
-      help("A list of controller quorum voter ids, directories, and hostname:port pairs. The same values must be used to format all nodes. For example:\n" +
-        "0@localhost:8082:JEXY6aqzQY-32P5TStzaFg@,1@localhost:8083:MvDxzVmcRsaTz33bUuRU6A,2@localhost:8084:07R5amHmR32VDA6jHkGbTA\n").
+      help("The initial controllers, as a comma-separated list of id@hostname:port:directory. The same values must be used to format all nodes. For example:\n" +
+        "0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n").
       action(store())
     parser.parseArgs(args)
   }

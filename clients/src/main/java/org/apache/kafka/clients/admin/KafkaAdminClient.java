@@ -4667,6 +4667,9 @@ public class KafkaAdminClient extends AdminClient {
                         setPort(endpoint.port())));
                 return new AddRaftVoterRequest.Builder(
                    new AddRaftVoterRequestData().
+                       setClusterId(options.clusterId().isPresent() ?
+                           options.clusterId().get() : null).
+                       setTimeoutMs(timeoutMs).
                        setVoterId(voterId) .
                        setVoterDirectoryId(voterDirectoryId).
                        setListeners(listeners));
@@ -4711,6 +4714,8 @@ public class KafkaAdminClient extends AdminClient {
             RemoveRaftVoterRequest.Builder createRequest(int timeoutMs) {
                 return new RemoveRaftVoterRequest.Builder(
                     new RemoveRaftVoterRequestData().
+                        setClusterId(options.clusterId().isPresent() ?
+                            options.clusterId().get() : null).
                         setVoterId(voterId) .
                         setVoterDirectoryId(voterDirectoryId));
             }

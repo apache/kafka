@@ -64,4 +64,22 @@ public class MetadataQuorumCommandErrorTest {
         assertThrows(KafkaException.class, () -> MetadataQuorumCommand.relativeTimeMs(futureEpochMs, "test"));
     }
 
+    @Test
+    public void testRemoveControllerRequiresControllerId() {
+        assertEquals("argument --controller-id/-i is required",
+            ToolsTestUtils.captureStandardErr(() ->
+                assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
+                    "remove-controller",
+                    "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
+                    "--dry-run"))));
+    }
+
+    @Test
+    public void testRemoveControllerRequiresControllerDirectoryId() {
+        assertEquals("argument --controller-directory-id/-d is required",
+            ToolsTestUtils.captureStandardErr(() ->
+                assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
+                    "remove-controller",
+                    "--controller-id", "1"))));
+    }
 }
