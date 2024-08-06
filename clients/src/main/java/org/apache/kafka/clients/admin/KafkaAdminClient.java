@@ -239,6 +239,7 @@ import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RemoveRaftVoterRequest;
+import org.apache.kafka.common.requests.RemoveRaftVoterResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerRequest;
@@ -2296,7 +2297,6 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
                 final long now = time.milliseconds();
-                log.warn("The DescribeTopicPartitions API is not supported, using Metadata API to describe topics.");
                 runnable.call(generateDescribeTopicsCallWithMetadataApi(topicNamesList, topicFutures, options, now), now);
                 return false;
             }
@@ -4717,7 +4717,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleResponse(AbstractResponse response) {
-                AddRaftVoterResponse addResponse = (AddRaftVoterResponse) response;
+                RemoveRaftVoterResponse addResponse = (RemoveRaftVoterResponse) response;
                 if (addResponse.data().errorCode() != Errors.NONE.code()) {
                     ApiError error = new ApiError(
                             addResponse.data().errorCode(),
@@ -4861,6 +4861,10 @@ public class KafkaAdminClient extends AdminClient {
             return ListOffsetsRequest.EARLIEST_TIMESTAMP;
         } else if (offsetSpec instanceof OffsetSpec.MaxTimestampSpec) {
             return ListOffsetsRequest.MAX_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.EarliestLocalSpec) {
+            return ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.LatestTieredSpec) {
+            return ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
         }
         return ListOffsetsRequest.LATEST_TIMESTAMP;
     }

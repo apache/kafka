@@ -2382,6 +2382,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     DistributedHerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
+        callback.recordStage(tickThreadStage);
         DistributedHerderRequest req = new DistributedHerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
         // We don't need to synchronize here
@@ -2393,7 +2394,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // queue was added
         if (peekWithoutException() == req)
             member.wakeup();
-        callback.recordStage(tickThreadStage);
         return req;
     }
 
@@ -2432,10 +2432,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Connector {} config removed", connector);
 
             synchronized (DistributedHerder.this) {
-                // rebalance after connector removal to ensure that existing tasks are balanced among workers
-                if (configState.contains(connector))
+                if (configState.contains(connector)) {
+                    // rebalance after connector removal to ensure that existing tasks are balanced among workers
                     needsReconfigRebalance = true;
-                connectorConfigUpdates.add(connector);
+                } else {
+                    connectorConfigUpdates.add(connector);
+                }
+
             }
             member.wakeup();
         }
@@ -2448,9 +2451,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // to be bounced. However, this callback may also indicate a connector *addition*, which does require
             // a rebalance, so we need to be careful about what operation we request.
             synchronized (DistributedHerder.this) {
-                if (!configState.contains(connector))
+                if (!configState.contains(connector)) {
                     needsReconfigRebalance = true;
-                connectorConfigUpdates.add(connector);
+                } else {
+                    // Only need to restart the connector if it already existed
+                    connectorConfigUpdates.add(connector);
+                }
+
             }
             member.wakeup();
         }

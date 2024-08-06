@@ -50,7 +50,7 @@ public final class RecordRedactorTest {
 
     @Test
     public void testTopicRecordToString() {
-        assertEquals("TopicRecord(name='foo', topicId=UOovKkohSU6AGdYW33ZUNg, tieredEpoch=0, tieredState=false)",
+        assertEquals("TopicRecord(name='foo', topicId=UOovKkohSU6AGdYW33ZUNg)",
                 REDACTOR.toLoggableString(new TopicRecord().
                     setTopicId(Uuid.fromString("UOovKkohSU6AGdYW33ZUNg")).
                     setName("foo")));

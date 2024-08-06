@@ -41,7 +41,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -270,9 +269,13 @@ public class ConfigurationControlManager {
                                          List<ApiMessageAndVersion> recordsImplicitlyDeleted,
                                          boolean newlyCreatedResource) {
         Map<String, String> allConfigs = new HashMap<>();
+        Map<String, String> existingConfigsMap = new HashMap<>();
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
-        TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
-        if (existingConfigs != null) allConfigs.putAll(existingConfigs);
+        TimelineHashMap<String, String> existingConfigsSnapshot = configData.get(configResource);
+        if (existingConfigsSnapshot != null) {
+            allConfigs.putAll(existingConfigsSnapshot);
+            existingConfigsMap.putAll(existingConfigsSnapshot);
+        }
         for (ApiMessageAndVersion newRecord : recordsExplicitlyAltered) {
             ConfigRecord configRecord = (ConfigRecord) newRecord.message();
             if (configRecord.value() == null) {
@@ -289,7 +292,7 @@ public class ConfigurationControlManager {
             // in the list passed to the policy in order to maintain backwards compatibility
         }
         try {
-            validator.validate(configResource, allConfigs);
+            validator.validate(configResource, allConfigs, existingConfigsMap);
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }
@@ -472,10 +475,7 @@ public class ConfigurationControlManager {
             if (configs != null) {
                 Collection<String> targetConfigs = resourceEntry.getValue();
                 if (targetConfigs.isEmpty()) {
-                    Iterator<Entry<String, String>> iter =
-                        configs.entrySet(lastCommittedOffset).iterator();
-                    while (iter.hasNext()) {
-                        Entry<String, String> entry = iter.next();
+                    for (Entry<String, String> entry : configs.entrySet(lastCommittedOffset)) {
                         foundConfigs.put(entry.getKey(), entry.getValue());
                     }
                 } else {

@@ -303,7 +303,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
 
-    private static final long LOG_SUMMARY_INTERVAL_MS = 2 * 60 * 1000L; // log a summary of processing every 2 minutes
+    private final long logSummaryIntervalMs; // the count summary log output time interval
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
     private long totalPunctuatorsSinceLastSummary = 0L;
@@ -643,6 +643,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.processingMode = processingMode(config);
         this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
+        this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -1069,8 +1070,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
-        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
-        if (logProcessingSummary) {
+        if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks since the last update",
                  totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalCommittedSinceLastSummary);
 
@@ -1142,8 +1142,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
-        final boolean logProcessingSummary = now - lastLogSummaryMs > LOG_SUMMARY_INTERVAL_MS;
-        if (logProcessingSummary) {
+        if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Committed {} total tasks since the last update", totalCommittedSinceLastSummary);
 
             totalCommittedSinceLastSummary = 0L;

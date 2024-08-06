@@ -37,10 +37,13 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.transforms.Filter;
+import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -55,6 +58,8 @@ import org.slf4j.event.Level;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
@@ -80,9 +85,12 @@ import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_ST
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.PREDICATES_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_ENFORCE_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TRANSFORMS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
@@ -113,6 +121,7 @@ public class ConnectWorkerIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectWorkerIntegrationTest.class);
 
     private static final int NUM_TOPIC_PARTITIONS = 3;
+    private static final long RECORD_TRANSFER_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30);
     private static final int NUM_WORKERS = 3;
     private static final int NUM_TASKS = 4;
@@ -137,7 +146,7 @@ public class ConnectWorkerIntegrationTest {
         brokerProps = new Properties();
         brokerProps.put("auto.create.topics.enable", String.valueOf(false));
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -149,7 +158,7 @@ public class ConnectWorkerIntegrationTest {
     @AfterEach
     public void close(TestInfo testInfo) {
         log.info("Finished test {}", testInfo.getDisplayName());
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 
@@ -239,8 +248,11 @@ public class ConnectWorkerIntegrationTest {
     public void testBrokerCoordinator() throws Exception {
         ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         workerProps.put(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(5000));
-        connect = connectBuilder.workerProps(workerProps).build();
+
+        useFixedBrokerPort();
+
         // start the clusters
+        connect = connectBuilder.build();
         connect.start();
         int numTasks = 4;
         // create test topic
@@ -258,7 +270,7 @@ public class ConnectWorkerIntegrationTest {
         // expect that the connector will be stopped once the coordinator is detected to be down
         StartAndStopLatch stopLatch = connectorHandle.expectedStops(1, false);
 
-        connect.kafka().stopOnlyKafka();
+        connect.kafka().stopOnlyBrokers();
 
         // Allow for the workers to discover that the coordinator is unavailable, wait is
         // heartbeat timeout * 2 + 4sec
@@ -289,7 +301,7 @@ public class ConnectWorkerIntegrationTest {
                         + CONNECTOR_SETUP_DURATION_MS + "ms");
 
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(1, false);
-        connect.kafka().startOnlyKafkaOnSamePorts();
+        connect.kafka().restartOnlyBrokers();
 
         // Allow for the kafka brokers to come back online
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
@@ -830,8 +842,10 @@ public class ConnectWorkerIntegrationTest {
         // Workaround for KAFKA-15676, which can cause the scheduled rebalance delay to
         // be spuriously triggered after the group coordinator for a Connect cluster is bounced
         workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
+
+        useFixedBrokerPort();
+
         connect = connectBuilder
-                .numBrokers(1)
                 .numWorkers(1)
                 .build();
         connect.start();
@@ -849,16 +863,17 @@ public class ConnectWorkerIntegrationTest {
 
         // Bring down Kafka, which should cause some REST requests to fail
         log.info("Stopping Kafka cluster");
-        connect.kafka().stopOnlyKafka();
+        connect.kafka().stopOnlyBrokers();
 
         // Try to reconfigure the connector, which should fail with a timeout error
         log.info("Trying to reconfigure connector while Kafka cluster is down");
         assertTimeoutException(
                 () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig2),
-                "flushing updates to the status topic"
+                "flushing updates to the status topic",
+                true
         );
         log.info("Restarting Kafka cluster");
-        connect.kafka().startOnlyKafkaOnSamePorts();
+        connect.kafka().restartOnlyBrokers();
         connect.assertions().assertExactlyNumBrokersAreUp(1, "Broker did not complete startup in time");
         log.info("Kafka cluster is restarted");
 
@@ -873,18 +888,21 @@ public class ConnectWorkerIntegrationTest {
         log.info("Deleting Kafka Connect config topic");
         connect.kafka().deleteTopic(configTopic);
 
-        // Try to delete the connector, which should fail with a slightly-different timeout error
+        // Try to reconfigure the connector, which should fail with a slightly-different timeout error
         log.info("Trying to reconfigure connector after config topic has been deleted");
         assertTimeoutException(
-                () -> connect.deleteConnector(CONNECTOR_NAME),
-                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
+                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
+                "writing a config for connector " + CONNECTOR_NAME + " to the config topic",
+                true
         );
 
-        // The worker should still be blocked on the same operation
-        log.info("Trying again to reconfigure connector after config topic has been deleted");
+        // The worker should still be blocked on the same operation, and the timeout should occur
+        // immediately
+        log.info("Trying to delete connector after config topic has been deleted");
         assertTimeoutException(
-                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
-                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
+                () -> connect.deleteConnector(CONNECTOR_NAME),
+                "writing a config for connector " + CONNECTOR_NAME + " to the config topic",
+                false
         );
     }
 
@@ -926,11 +944,13 @@ public class ConnectWorkerIntegrationTest {
         }
     }
 
-    private void assertTimeoutException(Runnable operation, String expectedStageDescription) throws InterruptedException {
+    private void assertTimeoutException(Runnable operation, String expectedStageDescription, boolean wait) throws InterruptedException {
         connect.requestTimeout(1_000);
         AtomicReference<Throwable> latestError = new AtomicReference<>();
 
-        // Wait for the specific operation against the Connect cluster to time out
+        // If requested, wait for the specific operation against the Connect cluster to time out
+        // Otherwise, assert that the operation times out immediately
+        long timeoutMs = wait ? 30_000L : 0L;
         waitForCondition(
                 () -> {
                     try {
@@ -952,7 +972,7 @@ public class ConnectWorkerIntegrationTest {
                         return true;
                     }
                 },
-                30_000,
+                timeoutMs,
                 () -> {
                     String baseMessage = "REST request did not time out with expected error message in time. ";
                     Throwable t = latestError.get();
@@ -1177,7 +1197,7 @@ public class ConnectWorkerIntegrationTest {
                 NUM_TASKS,
                 "Connector or its tasks did not start in time"
         );
-        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
 
         connect.deleteConnector(CONNECTOR_NAME);
 
@@ -1218,7 +1238,7 @@ public class ConnectWorkerIntegrationTest {
                 NUM_TASKS,
                 "Connector or its tasks did not start in time"
         );
-        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
 
         // See if any new records got written to the old topic
         final long nextEndOffset = connect.kafka().endOffset(connectorTopicPartition);
@@ -1277,7 +1297,7 @@ public class ConnectWorkerIntegrationTest {
                 NUM_TASKS,
                 "Connector or its tasks did not start in time"
         );
-        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
 
         // Delete the secrets file, which should render the old task configs invalid
         assertTrue(secretsFile.delete(), "Failed to delete secrets file");
@@ -1302,7 +1322,7 @@ public class ConnectWorkerIntegrationTest {
 
         // Wait for at least one task to commit offsets after being restarted
         connectorHandle.expectedCommits(1);
-        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
 
         final long endOffset = connect.kafka().endOffset(new TopicPartition(secondConnectorTopic, 0));
         assertTrue(
@@ -1375,6 +1395,57 @@ public class ConnectWorkerIntegrationTest {
         );
     }
 
+    @Test
+    public void testPluginAliases() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        // Create a topic; not strictly necessary but prevents log spam when we start a source connector later
+        final String topic = "kafka17150";
+        connect.kafka().createTopic(topic, 1);
+
+        Map<String, String> baseConnectorConfig = new HashMap<>();
+        // General connector properties
+        baseConnectorConfig.put(TASKS_MAX_CONFIG, Integer.toString(NUM_TASKS));
+        // Aliased converter classes
+        baseConnectorConfig.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getSimpleName());
+        baseConnectorConfig.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getSimpleName());
+        baseConnectorConfig.put(HEADER_CONVERTER_CLASS_CONFIG, StringConverter.class.getSimpleName());
+        // Aliased SMT and predicate classes
+        baseConnectorConfig.put(TRANSFORMS_CONFIG, "filter");
+        baseConnectorConfig.put(TRANSFORMS_CONFIG + ".filter.type", Filter.class.getSimpleName());
+        baseConnectorConfig.put(TRANSFORMS_CONFIG + ".filter.predicate", "tombstone");
+        baseConnectorConfig.put(PREDICATES_CONFIG, "tombstone");
+        baseConnectorConfig.put(PREDICATES_CONFIG + ".tombstone.type", RecordIsTombstone.class.getSimpleName());
+
+        // Test a source connector
+        final String sourceConnectorName = "plugins-alias-test-source";
+        Map<String, String> sourceConnectorConfig = new HashMap<>(baseConnectorConfig);
+        // Aliased source connector class
+        sourceConnectorConfig.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        // Connector-specific properties
+        sourceConnectorConfig.put(TOPIC_CONFIG, topic);
+        sourceConnectorConfig.put("throughput", "10");
+        sourceConnectorConfig.put("messages.per.poll", String.valueOf(MESSAGES_PER_POLL));
+        // Create the connector and ensure it and its tasks can start
+        connect.configureConnector(sourceConnectorName, sourceConnectorConfig);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(sourceConnectorName, NUM_TASKS, "Connector and tasks did not start in time");
+        connect.deleteConnector(sourceConnectorName);
+
+        // Test a sink connector
+        final String sinkConnectorName = "plugins-alias-test-sink";
+        Map<String, String> sinkConnectorConfig = new HashMap<>(baseConnectorConfig);
+        // Aliased sink connector class
+        sinkConnectorConfig.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        // Connector-specific properties
+        sinkConnectorConfig.put(TOPICS_CONFIG, topic);
+        // Create the connector and ensure it and its tasks can start
+        connect.configureConnector(sinkConnectorName, sinkConnectorConfig);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(sinkConnectorName, NUM_TASKS, "Connector and tasks did not start in time");
+        connect.deleteConnector(sinkConnectorName);
+    }
+
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup props for the source connector
         Map<String, String> props = new HashMap<>();
@@ -1388,6 +1459,23 @@ public class ConnectWorkerIntegrationTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
+    }
+
+    private void useFixedBrokerPort() throws IOException {
+        // Find a free port and use it in the Kafka broker's listeners config. We can't use port 0 in the listeners
+        // config to get a random free port because in this test we want to stop the Kafka broker and then bring it
+        // back up and listening on the same port in order to verify that the Connect cluster can re-connect to Kafka
+        // and continue functioning normally. If we were to use port 0 here, the Kafka broker would most likely listen
+        // on a different random free port the second time it is started. Note that we can only use the static port
+        // because we have a single broker setup in this test.
+        int listenerPort;
+        try (ServerSocket s = new ServerSocket(0)) {
+            listenerPort = s.getLocalPort();
+        }
+        brokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, String.format("EXTERNAL://localhost:%d,CONTROLLER://localhost:0", listenerPort));
+        connectBuilder
+                .numBrokers(1)
+                .brokerProps(brokerProps);
     }
 
     public static class EmptyTaskConfigsConnector extends SinkConnector {

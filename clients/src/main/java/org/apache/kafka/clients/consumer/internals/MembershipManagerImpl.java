@@ -140,11 +140,11 @@ public class MembershipManagerImpl implements MembershipManager {
     private final Optional<String> groupInstanceId;
 
     /**
-     * Rebalance timeout. To be used as time limit for the commit request issued
+     * Reconciliation commit timeout. To be used as time limit for the commit request issued
      * when a new assignment is received, that is retried until it succeeds, fails with a
      * non-retriable error, it the time limit expires.
      */
-    private final int rebalanceTimeoutMs;
+    private final int commitTimeoutDuringReconciliation;
 
     /**
      * Member ID assigned by the server to the member, received in a heartbeat response when
@@ -288,7 +288,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
-                                 int rebalanceTimeoutMs,
+                                 int commitTimeoutDuringReconciliation,
                                  Optional<String> serverAssignor,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
@@ -300,7 +300,7 @@ public class MembershipManagerImpl implements MembershipManager {
                                  Metrics metrics) {
         this(groupId,
             groupInstanceId,
-            rebalanceTimeoutMs,
+            commitTimeoutDuringReconciliation,
             serverAssignor,
             subscriptions,
             commitRequestManager,
@@ -315,7 +315,7 @@ public class MembershipManagerImpl implements MembershipManager {
     // Visible for testing
     MembershipManagerImpl(String groupId,
                           Optional<String> groupInstanceId,
-                          int rebalanceTimeoutMs,
+                          int commitTimeoutDuringReconciliation,
                           Optional<String> serverAssignor,
                           SubscriptionState subscriptions,
                           CommitRequestManager commitRequestManager,
@@ -338,7 +338,7 @@ public class MembershipManagerImpl implements MembershipManager {
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
         this.clientTelemetryReporter = clientTelemetryReporter;
-        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+        this.commitTimeoutDuringReconciliation = commitTimeoutDuringReconciliation;
         this.backgroundEventHandler = backgroundEventHandler;
         this.time = time;
         this.metricsManager = metricsManager;
@@ -363,7 +363,7 @@ public class MembershipManagerImpl implements MembershipManager {
             metricsManager.recordRebalanceStarted(time.milliseconds());
         }
 
-        log.info("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
+        log.info("Member {} with epoch {} transitioned from {} to {}.", memberIdInfoForLog(), memberEpoch, state, nextState);
         this.state = nextState;
     }
 
@@ -423,12 +423,17 @@ public class MembershipManagerImpl implements MembershipManager {
         MemberState state = state();
         if (state == MemberState.LEAVING) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
-                    "already leaving the group.", memberId, memberEpoch);
+                    "already leaving the group.", memberIdInfoForLog(), memberEpoch);
+            return;
+        }
+        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+            log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
+                "to leave the group and completed the leave operation. ", memberIdInfoForLog(), memberEpoch);
             return;
         }
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
-                " so it's not a member of the group. ", memberId, state);
+                " so it's not a member of the group. ", memberIdInfoForLog(), state);
             return;
         }
 
@@ -459,8 +464,29 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public void onHeartbeatFailure() {
-        metricsManager.maybeRecordRebalanceFailed();
+    public void onHeartbeatFailure(boolean retriable) {
+        if (!retriable) {
+            metricsManager.maybeRecordRebalanceFailed();
+        }
+        // The leave group request is sent out once (not retried), so we should complete the leave
+        // operation once the request completes, regardless of the response.
+        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+            log.warn("Member {} with epoch {} received a failed response to the heartbeat to " +
+                "leave the group and completed the leave operation. ", memberIdInfoForLog(), memberEpoch);
+        }
+    }
+
+    /**
+     * Complete the leave in progress (if any). This is expected to be used to complete the leave
+     * in progress when a member receives the response to the leave heartbeat.
+     */
+    private boolean maybeCompleteLeaveInProgress() {
+        if (leaveGroupInProgress.isPresent()) {
+            leaveGroupInProgress.get().complete(null);
+            leaveGroupInProgress = Optional.empty();
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -523,8 +549,8 @@ public class MembershipManagerImpl implements MembershipManager {
     public void transitionToFenced() {
         if (state == MemberState.PREPARE_LEAVING) {
             log.info("Member {} with epoch {} got fenced but it is already preparing to leave " +
-                    "the group, so it will stop sending heartbeat and won't attempt to rejoin.",
-                memberId, memberEpoch);
+                    "the group, so it will stop sending heartbeat and won't attempt to send the " +
+                    "leave request or rejoin.", memberIdInfoForLog(), memberEpoch);
             // Briefly transition to LEAVING to ensure all required actions are applied even
             // though there is no need to send a leave group heartbeat (ex. clear epoch and
             // notify epoch listeners). Then transition to UNSUBSCRIBED, ensuring that the member
@@ -532,23 +558,26 @@ public class MembershipManagerImpl implements MembershipManager {
             // sending heartbeats while it completes the ongoing leaving operation.
             transitionToSendingLeaveGroup(false);
             transitionTo(MemberState.UNSUBSCRIBED);
+            maybeCompleteLeaveInProgress();
             return;
         }
 
         if (state == MemberState.LEAVING) {
-            log.debug("Member {} with epoch {} got fenced but it is already leaving the group " +
-                    "with state {}, so it won't attempt to rejoin.", memberId, memberEpoch, state);
+            log.debug("Member {} with epoch {} got fenced before sending leave group heartbeat. " +
+                    "It will not send the leave request and won't attempt to rejoin.", memberIdInfoForLog(), memberEpoch);
+            transitionTo(MemberState.UNSUBSCRIBED);
+            maybeCompleteLeaveInProgress();
             return;
         }
         if (state == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fenced but it already left the group, so it " +
-                    "won't attempt to rejoin.", memberId, memberEpoch);
+                    "won't attempt to rejoin.", memberIdInfoForLog(), memberEpoch);
             return;
         }
         transitionTo(MemberState.FENCED);
         resetEpoch();
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
-                "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
+                "assignment and rejoin the group.", memberIdInfoForLog(), memberEpoch, MemberState.FENCED);
 
         // Release assignment
         CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
@@ -574,16 +603,20 @@ public class MembershipManagerImpl implements MembershipManager {
     public void transitionToFatal() {
         MemberState previousState = state;
         transitionTo(MemberState.FATAL);
-        if (memberId.isEmpty()) {
-            log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
-        } else {
-            log.error("Non-member transitioned to {} state", MemberState.FATAL);
-        }
+        log.error("Member {} with epoch {} transitioned to fatal state", memberIdInfoForLog(), memberEpoch);
         notifyEpochChange(Optional.empty(), Optional.empty());
 
         if (previousState == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
-                    "left the group, so onPartitionsLost callback won't be triggered.", memberId, memberEpoch);
+                    "left the group, so onPartitionsLost callback won't be triggered.", memberIdInfoForLog(), memberEpoch);
+            return;
+        }
+
+        if (previousState == MemberState.LEAVING || previousState == MemberState.PREPARE_LEAVING) {
+            log.info("Member {} with epoch {} was leaving the group with state {} when it got a " +
+                "fatal error from the broker. It will discard the ongoing leave and remain in " +
+                "fatal state.", memberIdInfoForLog(), memberEpoch, previousState);
+            maybeCompleteLeaveInProgress();
             return;
         }
 
@@ -596,6 +629,11 @@ public class MembershipManagerImpl implements MembershipManager {
             }
             clearAssignment();
         });
+    }
+
+    // Visible for testing
+    String memberIdInfoForLog() {
+        return (memberId == null || memberId.isEmpty()) ? "<no ID>" : memberId;
     }
 
     /**
@@ -670,7 +708,7 @@ public class MembershipManagerImpl implements MembershipManager {
         if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
             // Member already leaving. No-op and return existing leave group future that will
             // complete when the ongoing leave operation completes.
-            log.debug("Leave group operation already in progress for member {}", memberId);
+            log.debug("Leave group operation already in progress for member {}", memberIdInfoForLog());
             return leaveGroupInProgress.get();
         }
 
@@ -682,10 +720,10 @@ public class MembershipManagerImpl implements MembershipManager {
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("Member {} callback to release assignment failed. It will proceed " +
-                    "to clear its assignment and send a leave group heartbeat", memberId, error);
+                    "to clear its assignment and send a leave group heartbeat", memberIdInfoForLog(), error);
             } else {
                 log.info("Member {} completed callback to release assignment. It will proceed " +
-                    "to clear its assignment and send a leave group heartbeat", memberId);
+                    "to clear its assignment and send a leave group heartbeat", memberIdInfoForLog());
             }
             // Clear the subscription, no matter if the callback execution failed or succeeded.
             subscriptions.unsubscribe();
@@ -721,7 +759,7 @@ public class MembershipManagerImpl implements MembershipManager {
         droppedPartitions.addAll(subscriptions.assignedPartitions());
 
         log.info("Member {} is triggering callbacks to release assignment {} and leave group",
-            memberId, droppedPartitions);
+            memberIdInfoForLog(), droppedPartitions);
 
         CompletableFuture<Void> callbackResult;
         if (droppedPartitions.isEmpty()) {
@@ -753,12 +791,12 @@ public class MembershipManagerImpl implements MembershipManager {
     public void transitionToSendingLeaveGroup(boolean dueToExpiredPollTimer) {
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
-                    "FATAL state", memberId, memberEpoch);
+                    "FATAL state", memberIdInfoForLog(), memberEpoch);
             return;
         }
         if (state == MemberState.UNSUBSCRIBED) {
             log.warn("Member {} won't send leave group request because it is already out of the group.",
-                memberId);
+                memberIdInfoForLog());
             return;
         }
 
@@ -799,7 +837,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatRequestSent() {
+    public void onHeartbeatRequestGenerated() {
         MemberState state = state();
         if (state == MemberState.ACKNOWLEDGING) {
             if (targetAssignmentReconciled()) {
@@ -807,18 +845,18 @@ public class MembershipManagerImpl implements MembershipManager {
             } else {
                 log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
                         "to ack a previous reconciliation. New assignments are ready to " +
-                        "be reconciled.", memberId, memberEpoch, MemberState.RECONCILING);
+                        "be reconciled.", memberIdInfoForLog(), memberEpoch, MemberState.RECONCILING);
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
             if (isPollTimerExpired) {
-                log.debug("Member {} sent heartbeat to leave due to expired poll timer. It will " +
+                log.debug("Member {} with epoch {} generated the heartbeat to leave due to expired poll timer. It will " +
                     "remain stale (no heartbeat) until it rejoins the group on the next consumer " +
-                    "poll.", memberId);
+                    "poll.", memberIdInfoForLog(), memberEpoch);
                 transitionToStale();
             } else {
-                log.debug("Member {} sent heartbeat to leave group.", memberId);
-                transitionToUnsubscribed();
+                log.debug("Member {} with epoch {} generated the heartbeat to leave the group.", memberIdInfoForLog(), memberEpoch);
+                transitionTo(MemberState.UNSUBSCRIBED);
             }
         }
     }
@@ -829,16 +867,12 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
-            log.debug("Heartbeat for leaving group could not be sent. Member {} with epoch {} will transition to {}.",
-                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
-            transitionToUnsubscribed();
+            log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
+                    "not known/available). Member {} with epoch {} will transition to {}.",
+                memberIdInfoForLog(), memberEpoch, MemberState.UNSUBSCRIBED);
+            transitionTo(MemberState.UNSUBSCRIBED);
+            maybeCompleteLeaveInProgress();
         }
-    }
-
-    private void transitionToUnsubscribed() {
-        transitionTo(MemberState.UNSUBSCRIBED);
-        leaveGroupInProgress.get().complete(null);
-        leaveGroupInProgress = Optional.empty();
     }
 
     /**
@@ -876,7 +910,7 @@ public class MembershipManagerImpl implements MembershipManager {
         isPollTimerExpired = false;
         if (state == MemberState.STALE) {
             log.debug("Expired poll timer has been reset so stale member {} will rejoin the group" +
-                "when it completes releasing its previous assignment.", memberId);
+                "when it completes releasing its previous assignment.", memberIdInfoForLog());
             staleMemberAssignmentRelease.whenComplete((__, error) -> transitionToJoining());
         }
     }
@@ -900,7 +934,7 @@ public class MembershipManagerImpl implements MembershipManager {
             clearAssignment();
             log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
                 "in {} state until the poll timer is reset, and it will then rejoin the group",
-                memberId, MemberState.STALE);
+                memberIdInfoForLog(), MemberState.STALE);
         });
     }
 
@@ -968,7 +1002,7 @@ public class MembershipManagerImpl implements MembershipManager {
                         "\tAdded partitions (assigned - owned):       {}\n" +
                         "\tRevoked partitions (owned - assigned):     {}\n",
                 resolvedAssignment.localEpoch,
-                memberId,
+                memberIdInfoForLog(),
                 assignedTopicPartitions,
                 ownedPartitions,
                 addedPartitions,
@@ -982,9 +1016,9 @@ public class MembershipManagerImpl implements MembershipManager {
         // Issue a commit request that will be retried until it succeeds, fails with a
         // non-retriable error, or the time limit expires. Retry on stale member epoch error, in a
         // best effort to commit the offsets in the case where the epoch might have changed while
-        // the current reconciliation is in process. Note this is using the rebalance timeout as
-        // it is the limit enforced by the broker to complete the reconciliation process.
-        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getDeadlineMsForTimeout(rebalanceTimeoutMs));
+        // the current reconciliation is in process. Note this is using the reconciliation commit timeout
+        // as it is the limit enforced by the broker to complete the reconciliation process.
+        commitResult = commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getDeadlineMsForTimeout(commitTimeoutDuringReconciliation));
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {
@@ -1050,7 +1084,7 @@ public class MembershipManagerImpl implements MembershipManager {
             if (error != null) {
                 // Leaving member in RECONCILING state after callbacks fail. The member
                 // won't send the ack, and the expectation is that the broker will kick the
-                // member out of the group after the rebalance timeout expires, leading to a
+                // member out of the group after the reconciliation commit timeout expires, leading to a
                 // RECONCILING -> FENCED transition.
                 log.error("Reconciliation failed.", error);
                 markReconciliationCompleted();
@@ -1128,7 +1162,7 @@ public class MembershipManagerImpl implements MembershipManager {
      *     <li>Try to find topic names in the metadata cache</li>
      *     <li>For topics not found in metadata, try to find names in the local topic names cache
      *     (contains topic id and names currently assigned and resolved)</li>
-     *     <li>If there are topics that are not in metadata cache or in the local cached
+     *     <li>If there are topics that are not in metadata cache or in the local cache
      *     of topic names assigned to this member, request a metadata update, and continue
      *     resolving names as the cache is updated.
      *     </li>
@@ -1226,7 +1260,7 @@ public class MembershipManagerImpl implements MembershipManager {
         if (state == MemberState.FATAL) {
             String errorMsg = String.format("Member %s with epoch %s received a fatal error " +
                 "while waiting for a revocation commit to complete. Will abort revocation " +
-                "without triggering user callback.", memberId, memberEpoch);
+                "without triggering user callback.", memberIdInfoForLog(), memberEpoch);
             log.debug(errorMsg);
             revocationResult.completeExceptionally(new KafkaException(errorMsg));
             return revocationResult;

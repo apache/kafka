@@ -17,11 +17,10 @@
 
 package kafka.log
 
-import com.yammer.metrics.core.MetricName
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.LocalLog.nextOption
 import kafka.log.remote.RemoteLogManager
-import kafka.server.{BrokerTopicMetrics, BrokerTopicStats, RequestLocal}
+import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -42,6 +41,7 @@ import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationGuard}
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, Path}
@@ -110,12 +110,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   import kafka.log.UnifiedLog._
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass) {
-    // For compatibility, metrics are defined to be under `Log` class
-    override def metricName(name: String, tags: util.Map[String, String]): MetricName = {
-      KafkaMetricsGroup.explicitMetricName(getClass.getPackage.getName, "Log", name, tags)
-    }
-  }
+  // For compatibility, metrics are defined to be under `Log` class
+  private val metricsGroup = new KafkaMetricsGroup(getClass.getPackage.getName, "Log")
 
   this.logIdent = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
 

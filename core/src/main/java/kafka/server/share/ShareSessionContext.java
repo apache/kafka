@@ -102,7 +102,7 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     @Override
-    ShareFetchResponse throttleResponse(int throttleTimeMs) {
+    public ShareFetchResponse throttleResponse(int throttleTimeMs) {
         if (!isSubsequent) {
             return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
                     Collections.emptyIterator(), Collections.emptyList()));
@@ -180,7 +180,7 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     @Override
-    int responseSize(LinkedHashMap<TopicIdPartition, PartitionData> updates, short version) {
+    public int responseSize(LinkedHashMap<TopicIdPartition, PartitionData> updates, short version) {
         if (!isSubsequent)
             return ShareFetchResponse.sizeOf(version, updates.entrySet().iterator());
         synchronized (session) {
@@ -194,7 +194,7 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     @Override
-    ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
+    public ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
                                                      LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
         if (!isSubsequent) {
             return new ShareFetchResponse(ShareFetchResponse.toMessage(
@@ -225,7 +225,7 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     @Override
-    ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
+    public ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
         if (!isSubsequent) {
             return new ErroneousAndValidPartitionData(shareFetchData);
         }
