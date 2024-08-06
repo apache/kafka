@@ -36,13 +36,14 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
 
-@Timeout(120)
+@Timeout(30)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    new ClusterConfigProperty(key = "group.initial.rebalance.delay.ms", value = "1000"),
   ))
   def testJoinGroupWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
     testJoinGroup()
@@ -51,7 +52,8 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    new ClusterConfigProperty(key = "group.initial.rebalance.delay.ms", value = "1000"),
   ))
   def testJoinGroupWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
     testJoinGroup()
