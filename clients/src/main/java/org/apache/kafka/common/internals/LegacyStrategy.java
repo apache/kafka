@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.common.internals;
 
-import javax.security.auth.Subject;
 import java.lang.reflect.Method;
 import java.security.PrivilegedAction;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
+
+import javax.security.auth.Subject;
 
 /**
  * This class implements reflective access to the deprecated-for-removal methods of AccessController and Subject.

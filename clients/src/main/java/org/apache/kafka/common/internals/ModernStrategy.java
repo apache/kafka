@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.common.internals;
 
-import javax.security.auth.Subject;
 import java.lang.reflect.Method;
 import java.security.PrivilegedAction;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
+
+import javax.security.auth.Subject;
 
 /**
  * This class implements reflective access to the methods of Subject added to replace deprecated methods.

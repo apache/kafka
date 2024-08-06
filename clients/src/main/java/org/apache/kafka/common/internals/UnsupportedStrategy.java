@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.common.internals;
 
-import javax.security.auth.Subject;
 import java.security.PrivilegedAction;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
+
+import javax.security.auth.Subject;
 
 /**
  * This is a fallback strategy to use if no other strategies are available.
