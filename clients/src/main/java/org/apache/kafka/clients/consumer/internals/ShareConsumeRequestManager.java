@@ -236,7 +236,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         PollResult pollResult = null;
         if (!unsentRequests.isEmpty()) {
             pollResult = new PollResult(unsentRequests);
-        } else if (areAnyAcknowledgementsLeft()) {
+        } else if (checkAndRemoveCompletedAcknowledgements()) {
             // Return empty result until all the acknowledgement request states are processed
             pollResult = PollResult.EMPTY;
         } else if (closing) {
@@ -287,7 +287,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return Optional.empty();
     }
 
-    private boolean areAnyAcknowledgementsLeft() {
+    /**
+     * Prunes the empty acknowledgementRequestStates.
+     * Returns true if there are still some acknowledgements left to be processed.
+     */
+    private boolean checkAndRemoveCompletedAcknowledgements() {
         boolean areAnyAcksLeft = false;
         Iterator<Map.Entry<Integer, Pair<AcknowledgeRequestState>>> iterator = acknowledgeRequestStates.entrySet().iterator();
         while (iterator.hasNext()) {
