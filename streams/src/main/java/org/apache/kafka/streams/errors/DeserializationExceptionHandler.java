@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
 /**
@@ -37,11 +37,27 @@ public interface DeserializationExceptionHandler extends Configurable {
      * @param context processor context
      * @param record record that failed deserialization
      * @param exception the actual exception
+     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)} instead.
      */
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    DeserializationHandlerResponse handle(final ProcessorContext context,
-                                          final ConsumerRecord<byte[], byte[]> record,
-                                          final Exception exception);
+    @Deprecated
+    default DeserializationHandlerResponse handle(final ProcessorContext context,
+                                                  final ConsumerRecord<byte[], byte[]> record,
+                                                  final Exception exception) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Inspect a record and the exception received.
+     *
+     * @param context error handler context
+     * @param record record that failed deserialization
+     * @param exception the actual exception
+     */
+    default DeserializationHandlerResponse handle(final ErrorHandlerContext context,
+                                                  final ConsumerRecord<byte[], byte[]> record,
+                                                  final Exception exception) {
+        return handle(((DefaultErrorHandlerContext) context).processorContext().orElse(null), record, exception);
+    }
 
     /**
      * Enumeration that describes the response from the exception handler.

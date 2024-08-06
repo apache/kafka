@@ -199,6 +199,7 @@ public class SharePartitionManager implements AutoCloseable {
             Time time,
             ShareSessionCache cache,
             Map<SharePartitionKey, SharePartition> partitionCacheMap,
+            ConcurrentLinkedQueue<ShareFetchPartitionData> fetchQueue,
             int recordLockDurationMs,
             Timer timer,
             int maxDeliveryCount,
@@ -210,7 +211,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.time = time;
         this.cache = cache;
         this.partitionCacheMap = partitionCacheMap;
-        this.fetchQueue = new ConcurrentLinkedQueue<>();
+        this.fetchQueue = fetchQueue;
         this.processFetchQueueLock = new AtomicBoolean(false);
         this.recordLockDurationMs = recordLockDurationMs;
         this.timer = timer;
@@ -466,7 +467,8 @@ public class SharePartitionManager implements AutoCloseable {
     /**
      * Recursive function to process all the fetch requests present inside the fetch queue
      */
-    private void maybeProcessFetchQueue() {
+    // Visible for testing.
+    void maybeProcessFetchQueue() {
         if (!processFetchQueueLock.compareAndSet(false, true)) {
             // The queue is already being processed hence avoid re-triggering.
             return;
@@ -529,6 +531,8 @@ public class SharePartitionManager implements AutoCloseable {
                 // the lock on share partition already exists which facilitates correct behaviour
                 // with multiple requests from queue being processed.
                 releaseProcessFetchQueueLock();
+                if (!fetchQueue.isEmpty())
+                    maybeProcessFetchQueue();
                 return;
             }
 

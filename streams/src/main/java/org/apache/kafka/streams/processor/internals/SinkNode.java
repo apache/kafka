@@ -88,8 +88,7 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
                 context.offset(),
                 context.partition(),
                 context.topic(),
-                record.headers(),
-                context.recordContext().rawRecord()
+                record.headers()
             );
 
         final String topic = topicExtractor.extract(key, value, contextForExtraction);

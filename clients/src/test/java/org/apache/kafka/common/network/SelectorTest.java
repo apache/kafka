@@ -831,10 +831,12 @@ public class SelectorTest {
             for (int i = 0; i < conns; i++) {
                 Thread sender = createSender(serverAddress, randomPayload(1));
                 sender.start();
-                SocketChannel channel = ss.accept();
-                channel.configureBlocking(false);
-
-                selector.register(Integer.toString(i), channel);
+                try (SocketChannel channel = ss.accept()) {
+                    channel.configureBlocking(false);
+                    selector.register(Integer.toString(i), channel);
+                } finally {
+                    sender.join();
+                }
             }
         }
 
