@@ -215,14 +215,22 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      */
     private PollResult processAcknowledgements(long currentTimeMs) {
         List<UnsentRequest> unsentRequests = new ArrayList<>();
-        for (Pair<AcknowledgeRequestState> requestStates : acknowledgeRequestStates.values()) {
-            isAsyncDone = false;
-            // For commitAsync
-            maybeBuildRequest(requestStates.getAsyncRequest(), currentTimeMs, true).ifPresent(unsentRequests::add);
+        for (Map.Entry<Integer, Pair<AcknowledgeRequestState>> requestStates : acknowledgeRequestStates.entrySet()) {
+            int nodeId = requestStates.getKey();
 
-            // Check to ensure we start processing commitSync/close only if there are no commitAsync requests left to process.
-            if (isAsyncDone)
-                maybeBuildRequest(requestStates.getSyncRequest(), currentTimeMs, false).ifPresent(unsentRequests::add);
+            if (!isNodeFree(nodeId)) {
+                log.warn("Skipping acknowledge request because previous request to {} has not been processed, so acks are not sent", nodeId);
+            } else {
+                isAsyncDone = false;
+                // For commitAsync
+                maybeBuildRequest(requestStates.getValue().getAsyncRequest(), currentTimeMs, true).ifPresent(unsentRequests::add);
+                // Check to ensure we start processing commitSync/close only if there are no commitAsync requests left to process.
+                if (!isNodeFree(nodeId)) {
+                    log.warn("Skipping acknowledge request because previous request to {} has not been processed, so acks are not sent", nodeId);
+                } else if (isAsyncDone) {
+                    maybeBuildRequest(requestStates.getValue().getSyncRequest(), currentTimeMs, false).ifPresent(unsentRequests::add);
+                }
+            }
         }
 
         PollResult pollResult = null;
@@ -242,22 +250,27 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return pollResult;
     }
 
+    private boolean isNodeFree(int nodeId) {
+        return !nodesWithPendingRequests.contains(nodeId);
+    }
+
     private Optional<UnsentRequest> maybeBuildRequest(AcknowledgeRequestState acknowledgeRequestState, long currentTimeMs, boolean onCommitAsync) {
-        if (acknowledgeRequestState == null || (!closing && acknowledgeRequestState.acknowledgementsToSend.isEmpty() && acknowledgeRequestState.incompleteAcknowledgements.isEmpty())) {
+        if (acknowledgeRequestState == null || (!acknowledgeRequestState.onClose && acknowledgeRequestState.isEmpty())) {
             if (onCommitAsync) {
                 isAsyncDone = true;
             }
             return Optional.empty();
         } else if (!acknowledgeRequestState.maybeExpire()) {
-            if (nodesWithPendingRequests.contains(acknowledgeRequestState.nodeId)) {
-                log.debug("Skipping acknowledge request because previous request to {} has not been processed", acknowledgeRequestState.nodeId);
+            if (acknowledgeRequestState.canSendRequest(currentTimeMs)) {
+                acknowledgeRequestState.onSendAttempt(currentTimeMs);
+                if (onCommitAsync) {
+                    isAsyncDone = true;
+                }
+                return Optional.of(acknowledgeRequestState.buildRequest(currentTimeMs));
             } else {
-                if (acknowledgeRequestState.canSendRequest(currentTimeMs)) {
-                    acknowledgeRequestState.onSendAttempt(currentTimeMs);
-                    if (onCommitAsync) {
-                        isAsyncDone = true;
-                    }
-                    return Optional.of(acknowledgeRequestState.buildRequest(currentTimeMs));
+                // We wait for the backoff before we can send this request.
+                if (onCommitAsync) {
+                    isAsyncDone = false;
                 }
             }
         } else {
@@ -282,7 +295,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             if (isRequestStateInProgress(acknowledgeRequestStatePair.getValue().getAsyncRequest()) || isRequestStateInProgress(acknowledgeRequestStatePair.getValue().getSyncRequest())) {
                 areAnyAcksLeft = true;
             } else if (!closing) {
-                acknowledgeRequestStates.remove(acknowledgeRequestStatePair.getKey());
+                iterator.remove();
             }
         }
         if (!acknowledgeRequestStates.isEmpty()) areAnyAcksLeft = true;
@@ -314,26 +327,30 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Node node = cluster.nodeById(nodeId);
             if (node != null) {
-                Map<TopicIdPartition, Acknowledgements> acknowledgementsMapForNode = new HashMap<>();
-                for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
-                    Acknowledgements acknowledgements = acknowledgementsMap.get(tip);
-                    if (acknowledgements != null) {
-                        acknowledgementsMapForNode.put(tip, acknowledgements);
-
-                        metricsManager.recordAcknowledgementSent(acknowledgements.size());
-                        log.debug("Added sync acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
-                        resultCount.incrementAndGet();
-                    }
-                }
                 acknowledgeRequestStates.putIfAbsent(nodeId, new Pair<>(null, null));
 
                 // Ensure there is no commitSync()/close() request already present as they are blocking calls
                 // and only one request can be active at a time.
-                if (acknowledgeRequestStates.get(nodeId).getSyncRequest() != null) {
+                if (acknowledgeRequestStates.get(nodeId).getSyncRequest() != null && !acknowledgeRequestStates.get(nodeId).getSyncRequest().isEmpty()) {
                     log.error("Attempt to call commitSync() when there is an existing sync request for node {}", node.id());
+                    future.completeExceptionally(
+                            new IllegalStateException("Attempt to call commitSync() when there is an existing sync request for node : " + node.id()));
                 } else {
+                    Map<TopicIdPartition, Acknowledgements> acknowledgementsMapForNode = new HashMap<>();
+                    for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
+                        Acknowledgements acknowledgements = acknowledgementsMap.get(tip);
+                        if (acknowledgements != null) {
+                            acknowledgementsMapForNode.put(tip, acknowledgements);
+
+                            metricsManager.recordAcknowledgementSent(acknowledgements.size());
+                            log.debug("Added sync acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
+                            resultCount.incrementAndGet();
+                        }
+                    }
+
+
                     // There can only be one commitSync()/close() happening at a time. So per node, there will be one acknowledge request state representing commitSync() and close().
-                    acknowledgeRequestStates.put(nodeId, new Pair<>(acknowledgeRequestStates.get(nodeId).getAsyncRequest(), new AcknowledgeRequestState(logContext,
+                    acknowledgeRequestStates.get(nodeId).setSyncRequest(new AcknowledgeRequestState(logContext,
                             ShareConsumeRequestManager.class.getSimpleName() + ":1",
                             deadlineMs,
                             retryBackoffMs,
@@ -344,7 +361,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             this::handleShareAcknowledgeSuccess,
                             this::handleShareAcknowledgeFailure,
                             resultHandler
-                    )));
+                    ));
                 }
             }
         });
@@ -380,7 +397,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         resultCount.incrementAndGet();
                         AcknowledgeRequestState asyncRequestState = acknowledgeRequestStates.get(nodeId).getAsyncRequest();
                         if (asyncRequestState == null) {
-                            acknowledgeRequestStates.replace(nodeId, new Pair<>(new AcknowledgeRequestState(logContext,
+                            acknowledgeRequestStates.get(nodeId).setAsyncRequest(new AcknowledgeRequestState(logContext,
                                     ShareConsumeRequestManager.class.getSimpleName() + ":2",
                                     Long.MAX_VALUE,
                                     retryBackoffMs,
@@ -391,7 +408,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                     this::handleShareAcknowledgeSuccess,
                                     this::handleShareAcknowledgeFailure,
                                     resultHandler
-                            ), acknowledgeRequestStates.get(nodeId).getSyncRequest()));
+                            ));
                         } else {
                             Acknowledgements prevAcks = asyncRequestState.acknowledgementsToSend.putIfAbsent(tip, acknowledgements);
                             if (prevAcks != null) {
@@ -443,24 +460,26 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
                 // Ensure there is no commitSync()/close() request already present as they are blocking calls
                 // and only one request can be active at a time.
-                if (acknowledgeRequestStates.get(nodeId).getSyncRequest() != null) {
-                    log.error("Attempt to call close() when there is an existing sync request for node {}", node.id());
+                if (acknowledgeRequestStates.get(nodeId).getSyncRequest() != null && !acknowledgeRequestStates.get(nodeId).getSyncRequest().isEmpty()) {
+                    log.error("Attempt to call close() when there is an existing sync request for node {}-{}", node.id(), acknowledgeRequestStates.get(nodeId).getSyncRequest());
+                    closeFuture.completeExceptionally(
+                            new IllegalStateException("Attempt to call close() when there is an existing sync request for node : " + node.id()));
                 } else {
                     // There can only be one commitSync()/close() happening at a time. So per node, there will be one acknowledge request state.
-                    acknowledgeRequestStates.put(nodeId, new Pair<>(acknowledgeRequestStates.get(nodeId).getAsyncRequest(),
-                            new AcknowledgeRequestState(logContext,
-                                    ShareConsumeRequestManager.class.getSimpleName() + ":3",
-                                    deadlineMs,
-                                    retryBackoffMs,
-                                    retryBackoffMaxMs,
-                                    sessionHandler,
-                                    nodeId,
-                                    acknowledgementsMapForNode,
-                                    this::handleShareAcknowledgeCloseSuccess,
-                                    this::handleShareAcknowledgeCloseFailure,
-                                    resultHandler,
-                                    true
-                            )));
+                    acknowledgeRequestStates.get(nodeId).setSyncRequest(new AcknowledgeRequestState(logContext,
+                            ShareConsumeRequestManager.class.getSimpleName() + ":3",
+                            deadlineMs,
+                            retryBackoffMs,
+                            retryBackoffMaxMs,
+                            sessionHandler,
+                            nodeId,
+                            acknowledgementsMapForNode,
+                            this::handleShareAcknowledgeCloseSuccess,
+                            this::handleShareAcknowledgeCloseFailure,
+                            resultHandler,
+                            true
+                    ));
+
                 }
             }
         });
@@ -586,12 +605,21 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             if (!handler.handleResponse(response, requestVersion)) {
                 acknowledgeRequestState.onFailedAttempt(currentTimeMs);
-                if (response.error().exception() instanceof RetriableException && !closing) {
+                log.warn("OnFailAttempt1");
+                if (response.error().exception() instanceof RetriableException && !acknowledgeRequestState.onClose) {
                     // We retry the request until the timer expires, unless we are closing.
                     acknowledgeRequestState.retryRequest();
+                } else {
+                    response.data().responses().forEach(shareAcknowledgeTopicResponse -> shareAcknowledgeTopicResponse.partitions().forEach(partitionData -> {
+                        TopicIdPartition tip = new TopicIdPartition(shareAcknowledgeTopicResponse.topicId(),
+                                partitionData.partitionIndex(),
+                                metadata.topicNames().get(shareAcknowledgeTopicResponse.topicId()));
+
+                        acknowledgeRequestState.handleAcknowledgeErrorCode(tip, response.error());
+                        metricsManager.recordLatency(resp.requestLatencyMs());
+                    }));
                 }
             } else {
-
                 AtomicBoolean shouldRetry = new AtomicBoolean(false);
                 // Check all partition level error codes
                 response.data().responses().forEach(shareAcknowledgeTopicResponse -> shareAcknowledgeTopicResponse.partitions().forEach(partitionData -> {
@@ -600,7 +628,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             partitionData.partitionIndex(),
                             metadata.topicNames().get(shareAcknowledgeTopicResponse.topicId()));
                     if (partitionError.exception() != null) {
-                        if (partitionError.exception() instanceof RetriableException && !closing) {
+                        if (partitionError.exception() instanceof RetriableException && !acknowledgeRequestState.onClose) {
                             // Move to incomplete acknowledgements to retry
                             acknowledgeRequestState.moveToIncompleteAcks(tip);
                             shouldRetry.set(true);
@@ -635,6 +663,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         try {
             log.debug("Completed ShareAcknowledge request from node {} unsuccessfully {}", fetchTarget.id(), Errors.forException(error));
             acknowledgeRequestState.sessionHandler().handleError(error);
+            acknowledgeRequestState.onFailedAttempt(currentTimeMs);
 
             requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> {
                 TopicIdPartition tip = new TopicIdPartition(topic.topicId(),
@@ -686,6 +715,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         try {
             log.debug("Completed ShareAcknowledge on close request from node {} unsuccessfully {}", fetchTarget.id(), Errors.forException(error));
             acknowledgeRequestState.sessionHandler().handleError(error);
+            acknowledgeRequestState.onFailedAttempt(currentTimeMs);
 
             requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> {
                 TopicIdPartition tip = new TopicIdPartition(topic.topicId(),
@@ -835,7 +865,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, error) -> {
                 if (error != null) {
-                    onFailedAttempt(currentTimeMs);
                     errorHandler.handle(nodeToSend, requestBuilder.data(), this, error, currentTimeMs);
                     processingComplete();
                 } else {
@@ -1025,16 +1054,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         private V asyncRequest;
         private V syncRequest;
 
-        public Pair(V first, V second) {
-            this.asyncRequest = first;
-            this.syncRequest = second;
+        public Pair(V asyncRequest, V syncRequest) {
+            this.asyncRequest = asyncRequest;
+            this.syncRequest = syncRequest;
         }
 
         public void setAsyncRequest(V asyncRequest) {
             this.asyncRequest = asyncRequest;
         }
 
-        public void setSecond(V second) {
+        public void setSyncRequest(V second) {
             this.syncRequest = second;
         }
 
