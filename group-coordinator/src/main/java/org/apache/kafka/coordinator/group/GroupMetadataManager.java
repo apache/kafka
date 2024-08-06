@@ -1395,7 +1395,7 @@ public class GroupMetadataManager {
      * @param receivedMemberEpoch   The member epoch.
      * @param ownedTopicPartitions  The owned partitions.
      *
-     * @throws FencedMemberEpochException if the provided epoch is ahead or behind the epoch known
+     * @throws FencedMemberEpochException if the provided epoch is ahead of or behind the epoch known
      *                                    by this coordinator.
      */
     private void throwIfConsumerGroupMemberEpochIsInvalid(
@@ -1424,7 +1424,7 @@ public class GroupMetadataManager {
      * @param member                The share group member.
      * @param receivedMemberEpoch   The member epoch.
      *
-     * @throws FencedMemberEpochException if the provided epoch is ahead or behind the epoch known
+     * @throws FencedMemberEpochException if the provided epoch is ahead of or behind the epoch known
      *                                    by this coordinator.
      */
     private void throwIfShareGroupMemberEpochIsInvalid(
@@ -1435,6 +1435,14 @@ public class GroupMetadataManager {
             throw new FencedMemberEpochException("The share group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
                 + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
+        } else if (receivedMemberEpoch < member.memberEpoch()) {
+            // If the member comes with the previous epoch and has a subset of the current assignment partitions,
+            // we accept it because the response with the bumped epoch may have been lost.
+            if (receivedMemberEpoch != member.previousMemberEpoch()) {
+                throw new FencedMemberEpochException("The share group member has a smaller member "
+                        + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
+                        + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
+            }
         }
     }
 
