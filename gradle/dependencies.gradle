@@ -136,6 +136,7 @@ versions += [
   kafka_36: "3.6.2",
   kafka_37: "3.7.1",
   kafka_38: "3.8.0",
+  // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
@@ -158,6 +159,7 @@ versions += [
   zinc: "1.9.2",
   zookeeper: "3.8.4",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
+  // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   zstd: "1.5.6-4",
   junitPlatform: "1.10.2"
 ]

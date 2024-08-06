@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
+
+import java.util.zip.Deflater;
+
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
+
 /**
  * The compression type to use
  */
@@ -23,7 +30,46 @@ public enum CompressionType {
     NONE((byte) 0, "none", 1.0f),
 
     // Shipped with the JDK
-    GZIP((byte) 1, "gzip", 1.0f),
+    GZIP((byte) 1, "gzip", 1.0f) {
+        public static final int MIN_LEVEL = Deflater.BEST_SPEED;
+        public static final int MAX_LEVEL = Deflater.BEST_COMPRESSION;
+        public static final int DEFAULT_LEVEL = Deflater.DEFAULT_COMPRESSION;
+
+        @Override
+        public int defaultLevel() {
+            return DEFAULT_LEVEL;
+        }
+
+        @Override
+        public int maxLevel() {
+            return MAX_LEVEL;
+        }
+
+        @Override
+        public int minLevel() {
+            return MIN_LEVEL;
+        }
+
+        @Override
+        public ConfigDef.Validator levelValidator() {
+            return new ConfigDef.Validator() {
+                @Override
+                public void ensureValid(String name, Object o) {
+                    if (o == null)
+                        throw new ConfigException(name, null, "Value must be non-null");
+                    int level = ((Number) o).intValue();
+                    if (level > MAX_LEVEL || (level < MIN_LEVEL && level != DEFAULT_LEVEL)) {
+                        throw new ConfigException(name, o, "Value must be between " + MIN_LEVEL + " and " + MAX_LEVEL + " or equal to " + DEFAULT_LEVEL);
+                    }
+                }
+
+                @Override
+                public String toString() {
+                    return "[" + MIN_LEVEL + ",...," + MAX_LEVEL + "] or " + DEFAULT_LEVEL;
+                }
+            };
+        }
+    },
 
     // We should only load classes from a given compression library when we actually use said compression library. This
     // is because compression libraries include native code for a set of platforms and we want to avoid errors
@@ -31,8 +77,65 @@ public enum CompressionType {
     // To ensure this, we only reference compression library code from classes that are only invoked when actual usage
     // happens.
     SNAPPY((byte) 2, "snappy", 1.0f),
-    LZ4((byte) 3, "lz4", 1.0f),
-    ZSTD((byte) 4, "zstd", 1.0f);
+    LZ4((byte) 3, "lz4", 1.0f) {
+        // These values come from net.jpountz.lz4.LZ4Constants
+        // We may need to update them if the lz4 library changes these values.
+        private static final int MIN_LEVEL = 1;
+        private static final int MAX_LEVEL = 17;
+        private static final int DEFAULT_LEVEL = 9;
+
+        @Override
+        public int defaultLevel() {
+            return DEFAULT_LEVEL;
+        }
+
+        @Override
+        public int maxLevel() {
+            return MAX_LEVEL;
+        }
+
+        @Override
+        public int minLevel() {
+            return MIN_LEVEL;
+        }
+
+        @Override
+        public ConfigDef.Validator levelValidator() {
+            return between(MIN_LEVEL, MAX_LEVEL);
+        }
+    },
+    ZSTD((byte) 4, "zstd", 1.0f) {
+        // These values come from the zstd library. We don't use the Zstd.minCompressionLevel(),
+        // Zstd.maxCompressionLevel() and Zstd.defaultCompressionLevel() methods to not load the Zstd library
+        // while parsing configuration.
+        // See ZSTD_minCLevel in https://github.com/facebook/zstd/blob/dev/lib/compress/zstd_compress.c#L6987
+        // and ZSTD_TARGETLENGTH_MAX https://github.com/facebook/zstd/blob/dev/lib/zstd.h#L1249
+        private static final int MIN_LEVEL = -131072;
+        // See ZSTD_MAX_CLEVEL in https://github.com/facebook/zstd/blob/dev/lib/compress/clevels.h#L19
+        private static final int MAX_LEVEL = 22;
+        // See ZSTD_CLEVEL_DEFAULT in https://github.com/facebook/zstd/blob/dev/lib/zstd.h#L129
+        private static final int DEFAULT_LEVEL = 3;
+
+        @Override
+        public int defaultLevel() {
+            return DEFAULT_LEVEL;
+        }
+
+        @Override
+        public int maxLevel() {
+            return MAX_LEVEL;
+        }
+
+        @Override
+        public int minLevel() {
+            return MIN_LEVEL;
+        }
+
+        @Override
+        public ConfigDef.Validator levelValidator() {
+            return between(MIN_LEVEL, MAX_LEVEL);
+        }
+    };
 
     // compression type is represented by two bits in the attributes field of the record batch header, so `byte` is
     // large enough
@@ -76,6 +179,22 @@ public enum CompressionType {
             return ZSTD;
         else
             throw new IllegalArgumentException("Unknown compression name: " + name);
+    }
+
+    public int defaultLevel() {
+        throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
+    }
+
+    public int maxLevel() {
+        throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
+    }
+
+    public int minLevel() {
+        throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
+    }
+
+    public ConfigDef.Validator levelValidator() {
+        throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
     }
 
     @Override

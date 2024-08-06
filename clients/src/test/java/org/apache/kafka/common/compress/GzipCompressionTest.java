@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.compress;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -30,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static org.apache.kafka.common.record.CompressionType.GZIP;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -42,7 +44,7 @@ public class GzipCompressionTest {
         byte[] data = String.join("", Collections.nCopies(256, "data")).getBytes(StandardCharsets.UTF_8);
 
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
-            for (int level : Arrays.asList(GzipCompression.MIN_LEVEL, GzipCompression.DEFAULT_LEVEL, GzipCompression.MAX_LEVEL)) {
+            for (int level : Arrays.asList(GZIP.minLevel(), GZIP.defaultLevel(), GZIP.maxLevel())) {
                 GzipCompression compression = builder.level(level).build();
                 ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
                 try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
@@ -65,21 +67,21 @@ public class GzipCompressionTest {
     public void testCompressionLevels() {
         GzipCompression.Builder builder = Compression.gzip();
 
-        assertThrows(IllegalArgumentException.class, () -> builder.level(GzipCompression.MIN_LEVEL - 1));
-        assertThrows(IllegalArgumentException.class, () -> builder.level(GzipCompression.MAX_LEVEL + 1));
+        assertThrows(IllegalArgumentException.class, () -> builder.level(GZIP.minLevel() - 1));
+        assertThrows(IllegalArgumentException.class, () -> builder.level(GZIP.maxLevel() + 1));
 
-        builder.level(GzipCompression.MIN_LEVEL);
-        builder.level(GzipCompression.MAX_LEVEL);
+        builder.level(GZIP.minLevel());
+        builder.level(GZIP.maxLevel());
     }
 
     @Test
     public void testLevelValidator() {
-        GzipCompression.LevelValidator validator = new GzipCompression.LevelValidator();
-        for (int level = GzipCompression.MIN_LEVEL; level <= GzipCompression.MAX_LEVEL; level++) {
+        ConfigDef.Validator validator = GZIP.levelValidator();
+        for (int level = GZIP.minLevel(); level <= GZIP.maxLevel(); level++) {
             validator.ensureValid("", level);
         }
-        validator.ensureValid("", GzipCompression.DEFAULT_LEVEL);
-        assertThrows(ConfigException.class, () -> validator.ensureValid("", GzipCompression.MIN_LEVEL - 1));
-        assertThrows(ConfigException.class, () -> validator.ensureValid("", GzipCompression.MAX_LEVEL + 1));
+        validator.ensureValid("", GZIP.defaultLevel());
+        assertThrows(ConfigException.class, () -> validator.ensureValid("", GZIP.minLevel() - 1));
+        assertThrows(ConfigException.class, () -> validator.ensureValid("", GZIP.maxLevel() + 1));
     }
 }
