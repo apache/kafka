@@ -91,9 +91,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
-        if (Objects.isNull(knownConsumerGroups)) {
-            log.info("Initial consumer loading has not yet completed");
-        }
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
                 "refreshing consumer groups");
     }
@@ -138,6 +135,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (Objects.isNull(knownConsumerGroups)) {
             // If knownConsumerGroup is null, it means the initial loading has not finished.
             // An exception should be thrown to trigger the retry behavior in the framework.
+            log.debug("Initial consumer loading has not yet completed");
             throw new RetriableException("Timeout while loading consumer groups.");
         }
 
