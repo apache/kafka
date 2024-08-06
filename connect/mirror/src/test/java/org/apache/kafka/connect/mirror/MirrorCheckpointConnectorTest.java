@@ -90,10 +90,20 @@ public class MirrorCheckpointConnectorTest {
     public void testNoConsumerGroup() {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(new HashSet<>(), config);
+        List<Map<String, String>> output = connector.taskConfigs(1);
+        // expect no task will be created
+        assertEquals(0, output.size(), "ConsumerGroup shouldn't exist");
+    }
+
+    @Test
+    public void testConsumerGroupInitializeTimeout() {
+        MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(null, config);
+
         assertThrows(
                 RetriableException.class,
                 () -> connector.taskConfigs(1),
-                "taskConfigs should throw exception when loading ConsumerGroup timeout"
+                "taskConfigs should throw exception when initial loading ConsumerGroup timeout"
         );
     }
 

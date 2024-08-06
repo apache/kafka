@@ -40,6 +40,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -64,7 +65,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
     private SourceAndTarget sourceAndTarget;
-    private Set<String> knownConsumerGroups = Collections.emptySet();
+    private Set<String> knownConsumerGroups = null;
 
     public MirrorCheckpointConnector() {
         // nop
@@ -82,7 +83,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        String connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         topicFilter = config.topicFilter();
         groupFilter = config.groupFilter();
@@ -91,10 +91,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
+        if (Objects.isNull(knownConsumerGroups)) {
+            log.info("Initial consumer loading has not yet completed");
+        }
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
                 "refreshing consumer groups");
-        log.info("Started {} with {} consumer groups.", connectorName, knownConsumerGroups.size());
-        log.debug("Started {} with consumer groups: {}", connectorName, knownConsumerGroups);
     }
 
     @Override
@@ -134,17 +135,19 @@ public class MirrorCheckpointConnector extends SourceConnector {
     // divide consumer groups among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        // if the replication is disabled, known consumer group is empty, or checkpoint emission is
-        // disabled by setting 'emit.checkpoints.enabled' to false, the interval of checkpoint emission
-        // will be negative and no 'MirrorCheckpointTask' will be created
-        if (!config.enabled() || config.emitCheckpointsInterval().isNegative()) {
-            return Collections.emptyList();
-        } else if (knownConsumerGroups.isEmpty()) {
-            // If consumerGroup is empty, an exception should be thrown to trigger the retry behavior in the framework.
-            // Simply returning an empty list will shut down all tasks, which is not the expected behavior.
+        if (Objects.isNull(knownConsumerGroups)) {
+            // If knownConsumerGroup is null, it means the initial loading has not finished.
+            // An exception should be thrown to trigger the retry behavior in the framework.
             throw new RetriableException("Timeout while loading consumer groups.");
         }
 
+        // if the replication is disabled, known consumer group is empty, or checkpoint emission is
+        // disabled by setting 'emit.checkpoints.enabled' to false, the interval of checkpoint emission
+        // will be negative and no 'MirrorCheckpointTask' will be created
+        if (!config.enabled() || knownConsumerGroups.isEmpty()
+                || config.emitCheckpointsInterval().isNegative()) {
+            return Collections.emptyList();
+        }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());
         List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(new ArrayList<>(knownConsumerGroups), numTasks);
         return IntStream.range(0, numTasks)
@@ -191,6 +194,8 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private void refreshConsumerGroups()
             throws InterruptedException, ExecutionException {
+        // Checking null to avoid NPE.
+        Set<String> knownConsumerGroups = Objects.isNull(this.knownConsumerGroups) ? Collections.emptySet() : this.knownConsumerGroups;
         Set<String> consumerGroups = findConsumerGroups();
         Set<String> newConsumerGroups = new HashSet<>(consumerGroups);
         newConsumerGroups.removeAll(knownConsumerGroups);
@@ -201,14 +206,17 @@ public class MirrorCheckpointConnector extends SourceConnector {
                     consumerGroups.size(), sourceAndTarget, newConsumerGroups.size(), deadConsumerGroups.size(),
                     knownConsumerGroups.size());
             log.debug("Found new consumer groups: {}", newConsumerGroups);
-            knownConsumerGroups = consumerGroups;
+            this.knownConsumerGroups = consumerGroups;
             context.requestTaskReconfiguration();
         }
     }
 
     private void loadInitialConsumerGroups()
             throws InterruptedException, ExecutionException {
+        String connectorName = config.connectorName();
         knownConsumerGroups = findConsumerGroups();
+        log.info("Started {} with {} consumer groups.", connectorName, knownConsumerGroups.size());
+        log.debug("Started {} with consumer groups: {}", connectorName, knownConsumerGroups);
     }
 
     Set<String> findConsumerGroups()
