@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static org.apache.kafka.common.record.CompressionType.ZSTD;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -40,7 +41,7 @@ public class ZstdCompressionTest {
         byte[] data = String.join("", Collections.nCopies(256, "data")).getBytes(StandardCharsets.UTF_8);
 
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
-            for (int level : Arrays.asList(ZstdCompression.MIN_LEVEL, ZstdCompression.DEFAULT_LEVEL, ZstdCompression.MAX_LEVEL)) {
+            for (int level : Arrays.asList(ZSTD.minLevel(), ZSTD.defaultLevel(), ZSTD.maxLevel())) {
                 ZstdCompression compression = builder.level(level).build();
                 ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
                 try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
@@ -63,10 +64,10 @@ public class ZstdCompressionTest {
     public void testCompressionLevels() {
         ZstdCompression.Builder builder = Compression.zstd();
 
-        assertThrows(IllegalArgumentException.class, () -> builder.level(ZstdCompression.MIN_LEVEL - 1));
-        assertThrows(IllegalArgumentException.class, () -> builder.level(ZstdCompression.MAX_LEVEL + 1));
+        assertThrows(IllegalArgumentException.class, () -> builder.level(ZSTD.minLevel() - 1));
+        assertThrows(IllegalArgumentException.class, () -> builder.level(ZSTD.maxLevel() + 1));
 
-        builder.level(ZstdCompression.MIN_LEVEL);
-        builder.level(ZstdCompression.MAX_LEVEL);
+        builder.level(ZSTD.minLevel());
+        builder.level(ZSTD.maxLevel());
     }
 }

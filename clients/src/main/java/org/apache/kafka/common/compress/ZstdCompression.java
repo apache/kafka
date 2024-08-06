@@ -19,7 +19,6 @@ package org.apache.kafka.common.compress;
 
 import com.github.luben.zstd.BufferPool;
 import com.github.luben.zstd.RecyclingBufferPool;
-import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
 import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
 import org.apache.kafka.common.KafkaException;
@@ -36,11 +35,9 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-public class ZstdCompression implements Compression {
+import static org.apache.kafka.common.record.CompressionType.ZSTD;
 
-    public static final int MIN_LEVEL = Zstd.minCompressionLevel();
-    public static final int MAX_LEVEL = Zstd.maxCompressionLevel();
-    public static final int DEFAULT_LEVEL = Zstd.defaultCompressionLevel();
+public class ZstdCompression implements Compression {
 
     private final int level;
 
@@ -50,7 +47,7 @@ public class ZstdCompression implements Compression {
 
     @Override
     public CompressionType type() {
-        return CompressionType.ZSTD;
+        return ZSTD;
     }
 
     @Override
@@ -124,10 +121,10 @@ public class ZstdCompression implements Compression {
     }
 
     public static class Builder implements Compression.Builder<ZstdCompression> {
-        private int level = DEFAULT_LEVEL;
+        private int level = ZSTD.defaultLevel();
 
         public Builder level(int level) {
-            if (MAX_LEVEL < level || level < MIN_LEVEL) {
+            if (level < ZSTD.minLevel() || ZSTD.maxLevel() < level) {
                 throw new IllegalArgumentException("zstd doesn't support given compression level: " + level);
             }
 
