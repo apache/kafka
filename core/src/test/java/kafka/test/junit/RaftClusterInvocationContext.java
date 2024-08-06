@@ -224,6 +224,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public void restart(Map<Integer, Map<String, Object>> perServerConfigOverrides) throws Exception {
+            clusterTestKit.restart(perServerConfigOverrides);
+        }
+
+        @Override
         public void waitForReadyBrokers() throws InterruptedException {
             try {
                 clusterTestKit.waitForReadyBrokers();

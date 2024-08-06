@@ -346,7 +346,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final TestKitNodes nodes;
     private final Map<Integer, ControllerServer> controllers;
     private final Map<Integer, BrokerServer> brokers;
-    private final ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager;
+    private ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager;
     private final File baseDirectory;
     private final SimpleFaultHandlerFactory faultHandlerFactory;
 
@@ -445,6 +445,109 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         }
+    }
+
+    public void shutdown() throws Exception {
+        List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
+        try {
+            // Note the shutdown order here is chosen to be consistent with
+            // `KafkaRaftServer`. See comments in that class for an explanation.
+            for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
+                int brokerId = entry.getKey();
+                BrokerServer broker = entry.getValue();
+                futureEntries.add(new SimpleImmutableEntry<>("broker" + brokerId,
+                        executorService.submit((Runnable) broker::shutdown)));
+            }
+            waitForAllFutures(futureEntries);
+            futureEntries.clear();
+            for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
+                int controllerId = entry.getKey();
+                ControllerServer controller = entry.getValue();
+                futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
+                        executorService.submit(controller::shutdown)));
+            }
+            waitForAllFutures(futureEntries);
+            futureEntries.clear();
+        } catch (Exception e) {
+            for (Entry<String, Future<?>> entry : futureEntries) {
+                entry.getValue().cancel(true);
+            }
+            throw e;
+        }
+    }
+
+    public void restart(Map<Integer, Map<String, Object>> perServerOverriddenConfig) throws Exception {
+        shutdown();
+
+        controllerQuorumVotersFutureManager.close();
+        controllerQuorumVotersFutureManager = new ControllerQuorumVotersFutureManager(nodes.controllerNodes().size());
+        Map<Integer, SharedServer> jointServers = new HashMap<>();
+
+        controllers.forEach((id, controller) -> {
+            Map<String, Object> config = controller.config().originals();
+            config.putAll(perServerOverriddenConfig.getOrDefault(-1, Collections.emptyMap()));
+            config.putAll(perServerOverriddenConfig.getOrDefault(id, Collections.emptyMap()));
+
+            TestKitNode node = nodes.controllerNodes().get(id);
+            SharedServer sharedServer = new SharedServer(
+                    new KafkaConfig(config, false),
+                    node.initialMetaPropertiesEnsemble(),
+                    Time.SYSTEM,
+                    new Metrics(),
+                    controllerQuorumVotersFutureManager.future,
+                    Collections.emptyList(),
+                    faultHandlerFactory
+            );
+            try {
+                controller = new ControllerServer(
+                        sharedServer,
+                        KafkaRaftServer.configSchema(),
+                        nodes.bootstrapMetadata());
+            } catch (Throwable e) {
+                log.error("Error creating controller {}", node.id(), e);
+                Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", sharedServer::stopForController);
+                throw e;
+            }
+            controllers.put(node.id(), controller);
+            controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
+                if (e != null) {
+                    controllerQuorumVotersFutureManager.fail(e);
+                } else {
+                    controllerQuorumVotersFutureManager.registerPort(node.id(), port);
+                }
+            });
+            jointServers.put(node.id(), sharedServer);
+        });
+
+        brokers.forEach((id, broker) -> {
+            Map<String, Object> config = broker.config().originals();
+            config.putAll(perServerOverriddenConfig.getOrDefault(-1, Collections.emptyMap()));
+            config.putAll(perServerOverriddenConfig.getOrDefault(id, Collections.emptyMap()));
+
+            TestKitNode node = nodes.brokerNodes().get(id);
+            SharedServer sharedServer = jointServers.computeIfAbsent(
+                    node.id(),
+                    nodeId -> new SharedServer(
+                            new KafkaConfig(config),
+                            node.initialMetaPropertiesEnsemble(),
+                            Time.SYSTEM,
+                            new Metrics(),
+                            controllerQuorumVotersFutureManager.future,
+                            Collections.emptyList(),
+                            faultHandlerFactory
+                    )
+            );
+            try {
+                broker = new BrokerServer(sharedServer);
+            } catch (Throwable e) {
+                log.error("Error creating broker {}", node.id(), e);
+                Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", sharedServer::stopForBroker);
+                throw e;
+            }
+            brokers.put(node.id(), broker);
+        });
+
+        startup();
     }
 
     /**
