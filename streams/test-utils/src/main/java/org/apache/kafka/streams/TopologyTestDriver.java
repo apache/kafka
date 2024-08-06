@@ -1232,13 +1232,6 @@ public class TopologyTestDriver implements Closeable {
             super(inner);
         }
 
-        @Deprecated
-        @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
-            inner.init(context, root);
-        }
-
         @Override
         public void init(final StateStoreContext context, final StateStore root) {
             inner.init(context, root);
@@ -1303,13 +1296,6 @@ public class TopologyTestDriver implements Closeable {
 
         public WindowStoreFacade(final TimestampedWindowStore<K, V> store) {
             super(store);
-        }
-
-        @Deprecated
-        @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
-            inner.init(context, root);
         }
 
         @Override
