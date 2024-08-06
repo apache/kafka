@@ -56,7 +56,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ")
     formatter.setScramArguments(List(
-      s"SCRAM-SHA-256=[name=${JaasTestUtils.KafkaScramAdmin},password=${JaasTestUtils.KafkaScramAdminPassword}]").asJava)
+      s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
   }
 
   override def configureListeners(props: collection.Seq[Properties]): Unit = {
