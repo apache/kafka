@@ -336,7 +336,7 @@ public class RemoteLogManager implements Closeable {
             if (classPath != null && !classPath.trim().isEmpty()) {
                 ChildFirstClassLoader classLoader = new ChildFirstClassLoader(classPath, this.getClass().getClassLoader());
                 RemoteStorageManager delegate = createDelegate(classLoader, rlmConfig.remoteStorageManagerClassName());
-                return new ClassLoaderAwareRemoteStorageManager(delegate, classLoader);
+                return (RemoteStorageManager) new ClassLoaderAwareRemoteStorageManager(delegate, classLoader);
             } else {
                 return createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteStorageManagerClassName());
             }
@@ -355,7 +355,7 @@ public class RemoteLogManager implements Closeable {
             if (classPath != null && !classPath.trim().isEmpty()) {
                 ClassLoader classLoader = new ChildFirstClassLoader(classPath, this.getClass().getClassLoader());
                 RemoteLogMetadataManager delegate = createDelegate(classLoader, rlmConfig.remoteLogMetadataManagerClassName());
-                return new ClassLoaderAwareRemoteLogMetadataManager(delegate, classLoader);
+                return (RemoteLogMetadataManager) new ClassLoaderAwareRemoteLogMetadataManager(delegate, classLoader);
             } else {
                 return createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteLogMetadataManagerClassName());
             }
