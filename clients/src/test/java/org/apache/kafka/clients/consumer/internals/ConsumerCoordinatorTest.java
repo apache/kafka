@@ -87,6 +87,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -3206,14 +3208,21 @@ public abstract class ConsumerCoordinatorTest {
         assertThrows(KafkaException.class, () -> coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE)));
     }
 
-    @Test
-    public void testRefreshOffsetNotCoordinatorForConsumer() {
+    @ParameterizedTest
+    @CsvSource({
+        "NOT_COORDINATOR, true",
+        "COORDINATOR_NOT_AVAILABLE, true",
+        "NETWORK_EXCEPTION, false",
+    })
+    public void testRefreshOffsetRetriableErrors(Errors error, boolean expectCoordinatorRelookup) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         subscriptions.assignFromUser(singleton(t1p));
-        client.prepareResponse(offsetFetchResponse(Errors.NOT_COORDINATOR, Collections.emptyMap()));
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(offsetFetchResponse(error, Collections.emptyMap()));
+        if (expectCoordinatorRelookup) {
+            client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        }
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
         coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 

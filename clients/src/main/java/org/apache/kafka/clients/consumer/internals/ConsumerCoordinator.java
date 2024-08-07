@@ -1460,9 +1460,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (responseError == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                     // just retry
                     future.raise(responseError);
-                } else if (responseError == Errors.NOT_COORDINATOR) {
+                } else if (responseError == Errors.COORDINATOR_NOT_AVAILABLE ||
+                           responseError == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
                     markCoordinatorUnknown(responseError);
+                    future.raise(responseError);
+                } else if (responseError.exception() instanceof RetriableException) {
+                    // retry
                     future.raise(responseError);
                 } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
