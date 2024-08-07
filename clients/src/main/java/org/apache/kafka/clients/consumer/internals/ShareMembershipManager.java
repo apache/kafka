@@ -124,6 +124,9 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         return rackId;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void onHeartbeatSuccess(ShareGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {

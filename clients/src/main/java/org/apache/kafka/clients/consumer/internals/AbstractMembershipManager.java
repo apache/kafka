@@ -932,7 +932,8 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
         return CompletableFuture.completedFuture(null);
     }
 
-    /** Signals to the membership manager that the assignment has been lost so that
+    /**
+     * Signals to the membership manager that the assignment has been lost so that
      * actions specific to the group type can be performed.
      */
     protected CompletableFuture<Void> signalPartitionsLost(Set<TopicPartition> partitionsLost) {

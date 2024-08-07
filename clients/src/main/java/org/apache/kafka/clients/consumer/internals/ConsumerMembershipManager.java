@@ -199,10 +199,9 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Update member info and transition member state based on a successful heartbeat response.
-     *
-     * @param response Heartbeat response to extract member info and errors from.
+     * {@inheritDoc}
      */
+    @Override
     public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
@@ -252,16 +251,14 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             }
 
             Map<Uuid, SortedSet<Integer>> newAssignment = new HashMap<>();
-            assignment.topicPartitions().forEach(topicPartition -> {
-                newAssignment.put(topicPartition.topicId(), new TreeSet<>(topicPartition.partitions()));
-            });
+            assignment.topicPartitions().forEach(topicPartition ->
+                newAssignment.put(topicPartition.topicId(), new TreeSet<>(topicPartition.partitions())));
             processAssignmentReceived(newAssignment);
         }
     }
 
     /**
-     * Signals to the membership manager that reconciliation has started so that
-     * actions specific to group type can be performed.
+     * {@inheritDoc}
      */
     @Override
     protected CompletableFuture<Void> signalReconciliationStarted() {
@@ -274,8 +271,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Signals to the membership manager that reconciliation is completing so that
-     * actions specific to group type can be performed.
+     * {@inheritDoc}
      */
     @Override
     protected void signalReconciliationCompleting() {
@@ -284,17 +280,17 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Signals to the membership manager that the member is leaving the group so that
-     * actions specific to the group type can be performed.
+     * {@inheritDoc}
      */
     @Override
     protected CompletableFuture<Void> signalMemberLeavingGroup() {
         return invokeOnPartitionsRevokedOrLostToReleaseAssignment();
     }
 
-    /** Signals to the membership manager that the assignment has been lost so that
-     * actions sepcific to the group type can be performed.
+    /**
+     * {@inheritDoc}
      */
+    @Override
     protected CompletableFuture<Void> signalPartitionsLost(Set<TopicPartition> partitionsLost) {
         return invokeOnPartitionsLostCallback(partitionsLost);
     }
@@ -379,25 +375,25 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * Signals to the membership manager that partitions are being assigned so that actions
-     * specific to the group type can be taken.
+     * {@inheritDoc}
      */
+    @Override
     public CompletableFuture<Void> signalPartitionsAssigned(Set<TopicPartition> partitionsAssigned) {
         return invokeOnPartitionsAssignedCallback(partitionsAssigned);
     }
 
     /**
-     * Signals to the membership manager that partitions are being revoked so that actions
-     * specific to a group type can be taken.
+     * {@inheritDoc}
      */
+    @Override
     public void signalPartitionsBeingRevoked(Set<TopicPartition> partitionsToRevoke) {
         logPausedPartitionsBeingRevoked(partitionsToRevoke);
     }
 
     /**
-     * Signals to the membership manager that partitions have been revoked so that actions
-     * specific to a group type can be taken.
+     * {@inheritDoc}
      */
+    @Override
     public CompletableFuture<Void> signalPartitionsRevoked(Set<TopicPartition> partitionsRevoked) {
         return invokeOnPartitionsRevokedCallback(partitionsRevoked);
     }
@@ -472,11 +468,17 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int joinGroupEpoch() {
         return ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public int leaveGroupEpoch() {
         return groupInstanceId.isPresent() ?
