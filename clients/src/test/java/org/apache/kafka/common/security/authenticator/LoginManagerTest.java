@@ -166,7 +166,7 @@ public class LoginManagerTest {
     }
 
     @Test
-    public void testLoginException() throws Exception {
+    public void testShouldReThrowExceptionOnErrorLoginAttempt() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put(SaslConfigs.SASL_JAAS_CONFIG, dynamicPlainContext);
         config.put(SaslConfigs.SASL_LOGIN_CLASS, Login.class);
