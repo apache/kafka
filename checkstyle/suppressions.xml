@@ -135,9 +135,6 @@
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>
 
-    <suppress checks="MethodLength"
-              files="ConsumerTestBuilder.java"/>
-
     <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
 
@@ -189,7 +186,7 @@
 
     <!-- Raft -->
     <suppress checks="NPathComplexity"
-              files="RecordsIterator.java"/>
+              files="(DynamicVoter|RecordsIterator).java"/>
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
@@ -325,7 +322,7 @@
     <suppress checks="(ParameterNumber|ClassDataAbstractionCoupling)"
               files="(QuorumController).java"/>
     <suppress checks="(CyclomaticComplexity|NPathComplexity)"
-              files="(PartitionRegistration|PartitionChangeBuilder).java"/>
+              files="(PartitionRegistration|PartitionChangeBuilder|ScramParser).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(ClientQuotasImage|KafkaEventQueue|MetadataDelta|QuorumController|ReplicationControlManager|KRaftMigrationDriver|ClusterControlManager|MetaPropertiesEnsemble).java"/>
     <suppress checks="NPathComplexity"

@@ -93,7 +93,9 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     config.put(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false")
     if (wasRemoteStorageEnabled) {
-      assertEquals("Disabling remote storage feature on the topic level is not supported.",
+      assertEquals("It is invalid to disable remote storage without deleting remote data. " +
+        "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.log.copy.disable=true`. " +
+        "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.",
         assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
           new ConfigResource(TOPIC, "foo"), config, util.Collections.singletonMap(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"))).getMessage)
     } else {
