@@ -912,6 +912,9 @@ public class SharePartition {
             // in the cached state are not missed
             findNextFetchOffset.set(true);
             endOffset = cachedState.lastEntry().getValue().lastOffset();
+            // In case the persister read state RPC result contains no AVAILABLE records, we can update cached state
+            // and start/end offsets.
+            maybeUpdateCachedStateAndOffsets();
         } else {
             endOffset = partitionData.startOffset();
         }

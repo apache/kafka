@@ -119,7 +119,6 @@ public class ConnectorRestartApiIntegrationTest {
 
     @AfterAll
     public static void close() {
-        // stop all Connect, Kafka and Zk threads.
         CONNECT_CLUSTERS.values().forEach(EmbeddedConnectCluster::stop);
     }
 
@@ -127,7 +126,7 @@ public class ConnectorRestartApiIntegrationTest {
     public void testRestartUnknownConnectorNoParams() throws Exception {
         String connectorName = "Unknown";
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         startOrReuseConnectWithNumWorkers(ONE_WORKER);
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
@@ -148,7 +147,7 @@ public class ConnectorRestartApiIntegrationTest {
     private void restartUnknownConnector(boolean onlyFailed, boolean includeTasks) throws Exception {
         String connectorName = "Unknown";
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         startOrReuseConnectWithNumWorkers(ONE_WORKER);
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
@@ -299,7 +298,7 @@ public class ConnectorRestartApiIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         props.put("connector.start.inject.error", "true");
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         startOrReuseConnectWithNumWorkers(ONE_WORKER);
 
         // Try to start the connector and its single task.
@@ -330,7 +329,7 @@ public class ConnectorRestartApiIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         tasksToFail.forEach(taskId -> props.put("task-" + taskId + ".start.inject.error", "true"));
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         startOrReuseConnectWithNumWorkers(ONE_WORKER);
 
         // Try to start the connector and its single task.

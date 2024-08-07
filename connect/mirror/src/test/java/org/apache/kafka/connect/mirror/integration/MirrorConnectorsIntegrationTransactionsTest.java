@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Integration test for MirrorMaker2 in which source records are emitted with a transactional producer,
@@ -49,6 +50,12 @@ public class MirrorConnectorsIntegrationTransactionsTest extends MirrorConnector
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
         producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "embedded-kafka-0");
+        // This may be the first transactional producer for the Kafka cluster, in which case
+        // Producer::initTransactions may take a while (especially on CI)
+        // To be tolerant of long initialization for the transaction log, selecting a
+        // transaction coordinator, etc., we configure our producer to wait a little longer
+        // than the default before timing out in that method
+        producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, TimeUnit.MINUTES.toMillis(5));
         KafkaProducer<byte[], byte[]> producer = cluster.kafka().createProducer(producerProps);
         producer.initTransactions();
         return producer;
