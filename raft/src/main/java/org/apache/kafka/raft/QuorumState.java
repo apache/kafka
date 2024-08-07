@@ -405,7 +405,7 @@ public class QuorumState {
      * we do not begin fetching until the election has concluded and
      * {@link #transitionToFollower(int, int, Endpoints)} is invoked.
      */
-    public void addVotedState(
+    public void transitionToUnattachedVotedState(
         int epoch,
         ReplicaKey candidateKey
     ) {

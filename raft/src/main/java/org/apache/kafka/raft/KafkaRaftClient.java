@@ -672,9 +672,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void transitionToUnattachedVoted(ReplicaKey candidateKey, int epoch) {
-        quorum.addVotedState(epoch, candidateKey);
-        maybeFireLeaderChange();
-        resetConnections();
+        quorum.transitionToUnattachedVotedState(epoch, candidateKey);
     }
 
     private void onBecomeFollower(long currentTimeMs) {
@@ -817,7 +815,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0
         );
 
-        if (voteGranted && quorum.isUnattached()) {
+        if (voteGranted && quorum.isUnattachedNotVoted()) {
             transitionToUnattachedVoted(candidateKey, candidateEpoch);
         }
 

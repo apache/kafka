@@ -23,7 +23,6 @@ import org.apache.kafka.raft.internals.ReplicaKey;
 
 import org.slf4j.Logger;
 
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -42,12 +41,12 @@ import java.util.Set;
  */
 
 public class UnattachedState implements EpochState {
-    private int epoch;
-    private OptionalInt leaderId;
-    private Optional<VotedState> votedState;
-    private Set<Integer> voters;
-    private long electionTimeoutMs;
-    private Timer electionTimer;
+    private final int epoch;
+    private final OptionalInt leaderId;
+    private final Optional<ReplicaKey> votedKey;
+    private final Set<Integer> voters;
+    private final long electionTimeoutMs;
+    private final Timer electionTimer;
     private final Optional<LogOffsetMetadata> highWatermark;
     private final Logger log;
 
@@ -63,7 +62,7 @@ public class UnattachedState implements EpochState {
     ) {
         this.epoch = epoch;
         this.leaderId = leaderId;
-        this.votedState = votedKey.map(VotedState::new);
+        this.votedKey = votedKey;
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -73,8 +72,8 @@ public class UnattachedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        if (votedState.isPresent()) {
-            return votedState.get().election();
+        if (votedKey.isPresent()) {
+            return ElectionState.withVotedCandidate(epoch, votedKey().get(), voters);
         } else if (leaderId.isPresent()) {
             return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), voters);
         } else {
@@ -98,7 +97,7 @@ public class UnattachedState implements EpochState {
     }
 
     public Optional<ReplicaKey> votedKey() {
-        return votedState.map(VotedState::votedKey);
+        return votedKey;
     }
 
     public long electionTimeoutMs() {
@@ -122,8 +121,19 @@ public class UnattachedState implements EpochState {
 
     @Override
     public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
-        if (votedState.isPresent()) {
-            return votedState.get().canGrantVote(candidateKey);
+        if (votedKey.isPresent()) {
+            ReplicaKey votedReplicaKey = votedKey.get();
+            if (votedReplicaKey.id() == candidateKey.id()) {
+                return !votedReplicaKey.directoryId().isPresent() || votedReplicaKey.directoryId().equals(candidateKey.directoryId());
+            }
+            log.debug(
+                "Rejecting vote request from candidate ({}), already have voted for another " +
+                    "candidate ({}) in epoch {}",
+                candidateKey,
+                votedKey,
+                epoch
+            );
+            return false;
         } else if (leaderId.isPresent()) {
             // If the leader id is known it should behave similar to the follower state
             log.debug(
@@ -156,36 +166,4 @@ public class UnattachedState implements EpochState {
 
     @Override
     public void close() {}
-
-    private class VotedState {
-        private final ReplicaKey votedKey;
-
-        VotedState(ReplicaKey votedKey) {
-            this.votedKey = Objects.requireNonNull(votedKey);
-        }
-
-        ReplicaKey votedKey() {
-            return votedKey;
-        }
-
-        ElectionState election() {
-            return ElectionState.withVotedCandidate(epoch, votedKey, voters);
-        }
-
-        boolean canGrantVote(ReplicaKey candidateKey) {
-            if (votedKey.id() == candidateKey.id()) {
-                return !votedKey.directoryId().isPresent() || votedKey.directoryId().equals(candidateKey.directoryId());
-            }
-
-            log.debug(
-                "Rejecting vote request from candidate ({}), already have voted for another " +
-                "candidate ({}) in epoch {}",
-                candidateKey,
-                votedKey,
-                epoch
-            );
-
-            return false;
-        }
-    }
 }
