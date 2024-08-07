@@ -28,7 +28,8 @@ import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
-import kafka.utils.{Exit, TestUtils, VerifiableProperties}
+import kafka.utils.{TestUtils, VerifiableProperties}
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
@@ -451,7 +452,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpRemoteLogMetadataNoFilesFlag(): Unit = {
-    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message))
     try {
       val thrown = assertThrows(classOf[IllegalArgumentException], () => runDumpLogSegments(Array("--remote-log-metadata-decoder")))
       assertTrue(thrown.getMessage.equals("Missing required argument \"[files]\""))

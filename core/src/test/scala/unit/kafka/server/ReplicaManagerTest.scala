@@ -29,7 +29,8 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils.waitUntilTrue
-import kafka.utils.{Exit, Pool, TestUtils}
+import kafka.utils.{Pool, TestUtils}
+import org.apache.kafka.common.utils.Exit
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
@@ -6701,7 +6702,7 @@ class ReplicaManagerTest {
       def haltProcedure(exitStatus: Int, message: Option[String]): Nothing = {
         fail("Test failure, broker should not have halted")
       }
-      Exit.setHaltProcedure(haltProcedure)
+      Exit.setHaltProcedure((status, message) => haltProcedure(status, Option(message)))
 
       // When
       logDirFailureChannel.maybeAddOfflineLogDir(logDirFiles.head.getAbsolutePath, "test failure", null)

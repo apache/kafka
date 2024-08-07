@@ -25,7 +25,8 @@ import java.nio.file.Files
 import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 
-import kafka.utils.{CoreUtils, Exit, Logging}
+import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.utils.Exit
 
 import scala.jdk.CollectionConverters._
 import org.apache.commons.lang.text.StrSubstitutor
@@ -397,7 +398,7 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc.stop())
+    Exit.addShutdownHook("minikdc-shutdown-hook", () => miniKdc.stop())
     miniKdc
   }
 

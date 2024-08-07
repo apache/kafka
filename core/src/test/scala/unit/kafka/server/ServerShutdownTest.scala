@@ -16,7 +16,8 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, Exit, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils}
+import org.apache.kafka.common.utils.Exit
 
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket

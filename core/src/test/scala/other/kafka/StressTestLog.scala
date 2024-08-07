@@ -22,6 +22,7 @@ import java.util.concurrent.atomic._
 import kafka.log._
 import kafka.server.BrokerTopicStats
 import kafka.utils._
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
@@ -63,7 +64,7 @@ object StressTestLog {
     val reader = new ReaderThread(log)
     reader.start()
 
-    Exit.addShutdownHook("stress-test-shutdown-hook", {
+    Exit.addShutdownHook("stress-test-shutdown-hook", () => {
         running.set(false)
         writer.join()
         reader.join()

@@ -25,7 +25,7 @@ import java.util.{Properties, Random}
 import joptsimple._
 import kafka.log._
 import kafka.server.BrokerTopicStats
-import kafka.utils._
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression, ZstdCompression}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._

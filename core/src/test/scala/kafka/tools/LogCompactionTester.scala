@@ -26,6 +26,7 @@ import java.util.{Properties, Random}
 
 import joptsimple.OptionParser
 import kafka.utils._
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}

@@ -20,7 +20,8 @@ import java.nio.file.Files
 import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.{Exit, TestUtils}
+import kafka.utils.TestUtils
+import org.apache.kafka.common.utils.Exit
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
