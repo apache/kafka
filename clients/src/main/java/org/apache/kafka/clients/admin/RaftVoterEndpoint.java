@@ -91,6 +91,8 @@ public class RaftVoterEndpoint {
 
     @Override
     public String toString() {
-        return name + "://" + host + ":" + port;
+        // enclose IPv6 hosts in square brackets for readability
+        String hostString = host.contains(":") ? "[" + host + "]" : host;
+        return name + "://" + hostString + ":" + port;
     }
 }
