@@ -23,16 +23,6 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -46,13 +36,25 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+
 import org.junit.jupiter.api.extension.ExtendWith;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -72,6 +74,7 @@ public class ClientTelemetryTest {
             String testTopicName = "test_topic";
             admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));
             clusterInstance.waitForTopic(testTopicName, 1);
+            
             Map<String, Object> producerConfigs = new HashMap<>();
             producerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
             producerConfigs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
@@ -99,7 +102,9 @@ public class ClientTelemetryTest {
                 assertEquals(1, values.size());
                 assertEquals("bar", values.get(0));
             }
-            assertNotNull(admin.clientInstanceId(Duration.ofSeconds(3)));
+            Uuid uuid = admin.clientInstanceId(Duration.ofSeconds(3));
+            assertNotNull(uuid);
+            assertEquals(uuid, admin.clientInstanceId(Duration.ofSeconds(3)));
         }
     }
 
@@ -108,7 +113,7 @@ public class ClientTelemetryTest {
     public void testMetrics(ClusterInstance clusterInstance) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        List<String> expectedMetricsName = Arrays.asList("request-size-max", "io-wait-ratio", "response-total", 
+        List<String> expectedMetricsName = Arrays.asList("request-size-max", "io-wait-ratio", "response-total",
                 "version",
                 "io-time-ns-avg", "network-io-rate");
         try (Admin admin = Admin.create(configs)) {

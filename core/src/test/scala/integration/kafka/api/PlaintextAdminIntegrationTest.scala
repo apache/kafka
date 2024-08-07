@@ -2980,12 +2980,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("quorum=kraft"))
+  @Timeout(30)
   def testListClientMetricsResourcesTimeoutMs(ignored: String): Unit = {
-    client = createAdminClient
-    def timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
-    assertThrows(classOf[ExecutionException], () => client.listClientMetricsResources(timeoutOption).all().get())
-    def enoughOption = new ListClientMetricsResourcesOptions().timeoutMs(1000)
-    assertDoesNotThrow(() => client.listClientMetricsResources(enoughOption).all().get())
+    client = createInvalidAdminClient()
+    try {
+      def timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
+      val exception = assertThrows(classOf[ExecutionException], () =>
+        client.listClientMetricsResources(timeoutOption).all().get())
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
   }
 
   private def testAppendConfig(props: Properties, append: String, expected: String): Unit = {
