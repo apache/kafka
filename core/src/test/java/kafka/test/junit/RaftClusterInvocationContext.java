@@ -112,10 +112,13 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         private EmbeddedZookeeper embeddedZookeeper;
         private KafkaClusterTestKit clusterTestKit;
         private final boolean isCombined;
+        private final ListenerName listenerName;
 
         RaftClusterInstance(ClusterConfig clusterConfig, boolean isCombined) {
             this.clusterConfig = clusterConfig;
             this.isCombined = isCombined;
+            this.listenerName = clusterConfig.listenerName().map(ListenerName::normalised)
+                    .orElse(TestKitNodes.BROKER_LISTENER_NAME);
         }
 
         @Override
@@ -130,7 +133,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public ListenerName clientListener() {
-            return ListenerName.normalised("EXTERNAL");
+            return listenerName;
         }
 
         @Override
@@ -265,7 +268,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
                         .setPerServerProperties(clusterConfig.perServerOverrideProperties())
-                        .setNumControllerNodes(clusterConfig.numControllers()).build();
+                        .setNumControllerNodes(clusterConfig.numControllers())
+                        .setListenerName(listenerName)
+                        .setSecurityProtocol(clusterConfig.securityProtocol())
+                        .build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 if (Boolean.parseBoolean(clusterConfig.serverProperties()
                         .getOrDefault("zookeeper.metadata.migration.enable", "false"))) {

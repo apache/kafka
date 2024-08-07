@@ -19,6 +19,7 @@ package kafka.testkit;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
@@ -43,6 +44,8 @@ import java.util.stream.Stream;
 public class TestKitNodes {
     public static final int CONTROLLER_ID_OFFSET = 3000;
     public static final int BROKER_ID_OFFSET = 0;
+    public static final ListenerName BROKER_LISTENER_NAME = ListenerName.normalised("EXTERNAL");
+    public static final SecurityProtocol BROKER_SECURITY_PROTOCOL = SecurityProtocol.PLAINTEXT;
 
     public static class Builder {
         private boolean combined;
@@ -53,6 +56,8 @@ public class TestKitNodes {
         private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersion(MetadataVersion.latestTesting(), "testkit");
+        private ListenerName listenerName = BROKER_LISTENER_NAME;
+        private SecurityProtocol securityProtocol = BROKER_SECURITY_PROTOCOL;
 
         public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
@@ -93,6 +98,16 @@ public class TestKitNodes {
             this.perServerProperties = Collections.unmodifiableMap(
                 perServerProperties.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
+            return this;
+        }
+
+        public Builder setListenerName(ListenerName listenerName) {
+            this.listenerName = listenerName;
+            return this;
+        }
+
+        public Builder setSecurityProtocol(SecurityProtocol securityProtocol) {
+            this.securityProtocol = securityProtocol;
             return this;
         }
 
@@ -159,7 +174,8 @@ public class TestKitNodes {
                 brokerNodes.put(id, brokerNode);
             }
 
-            return new TestKitNodes(baseDirectory, clusterId, bootstrapMetadata, controllerNodes, brokerNodes);
+            return new TestKitNodes(baseDirectory, clusterId, bootstrapMetadata, controllerNodes, brokerNodes,
+                    listenerName, securityProtocol, new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT);
         }
     }
 
@@ -168,19 +184,31 @@ public class TestKitNodes {
     private final BootstrapMetadata bootstrapMetadata;
     private final SortedMap<Integer, TestKitNode> controllerNodes;
     private final SortedMap<Integer, TestKitNode> brokerNodes;
+    private final ListenerName brokerListenerName;
+    private final ListenerName controllerListenerName;
+    private final SecurityProtocol brokerSecurityProtocol;
+    private final SecurityProtocol controllerSecurityProtocol;
 
     private TestKitNodes(
         String baseDirectory,
         String clusterId,
         BootstrapMetadata bootstrapMetadata,
         SortedMap<Integer, TestKitNode> controllerNodes,
-        SortedMap<Integer, TestKitNode> brokerNodes
+        SortedMap<Integer, TestKitNode> brokerNodes,
+        ListenerName brokerListenerName,
+        SecurityProtocol brokerSecurityProtocol,
+        ListenerName controllerListenerName,
+        SecurityProtocol controllerSecurityProtocol
     ) {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
         this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
         this.controllerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(controllerNodes)));
         this.brokerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(brokerNodes)));
+        this.brokerListenerName = Objects.requireNonNull(brokerListenerName);
+        this.controllerListenerName = Objects.requireNonNull(controllerListenerName);
+        this.brokerSecurityProtocol = Objects.requireNonNull(brokerSecurityProtocol);
+        this.controllerSecurityProtocol = Objects.requireNonNull(controllerSecurityProtocol);
     }
 
     public boolean isCombined(int node) {
@@ -207,16 +235,20 @@ public class TestKitNodes {
         return brokerNodes;
     }
 
-    public ListenerName interBrokerListenerName() {
-        return new ListenerName("EXTERNAL");
+    public ListenerName externalListenerName() {
+        return brokerListenerName;
     }
 
-    public ListenerName externalListenerName() {
-        return new ListenerName("EXTERNAL");
+    public SecurityProtocol externalListenerProtocol() {
+        return brokerSecurityProtocol;
     }
 
     public ListenerName controllerListenerName() {
-        return new ListenerName("CONTROLLER");
+        return controllerListenerName;
+    }
+
+    public SecurityProtocol controllerListenerProtocol() {
+        return controllerSecurityProtocol;
     }
 
     private static TestKitNode buildBrokerNode(int id,
