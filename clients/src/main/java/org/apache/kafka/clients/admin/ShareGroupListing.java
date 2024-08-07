@@ -17,8 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.ShareGroupState;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 import java.util.Optional;
