@@ -400,7 +400,7 @@ public class QuorumState {
     }
 
     /**
-     * Grant a vote to a candidate. We will remain in Unattached
+     * Grant a vote to a candidate. We will transition/remain in Unattached
      * state until either the election timeout expires or a leader is elected. In particular,
      * we do not begin fetching until the election has concluded and
      * {@link #transitionToFollower(int, int, Endpoints)} is invoked.
@@ -431,7 +431,7 @@ public class QuorumState {
                     currentEpoch
                 )
             );
-        } else if (epoch == currentEpoch && !isUnattached()) {
+        } else if (epoch == currentEpoch && !isUnattachedNotVoted()) {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Voted for %s and epoch %d from the current state (%s)",
@@ -658,12 +658,16 @@ public class QuorumState {
         return state instanceof FollowerState;
     }
 
-    public boolean isUnattachedAndVoted() {
-        return isUnattached() && unattachedStateOrThrow().votedKey().isPresent();
-    }
-
     public boolean isUnattached() {
         return state instanceof UnattachedState;
+    }
+
+    public boolean isUnattachedNotVoted() {
+        return isUnattached() && !unattachedStateOrThrow().votedKey().isPresent();
+    }
+
+    public boolean isUnattachedAndVoted() {
+        return isUnattached() && unattachedStateOrThrow().votedKey().isPresent();
     }
 
     public boolean isLeader() {
