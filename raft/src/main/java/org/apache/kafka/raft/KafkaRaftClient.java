@@ -672,7 +672,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void transitionToVoted(ReplicaKey candidateKey, int epoch) {
-        quorum.transitionToVoted(epoch, candidateKey);
+        quorum.addVotedState(epoch, candidateKey);
         maybeFireLeaderChange();
         resetConnections();
     }
@@ -817,7 +817,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0
         );
 
-        if (voteGranted && quorum.isUnattached()) {
+        if (voteGranted && quorum.isUnattached()) { // how a non-committed voter can transition to voted state
             transitionToVoted(candidateKey, candidateEpoch);
         }
 
@@ -3024,23 +3024,28 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private long pollVoted(long currentTimeMs) {
-        VotedState state = quorum.votedStateOrThrow();
-        GracefulShutdown shutdown = this.shutdown.get();
-
-        if (shutdown != null) {
-            // If shutting down, then remain in this state until either the
-            // shutdown completes or an epoch bump forces another state transition
-            return shutdown.remainingTimeMs();
-        } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
-            // KAFKA-17067 is going to fix this. VotedState doesn't mean that the replica is a voter
-            // we need to treat VotedState similar to UnattachedState.
-            transitionToCandidate(currentTimeMs);
-            return 0L;
-        } else {
-            return state.remainingElectionTimeMs(currentTimeMs);
-        }
-    }
+//    private long pollVoted(long currentTimeMs) {
+//        VotedState state = quorum.votedStateOrThrow();
+//        GracefulShutdown shutdown = this.shutdown.get();
+//
+//        if (shutdown != null) {
+//            // If shutting down, then remain in this state until either the
+//            // shutdown completes or an epoch bump forces another state transition
+//            return shutdown.remainingTimeMs();
+//        } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
+//            // KAFKA-17067 is going to fix this. VotedState doesn't mean that the replica is a voter
+//            // we need to treat VotedState similar to UnattachedState.
+//            if (quorum.isVoter()) {
+//                transitionToCandidate(currentTimeMs); // kafka-17067 comment
+//                return 0L;
+//            } else {
+//                return quorumConfig.electionTimeoutMs(); // some timeout since infinite seems slightly unsafe
+//            }
+//        }
+//        // wait for begin quorum request so we know who the new leader is -> transition to follower
+//        // needs to be fetching from leader to be added.
+//        return state.remainingElectionTimeMs(currentTimeMs);
+//    }
 
     private long pollUnattached(long currentTimeMs) {
         UnattachedState state = quorum.unattachedStateOrThrow();
@@ -3077,8 +3082,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return pollCandidate(currentTimeMs);
         } else if (quorum.isFollower()) {
             return pollFollower(currentTimeMs);
-        } else if (quorum.isVoted()) {
-            return pollVoted(currentTimeMs);
         } else if (quorum.isUnattached()) {
             return pollUnattached(currentTimeMs);
         } else if (quorum.isResigned()) {
