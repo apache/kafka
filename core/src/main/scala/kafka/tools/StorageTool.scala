@@ -149,7 +149,6 @@ object StorageTool extends Logging {
     } else {
       listener.host
     }
-    val port = config.controllerListeners.head.port
     DynamicVoters.parse(s"${config.nodeId}@${host}:${listener.port}:${Uuid.randomUuid()}")
   }
 
