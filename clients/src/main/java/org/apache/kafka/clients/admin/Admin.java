@@ -875,23 +875,23 @@ public interface Admin extends AutoCloseable {
     DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options);
 
     /**
-     * Describe some group IDs in the cluster.
+     * Describe some consumer groups in the cluster.
      *
      * @param groupIds The IDs of the groups to describe.
      * @param options  The options to use when describing the groups.
-     * @return The DescribeConsumerGroupResult.
+     * @return The DescribeConsumerGroupsResult.
      */
     DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds,
                                                         DescribeConsumerGroupsOptions options);
 
     /**
-     * Describe some group IDs in the cluster, with the default options.
+     * Describe some consumer groups in the cluster, with the default options.
      * <p>
      * This is a convenience method for {@link #describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}
      * with default options. See the overload for more details.
      *
      * @param groupIds The IDs of the groups to describe.
-     * @return The DescribeConsumerGroupResult.
+     * @return The DescribeConsumerGroupsResult.
      */
     default DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds) {
         return describeConsumerGroups(groupIds, new DescribeConsumerGroupsOptions());
@@ -1766,6 +1766,49 @@ public interface Admin extends AutoCloseable {
         Uuid voterDirectoryId,
         RemoveRaftVoterOptions options
     );
+
+    /**
+     * Describe some share groups in the cluster.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @param options  The options to use when describing the groups.
+     * @return The DescribeShareGroupsResult.
+     */
+    DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds,
+                                                  DescribeShareGroupsOptions options);
+
+    /**
+     * Describe some share groups in the cluster, with the default options.
+     * <p>
+     * This is a convenience method for {@link #describeShareGroups(Collection, DescribeShareGroupsOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeShareGroupsResult.
+     */
+    default DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds) {
+        return describeShareGroups(groupIds, new DescribeShareGroupsOptions());
+    }
+
+    /**
+     * List the share groups available in the cluster.
+     *
+     * @param options The options to use when listing the share groups.
+     * @return The ListShareGroupsResult.
+     */
+    ListShareGroupsResult listShareGroups(ListShareGroupsOptions options);
+
+    /**
+     * List the share groups available in the cluster with the default options.
+     * <p>
+     * This is a convenience method for {@link #listShareGroups(ListShareGroupsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return The ListShareGroupsResult.
+     */
+    default ListShareGroupsResult listShareGroups() {
+        return listShareGroups(new ListShareGroupsOptions());
+    }
 
     /**
      * Get the metrics kept by the adminClient
