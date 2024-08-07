@@ -59,6 +59,6 @@ class ModernStrategy extends ReflectiveStrategy {
 
     @Override
     public <T> T callAs(Subject subject, Callable<T> action) throws CompletionException {
-        return (T) invoke(callAs, null, subject, action);
+        return (T) invokeChecked(callAs, CompletionException.class, null, subject, action);
     }
 }

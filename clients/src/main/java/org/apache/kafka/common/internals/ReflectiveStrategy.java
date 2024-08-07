@@ -39,6 +39,23 @@ abstract class ReflectiveStrategy implements SecurityManagerCompatibility {
         }
     }
 
+    <T extends Exception> Object invokeChecked(Method method, Class<T> ex, Object obj, Object... args) throws T {
+        try {
+            return method.invoke(obj, args);
+        } catch (IllegalAccessException e) {
+            throw new UnsupportedOperationException(e);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (ex.isInstance(e)) {
+                throw ex.cast(e);
+            } else if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            } else {
+                throw new RuntimeException(cause);
+            }
+        }
+    }
+
     /**
      * Interface to allow mocking out classloading infrastructure. This is used to test reflective operations.
      */

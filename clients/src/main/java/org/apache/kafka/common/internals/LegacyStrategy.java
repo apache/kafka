@@ -82,7 +82,7 @@ class LegacyStrategy extends ReflectiveStrategy {
      * @return The result of Subject.doAs(Subject, PrivilegedExceptionAction)
      */
     private <T> T doAs(Subject subject, PrivilegedExceptionAction<T> action) throws PrivilegedActionException {
-        return (T) invoke(doAs, null, subject, action);
+        return (T) invokeChecked(doAs, PrivilegedActionException.class, null, subject, action);
     }
 
     @Override
