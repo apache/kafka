@@ -241,7 +241,7 @@ public class MetadataQuorumCommand {
     }
 
     // Constructs the CurrentVoters string
-    // CurrentVoters: [{"id": 0, "directoryId": "UUID1", "endpoints": [{"name": "C", "host": "controller-0", "port": 1234}]}, {"id": 1, ... }]}]
+    // CurrentVoters: [{"id": 0, "directoryId": "UUID1", "endpoints": ["C://controller-0:1234"]}]
     private static String printVoterState(QuorumInfo quorumInfo) {
         return printReplicaState(quorumInfo, quorumInfo.voters());
     }
@@ -283,10 +283,8 @@ public class MetadataQuorumCommand {
             if (!endpoints.isEmpty()) {
                 sb.append(", \"endpoints\": [");
                 for (RaftVoterEndpoint endpoint : endpoints) {
-                    sb.append("{");
-                    sb.append("\"name\": ").append("\"").append(endpoint.name()).append("\", ");
-                    sb.append("\"host\": ").append("\"").append(endpoint.host()).append("\", ");
-                    sb.append("\"port\": ").append(endpoint.port()).append("}, ");
+                    sb.append("\"");
+                    sb.append(endpoint.toString()).append("\", ");
                 }
                 sb.setLength(sb.length() - 2);  // remove the last comma and space
                 sb.append("]");

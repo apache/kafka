@@ -91,10 +91,6 @@ public class RaftVoterEndpoint {
 
     @Override
     public String toString() {
-        return "RaftVoterEndpoint" +
-            "(name=" + name +
-            ", host=" + host +
-            ", port=" + port +
-            ")";
+        return name + "://" + host + ":" + port;
     }
 }
