@@ -34,9 +34,6 @@ public class MockMessageQueue implements RaftMessageQueue {
     public RaftMessage poll(long timeoutMs) {
         wakeupRequested.set(false);
         lastPollTimeout.set(timeoutMs);
-        if (timeoutMs == 0) {
-            return null;
-        }
         return messages.poll();
     }
 
