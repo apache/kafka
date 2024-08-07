@@ -42,6 +42,7 @@ import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
+import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.io.File;
 import java.io.IOException;
@@ -79,7 +80,12 @@ public class MetadataQuorumCommand {
         try {
             execute(args);
             return 0;
-        } catch (TerseException | ArgumentParserException e) {
+        } catch (HelpScreenException e) {
+            return 0;
+        } catch (ArgumentParserException e) {
+            e.getParser().handleError(e);
+            return 1;
+        } catch (TerseException e) {
             System.err.println(e.getMessage());
             return 1;
         } catch (Throwable e) {

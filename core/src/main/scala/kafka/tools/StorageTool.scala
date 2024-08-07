@@ -25,6 +25,7 @@ import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace}
+import net.sourceforge.argparse4j.internal.HelpScreenException
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
@@ -68,8 +69,10 @@ object StorageTool extends Logging {
     val namespace = try {
       parseArguments(args)
     } catch {
+      case _: HelpScreenException =>
+        return 0
       case e: ArgumentParserException =>
-        e.printStackTrace(printStream)
+        e.getParser.handleError(e)
         return 1
     }
     val command = namespace.getString("command")
@@ -137,16 +140,17 @@ object StorageTool extends Logging {
     if (!config.processRoles.contains(ProcessRole.ControllerRole)) {
       throw new TerseFailure("You cannot use --standalone on a broker node.")
     }
-    if (config.controllerListeners.isEmpty) {
+    if (config.effectiveAdvertisedControllerListeners.isEmpty) {
       throw new RuntimeException("No controller listeners found.")
     }
-    val host = if (config.controllerListeners.head.host == null) {
+    val listener = config.effectiveAdvertisedControllerListeners.head
+    val host = if (listener.host == null) {
       "localhost"
     } else {
-      config.controllerListeners.head.host
+      listener.host
     }
     val port = config.controllerListeners.head.port
-    DynamicVoters.parse(s"${config.nodeId}@${host}:${port}:${Uuid.randomUuid()}")
+    DynamicVoters.parse(s"${config.nodeId}@${host}:${listener.port}:${Uuid.randomUuid()}")
   }
 
   def parseArguments(args: Array[String]): Namespace = {

@@ -216,7 +216,7 @@ public class SocketServerConfigs {
         return listenerListToEndPoints(input, n -> {
             SecurityProtocol result = nameToSecurityProto.get(n);
             if (result == null) {
-                throw new IllegalArgumentException("No security protocol defined for listener " + n);
+                throw new IllegalArgumentException("No security protocol defined for listener " + n.value());
             }
             return result;
         });
