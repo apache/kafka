@@ -1161,6 +1161,46 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
+    @Test
+    public void testFetchOffsetsWithWrappedTimeout() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        service.startup(() -> 1);
+
+        OffsetFetchRequestData.OffsetFetchRequestGroup request =
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group")
+                .setTopics(Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(Collections.singletonList(0))));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("fetch-offsets"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(new CompletionException(Errors.REQUEST_TIMED_OUT.exception())));
+
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
+            requestContext(ApiKeys.OFFSET_FETCH),
+            request,
+            true
+        );
+
+        assertEquals(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId("group")
+                .setErrorCode(Errors.NOT_COORDINATOR.code()),
+            future.get()
+        );
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testFetchAllOffsets(
@@ -1240,6 +1280,43 @@ public class GroupCoordinatorServiceTest {
             new OffsetFetchResponseData.OffsetFetchResponseGroup()
                 .setGroupId("group")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
+    }
+
+    @Test
+    public void testFetchAllOffsetsWithWrappedTimeout() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        service.startup(() -> 1);
+
+        OffsetFetchRequestData.OffsetFetchRequestGroup request =
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group");
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("fetch-all-offsets"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+            )).thenReturn(FutureUtils.failedFuture(new CompletionException(Errors.REQUEST_TIMED_OUT.exception())));
+
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchAllOffsets(
+            requestContext(ApiKeys.OFFSET_FETCH),
+            request,
+            true
+        );
+
+        assertEquals(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId("group")
+                .setErrorCode(Errors.NOT_COORDINATOR.code()),
             future.get()
         );
     }

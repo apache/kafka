@@ -784,7 +784,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     Collections.emptyList(),
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
                 )
-            );
+            ).exceptionally(exception -> handleOffsetFetchException(request, exception));
         } else {
             return runtime.scheduleReadOperation(
                 "fetch-offsets",
@@ -835,7 +835,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     Collections.emptyList(),
                     coordinator.fetchAllOffsets(request, Long.MAX_VALUE)
                 )
-            );
+            ).exceptionally(exception -> handleOffsetFetchException(request, exception));
         } else {
             return runtime.scheduleReadOperation(
                 "fetch-all-offsets",
@@ -1174,6 +1174,36 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             default:
                 return handler.apply(apiError.error(), apiError.message());
+        }
+    }
+
+    /**
+     * This is the handler used by offset fetch operations to convert errors to coordinator errors.
+     *
+     * @param request           The OffsetFetchRequestGroup request.
+     * @param exception         The exception to handle.
+     * @return The OffsetFetchRequestGroup response.
+     */
+    private OffsetFetchResponseData.OffsetFetchResponseGroup handleOffsetFetchException(
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
+        Throwable exception
+    ) {
+        ApiError apiError = ApiError.fromThrowable(exception);
+
+        switch (apiError.error()) {
+            case REQUEST_TIMED_OUT:
+                // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, otherwise older consumers will not
+                // expect the error and won't retry the request. NOT_COORDINATOR additionally
+                // triggers coordinator re-lookup, which is necessary if the client is talking to a
+                // zombie coordinator.
+                return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(request.groupId())
+                    .setErrorCode(Errors.NOT_COORDINATOR.code());
+
+            default:
+                return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(request.groupId())
+                    .setErrorCode(apiError.error().code());
         }
     }
 }
