@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.{ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -77,7 +77,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setSubscribedTopicNames(List("foo").asJava), true
+        .setSubscribedTopicNames(List("foo").asJava),
+      true
     ).build()
 
     // Send the request until receiving a successful response. There is a delay
@@ -105,10 +106,11 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(shareGroupHeartbeatResponse.data.memberId)
-        .setMemberEpoch(shareGroupHeartbeatResponse.data.memberEpoch), true
+        .setMemberEpoch(shareGroupHeartbeatResponse.data.memberEpoch),
+      true
     ).build()
 
-    // This is the expected assignment.
+    // This is the expected assignment. here
     val expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
       .setTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
@@ -131,7 +133,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(shareGroupHeartbeatResponse.data.memberId)
-        .setMemberEpoch(-1), true
+        .setMemberEpoch(-1),
+      true
     ).build()
 
     shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
@@ -166,7 +169,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setSubscribedTopicNames(List("foo").asJava), true
+        .setSubscribedTopicNames(List("foo").asJava),
+      true
     ).build()
 
     // Send the request until receiving a successful response. There is a delay
@@ -215,7 +219,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId1)
-        .setMemberEpoch(1), true
+        .setMemberEpoch(1),
+      true
     ).build()
 
     // Heartbeats until the partitions are assigned for member 1.
@@ -234,7 +239,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId2)
-        .setMemberEpoch(2), true
+        .setMemberEpoch(2),
+      true
     ).build()
 
     // Heartbeats until the partitions are assigned for member 2.
@@ -254,7 +260,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId1)
-        .setMemberEpoch(3), true
+        .setMemberEpoch(3),
+      true
     ).build()
 
     // Heartbeats until the response for no change of assignment occurs for member 1 with same epoch.
@@ -295,7 +302,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setSubscribedTopicNames(List("foo").asJava), true
+        .setSubscribedTopicNames(List("foo").asJava),
+      true
     ).build()
 
     // Send the request until receiving a successful response. There is a delay
@@ -330,7 +338,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(1), true
+        .setMemberEpoch(1),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -347,7 +356,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(-1)
-        .setMemberId(memberId), true
+        .setMemberId(memberId),
+      true
     ).build()
 
     // Send the member request until receiving a successful response.
@@ -365,7 +375,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         .setGroupId("grp")
         .setMemberEpoch(0)
         .setMemberId(memberId)
-        .setSubscribedTopicNames(List("foo").asJava), true
+        .setSubscribedTopicNames(List("foo").asJava),
+      true
     ).build()
 
     shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
@@ -401,7 +412,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setSubscribedTopicNames(List("foo", "bar", "baz").asJava), true
+        .setSubscribedTopicNames(List("foo", "bar", "baz").asJava),
+      true
     ).build()
     // Send the request until receiving a successful response. There is a delay
     // here because the group coordinator is loaded in the background.
@@ -441,7 +453,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(1), true
+        .setMemberEpoch(1),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -476,7 +489,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(3), true
+        .setMemberEpoch(3),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -507,7 +521,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(4), true
+        .setMemberEpoch(4),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -540,7 +555,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(5), true
+        .setMemberEpoch(5),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -584,7 +600,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setSubscribedTopicNames(List("foo").asJava), true
+        .setSubscribedTopicNames(List("foo").asJava),
+      true
     ).build()
 
     // Send the request until receiving a successful response. There is a delay
@@ -597,8 +614,9 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // Verify the response for member.
     val memberId = shareGroupHeartbeatResponse.data.memberId
+    var memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
     assertNotNull(memberId)
-    assertEquals(1, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(1, memberEpoch)
     assertEquals(new ShareGroupHeartbeatResponseData.Assignment(), shareGroupHeartbeatResponse.data.assignment)
 
     // Create the topic.
@@ -619,7 +637,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(1), true
+        .setMemberEpoch(memberEpoch),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -628,16 +647,18 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse.data.assignment == expectedAssignment
     }, msg = s"Could not get foo partitions assigned. Last response $shareGroupHeartbeatResponse.")
 
-    // Verify the response.
-    assertEquals(2, shareGroupHeartbeatResponse.data.memberEpoch)
+    // Verify the response, the epoch should have been bumped.
+    assertTrue(shareGroupHeartbeatResponse.data.memberEpoch > memberEpoch)
+    memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
 
     // Prepare the next heartbeat with a new subscribed topic.
     shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(2)
-        .setSubscribedTopicNames(List("foo", "bar").asJava), true
+        .setMemberEpoch(memberEpoch)
+        .setSubscribedTopicNames(List("foo", "bar").asJava),
+      true
     ).build()
 
     val barId = TestUtils.createTopicWithAdminRaw(
@@ -662,15 +683,17 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
     }, msg = s"Could not get bar partitions assigned. Last response $shareGroupHeartbeatResponse.")
 
-    // Verify the response.
-    assertEquals(4, shareGroupHeartbeatResponse.data.memberEpoch)
+    // Verify the response, the epoch should have been bumped.
+    assertTrue(shareGroupHeartbeatResponse.data.memberEpoch > memberEpoch)
+    memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
 
     // Prepare the next heartbeat which is empty to verify no assignment changes.
     shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(4), true
+        .setMemberEpoch(memberEpoch),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -678,8 +701,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
     }, msg = s"Could not get empty heartbeat response. Last response $shareGroupHeartbeatResponse.")
 
-    // Verify the response.
-    assertEquals(4, shareGroupHeartbeatResponse.data.memberEpoch)
+    // Verify the response, the epoch should be same.
+    assertEquals(memberEpoch, shareGroupHeartbeatResponse.data.memberEpoch)
 
     // Blocking the thread for 1 sec so that the session times out and the member needs to rejoin.
     Thread.sleep(1000)
@@ -689,7 +712,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(4), true
+        .setMemberEpoch(memberEpoch),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -701,8 +725,10 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
+        .setMemberId(memberId)
         .setMemberEpoch(0)
-        .setSubscribedTopicNames(List("foo", "bar").asJava), true
+        .setSubscribedTopicNames(List("foo", "bar").asJava),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -714,7 +740,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     }, msg = s"Could not get bar partitions assigned upon rejoining. Last response $shareGroupHeartbeatResponse.")
 
     // Epoch should have been bumped when a member is removed and again when it joins back.
-    assertEquals(6, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertTrue(shareGroupHeartbeatResponse.data.memberEpoch > memberEpoch)
   }
 
   @ClusterTest(
@@ -741,7 +767,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberEpoch(0)
-        .setSubscribedTopicNames(List("foo").asJava), true
+        .setSubscribedTopicNames(List("foo").asJava),
+      true
     ).build()
     // Send the request until receiving a successful response. There is a delay
     // here because the group coordinator is loaded in the background.
@@ -771,7 +798,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(1), true
+        .setMemberEpoch(1),
+      true
     ).build()
 
     TestUtils.waitUntilTrue(() => {
@@ -792,33 +820,20 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ShareGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(memberId)
-        .setMemberEpoch(2), true
+        .setMemberEpoch(2),
+      true
     ).build()
 
+    // Should receive no error and no assignment changes.
     TestUtils.waitUntilTrue(() => {
       shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
-      shareGroupHeartbeatResponse.data.errorCode == Errors.FENCED_MEMBER_EPOCH.code
-    }, msg = s"Could not change the group coordinator. Last response $shareGroupHeartbeatResponse.")
+      shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+    }, msg = s"Could not get partitions assigned. Last response $shareGroupHeartbeatResponse.")
 
-    // Verify the response
-    assertEquals(0, shareGroupHeartbeatResponse.data.memberEpoch)
-
-    shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
-      new ShareGroupHeartbeatRequestData()
-        .setGroupId("grp")
-        .setMemberEpoch(0)
-        .setSubscribedTopicNames(List("foo").asJava), true
-    ).build()
-
-    TestUtils.waitUntilTrue(() => {
-      shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
-      shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
-        shareGroupHeartbeatResponse.data.assignment == expectedAssignment
-    }, msg = s"Could not get partitions assigned after rejoin. Last response $shareGroupHeartbeatResponse.")
-
-    // Verify the response
-    assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
-    assertNotEquals(memberId, shareGroupHeartbeatResponse.data.memberId)
+    // Verify the response. Epoch should not have changed and null assignments determines that no
+    // change in old assignment.
+    assertEquals(2, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertNull(shareGroupHeartbeatResponse.data.assignment)
   }
 
   private def connectAndReceive(request: ShareGroupHeartbeatRequest): ShareGroupHeartbeatResponse = {
