@@ -50,6 +50,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -13504,6 +13505,75 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(1)
                 .setRackId("")));
         assertEquals("RackId can't be empty.", ex.getMessage());
+    }
+
+    @Test
+    public void testShareGroupDescribeRequest() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        // GroupId is not required
+        List<ShareGroupDescribeResponseData.DescribedGroup> groups = context.sendShareGroupDescribe(Collections.emptyList());
+        assertEquals(0, groups.size());
+
+        // Group id not found
+        groups = context.sendShareGroupDescribe(Collections.singletonList("unknown-group"));
+        assertEquals(1, groups.size());
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), groups.get(0).errorCode());
+    }
+
+    @Test
+    public void testShareGroupDescribeNoErrors() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share-range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        List<String> groupIds = Arrays.asList("group-id-1", "group-id-2");
+        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupIds.get(0), 100, GroupType.SHARE));
+        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupIds.get(1), 15, GroupType.SHARE));
+
+        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupIds.get(1))
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(Collections.singletonList("foo")));
+
+        // Verify that a member id was generated for the new member.
+        String memberId = result.response().memberId();
+        assertNotNull(memberId);
+        context.commit();
+
+        List<ShareGroupDescribeResponseData.DescribedGroup> expected = Arrays.asList(
+            new ShareGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(100)
+                .setGroupId(groupIds.get(0))
+                .setGroupState(ShareGroup.ShareGroupState.EMPTY.toString())
+                .setAssignorName("share-range"),
+            new ShareGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(16)
+                .setAssignmentEpoch(16)
+                .setGroupId(groupIds.get(1))
+                .setMembers(Collections.singletonList(
+                    new ShareGroupMember.Builder(memberId)
+                        .setMemberEpoch(16)
+                        .setClientId("client")
+                        .setClientHost("localhost/127.0.0.1")
+                        .setSubscribedTopicNames(Collections.singletonList("foo"))
+                        .build()
+                        .asShareGroupDescribeMember(
+                            new MetadataImageBuilder().build().topics()
+                        )
+                ))
+                .setGroupState(ShareGroup.ShareGroupState.STABLE.toString())
+                .setAssignorName("share-range")
+        );
+        List<ShareGroupDescribeResponseData.DescribedGroup> actual = context.sendShareGroupDescribe(groupIds);
+
+        assertEquals(expected, actual);
     }
 
     @Test

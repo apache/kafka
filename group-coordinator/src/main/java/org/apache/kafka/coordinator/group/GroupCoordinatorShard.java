@@ -36,6 +36,7 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -539,6 +540,21 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long committedOffset
     ) {
         return groupMetadataManager.consumerGroupDescribe(groupIds, committedOffset);
+    }
+
+    /**
+     * Handles a ShareGroupDescribe request.
+     *
+     * @param groupIds      The IDs of the groups to describe.
+     *
+     * @return A list containing the ShareGroupDescribeResponseData.DescribedGroup.
+     *
+     */
+    public List<ShareGroupDescribeResponseData.DescribedGroup> shareGroupDescribe(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.shareGroupDescribe(groupIds, committedOffset);
     }
 
     /**
