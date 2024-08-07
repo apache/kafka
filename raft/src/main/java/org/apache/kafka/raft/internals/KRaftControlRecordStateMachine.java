@@ -280,7 +280,7 @@ public final class KRaftControlRecordStateMachine {
             switch (record.type()) {
                 case KRAFT_VOTERS:
                     synchronized (voterSetHistory) {
-                        voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message())); // we update our in-memory voter set even if not committed yet
+                        voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message()));
                     }
                     break;
 

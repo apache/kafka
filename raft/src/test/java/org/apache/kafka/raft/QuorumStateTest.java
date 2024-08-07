@@ -481,33 +481,6 @@ public class QuorumStateTest {
         );
     }
 
-//    @ParameterizedTest
-//    @EnumSource(value = KRaftVersion.class)
-//    public void testCandidateToVoted(KRaftVersion kraftVersion) {
-//        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
-//        VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
-//        QuorumState state = initializeEmptyState(voters, kraftVersion);
-//        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-//        state.transitionToCandidate();
-//
-//        state.addVotedState(5, otherNodeKey);
-//        assertEquals(5, state.epoch());
-//        assertEquals(OptionalInt.empty(), state.leaderId());
-//
-//        VotedState followerState = state.votedStateOrThrow();
-//        assertEquals(otherNodeKey, followerState.votedKey());
-//
-//        assertEquals(
-//            Optional.of(
-//                ElectionState.withVotedCandidate(
-//                    5,
-//                    persistedVotedKey(otherNodeKey, kraftVersion),
-//                    persistedVoters(voters.voterIds(), kraftVersion))
-//            ),
-//            store.readElectionState()
-//        );
-//    }
-
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void testCandidateToAnyStateLowerEpoch(KRaftVersion kraftVersion) {
@@ -672,36 +645,6 @@ public class QuorumStateTest {
         assertThrows(IllegalStateException.class, () -> state.addVotedState(30, otherNodeKey));
     }
 
-//    @ParameterizedTest
-//    @EnumSource(value = KRaftVersion.class)
-//    public void testLeaderToVoted(KRaftVersion kraftVersion) {
-//        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
-//        VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
-//        QuorumState state = initializeEmptyState(voters, kraftVersion);
-//        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-//        state.transitionToCandidate();
-//        state.candidateStateOrThrow().recordGrantedVote(otherNodeKey.id());
-//        state.transitionToLeader(0L, accumulator);
-//        state.addVotedState(5, otherNodeKey);
-//
-//        assertEquals(5, state.epoch());
-//        assertEquals(OptionalInt.empty(), state.leaderId());
-//
-//        VotedState votedState = state.votedStateOrThrow();
-//        assertEquals(otherNodeKey, votedState.votedKey());
-//
-//        assertEquals(
-//            Optional.of(
-//                ElectionState.withVotedCandidate(
-//                    5,
-//                    persistedVotedKey(otherNodeKey, kraftVersion),
-//                    persistedVoters(voters.voterIds(), kraftVersion)
-//                )
-//            ),
-//            store.readElectionState()
-//        );
-//    }
-//
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void testLeaderToAnyStateLowerEpoch(KRaftVersion kraftVersion) {
@@ -1338,36 +1281,6 @@ public class QuorumStateTest {
             () -> state.addVotedState(8, ReplicaKey.of(node2, ReplicaKey.NO_DIRECTORY_ID))
         );
     }
-
-    // think we should delete this test - code enforces only unattached can transition to voted
-//    @ParameterizedTest
-//    @EnumSource(value = KRaftVersion.class)
-//    public void testFollowerToVotedHigherEpoch(KRaftVersion kraftVersion) {
-//        ReplicaKey nodeKey1 = ReplicaKey.of(1, Uuid.randomUuid());
-//        ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
-//
-//        VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, nodeKey1, nodeKey2));
-//        QuorumState state = initializeEmptyState(voters, kraftVersion);
-//        state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-//        state.transitionToFollower(
-//            8,
-//            nodeKey2.id(),
-//            voters.listeners(nodeKey2.id())
-//        );
-//
-//        int jitterMs = 2500;
-//        random.mockNextInt(electionTimeoutMs, jitterMs);
-//
-//        state.transitiontoUnattachedVoted(9, nodeKey1);
-//        assertTrue(state.isUnattached());
-//
-//        UnattachedState votedState = state.unattachedStateOrThrow();
-//        assertEquals(9, votedState.epoch());
-//        assertEquals(nodeKey1, votedState.votedKey().get());
-//
-//        assertEquals(electionTimeoutMs + jitterMs,
-//            votedState.remainingElectionTimeMs(time.milliseconds()));
-//    }
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)

@@ -40,14 +40,10 @@ import java.util.Set;
  * either through random Fetch requests to the bootstrap servers or through BeginQuorumEpoch
  * request from the leader.
  */
-// (non-voter) fetch from bootstrap servers until local finds leader
-// voter will sit idle until a timeout and transition to candidate
 
 public class UnattachedState implements EpochState {
-    private final Time time;
     private int epoch;
     private OptionalInt leaderId;
-//    private Optional<ReplicaKey> votedKey;
     private Optional<VotedState> votedState;
     private Set<Integer> voters;
     private long electionTimeoutMs;
@@ -65,10 +61,8 @@ public class UnattachedState implements EpochState {
         long electionTimeoutMs,
         LogContext logContext
     ) {
-        this.time = time;
         this.epoch = epoch;
         this.leaderId = leaderId;
-//        this.votedKey = votedKey;
         this.votedState = votedKey.map(VotedState::new);
         this.voters = voters;
         this.highWatermark = highWatermark;
@@ -77,22 +71,10 @@ public class UnattachedState implements EpochState {
         this.log = logContext.logger(UnattachedState.class);
     }
 
-    public void updateAfterVoting(int epoch, ReplicaKey votedKey, Set<Integer> voters, long electionTimeoutMs) {
-        this.epoch = epoch;
-//        this.votedKey = Optional.of(votedKey);
-        this.votedState = Optional.of(new VotedState(votedKey));
-        this.leaderId = OptionalInt.empty();
-        this.voters = voters;
-        this.electionTimeoutMs = electionTimeoutMs;
-        this.electionTimer = time.timer(electionTimeoutMs);
-    }
-
     @Override
     public ElectionState election() {
         if (votedState.isPresent()) {
             return votedState.get().election();
-//        if (votedKey.isPresent()) {
-//            return ElectionState.withVotedCandidate(epoch, votedKey.get(), voters);
         } else if (leaderId.isPresent()) {
             return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), voters);
         } else {
@@ -142,22 +124,8 @@ public class UnattachedState implements EpochState {
     public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
         if (votedState.isPresent()) {
             return votedState.get().canGrantVote(candidateKey);
-//        if (votedKey.isPresent()) {
-//            ReplicaKey votedReplicaKey = votedKey.get();
-//            if (votedReplicaKey.id() == candidateKey.id()) {
-//                return !votedReplicaKey.directoryId().isPresent() ||
-//                    votedReplicaKey.directoryId().equals(candidateKey.directoryId());
-//            }
-//            log.debug(
-//                "Rejecting vote request from candidate ({}), already have voted for another " +
-//                    "candidate ({}) in epoch {}",
-//                candidateKey,
-//                votedReplicaKey,
-//                epoch
-//            );
-//            return false;
         } else if (leaderId.isPresent()) {
-            // If the leader id known it should behave similar to the follower state
+            // If the leader id is known it should behave similar to the follower state
             log.debug(
                 "Rejecting vote request from candidate ({}) since we already have a leader {} in epoch {}",
                 candidateKey,
@@ -190,7 +158,7 @@ public class UnattachedState implements EpochState {
     public void close() {}
 
     private class VotedState {
-        final ReplicaKey votedKey;
+        private final ReplicaKey votedKey;
 
         VotedState(ReplicaKey votedKey) {
             this.votedKey = Objects.requireNonNull(votedKey);

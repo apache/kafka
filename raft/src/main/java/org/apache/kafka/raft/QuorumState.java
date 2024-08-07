@@ -381,8 +381,6 @@ public class QuorumState {
             electionTimeoutMs = Long.MAX_VALUE;
         } else if (isCandidate()) {
             electionTimeoutMs = candidateStateOrThrow().remainingElectionTimeMs(time.milliseconds());
-//        } else if (isVoted()) {
-//            electionTimeoutMs = votedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         } else if (isUnattached()) {
             electionTimeoutMs = unattachedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         } else {
@@ -444,9 +442,6 @@ public class QuorumState {
             );
         }
 
-//      Set<Integer> voters = partitionState.lastVoterSet().voterIds();
-//      store.writeElectionState(ElectionState.withVotedCandidate(epoch, candidateKey, voters), partitionState.lastKraftVersion());
-//      unattachedStateOrThrow().updateAfterVoting(epoch, candidateKey, voters, randomElectionTimeoutMs());
         // Note that we reset the election timeout after voting for a candidate because we
         // know that the candidate has at least as good of a chance of getting elected as us
         durableTransitionTo(
@@ -459,7 +454,8 @@ public class QuorumState {
                 state.highWatermark(),
                 randomElectionTimeoutMs(),
                 logContext
-            ));
+            )
+        );
         log.debug("Voted for candidate {} in epoch {}", candidateKey, epoch);
     }
 
@@ -662,7 +658,7 @@ public class QuorumState {
         return state instanceof FollowerState;
     }
 
-    public boolean isUnattachedAndVoted() { // todo
+    public boolean isUnattachedAndVoted() {
         return isUnattached() && unattachedStateOrThrow().votedKey().isPresent();
     }
 
