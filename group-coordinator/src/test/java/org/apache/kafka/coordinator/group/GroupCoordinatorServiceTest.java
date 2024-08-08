@@ -1161,8 +1161,18 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
-    @Test
-    public void testFetchOffsetsWithWrappedTimeout() throws ExecutionException, InterruptedException {
+    @ParameterizedTest
+    @CsvSource({
+        "UNKNOWN_TOPIC_OR_PARTITION, NOT_COORDINATOR",
+        "NOT_ENOUGH_REPLICAS, NOT_COORDINATOR",
+        "REQUEST_TIMED_OUT, NOT_COORDINATOR",
+        "NOT_LEADER_OR_FOLLOWER, NOT_COORDINATOR",
+        "KAFKA_STORAGE_ERROR, NOT_COORDINATOR",
+    })
+    public void testFetchOffsetsWithWrappedError(
+        Errors error,
+        Errors expectedError
+    ) throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -1185,7 +1195,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new CompletionException(Errors.REQUEST_TIMED_OUT.exception())));
+        )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
 
         CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
@@ -1196,7 +1206,7 @@ public class GroupCoordinatorServiceTest {
         assertEquals(
             new OffsetFetchResponseData.OffsetFetchResponseGroup()
                 .setGroupId("group")
-                .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                .setErrorCode(expectedError.code()),
             future.get()
         );
     }
@@ -1284,8 +1294,18 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
-    @Test
-    public void testFetchAllOffsetsWithWrappedTimeout() throws ExecutionException, InterruptedException {
+    @ParameterizedTest
+    @CsvSource({
+        "UNKNOWN_TOPIC_OR_PARTITION, NOT_COORDINATOR",
+        "NOT_ENOUGH_REPLICAS, NOT_COORDINATOR",
+        "REQUEST_TIMED_OUT, NOT_COORDINATOR",
+        "NOT_LEADER_OR_FOLLOWER, NOT_COORDINATOR",
+        "KAFKA_STORAGE_ERROR, NOT_COORDINATOR",
+    })
+    public void testFetchAllOffsetsWithWrappedError(
+        Errors error,
+        Errors expectedError
+    ) throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -1305,7 +1325,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
-            )).thenReturn(FutureUtils.failedFuture(new CompletionException(Errors.REQUEST_TIMED_OUT.exception())));
+            )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
 
         CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchAllOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
@@ -1316,7 +1336,7 @@ public class GroupCoordinatorServiceTest {
         assertEquals(
             new OffsetFetchResponseData.OffsetFetchResponseGroup()
                 .setGroupId("group")
-                .setErrorCode(Errors.NOT_COORDINATOR.code()),
+                .setErrorCode(expectedError.code()),
             future.get()
         );
     }
