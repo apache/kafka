@@ -371,6 +371,11 @@ public class SharePartitionManager implements AutoCloseable {
                 if (!shareFetchDataWithMaxBytes.isEmpty()) {
                     throw Errors.INVALID_REQUEST.exception();
                 }
+                ShareSession shareSession = cache.get(key);
+                if (shareSession == null) {
+                    log.error("Share session error for {}: no such share session found", key);
+                    throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+                }
                 context = new FinalContext();
                 if (cache.remove(key) != null) {
                     log.debug("Removed share session with key {}", key);
@@ -441,6 +446,11 @@ public class SharePartitionManager implements AutoCloseable {
             throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
         } else if (reqMetadata.epoch() == ShareFetchMetadata.FINAL_EPOCH) {
             ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
+            ShareSession shareSession = cache.get(key);
+            if (shareSession == null) {
+                log.error("Share session error for {}: no such share session found", key);
+                throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+            }
             if (cache.remove(key) != null) {
                 log.debug("Removed share session with key " + key);
             }

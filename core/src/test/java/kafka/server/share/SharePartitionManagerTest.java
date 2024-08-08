@@ -131,40 +131,99 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testNewContextReturnsFinalContext() {
-        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().build();
-
-        ShareFetchMetadata newReqMetadata = new ShareFetchMetadata(Uuid.ZERO_UUID, -1);
-        ShareFetchContext shareFetchContext = sharePartitionManager.newContext("grp", Collections.emptyMap(), Collections.emptyList(), newReqMetadata, true);
-        assertEquals(FinalContext.class, shareFetchContext.getClass());
-
-        // If the final fetch request has topics to add, it should fail as an invalid request
-        Uuid topicId = Uuid.randomUuid();
-        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData = Collections.singletonMap(
-                new TopicIdPartition(topicId, new TopicPartition("foo", 0)),
-                new ShareFetchRequest.SharePartitionData(topicId, 4000));
-        assertThrows(InvalidRequestException.class,
-                () -> sharePartitionManager.newContext("grp", shareFetchData, Collections.emptyList(), newReqMetadata, true));
-
-        // shareFetchData is not empty, but the maxBytes of topic partition is 0, which means this is added only for acknowledgements.
-        // New context should be created successfully
-        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData2 = Collections.singletonMap(new TopicIdPartition(topicId, new TopicPartition("foo", 0)),
-                new ShareFetchRequest.SharePartitionData(topicId, 0));
-        shareFetchContext = sharePartitionManager.newContext("grp", shareFetchData2, Collections.emptyList(), newReqMetadata, true);
-        assertEquals(FinalContext.class, shareFetchContext.getClass());
-    }
-
-    @Test
-    public void testNewContextReturnsFinalContextForEmptyTopicPartitionsAndFinalEpoch() {
+    public void testNewContextReturnsFinalContextWithoutRequestData() {
         Time time = new MockTime();
         ShareSessionCache cache = new ShareSessionCache(10, 1000);
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
                 .withCache(cache).withTime(time).build();
+        Uuid tpId0 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
         String groupId = "grp";
-        // Verify that final epoch requests get a FinalContext
-        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
-                new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.FINAL_EPOCH), true);
-        assertEquals(FinalContext.class, context1.getClass());
+        Uuid memberId = Uuid.randomUuid();
+
+        // Create a new share session with an initial share fetch request
+        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData1 = new LinkedHashMap<>();
+        reqData1.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), PARTITION_MAX_BYTES));
+        reqData1.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), PARTITION_MAX_BYTES));
+
+        ShareFetchMetadata reqMetadata1 = new ShareFetchMetadata(memberId, ShareFetchMetadata.INITIAL_EPOCH);
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, reqData1, EMPTY_PART_LIST, reqMetadata1, false);
+        assertEquals(ShareSessionContext.class, context1.getClass());
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+
+        ShareFetchMetadata reqMetadata2 = new ShareFetchMetadata(memberId, ShareFetchMetadata.FINAL_EPOCH);
+        ShareFetchContext context2 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), Collections.emptyList(), reqMetadata2, true);
+        assertEquals(FinalContext.class, context2.getClass());
+    }
+
+    @Test
+    public void testNewContextReturnsFinalContextWithRequestData() {
+        Time time = new MockTime();
+        ShareSessionCache cache = new ShareSessionCache(10, 1000);
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withCache(cache).withTime(time).build();
+        Uuid tpId0 = Uuid.randomUuid();
+        Uuid tpId1 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+
+        // Create a new share session with an initial share fetch request
+        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData1 = new LinkedHashMap<>();
+        reqData1.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), PARTITION_MAX_BYTES));
+        reqData1.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), PARTITION_MAX_BYTES));
+
+        ShareFetchMetadata reqMetadata1 = new ShareFetchMetadata(memberId, ShareFetchMetadata.INITIAL_EPOCH);
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, reqData1, EMPTY_PART_LIST, reqMetadata1, false);
+        assertEquals(ShareSessionContext.class, context1.getClass());
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+
+        ShareFetchMetadata reqMetadata2 = new ShareFetchMetadata(memberId, ShareFetchMetadata.FINAL_EPOCH);
+
+        // shareFetchData is not empty, but the maxBytes of topic partition is 0, which means this is added only for acknowledgements.
+        // New context should be created successfully
+        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData3 = Collections.singletonMap(new TopicIdPartition(tpId1, new TopicPartition("foo", 0)),
+                new ShareFetchRequest.SharePartitionData(tpId1, 0));
+        ShareFetchContext context2 = sharePartitionManager.newContext(groupId, reqData3, Collections.emptyList(), reqMetadata2, true);
+        assertEquals(FinalContext.class, context2.getClass());
+    }
+
+    @Test
+    public void testNewContextReturnsFinalContextError() {
+        Time time = new MockTime();
+        ShareSessionCache cache = new ShareSessionCache(10, 1000);
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withCache(cache).withTime(time).build();
+        Uuid tpId0 = Uuid.randomUuid();
+        Uuid tpId1 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
+
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+
+        // Create a new share session with an initial share fetch request
+        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData1 = new LinkedHashMap<>();
+        reqData1.put(tp0, new ShareFetchRequest.SharePartitionData(tp0.topicId(), PARTITION_MAX_BYTES));
+        reqData1.put(tp1, new ShareFetchRequest.SharePartitionData(tp1.topicId(), PARTITION_MAX_BYTES));
+
+        ShareFetchMetadata reqMetadata1 = new ShareFetchMetadata(memberId, ShareFetchMetadata.INITIAL_EPOCH);
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, reqData1, EMPTY_PART_LIST, reqMetadata1, false);
+        assertEquals(ShareSessionContext.class, context1.getClass());
+        assertFalse(((ShareSessionContext) context1).isSubsequent());
+
+        ShareFetchMetadata reqMetadata2 = new ShareFetchMetadata(memberId, ShareFetchMetadata.FINAL_EPOCH);
+
+        // shareFetchData is not empty and the maxBytes of topic partition is not 0, which means this is trying to fetch on a Final request.
+        // New context should throw an error
+        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData3 = Collections.singletonMap(new TopicIdPartition(tpId1, new TopicPartition("foo", 0)),
+                new ShareFetchRequest.SharePartitionData(tpId1, PARTITION_MAX_BYTES));
+        assertThrows(InvalidRequestException.class,
+                () -> sharePartitionManager.newContext(groupId, reqData3, Collections.emptyList(), reqMetadata2, true));
     }
 
     @Test

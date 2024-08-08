@@ -6909,15 +6909,6 @@ class KafkaApisTest extends Logging {
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
 
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
-      CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
-        new TopicIdPartition(topicId, new TopicPartition(topicName, 0)) ->
-          new ShareAcknowledgeResponseData.PartitionData()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code)
-      ).asJava)
-    )
-
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId(groupId).
       setMemberId(memberId.toString).
@@ -7277,9 +7268,6 @@ class KafkaApisTest extends Logging {
     when(partition.getLeaderEpoch).thenAnswer(_ => newLeaderEpoch)
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
-
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).
-      thenReturn(CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]().asJava))
 
     when(sharePartitionManager.acknowledge(
       any(),
@@ -8270,12 +8258,11 @@ class KafkaApisTest extends Logging {
     assertTrue(partitionResponsesMap2.getOrElse(1, null).errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
   }
 
-  def compareAcknowledgementBatches(
-                                     baseOffset: Long,
-                                     endOffset: Long,
-                                     acknowledgementType: Byte,
-                                     acknowledgementBatch: ShareAcknowledgementBatch
-                                   ): Boolean = {
+  private def compareAcknowledgementBatches(baseOffset: Long,
+                                            endOffset: Long,
+                                            acknowledgementType: Byte,
+                                            acknowledgementBatch: ShareAcknowledgementBatch
+                                           ): Boolean = {
     if (baseOffset == acknowledgementBatch.firstOffset()
       && endOffset == acknowledgementBatch.lastOffset()
       && acknowledgementType == acknowledgementBatch.acknowledgeTypes().get(0)) {
@@ -8284,10 +8271,9 @@ class KafkaApisTest extends Logging {
     false
   }
 
-  def compareAcknowledgeResponsePartitionData(
-                                               partitionIndex: Int,
-                                               ackErrorCode: Short,
-                                               partitionData: ShareAcknowledgeResponseData.PartitionData
+  private def compareAcknowledgeResponsePartitionData(partitionIndex: Int,
+                                              ackErrorCode: Short,
+                                              partitionData: ShareAcknowledgeResponseData.PartitionData
                                              ): Boolean = {
     if (partitionIndex == partitionData.partitionIndex() && ackErrorCode == partitionData.errorCode()) {
       return true
