@@ -28,6 +28,8 @@
             For example, this could be done via the <code>KAFKA_OPTS</code> environment variable like follows: <code>export KAFKA_OPTS="-DZstdTempFolder=/opt/kafka/tmp -Dorg.xerial.snappy.tempdir=/opt/kafka/tmp"</code>.
 	    This is a known issue for version 3.8.0 as well.
         </li>
+        <li>Tiered storage feature can be dynamically disabled and then re-enabled on topic level.
+            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-950%3A++Tiered+Storage+Disablement">KIP-950</a> for more details.</li>
     </ul>
 
 <h4><a id="upgrade_3_8_0" href="#upgrade_3_8_0">Upgrading to 3.8.0 from any version 0.8.x through 3.7.x</a></h4>
