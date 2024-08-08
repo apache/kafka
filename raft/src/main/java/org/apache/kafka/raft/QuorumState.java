@@ -293,6 +293,14 @@ public class QuorumState {
         return ReplicaKey.of(localIdOrThrow(), localDirectoryId());
     }
 
+    public VoterSet.VoterNode localVoterNodeOrThrow() {
+        return VoterSet.VoterNode.of(
+            localReplicaKeyOrThrow(),
+            localListeners,
+            localSupportedKRaftVersion
+        );
+    }
+
     public int epoch() {
         return state.epoch();
     }
@@ -563,7 +571,6 @@ public class QuorumState {
             candidateState.grantingVoters(),
             accumulator,
             localListeners,
-            localSupportedKRaftVersion,
             fetchTimeoutMs,
             logContext
         );

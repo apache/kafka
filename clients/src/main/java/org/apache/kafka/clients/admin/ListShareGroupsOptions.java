@@ -14,25 +14,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Optional;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * Options for {@link Admin#removeRaftVoter}.
+ * Options for {@link Admin#listShareGroups(ListShareGroupsOptions)}.
+ *
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Stable
-public class RemoveRaftVoterOptions extends AbstractOptions<RemoveRaftVoterOptions> {
-    private Optional<String> clusterId = Optional.empty();
+@InterfaceStability.Evolving
+public class ListShareGroupsOptions extends AbstractOptions<ListShareGroupsOptions> {
 
-    public RemoveRaftVoterOptions setClusterId(Optional<String> clusterId) {
-        this.clusterId = clusterId;
+    private Set<ShareGroupState> states = Collections.emptySet();
+
+    /**
+     * If states is set, only groups in these states will be returned. Otherwise, all groups are returned.
+     */
+    public ListShareGroupsOptions inStates(Set<ShareGroupState> states) {
+        this.states = (states == null) ? Collections.emptySet() : new HashSet<>(states);
         return this;
     }
 
-    public Optional<String> clusterId() {
-        return clusterId;
+    /**
+     * Return the list of States that are requested or empty if no states have been specified.
+     */
+    public Set<ShareGroupState> states() {
+        return states;
     }
 }

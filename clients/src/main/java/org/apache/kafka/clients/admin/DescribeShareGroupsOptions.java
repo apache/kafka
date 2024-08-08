@@ -14,25 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Optional;
+import java.util.Collection;
 
 /**
- * Options for {@link Admin#removeRaftVoter}.
+ * Options for {@link Admin#describeShareGroups(Collection, DescribeShareGroupsOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Stable
-public class RemoveRaftVoterOptions extends AbstractOptions<RemoveRaftVoterOptions> {
-    private Optional<String> clusterId = Optional.empty();
+@InterfaceStability.Evolving
+public class DescribeShareGroupsOptions extends AbstractOptions<DescribeShareGroupsOptions> {
+    private boolean includeAuthorizedOperations;
 
-    public RemoveRaftVoterOptions setClusterId(Optional<String> clusterId) {
-        this.clusterId = clusterId;
+    public DescribeShareGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
         return this;
     }
 
-    public Optional<String> clusterId() {
-        return clusterId;
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
     }
 }
