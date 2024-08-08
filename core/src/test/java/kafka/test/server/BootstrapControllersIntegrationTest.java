@@ -39,13 +39,13 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.controller.QuorumController;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.Timeout;
@@ -127,7 +127,6 @@ public class BootstrapControllersIntegrationTest {
         }
     }
 
-    @Disabled
     @Test
     public void testPutControllersInBootstrapBrokersConfig() {
         Properties properties = cluster.clientProperties();
@@ -136,9 +135,8 @@ public class BootstrapControllersIntegrationTest {
             ExecutionException exception = assertThrows(ExecutionException.class,
                     () -> admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES));
             assertNotNull(exception.getCause());
-            assertEquals(MismatchedEndpointTypeException.class, exception.getCause().getClass());
-            assertEquals("This endpoint does not appear to be a BROKER.",
-                    exception.getCause().getMessage());
+            assertEquals(UnsupportedVersionException.class, exception.getCause().getClass());
+            assertEquals("The node does not support METADATA", exception.getCause().getMessage());
         }
     }
 
