@@ -818,6 +818,7 @@ public class StreamsConfig extends AbstractConfig {
         new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
         new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
+
     private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
         new String[] {
             ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
