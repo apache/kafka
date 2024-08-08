@@ -16,8 +16,13 @@
  */
 package kafka.server.share;
 
+import kafka.cluster.Partition;
+import kafka.server.ReplicaManager;
+
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
@@ -59,6 +64,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import scala.util.Either;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -212,6 +219,11 @@ public class SharePartition {
     private final Persister persister;
 
     /**
+     * The replica manager is used to perform partition operations.
+     */
+    private final ReplicaManager replicaManager;
+
+    /**
      * The share partition start offset specifies the partition start offset from which the records
      * are cached in the cachedState of the sharePartition.
      */
@@ -228,6 +240,11 @@ public class SharePartition {
      */
     private int stateEpoch;
 
+    /**
+     * The leader epoch is used to track the partition epoch.
+     */
+    private int leaderEpoch;
+
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -236,7 +253,8 @@ public class SharePartition {
         int recordLockDurationMs,
         Timer timer,
         Time time,
-        Persister persister
+        Persister persister,
+        ReplicaManager replicaManager
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -250,6 +268,7 @@ public class SharePartition {
         this.timer = timer;
         this.time = time;
         this.persister = persister;
+        this.replicaManager = replicaManager;
         // Initialize the partition.
         initialize();
     }
@@ -859,6 +878,9 @@ public class SharePartition {
 
     private void initialize() {
         log.debug("Initializing share partition: {}-{}", groupId, topicIdPartition);
+        // Fetch leader epoch for the topic partition.
+        leaderEpoch = getLeaderEpoch(topicIdPartition.topicPartition());
+
         // Initialize the share partition by reading the state from the persister.
         ReadShareGroupStateResult response;
         try {
@@ -866,7 +888,7 @@ public class SharePartition {
                 .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
                     .setGroupId(this.groupId)
                     .setTopicsData(Collections.singletonList(new TopicData<>(topicIdPartition.topicId(),
-                        Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(topicIdPartition.partition(), 0)))))
+                        Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(topicIdPartition.partition(), leaderEpoch)))))
                     .build())
                 .build()
             ).get();
@@ -918,6 +940,22 @@ public class SharePartition {
         } else {
             endOffset = partitionData.startOffset();
         }
+    }
+
+    private int getLeaderEpoch(TopicPartition tp) {
+        Either<Errors, Partition> partitionOrError = replicaManager.getPartitionOrError(tp);
+        if (partitionOrError.isLeft()) {
+            log.error("Failed to get partition leader for topic partition: {}-{} due to error: {}",
+                tp.topic(), tp.partition(), partitionOrError.left().get());
+            return -1;
+        }
+
+        Partition partition = partitionOrError.right().get();
+        if (!partition.isLeader()) {
+            log.error("The broker is not the leader for topic partition: {}-{}", tp.topic(), tp.partition());
+            return -1;
+        }
+        return partition.getLeaderEpoch();
     }
 
     private AcquiredRecords acquireNewBatchRecords(
@@ -1350,7 +1388,7 @@ public class SharePartition {
 
         lock.writeLock().lock();
         try {
-            if (throwable != null || !isWriteShareGroupStateSuccessful(stateBatches)) {
+            if (throwable != null || !isWriteShareGroupStateSuccessful(stateBatches, false)) {
                 // Log in DEBUG to avoid flooding of logs for a faulty client.
                 log.debug("Request failed for updating state, rollback any changed state"
                     + " for the share partition: {}-{}", groupId, topicIdPartition);
@@ -1497,7 +1535,7 @@ public class SharePartition {
     }
 
     // Visible for testing
-    boolean isWriteShareGroupStateSuccessful(List<PersisterStateBatch> stateBatches) {
+    boolean isWriteShareGroupStateSuccessful(List<PersisterStateBatch> stateBatches, boolean isRetry) {
         WriteShareGroupStateResult response;
         try {
             response = persister.writeState(new WriteShareGroupStateParameters.Builder()
@@ -1505,9 +1543,21 @@ public class SharePartition {
                     .setGroupId(this.groupId)
                     .setTopicsData(Collections.singletonList(new TopicData<>(topicIdPartition.topicId(),
                         Collections.singletonList(PartitionFactory.newPartitionStateBatchData(
-                            topicIdPartition.partition(), stateEpoch, startOffset, 0, stateBatches))))
+                            topicIdPartition.partition(), stateEpoch, startOffset, leaderEpoch, stateBatches))))
                     ).build()).build()).get();
         } catch (InterruptedException | ExecutionException e) {
+            if (e.getCause() != null && e.getCause() instanceof FencedLeaderEpochException) {
+                if (isRetry) {
+                    log.error("Fenced leader exception occurred for the share partition: {}-{}. Re-try failed,"
+                        + " current leader epoch: {}", groupId, topicIdPartition, leaderEpoch, e);
+                    return false;
+                }
+                log.info("Fenced leader exception occurred for the share partition: {}-{}. Re-fetch partition"
+                    + " leader epoch, current leader epoch: {}", groupId, topicIdPartition, leaderEpoch);
+                leaderEpoch = getLeaderEpoch(topicIdPartition.topicPartition());
+                // Retry the write state operation.
+                return isWriteShareGroupStateSuccessful(stateBatches, true);
+            }
             log.error("Failed to write the share group state for share partition: {}-{}", groupId, topicIdPartition, e);
             throw new IllegalStateException(String.format("Failed to write the share group state for share partition %s-%s",
                 groupId, topicIdPartition), e);
@@ -1601,7 +1651,7 @@ public class SharePartition {
                 }
             }
 
-            if (!stateBatches.isEmpty() && !isWriteShareGroupStateSuccessful(stateBatches)) {
+            if (!stateBatches.isEmpty() && !isWriteShareGroupStateSuccessful(stateBatches, false)) {
 
                 // Even if write share group state RPC call fails, we will still go ahead with the state transition.
                 log.error("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId {}. " +

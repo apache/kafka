@@ -496,7 +496,7 @@ public class SharePartitionManager implements AutoCloseable {
                     k -> {
                         long start = time.hiResClockMs();
                         SharePartition partition = new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxInFlightMessages, maxDeliveryCount,
-                            recordLockDurationMs, timer, time, persister);
+                            recordLockDurationMs, timer, time, persister, replicaManager);
                         this.shareGroupMetrics.partitionLoadTime(start);
                         return partition;
                     });
