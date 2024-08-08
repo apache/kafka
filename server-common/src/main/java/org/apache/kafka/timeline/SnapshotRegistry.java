@@ -183,7 +183,7 @@ public class SnapshotRegistry {
 
     /**
      * Creates a new snapshot at the given epoch.
-     * <br>
+     * <p>
      * If {@code epoch} already exists, and it is the last snapshot then just return that snapshot.
      *
      * @param epoch             The epoch to create the snapshot at. The current epoch
@@ -207,7 +207,7 @@ public class SnapshotRegistry {
 
     /**
      * Creates a new snapshot at the given epoch.
-     * <br>
+     * <p>
      * If {@code epoch} already exists, and it is the last snapshot then this operation will do nothing.
      *
      * @param epoch             The epoch to create the snapshot at. The current epoch

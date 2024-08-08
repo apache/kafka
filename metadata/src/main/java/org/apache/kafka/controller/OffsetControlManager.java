@@ -36,7 +36,7 @@ import java.util.Optional;
 
 /**
  * Manages read and write offsets, and in-memory snapshots.
- * <br>
+ * <p>
  * Also manages the following metrics:
  *      kafka.controller:type=KafkaController,name=ActiveControllerCount
  *      kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs
@@ -45,7 +45,7 @@ import java.util.Optional;
  *      kafka.controller:type=KafkaController,name=LastCommittedRecordOffset
  */
 class OffsetControlManager {
-    public static class Builder {
+    static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumControllerMetrics metrics = null;
