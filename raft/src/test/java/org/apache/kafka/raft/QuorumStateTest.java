@@ -962,12 +962,13 @@ public class QuorumStateTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testNonVoterUnattachedVotedToCandidate(KRaftVersion kraftVersion) {
-        int voter = 1;
-        VoterSet voters = withRemoteVoterSet(IntStream.of(voter), kraftVersion);
+    public void testObserverFromUnattachedVotedToCandidate(KRaftVersion kraftVersion) {
+        int voter1 = 1;
+        int voter2 = 2;
+        VoterSet voters = withRemoteVoterSet(IntStream.of(voter1, voter2), kraftVersion);
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattachedVotedState(5, ReplicaKey.of(voter, ReplicaKey.NO_DIRECTORY_ID));
+        state.transitionToUnattachedVotedState(5, ReplicaKey.of(voter1, ReplicaKey.NO_DIRECTORY_ID));
 
         assertThrows(IllegalStateException.class, () -> state.transitionToCandidate());
         assertTrue(state.isUnattached());

@@ -157,7 +157,7 @@ public class UnattachedState implements EpochState {
     public String toString() {
         return "Unattached(" +
             "epoch=" + epoch +
-            ", votedKey=" + (votedKey().isPresent() ? votedKey().get() : "null") +
+            ", votedKey=" + votedKey.map(ReplicaKey::toString).orElse("null") +
             ", voters=" + voters +
             ", electionTimeoutMs=" + electionTimeoutMs +
             ", highWatermark=" + highWatermark +

@@ -41,7 +41,7 @@ class VotedStateTest {
     private final int votedId = 1;
     private final int electionTimeoutMs = 10000;
 
-    private UnattachedState newVotedState(
+    private UnattachedState newUnattachedVotedState(
         Uuid votedDirectoryId
     ) {
         return new UnattachedState(
@@ -58,7 +58,7 @@ class VotedStateTest {
 
     @Test
     public void testElectionTimeout() {
-        UnattachedState state = newVotedState(ReplicaKey.NO_DIRECTORY_ID);
+        UnattachedState state = newUnattachedVotedState(ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey votedKey  = ReplicaKey.of(votedId, ReplicaKey.NO_DIRECTORY_ID);
 
         assertEquals(epoch, state.epoch());
@@ -82,7 +82,7 @@ class VotedStateTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testCanGrantVoteWithoutDirectoryId(boolean isLogUpToDate) {
-        UnattachedState state = newVotedState(ReplicaKey.NO_DIRECTORY_ID);
+        UnattachedState state = newUnattachedVotedState(ReplicaKey.NO_DIRECTORY_ID);
 
         assertTrue(
             state.canGrantVote(ReplicaKey.of(votedId, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
@@ -102,7 +102,7 @@ class VotedStateTest {
     @Test
     void testCanGrantVoteWithDirectoryId() {
         Uuid votedDirectoryId = Uuid.randomUuid();
-        UnattachedState state = newVotedState(votedDirectoryId);
+        UnattachedState state = newUnattachedVotedState(votedDirectoryId);
 
         assertTrue(state.canGrantVote(ReplicaKey.of(votedId, votedDirectoryId), false));
 
@@ -118,7 +118,7 @@ class VotedStateTest {
     @Test
     void testLeaderEndpoints() {
         Uuid votedDirectoryId = Uuid.randomUuid();
-        UnattachedState state = newVotedState(votedDirectoryId);
+        UnattachedState state = newUnattachedVotedState(votedDirectoryId);
 
         assertEquals(Endpoints.empty(), state.leaderEndpoints());
     }

@@ -1699,7 +1699,7 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    public void testFollowerNonVoterDoesNotBecomeCandidateAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
+    public void testFollowerAsObserverDoesNotBecomeCandidateAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
@@ -1729,7 +1729,7 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    public void testUnattachedNonVoterDoesNotBecomeCandidateAfterElectionTimeout(boolean withKip853Rpc) throws Exception {
+    public void testUnattachedAsObserverDoesNotBecomeCandidateAfterElectionTimeout(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
@@ -1747,19 +1747,21 @@ public class KafkaRaftClientTest {
         context.time.sleep(context.electionTimeoutMs() * 2);
         context.pollUntilRequest();
         assertTrue(context.client.quorum().isUnattached());
-        // also confirms no vote request was sent
         context.assertSentFetchRequest(epoch, 0L, 0);
+        // confirm no vote request was sent
+        assertEquals(0, context.channel.drainSendQueue().size());
 
         context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, withKip853Rpc), epoch, 0));
         context.pollUntilResponse();
-        // nonVoter can vote
+        // observer can vote
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
 
         context.time.sleep(context.electionTimeoutMs() * 2);
         context.pollUntilRequest();
-        // nonVoter cannot transition to candidate though
+        // observer cannot transition to candidate though
         assertTrue(context.client.quorum().isUnattached());
         context.assertSentFetchRequest(epoch + 1, 0L, 0);
+        assertEquals(0, context.channel.drainSendQueue().size());
     }
 
     @ParameterizedTest
@@ -2322,7 +2324,7 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    public void testLeaderAcceptVoteFromNonVoter(boolean withKip853Rpc) throws Exception {
+    public void testLeaderAcceptVoteFromObserver(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
@@ -2335,12 +2337,12 @@ public class KafkaRaftClientTest {
         context.becomeLeader();
         int epoch = context.currentEpoch();
 
-        ReplicaKey nonVoterKey = replicaKey(localId + 2, withKip853Rpc);
-        context.deliverRequest(context.voteRequest(epoch - 1, nonVoterKey, 0, 0));
+        ReplicaKey observerKey = replicaKey(localId + 2, withKip853Rpc);
+        context.deliverRequest(context.voteRequest(epoch - 1, observerKey, 0, 0));
         context.client.poll();
         context.assertSentVoteResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.of(localId), false);
 
-        context.deliverRequest(context.voteRequest(epoch, nonVoterKey, 0, 0));
+        context.deliverRequest(context.voteRequest(epoch, observerKey, 0, 0));
         context.client.poll();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
     }
