@@ -22,8 +22,7 @@ import joptsimple.OptionParser
 import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.common.utils.Exit
-import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
 import org.apache.kafka.server.util.CommandLineUtils
 
 object Kafka extends Logging {
