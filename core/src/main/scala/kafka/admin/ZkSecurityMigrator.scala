@@ -34,9 +34,9 @@ import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 import scala.concurrent._
 import scala.concurrent.duration._
-import scala.jdk.CollectionConverters._
 
 /**
  * This tool is to be used when making access to ZooKeeper authenticated or 

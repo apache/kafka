@@ -17,6 +17,10 @@
 
 package kafka.tools
 
+import java.io._
+import java.nio.charset.StandardCharsets
+import java.util.Properties
+import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet, OptionSpec}
 import kafka.common.MessageReader
 import kafka.utils.Implicits._
@@ -29,11 +33,7 @@ import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.tools.api.RecordReader
 
-import java.io._
 import java.lang
-import java.nio.charset.StandardCharsets
-import java.util.Properties
-import java.util.regex.Pattern
 import scala.annotation.nowarn
 
 @nowarn("cat=deprecation")
