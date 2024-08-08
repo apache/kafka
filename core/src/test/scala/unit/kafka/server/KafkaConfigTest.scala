@@ -630,7 +630,7 @@ class KafkaConfigTest {
   }
 
   private def listenerListToEndPoints(listenerList: String,
-                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = EndPoint.DefaultSecurityProtocolMap) =
+                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO.asScala) =
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
