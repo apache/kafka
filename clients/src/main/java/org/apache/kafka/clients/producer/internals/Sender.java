@@ -397,6 +397,7 @@ public class Sender implements Runnable {
                 // Update both readyTimeMs and drainTimeMs, this would "reset" the node
                 // latency.
                 this.accumulator.updateNodeLatencyStats(node.id(), now, true);
+                if (transactionManager != null) this.transactionManager.handleCoordinatorReadyAndMaybeUpdateApiVersions();
             }
         }
 
@@ -571,7 +572,7 @@ public class Sender implements Runnable {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
                 // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
                 // the time when the abortable error is handled
-                transactionManager.handleCoordinatorReady();
+                transactionManager.handleCoordinatorReadyAndMaybeUpdateApiVersions();
             }
             return true;
         }

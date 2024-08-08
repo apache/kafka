@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnRequestData;
@@ -62,6 +63,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
+import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -69,7 +71,6 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
-
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -187,6 +188,7 @@ public class TransactionManager {
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
     private boolean coordinatorSupportsBumpingEpoch;
+    private boolean coordinatorSupportsTransactionV2;
 
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
@@ -368,15 +370,21 @@ public class TransactionManager {
                 "(currentState= " + currentState + ")");
         }
 
-        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
-        AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
-            new AddOffsetsToTxnRequestData()
-                .setTransactionalId(transactionalId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setGroupId(groupMetadata.groupId())
-        );
-        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        TxnRequestHandler handler;
+        if (coordinatorSupportsTransactionV2) {
+            log.debug("Begin adding offsets {} for consumer group {} to transaction with transaction protocol V2", offsets, groupMetadata);
+            handler = txnOffsetCommitHandler(offsets, groupMetadata, Short.MAX_VALUE);
+        } else {
+            log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
+            AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
+                new AddOffsetsToTxnRequestData()
+                    .setTransactionalId(transactionalId)
+                    .setProducerId(producerIdAndEpoch.producerId)
+                    .setProducerEpoch(producerIdAndEpoch.epoch)
+                    .setGroupId(groupMetadata.groupId())
+            );
+            handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        }
 
         enqueueRequest(handler);
         return handler.result;
@@ -395,11 +403,21 @@ public class TransactionManager {
                     " to transaction while in state  " + currentState);
             } else if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition)) {
                 return;
+            } else if (coordinatorSupportsTransactionV2) {
+                txnPartitionMap.getOrCreate(topicPartition);
             } else {
                 log.debug("Begin adding new partition {} to transaction", topicPartition);
                 txnPartitionMap.getOrCreate(topicPartition);
                 newPartitionsInTransaction.add(topicPartition);
             }
+        }
+    }
+
+    public synchronized void maybeHandlePartitionAdded(TopicPartition topicPartition) {
+        if (isTransactional() && coordinatorSupportsTransactionV2) {
+            if (isPartitionAdded(topicPartition)) return;
+            log.debug("A new partition {} has been added to transaction", topicPartition);
+            partitionsInTransaction.add(topicPartition);
         }
     }
 
@@ -410,7 +428,7 @@ public class TransactionManager {
     synchronized boolean isSendToPartitionAllowed(TopicPartition tp) {
         if (hasFatalError())
             return false;
-        return !isTransactional() || partitionsInTransaction.contains(tp);
+        return !isTransactional() || partitionsInTransaction.contains(tp) || coordinatorSupportsTransactionV2;
     }
 
     public String transactionalId() {
@@ -873,7 +891,7 @@ public class TransactionManager {
     }
 
     // visible for testing
-    synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
+    public synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return partitionsInTransaction.contains(topicPartition);
     }
 
@@ -971,7 +989,7 @@ public class TransactionManager {
         return isTransactional() && currentState == State.INITIALIZING;
     }
 
-    void handleCoordinatorReady() {
+    void handleCoordinatorReadyAndMaybeUpdateApiVersions() {
         NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
                 apiVersions.get(transactionCoordinator.idString()) :
                 null;
@@ -980,6 +998,49 @@ public class TransactionManager {
                 null;
         this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
                 initProducerIdVersion.maxVersion() >= 3;
+
+        if (nodeApiVersions == null) return;
+
+        if (nodeApiVersions.supportedFeatures() != null) {
+            /*
+                To enable the transaction V2, it requires:
+                1. transaction.version max version >= 2
+                2. The ProduceRequest max version > ProducerRequest.LAST_BEFORE_TRANSACTION_V2_VERSION
+                3. The TxnOffsetCommitRequest max version > TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION
+            */
+            ApiVersion produceVersion = nodeApiVersions.apiVersion(ApiKeys.PRODUCE);
+            ApiVersion txnOffsetCommitVersion = nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT);
+            SupportedVersionRange transactionVersion = nodeApiVersions.supportedFeatures().get("transaction.version");
+            if (produceVersion != null &&
+                    produceVersion.maxVersion() > ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION &&
+                    txnOffsetCommitVersion != null &&
+                    txnOffsetCommitVersion.maxVersion() > TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION &&
+                    transactionVersion != null &&
+                    transactionVersion.max() >= (short) 2) {
+                this.coordinatorSupportsTransactionV2 = true;
+                return;
+            }
+        }
+        // Now, the broker does not support transaction V2. Let's downgrade the Produce and TxnOffsetCommitRequest
+        // max versions.
+        downgradeApiVersionsIfNotUsingTransactionV2();
+    }
+
+    // Set the ProducerRequest and TxnOffsetCommitRequest versions at their LAST_BEFORE_TRANSACTION_V2_VERSION.
+    private void downgradeApiVersionsIfNotUsingTransactionV2() {
+        NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
+            apiVersions.get(transactionCoordinator.idString()) :
+            null;
+        if (nodeApiVersions == null) return;
+        if (nodeApiVersions.apiVersion(ApiKeys.PRODUCE) != null &&
+            nodeApiVersions.apiVersion(ApiKeys.PRODUCE).maxVersion() > ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION) {
+            nodeApiVersions.apiVersion(ApiKeys.PRODUCE).setMaxVersion(ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION);
+        }
+
+        if (nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT) != null &&
+            nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT).maxVersion() > TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION) {
+            nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT).setMaxVersion(TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION);
+        }
     }
 
     private void transitionTo(State target) {
@@ -1091,7 +1152,8 @@ public class TransactionManager {
 
     private TxnOffsetCommitHandler txnOffsetCommitHandler(TransactionalRequestResult result,
                                                           Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                          ConsumerGroupMetadata groupMetadata) {
+                                                          ConsumerGroupMetadata groupMetadata,
+                                                          short desiredMaximumApiVersion) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
@@ -1107,9 +1169,36 @@ public class TransactionManager {
                 pendingTxnOffsetCommits,
                 groupMetadata.memberId(),
                 groupMetadata.generationId(),
-                groupMetadata.groupInstanceId()
+                groupMetadata.groupInstanceId(),
+                desiredMaximumApiVersion
             );
         return new TxnOffsetCommitHandler(result, builder);
+    }
+
+    private TxnOffsetCommitHandler txnOffsetCommitHandler(
+        Map<TopicPartition, OffsetAndMetadata> offsets,
+        ConsumerGroupMetadata groupMetadata,
+        short desiredMaximumApiVersion
+    ) {
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            OffsetAndMetadata offsetAndMetadata = entry.getValue();
+            CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
+                offsetAndMetadata.metadata(), offsetAndMetadata.leaderEpoch());
+            pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
+        }
+
+        final TxnOffsetCommitRequest.Builder builder =
+            new TxnOffsetCommitRequest.Builder(transactionalId,
+                groupMetadata.groupId(),
+                producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch,
+                pendingTxnOffsetCommits,
+                groupMetadata.memberId(),
+                groupMetadata.generationId(),
+                groupMetadata.groupInstanceId(),
+                desiredMaximumApiVersion
+            );
+        return new TxnOffsetCommitHandler(builder);
     }
 
     private void throwIfPendingState(String operation) {
@@ -1607,7 +1696,7 @@ public class TransactionManager {
                 log.debug("Successfully added partition for consumer group {} to transaction", builder.data.groupId());
 
                 // note the result is not completed until the TxnOffsetCommit returns
-                pendingRequests.add(txnOffsetCommitHandler(result, offsets, groupMetadata));
+                pendingRequests.add(txnOffsetCommitHandler(result, offsets, groupMetadata, TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION));
 
                 transactionStarted = true;
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
@@ -1640,6 +1729,11 @@ public class TransactionManager {
         private TxnOffsetCommitHandler(TransactionalRequestResult result,
                                        TxnOffsetCommitRequest.Builder builder) {
             super(result);
+            this.builder = builder;
+        }
+
+        private TxnOffsetCommitHandler(TxnOffsetCommitRequest.Builder builder) {
+            super("TxnOffsetCommitHandler");
             this.builder = builder;
         }
 

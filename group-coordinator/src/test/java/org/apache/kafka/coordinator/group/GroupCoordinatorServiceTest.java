@@ -63,6 +63,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -2026,8 +2027,9 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
-    @Test
-    public void testCommitTransactionalOffsets() throws ExecutionException, InterruptedException {
+    @ParameterizedTest
+    @ValueSource(shorts = {4, 5})
+    public void testCommitTransactionalOffsets(Short txnOffsetCommitVersion) throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -2070,7 +2072,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(CompletableFuture.completedFuture(response));
 
         CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(
-            requestContext(ApiKeys.TXN_OFFSET_COMMIT),
+            requestContext(ApiKeys.TXN_OFFSET_COMMIT, txnOffsetCommitVersion),
             request,
             BufferSupplier.NO_CACHING
         );

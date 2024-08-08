@@ -36,7 +36,9 @@
   // Version 10 adds 'CurrentLeader' and 'NodeEndpoints' as tagged fields (KIP-951)
   //
   // Version 11 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
-  "validVersions": "0-11",
+  //
+  // Version 12 is the same as version 10 (KIP-890).
+  "validVersions": "0-12",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",

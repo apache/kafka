@@ -25,7 +25,9 @@
   // Version 3 adds the member.id, group.instance.id and generation.id.
   //
   // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
-  "validVersions": "0-4",
+  //
+  // Version 5 is the same with version 3 (KIP-890).
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",

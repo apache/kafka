@@ -44,6 +44,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -79,7 +80,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -155,13 +155,13 @@ public class TransactionManagerTest {
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
         this.brokerNode = new Node(0, "localhost", 2211);
 
-        initializeTransactionManager(Optional.of(transactionalId));
+        initializeTransactionManager(Optional.of(transactionalId), false);
     }
 
-    private void initializeTransactionManager(Optional<String> transactionalId) {
+    private void initializeTransactionManager(Optional<String> transactionalId, boolean transactionV2Enabled) {
         Metrics metrics = new Metrics(time);
 
-        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                     .setMinVersion((short) 0)
@@ -169,7 +169,16 @@ public class TransactionManagerTest {
                 new ApiVersion()
                     .setApiKey(ApiKeys.PRODUCE.id)
                     .setMinVersion((short) 0)
-                    .setMaxVersion((short) 7))));
+                    .setMaxVersion(transactionV2Enabled ? (short) 12 : (short) 11),
+                new ApiVersion()
+                    .setApiKey(ApiKeys.TXN_OFFSET_COMMIT.id)
+                    .setMinVersion((short) 0)
+                    .setMaxVersion(transactionV2Enabled ? (short) 5 : (short) 4)),
+                Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
+                    .setName("transaction.version")
+                    .setMaxVersion(transactionV2Enabled ? (short) 2 : (short) 1)
+                    .setMinVersion((short) 0)),
+                false));
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
                 transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
@@ -230,13 +239,13 @@ public class TransactionManagerTest {
 
     @Test
     public void testFailIfNotReadyForSendIdempotentProducer() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         transactionManager.maybeAddPartition(tp0);
     }
 
     @Test
     public void testFailIfNotReadyForSendIdempotentProducerFatalError() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         transactionManager.transitionToFatalError(new KafkaException());
         assertThrows(KafkaException.class, () -> transactionManager.maybeAddPartition(tp0));
     }
@@ -381,6 +390,37 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertTrue(transactionManager.isPartitionAdded(partition));
         assertFalse(transactionManager.isPartitionPendingAdd(partition));
+    }
+
+    @Test
+    public void testMaybeAddPartitionToTransactionInTransactionV2() {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartition(partition);
+        // In V2, the maybeAddPartition should not add the partition to the pending list.
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+
+        // The partition is added after the maybeHandlePartitionAdded.
+        transactionManager.maybeHandlePartitionAdded(partition);
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+        assertTrue(transactionManager.isPartitionAdded(partition));
+
+        // Adding the partition again should not have any effect
+        transactionManager.maybeAddPartition(partition);
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertTrue(transactionManager.isPartitionAdded(partition));
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+
+        transactionManager.maybeHandlePartitionAdded(partition);
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+        assertTrue(transactionManager.isPartitionAdded(partition));
     }
 
     @Test
@@ -564,7 +604,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testDefaultSequenceNumber() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         assertEquals(transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, 3);
         assertEquals(transactionManager.sequenceNumber(tp0), 3);
@@ -572,7 +612,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testBumpEpochAndResetSequenceNumbersAfterUnknownProducerId() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         initializeIdempotentProducerId(producerId, epoch);
 
         ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
@@ -609,7 +649,7 @@ public class TransactionManagerTest {
         // The partition(s) that triggered the reset will have their sequence number reset, while any others will not
         final short epoch = Short.MAX_VALUE;
 
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         initializeIdempotentProducerId(producerId, epoch);
 
         ProducerBatch tp0b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
@@ -648,7 +688,7 @@ public class TransactionManagerTest {
     public void testBatchCompletedAfterProducerReset() {
         final short epoch = Short.MAX_VALUE;
 
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         initializeIdempotentProducerId(producerId, epoch);
 
         ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
@@ -684,7 +724,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testDuplicateSequenceAfterProducerReset() throws Exception {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         initializeIdempotentProducerId(producerId, epoch);
 
         Metrics metrics = new Metrics(time);
@@ -770,7 +810,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testSequenceNumberOverflow() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         assertEquals(transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
         assertEquals(transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
@@ -782,7 +822,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testProducerIdReset() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         initializeIdempotentProducerId(15L, Short.MAX_VALUE);
         assertEquals(transactionManager.sequenceNumber(tp0), 0);
         assertEquals(transactionManager.sequenceNumber(tp1), 0);
@@ -848,6 +888,108 @@ public class TransactionManagerTest {
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         assertFalse(transactionManager.isCompleting());
         assertFalse(transactionManager.transactionContainsPartition(tp0));
+    }
+
+    @Test
+    public void testBasicTransactionV2() throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+
+        assertFalse(responseFuture.isDone());
+
+        prepareProduceResponse(Errors.NONE, producerId, epoch);
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+
+        // The partition should be able to be added to the transaction after receiving the producer request response.
+        transactionManager.maybeHandlePartitionAdded(tp0);
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
+        assertFalse(responseFuture.isDone());
+        runUntil(responseFuture::isDone);
+
+        // Now, test adding the offsets.
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp1, new OffsetAndMetadata(1));
+
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
+
+        assertTrue(transactionManager.hasPendingOffsetCommits());
+
+        // the result doesn't complete until TxnOffsetCommit returns
+        assertFalse(addOffsetsResult.isCompleted());
+
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp1, Errors.NONE);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
+
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+        assertTrue(transactionManager.hasPendingOffsetCommits());
+
+        runUntil(() -> !transactionManager.hasPendingOffsetCommits());
+        // We should only be done after both RPCs complete.
+        assertTrue(addOffsetsResult.isCompleted());
+
+        transactionManager.beginCommit();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        runUntil(() -> !transactionManager.hasOngoingTransaction());
+        assertFalse(transactionManager.isCompleting());
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+    }
+
+    @Test
+    public void testTransactionManagerUpdateApiVersionForV2() {
+        Metrics metrics = new Metrics(time);
+
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+            new ApiVersion()
+                .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3),
+            new ApiVersion()
+                .setApiKey(ApiKeys.PRODUCE.id)
+                .setMinVersion((short) 5)
+                .setMaxVersion((short) (ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION + 1)),
+            new ApiVersion()
+                .setApiKey(ApiKeys.TXN_OFFSET_COMMIT.id)
+                .setMinVersion((short) 1)
+                .setMaxVersion((short) (TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION + 1))),
+            Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersion((short) 1)
+                .setMinVersion((short) 0)),
+            false));
+        this.transactionManager = new TransactionManager(logContext, transactionalId,
+            transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
+
+        int batchSize = 16 * 1024;
+        int deliveryTimeoutMs = 3000;
+        long totalSize = 1024 * 1024;
+        String metricGrpName = "producer-metrics";
+
+        this.brokerNode = new Node(0, "localhost", 2211);
+        this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
+            deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
+
+        this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
+            MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
+            50, transactionManager, apiVersions);
+
+        // The Produce and TxnOffsetCommit max version should be updated.
+        doInitTransactions();
+        NodeApiVersions nodeApiVersions = apiVersions.get("0");
+        assertEquals(TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION, nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT).maxVersion());
+        assertEquals(1, nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT).minVersion());
+        assertEquals(ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION, nodeApiVersions.apiVersion(ApiKeys.PRODUCE).maxVersion());
+        assertEquals(5, nodeApiVersions.apiVersion(ApiKeys.PRODUCE).minVersion());
     }
 
     @Test
@@ -2791,7 +2933,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testBumpEpochAfterTimeoutWithoutPendingInflightRequests() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         long producerId = 15L;
         short epoch = 5;
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
@@ -2834,7 +2976,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testNoProducerIdResetAfterLastInFlightBatchSucceeds() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         long producerId = 15L;
         short epoch = 5;
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
@@ -2874,7 +3016,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testEpochBumpAfterLastInflightBatchFails() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
         initializeIdempotentProducerId(producerId, epoch);
 
@@ -2907,7 +3049,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testNoFailedBatchHandlingWhenTxnManagerIsInFatalError() {
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         long producerId = 15L;
         short epoch = 5;
         initializeIdempotentProducerId(producerId, epoch);
@@ -3247,7 +3389,7 @@ public class TransactionManagerTest {
     @Test
     public void testHealthyPartitionRetriesDuringEpochBump() throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
@@ -3371,7 +3513,7 @@ public class TransactionManagerTest {
     @Test
     public void testFailedInflightBatchAfterEpochBump() throws InterruptedException {
         // Use a custom Sender to allow multiple inflight requests
-        initializeTransactionManager(Optional.empty());
+        initializeTransactionManager(Optional.empty(), false);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
                 REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
