@@ -45,9 +45,7 @@ import java.util.concurrent.CompletableFuture;
  * 5. Check that the updated voter is still listening on the default listener.
  * 6. Append the updated VotersRecord to the log. The KRaft internal listener will read this
  *    uncommitted record from the log and update the voter in the set of voters.
- * 7. Wait for the VotersRecord to commit using the majority of the voters. Return a
- *    REQUEST_TIMED_OUT error if it doesn't commit in time.
- * 8. Send the UpdateVoter successful response to the voter.
+ * 7. Send the UpdateVoter successful response to the voter.
  *
  * KAFKA-16538 is going to add support for handling this RPC when the kraft.version is 0.
  */
@@ -202,25 +200,20 @@ public final class UpdateVoterHandler {
             );
         }
 
-        UpdateVoterHandlerState state = new UpdateVoterHandlerState(
-            leaderState.appendVotersRecord(updatedVoters.get(), currentTimeMs),
-            requestListenerName,
-            time.timer(requestTimeoutMs)
+        leaderState.appendVotersRecord(updatedVoters.get(), currentTimeMs);
+
+        // Reply immediately and don't wait for the change to commit
+        return CompletableFuture.completedFuture(
+            RaftUtil.updateVoterResponse(
+                Errors.NONE,
+                requestListenerName,
+                new LeaderAndEpoch(
+                    localId,
+                    leaderState.epoch()
+                ),
+                leaderState.leaderEndpoints()
+            )
         );
-        leaderState.resetUpdateVoterHandlerState(Errors.UNKNOWN_SERVER_ERROR, Optional.of(state));
-
-        return state.future();
-    }
-
-    public void highWatermarkUpdated(LeaderState<?> leaderState) {
-        leaderState.updateVoterHandlerState().ifPresent(current -> {
-            leaderState.highWatermark().ifPresent(highWatermark -> {
-                if (highWatermark.offset() > current.lastOffset()) {
-                    // VotersRecord with the updated voter was committed; complete the RPC
-                    leaderState.resetUpdateVoterHandlerState(Errors.NONE, Optional.empty());
-                }
-            });
-        });
     }
 
     private boolean validVersionRange(

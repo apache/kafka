@@ -70,6 +70,8 @@ public class RaftUtil {
                 return new FetchSnapshotResponseData().setErrorCode(error.code());
             case API_VERSIONS:
                 return new ApiVersionsResponseData().setErrorCode(error.code());
+            case UPDATE_RAFT_VOTER:
+                return new UpdateRaftVoterResponseData().setErrorCode(error.code());
             default:
                 throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
         }
