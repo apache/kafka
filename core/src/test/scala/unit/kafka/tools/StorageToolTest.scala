@@ -24,6 +24,7 @@ import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.Features
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
@@ -400,21 +401,13 @@ Found problem:
 
   @Test
   def testFormatWithStandaloneFlagAndInitialControllersFlagFails(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.putAll(defaultDynamicQuorumProperties)
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String](
       "--release-version", "3.9-IV0",
       "--standalone", "--initial-controllers",
       "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
       "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
       "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang")
-    assertEquals(1, runFormatCommand(stream, properties, arguments.toSeq))
-    assertTrue(stream.toString().contains("net.sourceforge.argparse4j.inf.ArgumentParserException: " +
-      "argument --initial-controllers/-I: not allowed with argument --standalone/-s"),
-        "Failed to find content in output: " + stream.toString())
+    assertThrows(classOf[ArgumentParserException], () => StorageTool.parseArguments(arguments.toArray))
   }
 
   @ParameterizedTest

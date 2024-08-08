@@ -282,6 +282,8 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.metadata.properties" />
+    <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />

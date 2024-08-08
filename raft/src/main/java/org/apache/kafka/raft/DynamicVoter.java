@@ -183,6 +183,10 @@ public final class DynamicVoter {
 
     @Override
     public String toString() {
-        return nodeId + "@" + host + ":" + port + ":" + directoryId;
+        if (host.contains(":")) {
+            return nodeId + "@[" + host + "]:" + port + ":" + directoryId;
+        } else {
+            return nodeId + "@" + host + ":" + port + ":" + directoryId;
+        }
     }
 }

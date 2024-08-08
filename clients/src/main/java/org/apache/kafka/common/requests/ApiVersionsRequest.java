@@ -32,26 +32,39 @@ public class ApiVersionsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
         private static final String DEFAULT_CLIENT_SOFTWARE_NAME = "apache-kafka-java";
 
-        private static final ApiVersionsRequestData DATA = new ApiVersionsRequestData()
+        private static final ApiVersionsRequestData DEFAULT_DATA = new ApiVersionsRequestData()
             .setClientSoftwareName(DEFAULT_CLIENT_SOFTWARE_NAME)
             .setClientSoftwareVersion(AppInfoParser.getVersion());
 
+        private final ApiVersionsRequestData data;
+
         public Builder() {
-            super(ApiKeys.API_VERSIONS);
+            this(DEFAULT_DATA,
+                ApiKeys.API_VERSIONS.oldestVersion(),
+                ApiKeys.API_VERSIONS.latestVersion());
         }
 
         public Builder(short version) {
-            super(ApiKeys.API_VERSIONS, version);
+            this(DEFAULT_DATA, version, version);
+        }
+
+        public Builder(
+            ApiVersionsRequestData data,
+            short oldestAllowedVersion,
+            short latestAllowedVersion
+        ) {
+            super(ApiKeys.API_VERSIONS, oldestAllowedVersion, latestAllowedVersion);
+            this.data = data.duplicate();
         }
 
         @Override
         public ApiVersionsRequest build(short version) {
-            return new ApiVersionsRequest(DATA, version);
+            return new ApiVersionsRequest(data, version);
         }
 
         @Override
         public String toString() {
-            return DATA.toString();
+            return data.toString();
         }
     }
 
