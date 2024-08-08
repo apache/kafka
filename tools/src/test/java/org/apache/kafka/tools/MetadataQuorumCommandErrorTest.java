@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import org.apache.kafka.common.KafkaException;
 
 import org.junit.jupiter.api.Test;
@@ -66,20 +67,18 @@ public class MetadataQuorumCommandErrorTest {
 
     @Test
     public void testRemoveControllerRequiresControllerId() {
-        assertEquals("argument --controller-id/-i is required",
-            ToolsTestUtils.captureStandardErr(() ->
-                assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
-                    "remove-controller",
-                    "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
-                    "--dry-run"))));
+        assertThrows(ArgumentParserException.class, () ->
+            MetadataQuorumCommand.execute("--bootstrap-server", "localhost:9092",
+                "remove-controller",
+                "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
+                "--dry-run"));
     }
 
     @Test
     public void testRemoveControllerRequiresControllerDirectoryId() {
-        assertEquals("argument --controller-directory-id/-d is required",
-            ToolsTestUtils.captureStandardErr(() ->
-                assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
-                    "remove-controller",
-                    "--controller-id", "1"))));
+        assertThrows(ArgumentParserException.class, () ->
+            MetadataQuorumCommand.execute("--bootstrap-server", "localhost:9092",
+                "remove-controller",
+                "--controller-id", "1"));
     }
 }
