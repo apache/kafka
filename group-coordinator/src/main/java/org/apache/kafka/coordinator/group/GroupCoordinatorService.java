@@ -40,6 +40,7 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
@@ -54,6 +55,7 @@ import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -628,8 +630,47 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public CompletableFuture<List<DescribedGroup>> shareGroupDescribe(
         RequestContext context,
         List<String> groupIds) {
-        // TODO: Implement this method as part of KIP-932.
-        throw new UnsupportedOperationException();
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(ShareGroupDescribeRequest.getErrorDescribedGroupList(
+                groupIds,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
+        }
+
+        final List<CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>>> futures =
+            new ArrayList<>(groupIds.size());
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            if (isGroupIdNotEmpty(groupId)) {
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
+                    .add(groupId);
+            } else {
+                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                    new ShareGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(null)
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                )));
+            }
+        });
+
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> future =
+                runtime.scheduleReadOperation(
+                    "share-group-describe",
+                    topicPartition,
+                    (coordinator, lastCommittedOffset) -> coordinator.shareGroupDescribe(groupIds, lastCommittedOffset)
+                ).exceptionally(exception -> handleOperationException(
+                    "share-group-describe",
+                    groupList,
+                    exception,
+                    (error, __) -> ShareGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
+                ));
+
+            futures.add(future);
+        });
+
+        return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
 
     /**
