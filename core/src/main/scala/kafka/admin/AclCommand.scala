@@ -17,28 +17,27 @@
 
 package kafka.admin
 
-import java.util.Properties
 import joptsimple._
 import joptsimple.util.EnumConverter
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils._
-import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
+import org.apache.kafka.common.acl._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.common.utils.{Exit, Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.security.authorizer.{AclEntry, AuthorizerUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
-import scala.jdk.CollectionConverters._
+import java.util.Properties
 import scala.collection.mutable
 import scala.io.StdIn
+import scala.jdk.CollectionConverters._
 
 object AclCommand extends Logging {
 

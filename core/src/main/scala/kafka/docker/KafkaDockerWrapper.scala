@@ -25,7 +25,7 @@ import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.utils.Exit
 
 import java.nio.charset.StandardCharsets
-import java.nio.file._
+import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
 
 object KafkaDockerWrapper extends Logging {
   def main(args: Array[String]): Unit = {

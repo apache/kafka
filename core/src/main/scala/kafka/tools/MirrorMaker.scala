@@ -17,28 +17,27 @@
 
 package kafka.tools
 
-import java.time.Duration
-import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.concurrent.CountDownLatch
-import java.util.{Collections, Properties}
 import kafka.consumer.BaseConsumerRecord
 import kafka.utils._
-import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.errors.{TimeoutException, WakeupException}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.server.util.TopicFilter.IncludeList
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
-import scala.jdk.CollectionConverters._
+import java.time.Duration
+import java.util
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.{Collections, Properties}
 import scala.collection.mutable.HashMap
+import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 import scala.util.{Failure, Success, Try}
 
