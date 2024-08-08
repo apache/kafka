@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.tools;
 
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import org.apache.kafka.common.KafkaException;
+
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
 
 import org.junit.jupiter.api.Test;
 
