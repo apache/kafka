@@ -241,7 +241,7 @@ public class MetadataQuorumCommand {
     }
 
     // Constructs the CurrentVoters string
-    // CurrentVoters: [{"id": 0, "directoryId": "UUID1", "endpoints": [{"name": "C", "securityProtocol": "SSL", "host": "controller-0", "port": 1234}]}, {"id": 1, ... }]}]
+    // CurrentVoters: [{"id": 0, "directoryId": "UUID1", "endpoints": ["C://controller-0:1234"]}]
     private static String printVoterState(QuorumInfo quorumInfo) {
         return printReplicaState(quorumInfo, quorumInfo.voters());
     }
@@ -279,13 +279,15 @@ public class MetadataQuorumCommand {
             StringBuilder sb = new StringBuilder();
             sb.append("{");
             sb.append("\"id\": ").append(id).append(", ");
-            sb.append("\"directoryId\": ").append("\"").append(directoryId.equals(Uuid.ZERO_UUID) ? "null" : directoryId).append("\"");
+            sb.append("\"directoryId\": ").append(directoryId.equals(Uuid.ZERO_UUID) ? "null" : "\"" + directoryId + "\"");
             if (!endpoints.isEmpty()) {
-                sb.append(", \"endpoints\": ");
+                sb.append(", \"endpoints\": [");
                 for (RaftVoterEndpoint endpoint : endpoints) {
-                    sb.append(endpoint.toString()).append(", ");
+                    sb.append("\"");
+                    sb.append(endpoint.toString()).append("\", ");
                 }
                 sb.setLength(sb.length() - 2);  // remove the last comma and space
+                sb.append("]");
             }
             sb.append("}");
             return sb.toString();
