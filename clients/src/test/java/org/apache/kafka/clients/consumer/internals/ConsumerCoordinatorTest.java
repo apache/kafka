@@ -3214,7 +3214,7 @@ public abstract class ConsumerCoordinatorTest {
         "COORDINATOR_NOT_AVAILABLE, true",
         "NETWORK_EXCEPTION, false",
     })
-    public void testRefreshOffsetRetriableErrors(Errors error, boolean expectCoordinatorRelookup) {
+    public void testRefreshOffsetRetriableErrorCoordinatorLookup(Errors error, boolean expectCoordinatorRelookup) {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
