@@ -24,7 +24,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -223,7 +222,6 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -292,7 +290,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * See AdminClientIntegrationTest for an integration test.
  */
-//@Timeout(120)
+@Timeout(120)
 public class KafkaAdminClientTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
     private static final String GROUP_ID = "group-0";
@@ -429,40 +427,6 @@ public class KafkaAdminClientTest {
         assertEquals(admin.getClientId(), mockMetricsReporter.clientId);
         assertEquals(2, admin.metrics.reporters().size());
         admin.close();
-    }
-
-    public static void main(String[] args) throws Exception {
-        new KafkaAdminClientTest().likangningTest();
-    }
-
-    @Test
-    public void likangningTest() throws Exception {
-        System.out.println("begin 123");
-        AdminClient sourceAdminClient = AdminClient.create(getCommonProperties());
-        for (int i = 0; i < Integer.MAX_VALUE; i++) {
-            ListTopicsResult listTopicsResult = sourceAdminClient.listTopics();
-            System.out.println("waiting");
-            Thread.sleep(5000);
-        }
-
-        synchronized (KafkaAdminClient.class) {
-            KafkaAdminClient.class.wait();
-        }
-    }
-
-    private static Properties getCommonProperties() {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG, "use_all_dns_ips");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
-        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1");
-        props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, "1");
-        props.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, "1");
-        return props;
     }
 
     @Test

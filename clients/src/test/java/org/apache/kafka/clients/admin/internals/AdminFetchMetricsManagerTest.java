@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -86,29 +85,67 @@ public class AdminFetchMetricsManagerTest {
         assertTrue(Double.isNaN(metricValue(nodeLatencyMax)));
     }
 
-
     @Test
     public void testMultiNodeLatency() {
-        String connectionId = "0";
-        MetricName nodeLatencyAvg0 = metrics.metricName("request-latency-avg", "group", genericTag(connectionId));
-        MetricName nodeLatencyMax0 = metrics.metricName("request-latency-max", "group", genericTag(connectionId));
-        registerNodeLatencyMetric(connectionId, nodeLatencyAvg0, nodeLatencyMax0);
-        adminFetchMetricsManager.recordLatency(connectionId, 1);
-        adminFetchMetricsManager.recordLatency(connectionId, 1);
-
+        String connectionId0 = "0";
+        MetricName nodeLatencyAvg0 = metrics.metricName("request-latency-avg", "group", genericTag(connectionId0));
+        MetricName nodeLatencyMax0 = metrics.metricName("request-latency-max", "group", genericTag(connectionId0));
+        registerNodeLatencyMetric(connectionId0, nodeLatencyAvg0, nodeLatencyMax0);
+        adminFetchMetricsManager.recordLatency(connectionId0, 5);
+        adminFetchMetricsManager.recordLatency(connectionId0, 8);
 
         // Record metric against another node.
-        connectionId = "1";
-        MetricName nodeLatencyAvg1 = metrics.metricName("request-latency-avg", "group", genericTag(connectionId));
-        MetricName nodeLatencyMax1 = metrics.metricName("request-latency-max", "group", genericTag(connectionId));
-        registerNodeLatencyMetric(connectionId, nodeLatencyAvg1, nodeLatencyMax1);
-        adminFetchMetricsManager.recordLatency(connectionId, 10);
-        adminFetchMetricsManager.recordLatency(connectionId, 10);
+        String connectionId1 = "1";
+        MetricName nodeLatencyAvg1 = metrics.metricName("request-latency-avg", "group", genericTag(connectionId1));
+        MetricName nodeLatencyMax1 = metrics.metricName("request-latency-max", "group", genericTag(connectionId1));
+        registerNodeLatencyMetric(connectionId1, nodeLatencyAvg1, nodeLatencyMax1);
+        adminFetchMetricsManager.recordLatency(connectionId1, 105);
+        adminFetchMetricsManager.recordLatency(connectionId1, 108);
 
+        assertEquals(6.5, metricValue(nodeLatencyAvg0), EPSILON);
+        assertEquals(8, metricValue(nodeLatencyMax0), EPSILON);
+        assertEquals(106.5, metricValue(nodeLatencyAvg1), EPSILON);
+        assertEquals(108, metricValue(nodeLatencyMax1), EPSILON);
 
-        // Node specific metric should not be affected.
-//        assertEquals(289.5, metricValue(nodeLatencyAvg), EPSILON);
-//        assertEquals(456, metricValue(nodeLatencyMax), EPSILON);
+        mockSleepTimeWindow();
+        adminFetchMetricsManager.recordLatency(connectionId0, 11);
+        adminFetchMetricsManager.recordLatency(connectionId1, 111);
+        assertEquals(8, metricValue(nodeLatencyAvg0), EPSILON);
+        assertEquals(11, metricValue(nodeLatencyMax0), EPSILON);
+        assertEquals(108, metricValue(nodeLatencyAvg1), EPSILON);
+        assertEquals(111, metricValue(nodeLatencyMax1), EPSILON);
+
+        mockSleepTimeWindow();
+        assertEquals(11, metricValue(nodeLatencyAvg0), EPSILON);
+        assertEquals(11, metricValue(nodeLatencyMax0), EPSILON);
+        assertEquals(111, metricValue(nodeLatencyAvg1), EPSILON);
+        assertEquals(111, metricValue(nodeLatencyMax1), EPSILON);
+
+        mockSleepTimeWindow();
+        assertTrue(Double.isNaN(metricValue(nodeLatencyAvg0)));
+        assertTrue(Double.isNaN(metricValue(nodeLatencyMax0)));
+        assertTrue(Double.isNaN(metricValue(nodeLatencyAvg1)));
+        assertTrue(Double.isNaN(metricValue(nodeLatencyMax1)));
+
+        adminFetchMetricsManager.recordLatency(connectionId0, 500);
+        adminFetchMetricsManager.recordLatency(connectionId0, 600);
+        mockSleepTimeWindow();
+        adminFetchMetricsManager.recordLatency(connectionId1, 800);
+        adminFetchMetricsManager.recordLatency(connectionId1, 900);
+        assertEquals(550, metricValue(nodeLatencyAvg0), EPSILON);
+        assertEquals(600, metricValue(nodeLatencyMax0), EPSILON);
+        assertEquals(850, metricValue(nodeLatencyAvg1), EPSILON);
+        assertEquals(900, metricValue(nodeLatencyMax1), EPSILON);
+
+        mockSleepTimeWindow();
+        assertTrue(Double.isNaN(metricValue(nodeLatencyAvg0)));
+        assertTrue(Double.isNaN(metricValue(nodeLatencyMax0)));
+        assertEquals(850, metricValue(nodeLatencyAvg1), EPSILON);
+        assertEquals(900, metricValue(nodeLatencyMax1), EPSILON);
+
+        mockSleepTimeWindow();
+        assertTrue(Double.isNaN(metricValue(nodeLatencyAvg1)));
+        assertTrue(Double.isNaN(metricValue(nodeLatencyMax1)));
     }
 
     private Map<String, String> genericTag(String connectionId) {
@@ -116,7 +153,6 @@ public class AdminFetchMetricsManagerTest {
         tags.put("node-id", "node-" + connectionId);
         return tags;
     }
-
 
     private void mockSleepTimeWindow() {
         time.sleep(metrics.config().timeWindowMs() + 1);
@@ -127,16 +163,6 @@ public class AdminFetchMetricsManagerTest {
         Sensor nodeRequestTime = metrics.sensor(nodeTimeName);
         nodeRequestTime.add(nodeLatencyAvg, new Avg());
         nodeRequestTime.add(nodeLatencyMax, new Max());
-    }
-
-    private double metricValue(MetricNameTemplate name) {
-        MetricName metricName = metrics.metricInstance(name);
-        return metricValue(metricName);
-    }
-
-    private double metricValue(MetricNameTemplate name, Map<String, String> tags) {
-        MetricName metricName = metrics.metricInstance(name, tags);
-        return metricValue(metricName);
     }
 
     private double metricValue(MetricName metricName) {
