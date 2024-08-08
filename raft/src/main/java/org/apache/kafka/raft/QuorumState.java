@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
@@ -84,6 +85,7 @@ public class QuorumState {
     private final QuorumStateStore store;
     private final KRaftControlRecordStateMachine partitionState;
     private final Endpoints localListeners;
+    private final SupportedVersionRange localSupportedKRaftVersion;
     private final Random random;
     private final int electionTimeoutMs;
     private final int fetchTimeoutMs;
@@ -96,6 +98,7 @@ public class QuorumState {
         Uuid localDirectoryId,
         KRaftControlRecordStateMachine partitionState,
         Endpoints localListeners,
+        SupportedVersionRange localSupportedKRaftVersion,
         int electionTimeoutMs,
         int fetchTimeoutMs,
         QuorumStateStore store,
@@ -107,6 +110,7 @@ public class QuorumState {
         this.localDirectoryId = localDirectoryId;
         this.partitionState = partitionState;
         this.localListeners = localListeners;
+        this.localSupportedKRaftVersion = localSupportedKRaftVersion;
         this.electionTimeoutMs = electionTimeoutMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.store = store;
@@ -550,6 +554,7 @@ public class QuorumState {
             candidateState.grantingVoters(),
             accumulator,
             localListeners,
+            localSupportedKRaftVersion,
             fetchTimeoutMs,
             logContext
         );

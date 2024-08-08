@@ -76,7 +76,10 @@
       <allow pkg="net.jpountz.xxhash" />
       <allow pkg="org.xerial.snappy" />
       <allow pkg="org.apache.kafka.common.compress" />
-      <allow class="org.apache.kafka.common.record.CompressionType" exact-match="true" />
+      <allow class="org.apache.kafka.common.record.CompressionType" />
+      <allow class="org.apache.kafka.common.record.CompressionType.GZIP" />
+      <allow class="org.apache.kafka.common.record.CompressionType.LZ4" />
+      <allow class="org.apache.kafka.common.record.CompressionType.ZSTD" />
       <allow class="org.apache.kafka.common.record.RecordBatch" exact-match="true" />
     </subpackage>
 
@@ -150,6 +153,7 @@
     </subpackage>
 
     <subpackage name="record">
+      <allow class="org.apache.kafka.common.config.ConfigDef.Range.between" exact-match="true" />
       <allow pkg="org.apache.kafka.common.compress" />
       <allow pkg="org.apache.kafka.common.header" />
       <allow pkg="org.apache.kafka.common.record" />
@@ -284,6 +288,8 @@
     <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.log.remote.metadata.storage" />
+    <allow pkg="org.apache.kafka.server.log.remote.storage" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.producer" />
@@ -301,6 +307,7 @@
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
     <allow pkg="org.apache.kafka.coordinator.transaction" />
+    <allow pkg="org.apache.kafka.coordinator.group" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
