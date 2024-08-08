@@ -1460,6 +1460,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
+   * @return true if this topic enables tiered storage and remote log copy is enabled (i.e. remote.log.copy.disable=false)
+   */
+  private def remoteLogEnabledAndRemoteCopyEnabled(): Boolean = {
+    remoteLogEnabled() && !config.remoteLogCopyDisable()
+  }
+
+  /**
    * Find segments starting from the oldest until the user-supplied predicate is false.
    * A final segment that is empty will never be returned.
    *
@@ -1473,7 +1480,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // Segments are eligible for deletion when:
       //    1. they are uploaded to the remote storage
       //    2. log-start-offset was incremented higher than the largest offset in the candidate segment
-      if (remoteLogEnabled()) {
+      // Note: when remote log copy is disabled, we will fall back to local log check using retention.ms/bytes
+      if (remoteLogEnabledAndRemoteCopyEnabled()) {
         (upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage()) ||
           allowDeletionDueToLogStartOffsetIncremented
       } else {
@@ -1518,7 +1526,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def incrementStartOffset(startOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
-    if (remoteLogEnabled()) maybeIncrementLocalLogStartOffset(startOffset, reason)
+    if (remoteLogEnabledAndRemoteCopyEnabled()) maybeIncrementLocalLogStartOffset(startOffset, reason)
     else maybeIncrementLogStartOffset(startOffset, reason)
   }
 
@@ -1566,7 +1574,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def deleteRetentionMsBreachedSegments(): Int = {
-    val retentionMs = localRetentionMs(config, remoteLogEnabled())
+    val retentionMs = localRetentionMs(config, remoteLogEnabledAndRemoteCopyEnabled())
     if (retentionMs < 0) return 0
     val startMs = time.milliseconds
 
@@ -1578,7 +1586,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
-    val retentionSize: Long = localRetentionSize(config, remoteLogEnabled())
+    val retentionSize: Long = localRetentionSize(config, remoteLogEnabledAndRemoteCopyEnabled())
     if (retentionSize < 0 || size < retentionSize) return 0
     var diff = size - retentionSize
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
@@ -2334,12 +2342,12 @@ object UnifiedLog extends Logging {
     }
   }
 
-  private[log] def localRetentionMs(config: LogConfig, remoteLogEnabled: Boolean): Long = {
-    if (remoteLogEnabled) config.remoteLogConfig.localRetentionMs else config.retentionMs
+  private[log] def localRetentionMs(config: LogConfig, remoteLogEnabledAndRemoteCopyEnabled: Boolean): Long = {
+    if (remoteLogEnabledAndRemoteCopyEnabled) config.remoteLogConfig.localRetentionMs else config.retentionMs
   }
 
-  private[log] def localRetentionSize(config: LogConfig, remoteLogEnabled: Boolean): Long = {
-    if (remoteLogEnabled) config.remoteLogConfig.localRetentionBytes else config.retentionSize
+  private[log] def localRetentionSize(config: LogConfig, remoteLogEnabledAndRemoteCopyEnabled: Boolean): Long = {
+    if (remoteLogEnabledAndRemoteCopyEnabled) config.remoteLogConfig.localRetentionBytes else config.retentionSize
   }
 
 }

@@ -60,8 +60,16 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
         final Map<Integer, List<Integer>> assignment = mkMap(
                 mkEntry(p0, Arrays.asList(broker0, broker1))
         );
-        final Map<String, String> disableCopy = new HashMap<>();
-        disableCopy.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true");
+        // local.retention.ms/bytes need to set to the same value as retention.ms/bytes when disabling remote log copy
+        final Map<String, String> disableRemoteCopy = new HashMap<>();
+        disableRemoteCopy.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true");
+        disableRemoteCopy.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2");
+        disableRemoteCopy.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2");
+
+        // revert the change to local.retention.bytes
+        final Map<String, String> enableRemoteCopy = new HashMap<>();
+        enableRemoteCopy.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "false");
+        enableRemoteCopy.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1");
 
         final Map<String, String> deleteOnDisable = new HashMap<>();
         deleteOnDisable.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
@@ -78,7 +86,7 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                         new KeyValueSpec("k2", "v2"))
                 // disable remote log copy
                 .updateTopicConfig(topicA,
-                        Collections.singletonMap(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+                        disableRemoteCopy,
                         Collections.emptyList())
 
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
@@ -87,16 +95,16 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
 
                 // re-enable remote log copy
                 .updateTopicConfig(topicA,
-                        Collections.singletonMap(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "false"),
+                        enableRemoteCopy,
                         Collections.emptyList())
 
                 // make sure the logs can be offloaded
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
                 .produce(topicA, p0, new KeyValueSpec("k3", "v3"))
 
-                // explicitly disable remote log copy
+                // disable remote log copy again
                 .updateTopicConfig(topicA,
-                        disableCopy,
+                        disableRemoteCopy,
                         Collections.emptyList())
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 3)

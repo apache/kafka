@@ -981,6 +981,7 @@ class LogManager(logDirs: Seq[File],
       LogConfig.validateNoInvalidRemoteStorageConfigsInZK(newLogConfig.values())
     }
     LogConfig.validateTurningOffRemoteStorageWithDelete(newLogConfig.values(), wasRemoteLogEnabled, isRemoteLogStorageEnabled)
+    LogConfig.validateRetentionConfigsWhenRemoteCopyDisabled(newLogConfig.values(), isRemoteLogStorageEnabled)
     if (logs.nonEmpty) {
       logs.foreach { log =>
         val oldLogConfig = log.updateConfig(newLogConfig)

@@ -184,6 +184,8 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS = ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
+    public static final boolean DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG = false;
+    public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
@@ -635,6 +637,7 @@ public class LogConfig extends AbstractConfig {
             validateNoRemoteStorageForCompactedTopic(newConfigs);
             validateRemoteStorageRetentionSize(newConfigs);
             validateRemoteStorageRetentionTime(newConfigs);
+            validateRetentionConfigsWhenRemoteCopyDisabled(newConfigs, isRemoteLogStorageEnabled);
         } else {
             // The new config "remote.storage.enable" is false, validate if it's turning from true to false
             boolean wasRemoteLogEnabled = Boolean.parseBoolean(existingConfigs.getOrDefault(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"));
@@ -648,6 +651,24 @@ public class LogConfig extends AbstractConfig {
             throw new InvalidConfigurationException("It is invalid to disable remote storage without deleting remote data. " +
                     "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.log.copy.disable=true`. " +
                     "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.");
+        }
+    }
+
+    public static void validateRetentionConfigsWhenRemoteCopyDisabled(Map<?, ?> newConfigs, boolean isRemoteLogStorageEnabled) {
+        boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, false);
+        long retentionMs = (Long) newConfigs.get(TopicConfig.RETENTION_MS_CONFIG);
+        long localRetentionMs = (Long) newConfigs.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
+        long retentionBytes = (Long) newConfigs.get(TopicConfig.RETENTION_BYTES_CONFIG);
+        long localRetentionBytes = (Long) newConfigs.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
+        if (isRemoteLogStorageEnabled && isRemoteLogCopyDisabled) {
+            if (localRetentionBytes != -2 && localRetentionBytes != retentionBytes) {
+                throw new InvalidConfigurationException("When `remote.log.copy.disable` is set to true, the `local.retention.bytes` " +
+                        "and `retention.bytes` must be set to the identical value because there will be no more logs copied to the remote storage.");
+            }
+            if (localRetentionMs != -2 && localRetentionMs != retentionMs) {
+                throw new InvalidConfigurationException("When `remote.log.copy.disable` is set to true, the `local.retention.ms` " +
+                        "and `retention.ms` must be set to the identical value because there will be no more logs copied to the remote storage.");
+            }
         }
     }
 
