@@ -88,7 +88,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final long retryBackoffMaxMs;
     private boolean closing = false;
     private final CompletableFuture<Void> closeFuture;
-    private boolean isAsyncDone = false;
 
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
@@ -215,20 +214,21 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      */
     private PollResult processAcknowledgements(long currentTimeMs) {
         List<UnsentRequest> unsentRequests = new ArrayList<>();
+        AtomicBoolean isAsyncDone = new AtomicBoolean();
         for (Map.Entry<Integer, Pair<AcknowledgeRequestState>> requestStates : acknowledgeRequestStates.entrySet()) {
             int nodeId = requestStates.getKey();
 
             if (!isNodeFree(nodeId)) {
-                log.warn("Skipping acknowledge request because previous request to {} has not been processed, so acks are not sent", nodeId);
+                log.trace("Skipping acknowledge request because previous request to {} has not been processed, so acks are not sent", nodeId);
             } else {
-                isAsyncDone = false;
+                isAsyncDone.set(false);
                 // For commitAsync
-                maybeBuildRequest(requestStates.getValue().getAsyncRequest(), currentTimeMs, true).ifPresent(unsentRequests::add);
+                maybeBuildRequest(requestStates.getValue().getAsyncRequest(), currentTimeMs, true, isAsyncDone).ifPresent(unsentRequests::add);
                 // Check to ensure we start processing commitSync/close only if there are no commitAsync requests left to process.
                 if (!isNodeFree(nodeId)) {
-                    log.warn("Skipping acknowledge request because previous request to {} has not been processed, so acks are not sent", nodeId);
-                } else if (isAsyncDone) {
-                    maybeBuildRequest(requestStates.getValue().getSyncRequest(), currentTimeMs, false).ifPresent(unsentRequests::add);
+                    log.trace("Skipping acknowledge request because previous request to {} has not been processed, so acks are not sent", nodeId);
+                } else if (isAsyncDone.get()) {
+                    maybeBuildRequest(requestStates.getValue().getSyncRequest(), currentTimeMs, false, isAsyncDone).ifPresent(unsentRequests::add);
                 }
             }
         }
@@ -254,23 +254,26 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return !nodesWithPendingRequests.contains(nodeId);
     }
 
-    private Optional<UnsentRequest> maybeBuildRequest(AcknowledgeRequestState acknowledgeRequestState, long currentTimeMs, boolean onCommitAsync) {
+    private Optional<UnsentRequest> maybeBuildRequest(AcknowledgeRequestState acknowledgeRequestState,
+                                                      long currentTimeMs,
+                                                      boolean onCommitAsync,
+                                                      AtomicBoolean isAsyncDone) {
         if (acknowledgeRequestState == null || (!acknowledgeRequestState.onClose && acknowledgeRequestState.isEmpty())) {
             if (onCommitAsync) {
-                isAsyncDone = true;
+                isAsyncDone.set(true);
             }
             return Optional.empty();
         } else if (!acknowledgeRequestState.maybeExpire()) {
             if (acknowledgeRequestState.canSendRequest(currentTimeMs)) {
                 acknowledgeRequestState.onSendAttempt(currentTimeMs);
                 if (onCommitAsync) {
-                    isAsyncDone = true;
+                    isAsyncDone.set(true);
                 }
                 return Optional.of(acknowledgeRequestState.buildRequest(currentTimeMs));
             } else {
                 // We wait for the backoff before we can send this request.
                 if (onCommitAsync) {
-                    isAsyncDone = false;
+                    isAsyncDone.set(false);
                 }
             }
         } else {
@@ -281,7 +284,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
             acknowledgeRequestState.incompleteAcknowledgements.clear();
             if (onCommitAsync) {
-                isAsyncDone = true;
+                isAsyncDone.set(true);
             }
         }
         return Optional.empty();
@@ -609,7 +612,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             if (!handler.handleResponse(response, requestVersion)) {
                 acknowledgeRequestState.onFailedAttempt(currentTimeMs);
-                log.warn("OnFailAttempt1");
                 if (response.error().exception() instanceof RetriableException && !acknowledgeRequestState.onClose) {
                     // We retry the request until the timer expires, unless we are closing.
                     acknowledgeRequestState.retryRequest();
@@ -931,12 +933,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * through a background event.
          */
         void handleAcknowledgeErrorCode(TopicIdPartition tip, Errors acknowledgeErrorCode) {
-            Acknowledgements acks;
-            if (acknowledgeErrorCode == Errors.REQUEST_TIMED_OUT) {
-                acks = incompleteAcknowledgements.get(tip);
-            } else {
-                acks = inFlightAcknowledgements.get(tip);
-            }
+            Acknowledgements acks = inFlightAcknowledgements.get(tip);
             if (acks != null) {
                 acks.setAcknowledgeErrorCode(acknowledgeErrorCode);
             }
