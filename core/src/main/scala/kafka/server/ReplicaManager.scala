@@ -29,6 +29,7 @@ import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, Of
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Implicits._
 import kafka.utils._
+import org.apache.kafka.common.utils.Exit
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic

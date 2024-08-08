@@ -6699,10 +6699,7 @@ class ReplicaManagerTest {
       logManager.startup(Set.empty[String])
       replicaManager.startup()
 
-      def haltProcedure(exitStatus: Int, message: Option[String]): Nothing = {
-        fail("Test failure, broker should not have halted")
-      }
-      Exit.setHaltProcedure((status, message) => haltProcedure(status, Option(message)))
+      Exit.setHaltProcedure((_, _) => fail("Test failure, broker should not have halted"))
 
       // When
       logDirFailureChannel.maybeAddOfflineLogDir(logDirFiles.head.getAbsolutePath, "test failure", null)

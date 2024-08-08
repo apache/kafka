@@ -24,6 +24,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.{Collections, Properties}
 import kafka.consumer.BaseConsumerRecord
 import kafka.utils._
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
@@ -527,7 +528,7 @@ object MirrorMaker extends Logging {
       offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
       val numStreams = options.valueOf(numStreamsOpt).intValue()
 
-      Exit.addShutdownHook("MirrorMakerShutdownHook", cleanShutdown())
+      Exit.addShutdownHook("MirrorMakerShutdownHook", () => cleanShutdown())
 
       // create producer
       val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))

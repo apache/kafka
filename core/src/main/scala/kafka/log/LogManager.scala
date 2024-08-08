@@ -26,6 +26,7 @@ import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.server.metadata.BrokerMetadataPublisher.info
 import kafka.utils._
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}

@@ -19,11 +19,11 @@ package kafka.admin
 
 import joptsimple.{OptionSet, OptionSpec, OptionSpecBuilder}
 import kafka.server.KafkaConfig
-import kafka.utils.{Exit, Logging, ToolsUtils}
 import kafka.utils.Implicits._
+import kafka.utils.{Logging, ToolsUtils}
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
@@ -34,9 +34,9 @@ import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
 import scala.concurrent._
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 
 /**
  * This tool is to be used when making access to ZooKeeper authenticated or 

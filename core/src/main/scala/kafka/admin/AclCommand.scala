@@ -22,6 +22,7 @@ import joptsimple._
 import joptsimple.util.EnumConverter
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils._
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._

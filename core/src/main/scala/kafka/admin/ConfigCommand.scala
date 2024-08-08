@@ -23,7 +23,8 @@ import java.util.{Collections, Optional, Properties}
 import joptsimple._
 import kafka.server.{DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.Implicits._
-import kafka.utils.{Exit, Logging}
+import kafka.utils.Logging
+import org.apache.kafka.common.utils.Exit
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
