@@ -98,7 +98,7 @@ class TopicDeletionManager(config: KafkaConfig,
     if (isDeleteTopicEnabled) {
       controllerContext.queueTopicDeletion(initialTopicsToBeDeleted)
       // We must populate topicsWithDeletionStarted with topics ineligible for deletion because that Set is used
-      // to check if OfflinePartitionCount metric must be changed or not.
+      // in updatePartitionStateMetrics to gate changes to OfflinePartitionCount via isTopicDeletionInProgress.
       controllerContext.topicsWithDeletionStarted ++= initialTopicsIneligibleForDeletion & controllerContext.topicsToBeDeleted
       controllerContext.topicsIneligibleForDeletion ++= initialTopicsIneligibleForDeletion & controllerContext.topicsToBeDeleted
     } else {

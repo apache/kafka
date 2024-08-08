@@ -112,9 +112,11 @@ class KafkaController(val config: KafkaConfig,
                       brokerFeatures: BrokerFeatures,
                       featureCache: ZkFinalizedFeatureCache,
                       threadNamePrefix: Option[String] = None,
-                      // KafkaYammerMetrics uses a static singleton that is shared across the JVM
-                      // Therefore, these are populated in tests with brokerId to disambiguate between metrics for
-                      // different nodes
+                      // KafkaController objects are instantiated by all ZK brokers, including the inactive controllers.
+                      // It registers metrics on instantiation using KafkaYammerMetrics which uses a static singleton
+                      // that is shared across the JVM. These tags are populated with brokerId in tests to
+                      // disambiguate between metrics for different brokers and avoid removing KafkaController metrics
+                      // altogether on a broker shutdown.
                       metricTags: Map[String, String] = Map())
   extends ControllerEventProcessor with Logging {
 

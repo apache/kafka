@@ -58,6 +58,7 @@ class TopicDeletionManagerTest {
 
     assertEquals(Set("foo", "bar"), controllerContext.topicsToBeDeleted.toSet)
     assertEquals(Set("bar"), controllerContext.topicsIneligibleForDeletion.toSet)
+    assertEquals(Set("bar"), controllerContext.topicsWithDeletionStarted.toSet)
   }
 
   @Test
