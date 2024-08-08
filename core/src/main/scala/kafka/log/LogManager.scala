@@ -17,37 +17,39 @@
 
 package kafka.log
 
-import kafka.server._
-import kafka.server.checkpoints.OffsetCheckpointFile
-import kafka.server.metadata.BrokerMetadataPublisher.info
-import kafka.server.metadata.ConfigRepository
-import kafka.utils.Implicits._
-import kafka.utils._
-import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
-import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
-import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
-import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.image.TopicsImage
-import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.server.util.{FileLock, Scheduler}
-import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
-
 import java.io._
 import java.nio.file.{Files, NoSuchFileException}
-import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{OptionalLong, Properties}
-import scala.annotation.nowarn
+import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.metadata.ConfigRepository
+import kafka.server._
+import kafka.server.metadata.BrokerMetadataPublisher.info
+import kafka.utils._
+import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
+import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
+
+import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
-import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
+import kafka.utils.Implicits._
+import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
+import org.apache.kafka.image.TopicsImage
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
+
+import java.util.{OptionalLong, Properties}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.{FileLock, Scheduler}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
+
+import java.util
+import scala.annotation.nowarn
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.

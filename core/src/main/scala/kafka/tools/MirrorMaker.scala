@@ -17,6 +17,11 @@
 
 package kafka.tools
 
+import java.time.Duration
+import java.util
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.CountDownLatch
+import java.util.{Collections, Properties}
 import kafka.consumer.BaseConsumerRecord
 import kafka.utils._
 import org.apache.kafka.clients.consumer._
@@ -28,16 +33,11 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.server.util.TopicFilter.IncludeList
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
+import org.apache.kafka.server.util.TopicFilter.IncludeList
 
-import java.time.Duration
-import java.util
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.{Collections, Properties}
-import scala.collection.mutable.HashMap
 import scala.jdk.CollectionConverters._
+import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import scala.util.{Failure, Success, Try}
 
