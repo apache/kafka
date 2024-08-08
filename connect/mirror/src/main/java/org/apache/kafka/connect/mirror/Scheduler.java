@@ -47,20 +47,20 @@ class Scheduler implements AutoCloseable {
         if (interval.toMillis() < 0L) {
             return;
         }
-        executor.scheduleAtFixedRate(() -> executeThread(task, description), 0, interval.toMillis(), TimeUnit.MILLISECONDS);
+        executor.scheduleAtFixedRate(() -> executeThread(task, description, true), 0, interval.toMillis(), TimeUnit.MILLISECONDS);
     }
  
     void scheduleRepeatingDelayed(Task task, Duration interval, String description) {
         if (interval.toMillis() < 0L) {
             return;
         }
-        executor.scheduleAtFixedRate(() -> executeThread(task, description), interval.toMillis(),
+        executor.scheduleAtFixedRate(() -> executeThread(task, description, true), interval.toMillis(),
             interval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     void execute(Task task, String description) {
         try {
-            executor.submit(() -> executeThread(task, description)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            executor.submit(() -> executeThread(task, description, true)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             LOG.warn("{} was interrupted running task: {}", name, description);
         } catch (TimeoutException e) {
@@ -69,6 +69,10 @@ class Scheduler implements AutoCloseable {
             LOG.error("{} caught exception in task: {}", name, description, e);
         }
     } 
+
+    void executeAsync(Task task, String description) {
+        executor.submit(() -> executeThread(task, description, false));
+    }
 
     public void close() {
         closed = true;
@@ -87,13 +91,13 @@ class Scheduler implements AutoCloseable {
         void run() throws InterruptedException, ExecutionException;
     }
 
-    private void run(Task task, String description) {
+    private void run(Task task, String description, boolean checkTimeout) {
         try {
             long start = System.currentTimeMillis();
             task.run();
             long elapsed = System.currentTimeMillis() - start;
             LOG.info("{} took {} ms", description, elapsed);
-            if (elapsed > timeout.toMillis()) {
+            if (checkTimeout && elapsed > timeout.toMillis()) {
                 LOG.warn("{} took too long ({} ms) running task: {}", name, elapsed, description);
             }
         } catch (InterruptedException e) {
@@ -103,12 +107,12 @@ class Scheduler implements AutoCloseable {
         }
     }
 
-    private void executeThread(Task task, String description) {
+    private void executeThread(Task task, String description, boolean checkTimeout) {
         Thread.currentThread().setName(name + "-" + description);
         if (closed) {
             LOG.info("{} skipping task due to shutdown: {}", name, description);
             return;
         }
-        run(task, description);
+        run(task, description, checkTimeout);
     }
 }
