@@ -21,12 +21,12 @@ import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.Exit
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}

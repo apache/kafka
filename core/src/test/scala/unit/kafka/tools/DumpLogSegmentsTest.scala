@@ -29,7 +29,6 @@ import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
 import kafka.utils.{TestUtils, VerifiableProperties}
-import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
@@ -38,7 +37,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordBatch, RecordVersion, SimpleRecord}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.group.{CoordinatorRecord, CoordinatorRecordSerde}
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs

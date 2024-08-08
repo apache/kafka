@@ -17,18 +17,19 @@
 
 package kafka.server
 
-import com.yammer.metrics.core.Meter
 import kafka.network.RequestChannel
-import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChannel}
 import kafka.utils.{Logging, Pool}
+import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChannel}
+
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.atomic.AtomicInteger
+import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.collection.mutable
 
 trait ApiRequestHandler {
