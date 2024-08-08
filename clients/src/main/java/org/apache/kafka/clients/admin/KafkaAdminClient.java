@@ -1199,15 +1199,26 @@ public class KafkaAdminClient extends AdminClient {
             long pollTimeout = Long.MAX_VALUE;
             log.trace("Trying to choose nodes for {} at {}", pendingCalls, now);
 
-            Iterator<Call> pendingIter = pendingCalls.iterator();
-            while (pendingIter.hasNext()) {
-                Call call = pendingIter.next();
+            List<Call> toRemove = new ArrayList<>();
+            // Using pendingCalls.size() to get the list size before the for-loop to avoid infinite loop.
+            // If call.fail keeps adding the call to pendingCalls,
+            // the loop like for (int i = 0; i < pendingCalls.size(); i++) can't stop.
+            int pendingSize = pendingCalls.size();
+            // pendingCalls could be modified in this loop,
+            // hence using for-loop instead of iterator to avoid ConcurrentModificationException.
+            for (int i = 0; i < pendingSize; i++) {
+                Call call = pendingCalls.get(i);
                 // If the call is being retried, await the proper backoff before finding the node
                 if (now < call.nextAllowedTryMs) {
                     pollTimeout = Math.min(pollTimeout, call.nextAllowedTryMs - now);
                 } else if (maybeDrainPendingCall(call, now)) {
-                    pendingIter.remove();
+                    toRemove.add(call);
                 }
+            }
+
+            // Use remove instead of removeAll to avoid delete all matched elements
+            for (Call call : toRemove) {
+                pendingCalls.remove(call);
             }
             return pollTimeout;
         }
