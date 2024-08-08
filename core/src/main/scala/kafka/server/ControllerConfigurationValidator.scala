@@ -128,7 +128,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
         validateGroupName(resource.name())
         val properties = new Properties()
         val nullGroupConfigs = new mutable.ArrayBuffer[String]()
-        config.forEach((key, value) => {
+        newConfigs.forEach((key, value) => {
           if (value == null) {
             nullGroupConfigs += key
           } else {
@@ -139,7 +139,7 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
           throw new InvalidConfigurationException("Null value not supported for group configs: " +
             nullGroupConfigs.mkString(","))
         }
-        GroupConfigManager.validate(properties, kafkaConfig.extractGroupConfigMap, kafkaConfig.groupCoordinatorConfig)
+        GroupConfigManager.validate(properties, kafkaConfig.groupCoordinatorConfig)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

@@ -71,17 +71,15 @@ public class GroupConfigManager implements AutoCloseable {
      * Validate the given properties.
      *
      * @param newGroupConfig                 The new group config.
-     * @param configuredProps                The configured group config.
      * @param groupCoordinatorConfig         The group coordinator config.
      * @throws InvalidConfigurationException If validation fails
      */
     public static void validate(
         Properties newGroupConfig,
-        Map<?, ?> configuredProps,
         GroupCoordinatorConfig groupCoordinatorConfig
     ) {
         Properties combinedConfigs = new Properties();
-        combinedConfigs.putAll(configuredProps);
+        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap());
         combinedConfigs.putAll(newGroupConfig);
         GroupConfig.validate(combinedConfigs, groupCoordinatorConfig);
     }

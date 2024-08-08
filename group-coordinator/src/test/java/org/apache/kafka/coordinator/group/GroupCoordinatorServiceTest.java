@@ -2269,7 +2269,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         int partitionCount = 2;
         service.startup(() -> partitionCount);
@@ -2311,7 +2312,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         int partitionCount = 1;
         service.startup(() -> partitionCount);
@@ -2345,7 +2347,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         int partitionCount = 1;
         service.startup(() -> partitionCount);
@@ -2377,7 +2380,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("share-group-describe"),

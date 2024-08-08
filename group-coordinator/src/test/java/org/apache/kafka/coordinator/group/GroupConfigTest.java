@@ -54,16 +54,16 @@ public class GroupConfigTest {
     @Test
     public void testInvalidProps() {
         // Check for invalid sessionTimeoutMs, < MIN
-        doTestInvalidProps(9, 10);
+        doTestInvalidProps(1, 5000);
 
         // Check for invalid sessionTimeoutMs, > MAX
-        doTestInvalidProps(101, 10);
+        doTestInvalidProps(70000, 5000);
 
         // Check for invalid heartbeatIntervalMs, < MIN
-        doTestInvalidProps(10, 9);
+        doTestInvalidProps(50000, 1);
 
         // Check for invalid heartbeatIntervalMs, > MAX
-        doTestInvalidProps(10, 101);
+        doTestInvalidProps(50000, 70000);
     }
 
     private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs) {

@@ -57,10 +57,11 @@ public class GroupConfig extends AbstractConfig {
             MEDIUM,
             GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DOC);
 
+    @SuppressWarnings("this-escape")
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
-        consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
-        consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
+        this.consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
     public static Set<String> configNames() {
@@ -114,7 +115,7 @@ public class GroupConfig extends AbstractConfig {
     }
 
     /**
-     * Create a group config instance using the given properties and defaults
+     * Create a group config instance using the given properties and defaults.
      */
     public static GroupConfig fromProps(Map<?, ?> defaults, Properties overrides) {
         Properties props = new Properties();

@@ -181,7 +181,7 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
     config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000")
-    validator.validate(new ConfigResource(GROUP, "group"), config)
+    validator.validate(new ConfigResource(GROUP, "group"), config, emptyMap())
   }
 
   @Test
@@ -189,7 +189,7 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     assertEquals("Default group resources are not allowed.",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(GROUP, ""), config)).getMessage)
+        new ConfigResource(GROUP, ""), config, emptyMap())).getMessage)
   }
 
   @Test
@@ -199,7 +199,7 @@ class ControllerConfigurationValidatorTest {
     config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, null)
     assertEquals("Null value not supported for group configs: consumer.heartbeat.interval.ms",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config)).getMessage)
+        new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
   }
 
   @Test
@@ -209,6 +209,6 @@ class ControllerConfigurationValidatorTest {
     config.put("foobar", "abc")
     assertEquals("Unknown group config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config)).getMessage)
+        new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
   }
 }
