@@ -54,7 +54,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Timeout(value = 40)
 public class FeatureControlManagerTest {
 
-    @SuppressWarnings("unchecked")
     private static Map<String, VersionRange> rangeMap(Object... args) {
         Map<String, VersionRange> result = new HashMap<>();
         for (int i = 0; i < args.length; i += 3) {
@@ -100,7 +99,7 @@ public class FeatureControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
             build();
-        snapshotRegistry.getOrCreateSnapshot(-1);
+        snapshotRegistry.idempotentCreateSnapshot(-1);
         assertEquals(new FinalizedControllerFeatures(Collections.singletonMap("metadata.version", (short) 4), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(emptyList(), Collections.
@@ -131,7 +130,7 @@ public class FeatureControlManagerTest {
         FeatureLevelRecord record = new FeatureLevelRecord().
             setName("foo").setFeatureLevel((short) 2);
 
-        snapshotRegistry.getOrCreateSnapshot(-1);
+        snapshotRegistry.idempotentCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager.Builder().
                 setLogContext(logContext).
                 setQuorumFeatures(features("foo", 1, 2)).
@@ -139,7 +138,7 @@ public class FeatureControlManagerTest {
                 setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
                 build();
         manager.replay(record);
-        snapshotRegistry.getOrCreateSnapshot(123);
+        snapshotRegistry.idempotentCreateSnapshot(123);
         assertEquals(new FinalizedControllerFeatures(versionMap("metadata.version", 4, "foo", 2), 123),
             manager.finalizedFeatures(123));
     }
@@ -185,7 +184,7 @@ public class FeatureControlManagerTest {
             updateMap("bar", 3), Collections.emptyMap(), false);
         assertEquals(Collections.singletonMap("bar", ApiError.NONE), result.response());
         manager.replay((FeatureLevelRecord) result.records().get(0).message());
-        snapshotRegistry.getOrCreateSnapshot(3);
+        snapshotRegistry.idempotentCreateSnapshot(3);
 
         assertEquals(ControllerResult.atomicOf(emptyList(), Collections.
                 singletonMap("bar", new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -213,7 +212,7 @@ public class FeatureControlManagerTest {
     }
 
     @Test
-    public void testReplayRecords() throws Exception {
+    public void testReplayRecords() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         FeatureControlManager manager = new FeatureControlManager.Builder().

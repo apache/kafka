@@ -678,13 +678,13 @@ public class ShareGroupTest {
     public void testAsListedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ShareGroup shareGroup = new ShareGroup(snapshotRegistry, "group-foo");
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ShareGroupState.EMPTY, shareGroup.state(0));
         assertEquals("Empty", shareGroup.stateAsString(0));
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
             .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
         assertEquals(ShareGroupState.EMPTY, shareGroup.state(0));
         assertEquals("Empty", shareGroup.stateAsString(0));
         assertEquals(ShareGroupState.STABLE, shareGroup.state(1));
@@ -786,7 +786,7 @@ public class ShareGroupTest {
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ShareGroup shareGroup = new ShareGroup(snapshotRegistry, "group-id-1");
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ShareGroupState.EMPTY.toString(), shareGroup.stateAsString(0));
 
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
@@ -794,7 +794,7 @@ public class ShareGroupTest {
                 .build());
         shareGroup.updateMember(new ShareGroupMember.Builder("member2")
                 .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
 
         ShareGroupDescribeResponseData.DescribedGroup expected = new ShareGroupDescribeResponseData.DescribedGroup()
             .setGroupId("group-id-1")
@@ -818,14 +818,14 @@ public class ShareGroupTest {
     public void testIsInStatesCaseInsensitive() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ShareGroup shareGroup = new ShareGroup(snapshotRegistry, "group-foo");
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertTrue(shareGroup.isInStates(Collections.singleton("empty"), 0));
         assertFalse(shareGroup.isInStates(Collections.singleton("Empty"), 0));
 
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
             .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
         assertTrue(shareGroup.isInStates(Collections.singleton("empty"), 0));
         assertTrue(shareGroup.isInStates(Collections.singleton("stable"), 1));
         assertFalse(shareGroup.isInStates(Collections.singleton("empty"), 1));

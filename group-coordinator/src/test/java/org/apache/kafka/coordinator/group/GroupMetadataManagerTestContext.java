@@ -532,7 +532,7 @@ public class GroupMetadataManagerTestContext {
         this.groupMetadataManager = groupMetadataManager;
         this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
-        snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+        snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
     }
 
     public void commit() {
@@ -1512,7 +1512,7 @@ public class GroupMetadataManagerTestContext {
         }
 
         lastWrittenOffset++;
-        snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+        snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
     }
 
     void onUnloaded() {
