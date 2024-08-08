@@ -126,7 +126,7 @@ public class ShareGroupCommand {
                     : shareGroupStatesFromString(stateValue);
                 List<ShareGroupListing> listings = listShareGroupsWithState(states);
 
-                printGroupStates(listings);
+                printGroupInfo(listings);
             } else
                 listShareGroups().forEach(System.out::println);
         }
@@ -148,7 +148,7 @@ public class ShareGroupCommand {
             return new ArrayList<>(result.all().get());
         }
 
-        private void printGroupStates(List<ShareGroupListing> groups) {
+        private void printGroupInfo(List<ShareGroupListing> groups) {
             // find proper columns width
             int maxGroupLen = 15;
             for (ShareGroupListing group : groups) {
@@ -167,13 +167,13 @@ public class ShareGroupCommand {
             ShareGroupDescription description = getDescribeGroup(group);
             if (description == null)
                 return;
-            boolean shouldPrintState = opts.options.has(opts.stateOpt);
-            boolean shouldPrintMemDetails = opts.options.has(opts.membersOpt);
-            if (shouldPrintMemDetails) {
-                printMemberDetails(description, description.members());
-                return;
+            if (opts.options.has(opts.membersOpt)) {
+                printMembers(description);
+            } else if (opts.options.has(opts.stateOpt)) {
+                printStates(description);
+            } else {
+                printOffsets(description);
             }
-            printGroupDescriptionTable(description, shouldPrintState);
         }
 
         ShareGroupDescription getDescribeGroup(String group) throws ExecutionException, InterruptedException {
@@ -208,81 +208,53 @@ public class ShareGroupCommand {
             return lag;
         }
 
-        private void printGroupDescriptionTable(ShareGroupDescription description, boolean shouldPrintState) throws ExecutionException, InterruptedException {
+        private void printOffsets(ShareGroupDescription description) throws ExecutionException, InterruptedException {
             Map<TopicPartition, Long> offsets = getOffsets(description.members());
-            boolean notOffset = offsets == null || offsets.isEmpty();
-            if (notOffset) {
-                offsets = new HashMap<>();
-                offsets.put(new TopicPartition("SENTINEL", -1), -1L);
-            }
+            if (offsets != null && !offsets.isEmpty()) {
+                String fmt = printOffsetFormat(description, offsets);
+                System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET");
 
-            boolean printedHeader = false;
-            int maxItemLength = 20;
-            boolean foundMax = false;
-            for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
-                List<String> lineItem = new ArrayList<>();
-                lineItem.add(description.groupId());
-                lineItem.add(description.coordinator().idString());
-                if (notOffset) {
-                    lineItem.add("");
-                } else {
-                    lineItem.add(offset.getKey() + "=>" + offset.getValue());
+                for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
+                    System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue());
                 }
-                if (shouldPrintState) {
-                    lineItem.add(description.state().toString());
-                }
-
-                if (!foundMax) {
-                    for (String item : lineItem) {
-                        if (item != null) {
-                            maxItemLength = Math.max(maxItemLength, item.length());
-                        }
-                    }
-                    foundMax = true;
-                }
-                String formatAtom = "%" + (-maxItemLength) + "s";
-                if (!printedHeader) {
-                    String formatHeader = String.format(formatAtom + " " + formatAtom + " " + formatAtom, "GROUP", "COORDINATOR-NODE", "OFFSETS");
-                    if (shouldPrintState) {
-                        formatHeader = String.format(formatAtom + " " + formatAtom + " " + formatAtom + " " + formatAtom, "GROUP", "COORDINATOR-NODE", "OFFSETS", "STATE");
-                    }
-                    System.out.println(formatHeader);
-                    printedHeader = true;
-                }
-                for (String item : lineItem) {
-                    System.out.printf(formatAtom + " ", item);
-                }
-                System.out.println();
             }
         }
 
-        private void printMemberDetails(ShareGroupDescription description, Collection<MemberDescription> members) {
-            List<List<String>> lineItems = new ArrayList<>();
-            int maxLen = 20;
+        private static String printOffsetFormat(ShareGroupDescription description, Map<TopicPartition, Long> offsets) {
+            // find proper columns width
+            int groupLen = Math.max(15, description.groupId().length());
+            int maxTopicLen = 15;
+            for (TopicPartition topicPartition : offsets.keySet()) {
+                maxTopicLen = Math.max(maxTopicLen, topicPartition.topic().length());
+            }
+            return "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s\n";
+        }
+
+        private void printStates(ShareGroupDescription description) {
+            int groupLen = Math.max(15, description.groupId().length());
+            String coordinator = description.coordinator().host() + ":" + description.coordinator().port() + "  (" + description.coordinator().idString() + ")";
+            int coordinatorLen = Math.max(25, coordinator.length());
+
+            String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %s\n";
+            System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
+            System.out.printf(fmt, description.groupId(), coordinator, description.state().toString(), description.members().size());
+        }
+
+        private void printMembers(ShareGroupDescription description) {
+            int groupLen = Math.max(15, description.groupId().length());
+            int maxConsumerIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
+            Collection<MemberDescription> members = description.members();
             for (MemberDescription member : members) {
-                List<String> lineItem = new ArrayList<>();
-                lineItem.add(description.groupId());
-                lineItem.add(member.consumerId());
-                lineItem.add(member.host());
-                lineItem.add(member.clientId());
-                lineItem.add(member.assignment().topicPartitions().stream().map(part -> part.topic() + ":" + part.partition()).collect(Collectors.joining(",")));
-                for (String item : lineItem) {
-                    if (item != null) {
-                        maxLen = Math.max(maxLen, item.length());
-                    }
-                }
-                lineItems.add(lineItem);
+                maxConsumerIdLen = Math.max(maxConsumerIdLen, member.consumerId().length());
+                maxHostLen = Math.max(maxHostLen, member.host().length());
+                maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
             }
 
-            String fmt = "%" + (-maxLen) + "s";
-            String header = fmt + " " + fmt + " " + fmt + " " + fmt + " " + fmt;
-            System.out.printf(header, "GROUP", "MEMBER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
-            System.out.println();
-            for (List<String> item : lineItems) {
-                for (String atom : item) {
-                    System.out.printf(fmt + " ", atom);
-                }
-                System.out.println();
+            String fmt = "%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
+            System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
+            for (MemberDescription member : members) {
+                System.out.printf(fmt, description.groupId(), member.consumerId(), member.host(), member.clientId(),
+                    member.assignment().topicPartitions().stream().map(part -> part.topic() + ":" + part.partition()).collect(Collectors.joining(",")));
             }
         }
 
