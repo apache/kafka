@@ -24,6 +24,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -287,6 +288,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 /**
  * A unit test for KafkaAdminClient.
@@ -8171,6 +8176,37 @@ public class KafkaAdminClientTest {
             // Validate response
             assertNotNull(result.all());
             TestUtils.assertFutureThrows(result.all(), Errors.UNSUPPORTED_VERSION.exception().getClass());
+        }
+    }
+
+    @Test
+    public void testCallFailWithUnsupportedVersionExceptionDoesNotHaveConcurrentModificationException() throws InterruptedException {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            AdminMetadataManager metadataManager = mock(AdminMetadataManager.class);
+
+            // first false result make sure LeastLoadedBrokerOrActiveKController#provide can go to requestUpdate
+            // second true result make sure LeastLoadedBrokerOrActiveKController#provide can get a node
+            doReturn(false).doReturn(true).when(metadataManager).isReady();
+
+            // make maybeDrainPendingCall throw UnsupportedVersionException and go to Call#fail
+            doThrow(new UnsupportedVersionException("Unsupported version")).doNothing().when(metadataManager).requestUpdate();
+
+            // make sure describeCluster handleUnsupportedVersionException doesn't always return false
+            doReturn(false).when(metadataManager).usingBootstrapControllers();
+            // avoid sending fetchMetadata request
+            doReturn(1L).when(metadataManager).metadataFetchDelayMs(anyLong());
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, env.kafkaClient(), env.time())) {
+                admin.describeCluster(new DescribeClusterOptions().timeoutMs(1000));
+
+                // make sure maybeDrainPendingCalls doesn't remove duplicate pending calls
+                // the listNodes call will be added again in call.fail and remove one in maybeDrainPendingCalls
+                TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() != 0,
+                        "Timed out waiting for listNodes request");
+            }
         }
     }
 
