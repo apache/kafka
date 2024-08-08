@@ -996,11 +996,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 // Re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
                 future.completeExceptionally(responseError.exception());
+            } else if (responseError.exception() instanceof RetriableException) {
+                // If fail with a retriable KafkaException, then retry
+                future.completeExceptionally(responseError.exception());
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
             } else {
-                // Fail with a non-retriable KafkaException for all unexpected errors (even if
-                // they are retriable)
+                // Fail with a non-retriable KafkaException for all unexpected errors
                 future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
             }
         }
