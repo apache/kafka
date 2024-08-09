@@ -2464,13 +2464,15 @@ class KafkaApisTest extends Logging {
       ).build(version.toShort)
       val request = buildRequest(endTxnRequest)
 
+      val clientTransactionVersion = if (version >= 4) 2 else 0
+
       val requestLocal = RequestLocal.withThreadConfinedCaching
       when(txnCoordinator.handleEndTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(epoch),
         ArgumentMatchers.eq(TransactionResult.COMMIT),
-        ArgumentMatchers.eq(version >= 4),
+        ArgumentMatchers.eq(clientTransactionVersion.toShort),
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH))

@@ -181,7 +181,7 @@ class TransactionStateManagerTest {
       new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
     val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
-      new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true)))
+      new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), 2)))
 
     // We create a latch which is awaited while the log is loading. This ensures that the deletion
     // is triggered before the loading returns
@@ -225,19 +225,19 @@ class TransactionStateManagerTest {
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), 2))
 
     // pid1's transaction adds three more partitions
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic2", 0),
       new TopicPartition("topic2", 1),
       new TopicPartition("topic2", 2)))
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), 2))
 
     // pid1's transaction is preparing to commit
     txnMetadata1.state = PrepareCommit
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), 2))
 
     // pid2's transaction started with three partitions
     txnMetadata2.state = Ongoing
@@ -245,23 +245,23 @@ class TransactionStateManagerTest {
       new TopicPartition("topic3", 1),
       new TopicPartition("topic3", 2)))
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), 2))
 
     // pid2's transaction is preparing to abort
     txnMetadata2.state = PrepareAbort
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), 2))
 
     // pid2's transaction has aborted
     txnMetadata2.state = CompleteAbort
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), 2))
 
     // pid2's epoch has advanced, with no ongoing transaction yet
     txnMetadata2.state = Empty
     txnMetadata2.topicPartitions.clear()
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), 2))
 
     val startOffset = 15L   // it should work for any start offset
     val records = MemoryRecords.withRecords(startOffset, Compression.NONE, txnRecords.toArray: _*)
@@ -890,7 +890,7 @@ class TransactionStateManagerTest {
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), 2))
     val startOffset = 0L
     val records = MemoryRecords.withRecords(startOffset, Compression.NONE, txnRecords.toArray: _*)
 
@@ -1053,7 +1053,7 @@ class TransactionStateManagerTest {
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), 2))
     val startOffset = 0L
     val records = MemoryRecords.withRecords(startOffset, Compression.NONE, txnRecords.toArray: _*)
 
@@ -1159,7 +1159,7 @@ class TransactionStateManagerTest {
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 1),
       new TopicPartition("topic1", 1)))
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), 2))
 
     val startOffset = 15L
     val records = MemoryRecords.withRecords(startOffset, Compression.NONE, txnRecords.toArray: _*)
@@ -1178,7 +1178,7 @@ class TransactionStateManagerTest {
     txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
 
-    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), 2))
     val startOffset = 0L
 
     val unknownKey = new TransactionLogKey()
@@ -1210,7 +1210,7 @@ class TransactionStateManagerTest {
 
   @ParameterizedTest
   @EnumSource(classOf[TransactionVersion])
-  def testUsesFlexibleRecords(transactionVersion: TransactionVersion): Unit = {
+  def testTransactionVersionInTransactionManager(transactionVersion: TransactionVersion): Unit = {
     val metadataCache = mock(classOf[MetadataCache])
     when(metadataCache.features()).thenReturn {
       new FinalizedFeatures(
@@ -1223,7 +1223,6 @@ class TransactionStateManagerTest {
     val transactionManager = new TransactionStateManager(0, scheduler,
       replicaManager, metadataCache, txnConfig, time, metrics)
 
-    val expectFlexibleRecords = transactionVersion.featureLevel > 0
-    assertEquals(expectFlexibleRecords, transactionManager.usesFlexibleRecords())
+    assertEquals(transactionVersion.featureLevel(), transactionManager.transactionVersionLevel())
   }
 }

@@ -461,10 +461,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     addPartitionsOp.awaitAndVerify(txn)
 
     val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), 2))
 
     txnMetadata.state = PrepareCommit
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), 2))
 
     prepareTxnLog(partitionId)
   }
@@ -510,7 +510,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       txnTimeoutMs = 60000,
       state = Empty,
       topicPartitions = collection.mutable.Set.empty[TopicPartition],
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds(),
+      clientTransactionVersion = 0)
   }
 
   abstract class TxnOperation[R] extends Operation {
@@ -560,7 +561,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           txnMetadata.producerId,
           txnMetadata.producerEpoch,
           transactionResult(txn),
-          false, // TODO: fix this to work with transaction V2
+          2,
           (r, _, _) => resultCallback(r),
           RequestLocal.withThreadConfinedCaching)
       }

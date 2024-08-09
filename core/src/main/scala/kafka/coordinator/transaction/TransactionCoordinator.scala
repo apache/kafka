@@ -141,7 +141,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 txnTimeoutMs = transactionTimeoutMs,
                 state = Empty,
                 topicPartitions = collection.mutable.Set.empty[TopicPartition],
-                txnLastUpdateTimestamp = time.milliseconds())
+                txnLastUpdateTimestamp = time.milliseconds(),
+                clientTransactionVersion = 0)
               txnManager.putTransactionStateIfNotExists(createdMetadata)
 
             case Failure(exception) =>
@@ -182,7 +183,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               newMetadata.producerEpoch,
               TransactionResult.ABORT,
               isFromClient = false,
-              isTransactionsV2 = false,
+              clientTransactionVersion = 0,
               sendRetriableErrorCallback,
               requestLocal)
           } else {
@@ -488,7 +489,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            producerId: Long,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
-                           isTransactionsV2: Boolean,
+                           clientTransactionVersion: Short,
                            responseCallback: EndTxnCallback,
                            requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     endTransaction(transactionalId,
@@ -496,7 +497,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       producerEpoch,
       txnMarkerResult,
       isFromClient = true,
-      isTransactionsV2,
+      clientTransactionVersion,
       responseCallback,
       requestLocal)
   }
@@ -506,9 +507,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                              producerEpoch: Short,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
-                             isTransactionsV2: Boolean,
+                             clientTransactionVersion: Short,
                              responseCallback: EndTxnCallback,
                              requestLocal: RequestLocal): Unit = {
+    val requestIsAtLeastTransactionsV2 = clientTransactionVersion >= 2
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
@@ -522,11 +524,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
           txnMetadata.inLock {
+            val currentTxnMetadataIsAtLeastTransactionsV2 = txnMetadata.clientTransactionVersion >=2
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // New transactions will bump epoch on each transaction. On retries, if already in prepare state, return immediately
-            else if (isTransactionsV2 && isRetryEndTxn(txnMetadata, producerId, producerEpoch))
-              Left(Errors.NONE)
+            else if (currentTxnMetadataIsAtLeastTransactionsV2 && isRetryEndTxn(txnMetadata, producerId, producerEpoch)) {
+              if (isInvalidTxnTransition(txnMetadata, txnMarkerResult))
+                Left(Errors.INVALID_TXN_STATE)
+              else
+                Left(Errors.NONE)
+            }
             // Strict equality is enforced on the client side requests < version 4, as they shouldn't bump the producer epoch.
             else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
               Left(Errors.PRODUCER_FENCED)
@@ -541,7 +548,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
                 // Maybe allocate new producer ID if we are bumping epoch and epoch is exhausted
                 val nextProducerIdOrErrors =
-                  if (isTransactionsV2 && txnMetadata.isProducerEpochExhausted) {
+                  if (requestIsAtLeastTransactionsV2 && txnMetadata.isProducerEpochExhausted) {
                     producerIdManager.generateProducerId() match {
                       case Success(newProducerId) =>
                         Right(newProducerId)
@@ -552,7 +559,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                     Right(RecordBatch.NO_PRODUCER_ID)
                   }
 
-                if (!isTransactionsV2 && nextState == PrepareAbort && txnMetadata.pendingState.contains(PrepareEpochFence)) {
+                if (!requestIsAtLeastTransactionsV2 && nextState == PrepareAbort && txnMetadata.pendingState.contains(PrepareEpochFence)) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
                   isEpochFence = true
@@ -565,25 +572,25 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   case Left(error) =>
                     Left(error)
                   case Right(nextProducerId) =>
-                    Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, isTransactionsV2, nextProducerId, time.milliseconds()))
+                    Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, clientTransactionVersion, nextProducerId, time.milliseconds()))
                 }
               case CompleteCommit =>
-                if (txnMarkerResult == TransactionResult.COMMIT)
+                if (txnMarkerResult == TransactionResult.COMMIT && !currentTxnMetadataIsAtLeastTransactionsV2)
                   Left(Errors.NONE)
                 else
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case CompleteAbort =>
-                if (txnMarkerResult == TransactionResult.ABORT)
+                if (txnMarkerResult == TransactionResult.ABORT && !currentTxnMetadataIsAtLeastTransactionsV2)
                   Left(Errors.NONE)
                 else
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case PrepareCommit =>
-                if (txnMarkerResult == TransactionResult.COMMIT)
+                if (txnMarkerResult == TransactionResult.COMMIT && !currentTxnMetadataIsAtLeastTransactionsV2)
                   Left(Errors.CONCURRENT_TRANSACTIONS)
                 else
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case PrepareAbort =>
-                if (txnMarkerResult == TransactionResult.ABORT)
+                if (txnMarkerResult == TransactionResult.ABORT && !currentTxnMetadataIsAtLeastTransactionsV2)
                   Left(Errors.CONCURRENT_TRANSACTIONS)
                 else
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
@@ -631,12 +638,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                           if (txnMarkerResult != TransactionResult.COMMIT)
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
-                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), isTransactionsV2))
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), clientTransactionVersion))
                         case PrepareAbort =>
                           if (txnMarkerResult != TransactionResult.ABORT)
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
-                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), isTransactionsV2))
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), clientTransactionVersion))
                         case Dead | PrepareEpochFence =>
                           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                             s"This is illegal as we should never have transitioned to this state."
@@ -692,6 +699,11 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             sendTxnMarkersCallback, requestLocal = requestLocal)
       }
     }
+  }
+
+  def isInvalidTxnTransition(txnMetadata: TransactionMetadata, txnMarkerResult: TransactionResult) = {
+    !((List(PrepareCommit, CompleteCommit).contains(txnMetadata.state) && txnMarkerResult == TransactionResult.COMMIT) ||
+      (List(PrepareAbort, CompleteAbort).contains(txnMetadata.state) && txnMarkerResult == TransactionResult.ABORT))
   }
 
   def isRetryEndTxn(txnMetadata: TransactionMetadata, producerId: Long, producerEpoch: Short): Boolean = {
@@ -753,7 +765,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               txnTransitMetadata.producerEpoch,
               TransactionResult.ABORT,
               isFromClient = false,
-              isTransactionsV2 = false,
+              clientTransactionVersion = 0,
               onComplete(txnIdAndPidEpoch),
               RequestLocal.NoCaching)
           }

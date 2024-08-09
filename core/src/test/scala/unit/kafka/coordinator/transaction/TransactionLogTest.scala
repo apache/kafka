@@ -51,7 +51,7 @@ class TransactionLogTest {
     val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs, 0)
     txnMetadata.addPartitions(topicPartitions)
 
-    assertThrows(classOf[IllegalStateException], () => TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true))
+    assertThrows(classOf[IllegalStateException], () => TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), 2))
   }
 
   @Test
@@ -79,7 +79,7 @@ class TransactionLogTest {
         txnMetadata.addPartitions(topicPartitions)
 
       val keyBytes = TransactionLog.keyToBytes(transactionalId)
-      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true)
+      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), 2)
 
       new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
@@ -119,7 +119,7 @@ class TransactionLogTest {
     txnMetadata.addPartitions(Set(topicPartition))
 
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true)
+    val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), 2)
     val transactionMetadataRecord = TestUtils.records(Seq(
       new SimpleRecord(keyBytes, valueBytes)
     )).records.asScala.head
@@ -144,15 +144,15 @@ class TransactionLogTest {
 
   @Test
   def testSerializeTransactionLogValueToHighestNonFlexibleVersion(): Unit = {
-    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500, false)
-    val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, false))
+    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500, 0)
+    val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, 0))
     assertEquals(0, txnLogValueBuffer.getShort)
   }
 
   @Test
   def testSerializeTransactionLogValueToFlexibleVersion(): Unit = {
-    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500, true)
-    val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, true))
+    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500, 2)
+    val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, 2))
     assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_VERSION, txnLogValueBuffer.getShort)
   }
 

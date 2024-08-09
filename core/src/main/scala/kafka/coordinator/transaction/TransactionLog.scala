@@ -63,7 +63,7 @@ object TransactionLog {
     * @return value payload bytes
     */
   private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
-                                        usesFlexibleRecords: Boolean): Array[Byte] = {
+                                        transactionVersionLevel: Short): Array[Byte] = {
     if (txnMetadata.txnState == Empty && txnMetadata.topicPartitions.nonEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
@@ -79,7 +79,7 @@ object TransactionLog {
     // Serialize with version 0 (highest non-flexible version) until transaction.version 1 is enabled
     // which enables flexible fields in records.
     val version: Short =
-      if (usesFlexibleRecords) 1 else 0
+      if (transactionVersionLevel > 1) 1 else 0
     MessageUtil.toVersionPrefixedBytes(version,
       new TransactionLogValue()
         .setProducerId(txnMetadata.producerId)
@@ -88,7 +88,8 @@ object TransactionLog {
         .setTransactionStatus(txnMetadata.txnState.id)
         .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp)
         .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp)
-        .setTransactionPartitions(transactionPartitions))
+        .setTransactionPartitions(transactionPartitions)
+        .setClientTransactionVersion(transactionVersionLevel))
   }
 
   /**
@@ -132,7 +133,8 @@ object TransactionLog {
           state = TransactionState.fromId(value.transactionStatus),
           topicPartitions = mutable.Set.empty[TopicPartition],
           txnStartTimestamp = value.transactionStartTimestampMs,
-          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs)
+          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs,
+          clientTransactionVersion = value.clientTransactionVersion)
 
         if (!transactionMetadata.state.equals(Empty))
           value.transactionPartitions.forEach(partitionsSchema =>

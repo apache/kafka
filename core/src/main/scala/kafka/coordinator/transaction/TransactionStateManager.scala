@@ -30,7 +30,7 @@ import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, RecordBatch, SimpleRecord, TimestampType}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, SimpleRecord, TimestampType}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -101,8 +101,8 @@ class TransactionStateManager(brokerId: Int,
     TransactionStateManagerConfigs.METRICS_GROUP,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
-  private[transaction] def usesFlexibleRecords(): Boolean = {
-    metadataCache.features().finalizedFeatures().getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort) > 0
+  private[transaction] def transactionVersionLevel(): Short = {
+    metadataCache.features().finalizedFeatures().getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort)
   }
 
   // visible for testing only
@@ -543,15 +543,14 @@ class TransactionStateManager(brokerId: Int,
           loadedTransactions.foreach {
             case (transactionalId, txnMetadata) =>
               txnMetadata.inLock {
-                val isTransactionsV2 = txnMetadata.previousProducerId != RecordBatch.NO_PRODUCER_ID
                 // if state is PrepareCommit or PrepareAbort we need to complete the transaction
                 txnMetadata.state match {
                   case PrepareAbort =>
                     transactionsPendingForCompletion +=
-                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), isTransactionsV2))
+                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), txnMetadata.clientTransactionVersion))
                   case PrepareCommit =>
                     transactionsPendingForCompletion +=
-                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), isTransactionsV2))
+                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), txnMetadata.clientTransactionVersion))
                   case _ =>
                     // nothing needs to be done
                 }
@@ -625,7 +624,7 @@ class TransactionStateManager(brokerId: Int,
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(newMetadata, usesFlexibleRecords())
+    val valueBytes = TransactionLog.valueToBytes(newMetadata, transactionVersionLevel())
     val timestamp = time.milliseconds()
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))

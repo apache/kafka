@@ -2364,11 +2364,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendResponseMaybeThrottle(request, createResponse)
       }
 
+      // If the request is version 4, we know the client supports transaction version 2.
+      val clientTransactionVersion = if (endTxnRequest.version() >= 4) 2 else 0
+
       txnCoordinator.handleEndTransaction(endTxnRequest.data.transactionalId,
         endTxnRequest.data.producerId,
         endTxnRequest.data.producerEpoch,
         endTxnRequest.result(),
-        endTxnRequest.version() >= 4,
+        clientTransactionVersion.toShort,
         sendResponseCallback,
         requestLocal)
     } else
