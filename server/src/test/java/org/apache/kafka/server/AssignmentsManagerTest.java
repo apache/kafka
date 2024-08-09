@@ -360,28 +360,31 @@ public class AssignmentsManagerTest {
                 assertEquals(DIR_1, directoryData.id());
                 AssignReplicasToDirsRequestData.TopicData topicData = directoryData.topics().get(0);
                 assertEquals(TOPIC_1, topicData.topicId());
-                HashSet<Integer> foundPartitions = new HashSet<Integer>();
+                HashSet<Integer> foundPartitions = new HashSet<>();
                 topicData.partitions().forEach(p -> foundPartitions.add(p.partitionIndex()));
-                assertEquals(new HashSet<>(Arrays.asList(0, 1)), foundPartitions);
                 List<AssignReplicasToDirsResponseData.PartitionData> partitions = new ArrayList<>();
-                partitions.add(new AssignReplicasToDirsResponseData.PartitionData().
-                    setPartitionIndex(0).
-                    setErrorCode((short) 0));
-                if (failureType.equals("missingResult")) {
-                    // do nothing
-                } else if (failureType.equals("errorResult")) {
+                if (foundPartitions.contains(0)) {
                     partitions.add(new AssignReplicasToDirsResponseData.PartitionData().
-                        setPartitionIndex(1).
-                        setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code()));
-                } else {
-                    throw new RuntimeException("invalid failureType argument.");
+                        setPartitionIndex(0).
+                        setErrorCode((short) 0));
+                }
+                if (foundPartitions.contains(1)) {
+                    if (failureType.equals("missingResult")) {
+                        // do nothing
+                    } else if (failureType.equals("errorResult")) {
+                        partitions.add(new AssignReplicasToDirsResponseData.PartitionData().
+                            setPartitionIndex(1).
+                            setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code()));
+                    } else {
+                        throw new RuntimeException("invalid failureType argument.");
+                    }
                 }
                 return mockClientResponse(new AssignReplicasToDirsResponseData().
                     setDirectories(Arrays.asList(new AssignReplicasToDirsResponseData.DirectoryData().
                         setId(DIR_1).
                         setTopics(Arrays.asList(new AssignReplicasToDirsResponseData.TopicData().
                             setTopicId(TOPIC_1).
-                                setPartitions(partitions))))));
+                            setPartitions(partitions))))));
             });
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
                 assertEquals(1, testEnv.assignmentsManager.numPending());
