@@ -3103,7 +3103,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private UpdateRaftVoterRequestData buildUpdateVoterRequest() {
-        return RaftUtil.updateVoterRequest(
+        return VoteRpc.updateVoterRequest(
             clusterId,
             quorum.localReplicaKeyOrThrow(),
             quorum.epoch(),

@@ -1771,7 +1771,7 @@ public final class RaftClientTestContext {
         Errors error,
         LeaderAndEpoch leaderAndEpoch
     ) {
-        return RaftUtil.updateVoterResponse(
+        return VoteRpc.updateVoterResponse(
             error,
             channel.listenerName(),
             leaderAndEpoch,

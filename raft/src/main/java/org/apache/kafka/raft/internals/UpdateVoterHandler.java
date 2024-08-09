@@ -206,7 +206,7 @@ public final class UpdateVoterHandler {
 
         // Reply immediately and don't wait for the change to commit
         return CompletableFuture.completedFuture(
-            RaftUtil.updateVoterResponse(
+            VoteRpc.updateVoterResponse(
                 Errors.NONE,
                 requestListenerName,
                 new LeaderAndEpoch(
