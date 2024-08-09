@@ -40,6 +40,7 @@ import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFi
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
@@ -93,6 +94,35 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   override def tearDown(): Unit = {
     teardownBrokerLoggers()
     super.tearDown()
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreatePartitionWithOptionRetryOnQuotaViolation(): Unit = {
+    // Since it's hard to stably reach quota limit in integration test, we only verify quota configs are set correctly
+    val config = createConfig
+    val clientId = "test-client-id"
+
+    config.put(AdminClientConfig.CLIENT_ID_CONFIG, clientId)
+    client = AdminClientTestUtils.create(config, null)
+
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> clientId).asJava)
+
+    val configEntries = Map(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG -> 1.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 3.0)
+    val quotas = configEntries.map {case (k, v) => new ClientQuotaAlteration.Op(k,v)}
+    val alterResult = client.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, quotas.asJavaCollection)).asJavaCollection)
+    alterResult.all.get
+
+    TestUtils.waitUntilTrue(() => {
+      // wait for our ClientQuotaEntity to be set
+      client.describeClientQuotas(ClientQuotaFilter.all()).entities().get().size == 1
+    },
+      "Timed out waiting for quota config to be propagated to all servers")
+
+    val describeResult = client.describeClientQuotas(ClientQuotaFilter.all())
+    val quotaEntities = describeResult.entities().get()
+    assertTrue(quotaEntities.containsKey(entity))
+    assertEquals(configEntries,quotaEntities.get(entity).asScala)
   }
 
   @ParameterizedTest
