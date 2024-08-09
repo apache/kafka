@@ -69,6 +69,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -415,6 +416,150 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
+    }
+
+    @Test
+    public void testBatchingAcknowledgeRequestStates() {
+        buildRequestManager();
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, buildRecords(1L, 6, 1),
+                ShareCompletedFetchTest.acquiredRecords(1L, 6), Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
+
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements.add(4L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(5L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(6L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements2));
+
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+    }
+
+    @Test
+    public void testPendingCommitAsyncBeforeCommitSync() {
+        buildRequestManager();
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, buildRecords(1L, 6, 1),
+                ShareCompletedFetchTest.acquiredRecords(1L, 6), Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, acknowledgements));
+
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(4L, AcknowledgeType.ACCEPT);
+        acknowledgements2.add(5L, AcknowledgeType.ACCEPT);
+        acknowledgements2.add(6L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, acknowledgements2), 60000L);
+
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSyncRequest().getAcknowledgementsToSendCount(tip0));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSyncRequest().getAcknowledgementsToSendCount(tip0));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertEquals(3, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
+    }
+
+    @Test
+    public void testRetryAcknowledgements() throws InterruptedException {
+        buildRequestManager();
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, buildRecords(1L, 6, 1),
+                ShareCompletedFetchTest.acquiredRecords(1L, 6), Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+        acknowledgements.add(4L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(5L, AcknowledgeType.RELEASE);
+        acknowledgements.add(6L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, acknowledgements), 60000L);
+        assertNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
+
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSyncRequest().getAcknowledgementsToSendCount(tip0));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.REQUEST_TIMED_OUT));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSyncRequest().getIncompleteAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        TestUtils.retryOnExceptionWithTimeout(() -> assertEquals(1, shareConsumeRequestManager.sendAcknowledgements()));
+
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequest().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getSyncRequest().getIncompleteAcknowledgementsCount(tip0));
     }
 
     @Test
@@ -966,6 +1111,10 @@ public class ShareConsumeRequestManagerTest {
             NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);
             return pollResult.unsentRequests.size();
+        }
+
+        public Pair<AcknowledgeRequestState> requestStates(int nodeId) {
+            return super.requestStates(nodeId);
         }
     }
 

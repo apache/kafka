@@ -83,7 +83,7 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                 new RemoteLogSegmentMetadata(remoteLogSegmentId, record.startOffset(), record.endOffset(),
                                              record.maxTimestampMs(), record.brokerId(),
                                              record.eventTimestampMs(), record.segmentSizeInBytes(),
-                                             segmentLeaderEpochs, 0);
+                                             segmentLeaderEpochs);
         RemoteLogSegmentMetadataUpdate rlsmUpdate
                 = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, record.eventTimestampMs(),
                                                      customMetadata,

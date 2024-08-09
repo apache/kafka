@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -636,6 +637,37 @@ public class GroupMetadataManager {
                 ));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                );
+            }
+        });
+
+        return describedGroups;
+    }
+
+    /**
+     * Handles a ShareGroupDescribe request.
+     *
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the ShareGroupDescribeResponseData.DescribedGroup.
+     */
+    public List<ShareGroupDescribeResponseData.DescribedGroup> shareGroupDescribe(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        final List<ShareGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                describedGroups.add(shareGroup(groupId, committedOffset).asDescribedGroup(
+                    committedOffset,
+                    shareGroupAssignor.name(),
+                    metadataImage.topics()
+                ));
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new ShareGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
                     .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
                 );
@@ -2232,9 +2264,9 @@ public class GroupMetadataManager {
                     group.groupId(), memberId, instanceId, useClassicProtocol ? "classic" : "consumer");
                 return newMember;
             } else {
-                if (!useClassicProtocol) {
-                    // Static member rejoins with a different member id so it should replace
-                    // the previous instance iff the previous member had sent a leave group.
+                if (!useClassicProtocol && !existingStaticMemberOrNull.useClassicProtocol()) {
+                    // If both the rejoining static member and the existing static member use the consumer
+                    // protocol, replace the previous instance iff the previous member had sent a leave group.
                     throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
                 }
 
