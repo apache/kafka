@@ -186,7 +186,7 @@ public class QuorumStateTest {
         QuorumState state = buildQuorumState(OptionalInt.of(localId), voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
 
-        assertTrue(state.isUnattached());
+        assertTrue(state.isUnattachedNotVoted());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
         assertEquals(epoch, unattachedState.epoch());
         assertEquals(
@@ -790,7 +790,10 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToUnattached(5);
+        assertTrue(state.isUnattachedNotVoted());
+
         state.transitionToUnattachedVotedState(8, otherNodeKey);
+        assertTrue(state.isUnattachedAndVoted());
 
         UnattachedState votedState = state.unattachedStateOrThrow();
         assertEquals(8, votedState.epoch());
@@ -836,11 +839,13 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToUnattached(5);
+        assertTrue(state.isUnattachedNotVoted());
 
         long remainingElectionTimeMs = state.unattachedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         time.sleep(1000);
 
         state.transitionToUnattached(6);
+        assertTrue(state.isUnattachedNotVoted());
         UnattachedState unattachedState = state.unattachedStateOrThrow();
         assertEquals(6, unattachedState.epoch());
 
