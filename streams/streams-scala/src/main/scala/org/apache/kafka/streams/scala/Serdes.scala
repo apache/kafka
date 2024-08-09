@@ -39,9 +39,6 @@ object Serdes {
   implicit def JavaInteger: Serde[java.lang.Integer] = JSerdes.Integer()
   implicit def UUID: Serde[util.UUID] = JSerdes.UUID()
 
-  implicit def timeWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.TimeWindowedSerde[T] =
-    new WindowedSerdes.TimeWindowedSerde[T](tSerde)
-
   implicit def sessionWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.SessionWindowedSerde[T] =
     new WindowedSerdes.SessionWindowedSerde[T](tSerde)
 
