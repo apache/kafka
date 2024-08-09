@@ -1213,7 +1213,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         service.startup(() -> 1);
@@ -1348,7 +1349,8 @@ public class GroupCoordinatorServiceTest {
             new LogContext(),
             createConfig(),
             runtime,
-            new GroupCoordinatorMetrics()
+            new GroupCoordinatorMetrics(),
+            createConfigManager()
         );
 
         service.startup(() -> 1);
