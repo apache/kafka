@@ -34,7 +34,6 @@ import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.Collections
@@ -43,7 +42,6 @@ import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 /**
  * This test simulates a broker registering with the KRaft quorum under different configurations.
  */
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class BrokerRegistrationRequestTest {
 
