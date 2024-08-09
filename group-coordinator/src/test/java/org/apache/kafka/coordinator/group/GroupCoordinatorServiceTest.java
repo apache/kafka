@@ -1163,6 +1163,56 @@ public class GroupCoordinatorServiceTest {
     }
 
     @ParameterizedTest
+    @CsvSource({
+        "UNKNOWN_TOPIC_OR_PARTITION, NOT_COORDINATOR",
+        "NOT_ENOUGH_REPLICAS, NOT_COORDINATOR",
+        "REQUEST_TIMED_OUT, NOT_COORDINATOR",
+        "NOT_LEADER_OR_FOLLOWER, NOT_COORDINATOR",
+        "KAFKA_STORAGE_ERROR, NOT_COORDINATOR",
+    })
+    public void testFetchOffsetsWithWrappedError(
+        Errors error,
+        Errors expectedError
+    ) throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        service.startup(() -> 1);
+
+        OffsetFetchRequestData.OffsetFetchRequestGroup request =
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group")
+                .setTopics(Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(Collections.singletonList(0))));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("fetch-offsets"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
+
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
+            requestContext(ApiKeys.OFFSET_FETCH),
+            request,
+            true
+        );
+
+        assertEquals(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId("group")
+                .setErrorCode(expectedError.code()),
+            future.get()
+        );
+    }
+
+    @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testFetchAllOffsets(
         boolean requireStable
@@ -1241,6 +1291,53 @@ public class GroupCoordinatorServiceTest {
             new OffsetFetchResponseData.OffsetFetchResponseGroup()
                 .setGroupId("group")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "UNKNOWN_TOPIC_OR_PARTITION, NOT_COORDINATOR",
+        "NOT_ENOUGH_REPLICAS, NOT_COORDINATOR",
+        "REQUEST_TIMED_OUT, NOT_COORDINATOR",
+        "NOT_LEADER_OR_FOLLOWER, NOT_COORDINATOR",
+        "KAFKA_STORAGE_ERROR, NOT_COORDINATOR",
+    })
+    public void testFetchAllOffsetsWithWrappedError(
+        Errors error,
+        Errors expectedError
+    ) throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        service.startup(() -> 1);
+
+        OffsetFetchRequestData.OffsetFetchRequestGroup request =
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group");
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("fetch-all-offsets"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+            )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
+
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchAllOffsets(
+            requestContext(ApiKeys.OFFSET_FETCH),
+            request,
+            true
+        );
+
+        assertEquals(
+            new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId("group")
+                .setErrorCode(expectedError.code()),
             future.get()
         );
     }
