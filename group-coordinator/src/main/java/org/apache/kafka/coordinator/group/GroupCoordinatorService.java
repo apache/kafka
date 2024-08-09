@@ -825,7 +825,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     Collections.emptyList(),
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
                 )
-            );
+            ).exceptionally(exception -> handleOffsetFetchException(
+                "fetch-offsets",
+                request,
+                exception
+            ));
         } else {
             return runtime.scheduleReadOperation(
                 "fetch-offsets",
@@ -876,7 +880,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     Collections.emptyList(),
                     coordinator.fetchAllOffsets(request, Long.MAX_VALUE)
                 )
-            );
+            ).exceptionally(exception -> handleOffsetFetchException(
+                "fetch-all-offsets",
+                request,
+                exception
+            ));
         } else {
             return runtime.scheduleReadOperation(
                 "fetch-all-offsets",
@@ -1215,6 +1223,51 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             default:
                 return handler.apply(apiError.error(), apiError.message());
+        }
+    }
+
+    /**
+     * This is the handler used by offset fetch operations to convert errors to coordinator errors.
+     * The handler also handles and log unexpected errors.
+     *
+     * @param operationName     The name of the operation.
+     * @param request           The OffsetFetchRequestGroup request.
+     * @param exception         The exception to handle.
+     * @return The OffsetFetchRequestGroup response.
+     */
+    private OffsetFetchResponseData.OffsetFetchResponseGroup handleOffsetFetchException(
+        String operationName,
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
+        Throwable exception
+    ) {
+        ApiError apiError = ApiError.fromThrowable(exception);
+
+        switch (apiError.error()) {
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case NOT_ENOUGH_REPLICAS:
+            case REQUEST_TIMED_OUT:
+                // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
+                // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
+                // additionally triggers coordinator re-lookup, which is necessary if the client is
+                // talking to a zombie coordinator.
+                //
+                // While handleOperationException does remap UNKNOWN_TOPIC_OR_PARTITION,
+                // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
+                // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
+                // 3.9.
+                return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(request.groupId())
+                    .setErrorCode(Errors.NOT_COORDINATOR.code());
+
+            default:
+                return handleOperationException(
+                    operationName,
+                    request,
+                    exception,
+                    (error, __) -> new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                        .setGroupId(request.groupId())
+                        .setErrorCode(error.code())
+                );
         }
     }
 }
