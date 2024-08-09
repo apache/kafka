@@ -1129,23 +1129,6 @@ public class StreamsConfigTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldLogWarningWhenRetriesIsUsed() {
-        props.put(StreamsConfig.RETRIES_CONFIG, 0);
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLogger(StreamsConfig.class, Level.DEBUG);
-            new StreamsConfig(props);
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.RETRIES_CONFIG +
-                            "` is deprecated and will be removed in the 4.0.0 release.")
-            );
-        }
-    }
-
     @Test
     public void shouldSetDefaultAcceptableRecoveryLag() {
         final StreamsConfig config = new StreamsConfig(props);
