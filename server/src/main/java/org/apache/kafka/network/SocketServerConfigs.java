@@ -16,12 +16,23 @@
  */
 package org.apache.kafka.network;
 
+import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.config.ReplicationConfigs;
+import org.apache.kafka.server.util.Csv;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -184,4 +195,58 @@ public class SocketServerConfigs {
             .define(QUEUED_MAX_REQUESTS_CONFIG, INT, QUEUED_MAX_REQUESTS_DEFAULT, atLeast(1), HIGH, QUEUED_MAX_REQUESTS_DOC)
             .define(QUEUED_MAX_BYTES_CONFIG, LONG, QUEUED_MAX_REQUEST_BYTES_DEFAULT, MEDIUM, QUEUED_MAX_REQUEST_BYTES_DOC)
             .define(NUM_NETWORK_THREADS_CONFIG, INT, NUM_NETWORK_THREADS_DEFAULT, atLeast(1), HIGH, NUM_NETWORK_THREADS_DOC);
+
+    private static final Pattern URI_PARSE_REGEXP = Pattern.compile(
+        "^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
+
+    public static final Map<ListenerName, SecurityProtocol> DEFAULT_NAME_TO_SECURITY_PROTO;
+
+    static {
+        HashMap<ListenerName, SecurityProtocol> nameToSecurityProtocol = new HashMap<>();
+        for (SecurityProtocol securityProtocol : SecurityProtocol.values()) {
+            nameToSecurityProtocol.put(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
+        }
+        DEFAULT_NAME_TO_SECURITY_PROTO = Collections.unmodifiableMap(nameToSecurityProtocol);
+    }
+
+    public static List<Endpoint> listenerListToEndPoints(
+        String input,
+        Map<ListenerName, SecurityProtocol> nameToSecurityProto
+    ) {
+        return listenerListToEndPoints(input, n -> {
+            SecurityProtocol result = nameToSecurityProto.get(n);
+            if (result == null) {
+                throw new IllegalArgumentException("No security protocol defined for listener " + n.value());
+            }
+            return result;
+        });
+    }
+
+    public static List<Endpoint> listenerListToEndPoints(
+        String input,
+        Function<ListenerName, SecurityProtocol> nameToSecurityProto
+    ) {
+        List<Endpoint> results = new ArrayList<>();
+        for (String entry : Csv.parseCsvList(input.trim())) {
+            Matcher matcher = URI_PARSE_REGEXP.matcher(entry);
+            if (!matcher.matches()) {
+                throw new KafkaException("Unable to parse " + entry + " to a broker endpoint");
+            }
+            ListenerName listenerName = ListenerName.normalised(matcher.group(1));
+            String host = matcher.group(2);
+            if (host.isEmpty()) {
+                // By Kafka convention, an empty host string indicates binding to the wildcard
+                // address, and is stored as null.
+                host = null;
+            }
+            String portString = matcher.group(3);
+            int port = Integer.parseInt(portString);
+            SecurityProtocol securityProtocol = nameToSecurityProto.apply(listenerName);
+            results.add(new Endpoint(listenerName.value(),
+                securityProtocol,
+                host,
+                port));
+        }
+        return results;
+    }
 }
