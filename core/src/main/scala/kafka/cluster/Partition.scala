@@ -46,6 +46,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.slf4j.event.Level
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -93,9 +94,9 @@ class DelayedOperations(topicPartition: TopicPartition,
 
   def checkAndCompleteAll(): Unit = {
     val requestKey = TopicPartitionOperationKey(topicPartition)
-    fetch.checkAndComplete(requestKey)
-    produce.checkAndComplete(requestKey)
-    deleteRecords.checkAndComplete(requestKey)
+    CoreUtils.swallow(() -> fetch.checkAndComplete(requestKey), fetch, Level.ERROR)
+    CoreUtils.swallow(() -> produce.checkAndComplete(requestKey), produce, Level.ERROR)
+    CoreUtils.swallow(() -> deleteRecords.checkAndComplete(requestKey), deleteRecords, Level.ERROR)
   }
 
   def numDelayedDelete: Int = deleteRecords.numDelayed
@@ -1239,12 +1240,7 @@ class Partition(val topicPartition: TopicPartition,
    * Try to complete any pending requests. This should be called without holding the leaderIsrUpdateLock.
    */
   def tryCompleteDelayedRequests(): Unit = {
-    try {
-      delayedOperations.checkAndCompleteAll()
-    } catch {
-      case e: Exception =>
-        error(s"Unexpected exception while completing delayed requests for ${topicPartition}", e)
-    }
+    delayedOperations.checkAndCompleteAll()
   }
 
   def maybeShrinkIsr(): Unit = {
