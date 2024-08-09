@@ -471,12 +471,12 @@ public class PluginUtils {
     }
     
     private static Collection<URL> forClassLoader(ClassLoader classLoader) {
-        final Collection<URL> result = new ArrayList<URL>();
+        final Collection<URL> result = new ArrayList<>();
         while (classLoader != null) {
             if (classLoader instanceof URLClassLoader) {
                 URL[] urls = ((URLClassLoader) classLoader).getURLs();
                 if (urls != null) {
-                    result.addAll(new HashSet<URL>(Arrays.asList(urls)));
+                    result.addAll(new HashSet<>(Arrays.asList(urls)));
                 }
             }
             classLoader = classLoader.getParent();
@@ -485,7 +485,7 @@ public class PluginUtils {
     }
     
     private static Collection<URL> distinctUrls(Collection<URL> urls) {
-        Map<String, URL> distinct = new HashMap<String, URL>(urls.size());
+        Map<String, URL> distinct = new HashMap<>(urls.size());
         for (URL url : urls) {
             distinct.put(url.toExternalForm(), url);
         }

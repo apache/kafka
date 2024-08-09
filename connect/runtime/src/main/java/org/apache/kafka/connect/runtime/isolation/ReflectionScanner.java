@@ -79,7 +79,7 @@ public class ReflectionScanner extends PluginScanner {
         ClassGraph classGraphBuilder = new ClassGraph()
                 .addClassLoader(source.loader())
                 .enableExternalClasses()
-                .enableAllInfo();
+                .enableClassInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {
             return new PluginScanResult(
                   getPluginDesc(classGraph, PluginType.SINK, source),
