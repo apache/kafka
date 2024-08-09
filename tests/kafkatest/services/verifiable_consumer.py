@@ -145,7 +145,7 @@ class ConsumerEventHandler(object):
         else:
             return None
 
-# This needs to be used for cooperative and consumer protocol
+# This needs to be used for cooperative protocol.
 class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
     def __init__(self, node, verify_offsets, idx):
         super().__init__(node, verify_offsets, idx)
@@ -176,6 +176,25 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
         logger.debug("Partitions %s assigned to %s" % (assignment, node.account.hostname))
         self.assignment.extend(assignment)
 
+# This needs to be used for consumer protocol.
+class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHandler):
+    def __init__(self, node, verify_offsets, idx):
+        super().__init__(node, verify_offsets, idx)
+
+    def handle_partitions_revoked(self, event, node, logger):
+        self.revoked_count += 1
+        self.position = {}
+        revoked = []
+
+        for topic_partition in event["partitions"]:
+            tp = _create_partition_from_dict(topic_partition)
+            # tp existing in self.assignment is not guaranteed in the new consumer
+            # if it shuts down when revoking partitions for reconciliation.
+            if tp in self.assignment:
+                self.assignment.remove(tp)
+            revoked.append(tp)
+
+        logger.debug("Partitions %s revoked from %s" % (revoked, node.account.hostname))
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
@@ -245,13 +264,22 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def java_class_name(self):
         return "VerifiableConsumer"
 
+    def create_event_handler(self, idx, node):
+        if self.is_consumer_group_protocol_enabled():
+            return ConsumerProtocolConsumerEventHandler(node, self.verify_offsets, idx)
+        elif self.is_eager():
+            return ConsumerEventHandler(node, self.verify_offsets, idx)
+        else:
+            return IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
+
     def _worker(self, idx, node):
         with self.lock:
             if node not in self.event_handlers:
-                if self.is_eager():
-                    self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
-                else:
-                    self.event_handlers[node] = IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
+                self.event_handlers[node] = self.create_event_handler(idx, node)
+            else:
+                new_event_handler = self.create_event_handler(idx, node)
+                if self.event_handlers[node].__class__.__name__ != new_event_handler.__class__.__name__:
+                    self.event_handlers[node] = new_event_handler
             handler = self.event_handlers[node]
 
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
@@ -481,4 +509,4 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     if handler.state != ConsumerState.Dead]
 
     def is_consumer_group_protocol_enabled(self):
-        return self.group_protocol and self.group_protocol.upper() == "CONSUMER"
+        return self.group_protocol and self.group_protocol.lower() == consumer_group.consumer_group_protocol

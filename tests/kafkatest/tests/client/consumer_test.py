@@ -123,9 +123,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
         #       nodes have time to expire
         self.rolling_bounce_brokers(consumer, clean_shutdown=True)
 
-        unexpected_rebalances = consumer.num_rebalances() - num_rebalances
-        assert unexpected_rebalances == 0, \
-            "Broker rolling bounce caused %d unexpected group rebalances" % unexpected_rebalances
+        if group_protocol == consumer_group.classic_group_protocol:
+            unexpected_rebalances = consumer.num_rebalances() - num_rebalances
+            assert unexpected_rebalances == 0, \
+                "Broker rolling bounce caused %d unexpected group rebalances" % unexpected_rebalances
 
         consumer.stop_all()
 
@@ -363,7 +364,6 @@ class OffsetValidationTest(VerifiableConsumerTest):
             else:
                 # Consumer protocol: Existing members should remain active and new conflicting ones should not be able to join.
                 self.await_consumed_messages(consumer)
-                assert num_rebalances == consumer.num_rebalances(), "Static consumers attempt to join with instance id in use should not cause a rebalance"
                 assert len(consumer.joined_nodes()) == len(consumer.nodes)
                 assert len(conflict_consumer.joined_nodes()) == 0
                 
@@ -416,8 +416,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
         consumer.start()
         self.await_all_members(consumer)
 
-        partition_owner = consumer.owner(partition)
-        assert partition_owner is not None
+        partition_owner_container = {partition: None}
+        def check_partition_owner(partition_owner_container):
+            partition_owner_container[partition] = consumer.owner(partition)
+            return partition_owner_container[partition] is not None
+
+        wait_until(lambda: check_partition_owner(partition_owner_container),
+                   timeout_sec=self.session_timeout_sec*2+5,
+                   err_msg="Timed out waiting for partition to be assigned.")
+        partition_owner = partition_owner_container[partition]
 
         # startup the producer and ensure that some records have been written
         producer.start()
@@ -491,8 +498,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
         # ensure that the consumers do some work after the broker failure
         self.await_consumed_messages(consumer, min_messages=1000)
 
-        # verify that there were no rebalances on failover
-        assert num_rebalances == consumer.num_rebalances(), "Broker failure should not cause a rebalance"
+        # verify that there were no rebalances on failover for classic protocol consumer.
+        # Currently, the consumer protocol doesn't support num_rebalances().
+        if group_protocol == consumer_group.classic_group_protocol:
+            assert num_rebalances == consumer.num_rebalances(), "Broker failure should not cause a rebalance"
 
         consumer.stop_all()
 
@@ -608,7 +617,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
             consumer.start_node(node)
             self.await_members(consumer, num_started)
             wait_until(lambda: self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment()),
-                timeout_sec=15,
+                timeout_sec=self.session_timeout_sec*2,
                 err_msg="expected valid assignments of %d partitions when num_started %d: %s" % \
                         (self.NUM_PARTITIONS, num_started, \
                          [(str(node.account), a) for node, a in consumer.current_assignment().items()]))
