@@ -670,12 +670,11 @@ public class QuorumState {
     }
 
     public boolean isUnattachedNotVoted() {
-        EpochState fixedState = state;
-        return fixedState instanceof UnattachedState && !((UnattachedState) fixedState).votedKey().isPresent();
+        return maybeUnattachedState().filter(unattached -> !unattached.votedKey().isPresent()).isPresent();
     }
 
     public boolean isUnattachedAndVoted() {
-        return maybeUnattachedState().map(UnattachedState::votedKey).isPresent();
+        return maybeUnattachedState().flatMap(UnattachedState::votedKey).isPresent();
     }
 
     public boolean isLeader() {
