@@ -3972,6 +3972,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleShareGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val shareGroupDescribeRequest = request.body[ShareGroupDescribeRequest]
+    val includeAuthorizedOperations = shareGroupDescribeRequest.data.includeAuthorizedOperations
 
     if (!isShareGroupProtocolEnabled) {
       requestHelper.sendMaybeThrottle(request, shareGroupDescribeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
@@ -3998,6 +3999,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, shareGroupDescribeRequest.getErrorResponse(exception))
         } else {
+          if (includeAuthorizedOperations) {
+            results.forEach { groupResult =>
+              if (groupResult.errorCode == Errors.NONE.code) {
+                groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
+                  request,
+                  new Resource(ResourceType.GROUP, groupResult.groupId)
+                ))
+              }
+            }
+          }
+
           if (response.groups.isEmpty) {
             // If the response is empty, we can directly reuse the results.
             response.setGroups(results)
