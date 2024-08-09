@@ -24,6 +24,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -74,6 +75,8 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
@@ -143,6 +146,8 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopics;
+import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
@@ -153,6 +158,8 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.record.RecordVersion;
+import org.apache.kafka.common.requests.AddRaftVoterRequest;
+import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
@@ -215,6 +222,8 @@ import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
+import org.apache.kafka.common.requests.RemoveRaftVoterRequest;
+import org.apache.kafka.common.requests.RemoveRaftVoterResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
@@ -236,6 +245,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
@@ -266,6 +276,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -288,6 +299,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 /**
  * A unit test for KafkaAdminClient.
@@ -8194,6 +8209,37 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testCallFailWithUnsupportedVersionExceptionDoesNotHaveConcurrentModificationException() throws InterruptedException {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            AdminMetadataManager metadataManager = mock(AdminMetadataManager.class);
+
+            // first false result make sure LeastLoadedBrokerOrActiveKController#provide can go to requestUpdate
+            // second true result make sure LeastLoadedBrokerOrActiveKController#provide can get a node
+            doReturn(false).doReturn(true).when(metadataManager).isReady();
+
+            // make maybeDrainPendingCall throw UnsupportedVersionException and go to Call#fail
+            doThrow(new UnsupportedVersionException("Unsupported version")).doNothing().when(metadataManager).requestUpdate();
+
+            // make sure describeCluster handleUnsupportedVersionException doesn't always return false
+            doReturn(false).when(metadataManager).usingBootstrapControllers();
+            // avoid sending fetchMetadata request
+            doReturn(1L).when(metadataManager).metadataFetchDelayMs(anyLong());
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, env.kafkaClient(), env.time())) {
+                admin.describeCluster(new DescribeClusterOptions().timeoutMs(1000));
+
+                // make sure maybeDrainPendingCalls doesn't remove duplicate pending calls
+                // the listNodes call will be added again in call.fail and remove one in maybeDrainPendingCalls
+                TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() != 0,
+                        "Timed out waiting for listNodes request");
+            }
+        }
+    }
+
     private static ListClientMetricsResourcesResponse prepareListClientMetricsResourcesResponse(Errors error) {
         return new ListClientMetricsResourcesResponse(new ListClientMetricsResourcesResponseData()
                 .setErrorCode(error.code()));
@@ -8250,6 +8296,94 @@ public class KafkaAdminClientTest {
                     return ret;
                 }
             }
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "false, false", "false, true", "true, false", "true, true" })
+    public void testAddRaftVoterRequest(boolean fail, boolean sendClusterId) throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            AddRaftVoterResponseData responseData = new AddRaftVoterResponseData();
+            if (fail) {
+                responseData.
+                    setErrorCode(Errors.DUPLICATE_VOTER.code()).
+                    setErrorMessage("duplicate");
+            }
+            AtomicReference<AddRaftVoterRequestData> requestData = new AtomicReference<>();
+            env.kafkaClient().prepareResponse(
+                request -> {
+                    if (!(request instanceof AddRaftVoterRequest)) return false;
+                    requestData.set((AddRaftVoterRequestData) request.data());
+                    return true;
+                },
+                new AddRaftVoterResponse(responseData));
+            AddRaftVoterOptions options = new AddRaftVoterOptions();
+            if (sendClusterId) {
+                options.setClusterId(Optional.of("_o_GnDGwQaWu4r-NMzmkTw"));
+            }
+            AddRaftVoterResult result = env.adminClient().addRaftVoter(1,
+                    Uuid.fromString("YAfa4HClT3SIIW2klIUspg"),
+                    Collections.singleton(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080)),
+                    options);
+            assertNotNull(result.all());
+            if (fail) {
+                TestUtils.assertFutureThrows(result.all(), Errors.DUPLICATE_VOTER.exception().getClass());
+            } else {
+                result.all().get();
+            }
+            if (sendClusterId) {
+                assertEquals("_o_GnDGwQaWu4r-NMzmkTw", requestData.get().clusterId());
+            } else {
+                assertNull(requestData.get().clusterId());
+            }
+            assertEquals(1000, requestData.get().timeoutMs());
+            assertEquals(1, requestData.get().voterId());
+            assertEquals(Uuid.fromString("YAfa4HClT3SIIW2klIUspg"), requestData.get().voterDirectoryId());
+            assertEquals(new AddRaftVoterRequestData.Listener().
+                    setName("CONTROLLER").
+                    setHost("example.com").
+                    setPort(8080), requestData.get().listeners().find("CONTROLLER"));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "false, false", "false, true", "true, false", "true, true" })
+    public void testRemoveRaftVoterRequest(boolean fail, boolean sendClusterId) throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            RemoveRaftVoterResponseData responseData = new RemoveRaftVoterResponseData();
+            if (fail) {
+                responseData.
+                    setErrorCode(Errors.VOTER_NOT_FOUND.code()).
+                    setErrorMessage("not found");
+            }
+            AtomicReference<RemoveRaftVoterRequestData> requestData = new AtomicReference<>();
+            env.kafkaClient().prepareResponse(
+                    request -> {
+                        if (!(request instanceof RemoveRaftVoterRequest)) return false;
+                        requestData.set((RemoveRaftVoterRequestData) request.data());
+                        return true;
+                    },
+                    new RemoveRaftVoterResponse(responseData));
+            RemoveRaftVoterOptions options = new RemoveRaftVoterOptions();
+            if (sendClusterId) {
+                options.setClusterId(Optional.of("_o_GnDGwQaWu4r-NMzmkTw"));
+            }
+            RemoveRaftVoterResult result = env.adminClient().removeRaftVoter(1,
+                Uuid.fromString("YAfa4HClT3SIIW2klIUspg"),
+                options);
+            assertNotNull(result.all());
+            if (fail) {
+                TestUtils.assertFutureThrows(result.all(), Errors.VOTER_NOT_FOUND.exception().getClass());
+            } else {
+                result.all().get();
+            }
+            if (sendClusterId) {
+                assertEquals("_o_GnDGwQaWu4r-NMzmkTw", requestData.get().clusterId());
+            } else {
+                assertNull(requestData.get().clusterId());
+            }
+            assertEquals(1, requestData.get().voterId());
+            assertEquals(Uuid.fromString("YAfa4HClT3SIIW2klIUspg"), requestData.get().voterDirectoryId());
         }
     }
 }
