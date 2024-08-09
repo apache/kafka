@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -375,6 +376,30 @@ public class ConsumerHeartbeatRequestManagerTest {
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
 
+        time.sleep(1);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+    }
+
+    @Test
+    public void testDisconnect() {
+        // The initial heartbeatInterval is set to 0
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        // Mimic disconnect
+        result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), DisconnectException.INSTANCE);
+        verify(membershipManager).onHeartbeatFailure(true);
+        // Ensure that the coordinatorManager rediscovers the coordinator
+        verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
+        verify(backgroundEventHandler, never()).add(any());
+
+        // Assure the manager will backoff on disconnect
+        time.sleep(DEFAULT_RETRY_BACKOFF_MS - 1);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size());
+
+        // Assure that the backoff time has been exceeded
         time.sleep(1);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
