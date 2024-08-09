@@ -305,9 +305,7 @@ class BrokerServer(
         config.brokerId,
         () => metadataCache.getImage(),
         (directoryId: Uuid) => logManager.directoryPath(directoryId).
-          getOrElse("[unknown directory path]"),
-        (topicId: Uuid) => Optional.ofNullable(metadataCache.topicIdsToNames().get(topicId)).
-          orElse("[unknown topicid path]")
+          getOrElse("[unknown directory path]")
       )
       val directoryEventHandler = new DirectoryEventHandler {
         override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =

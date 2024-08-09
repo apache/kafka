@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
@@ -116,11 +117,6 @@ public final class AssignmentsManager {
     private final Function<Uuid, String> directoryIdToDescription;
 
     /**
-     * Maps topic IDs to descriptions for logging purposes.
-     */
-    private final Function<Uuid, String> topicIdToDescription;
-
-    /**
      * Maps partitions to assignments that are ready to send.
      */
     private final ConcurrentHashMap<TopicIdPartition, Assignment> ready;
@@ -154,8 +150,7 @@ public final class AssignmentsManager {
         NodeToControllerChannelManager channelManager,
         int nodeId,
         Supplier<MetadataImage> metadataImageSupplier,
-        Function<Uuid, String> directoryIdToDescription,
-        Function<Uuid, String> topicIdToDescription
+        Function<Uuid, String> directoryIdToDescription
     ) {
         this(STANDARD_BACKOFF,
             time,
@@ -163,7 +158,6 @@ public final class AssignmentsManager {
             nodeId,
             metadataImageSupplier,
             directoryIdToDescription,
-            topicIdToDescription,
             KafkaYammerMetrics.defaultRegistry());
     }
 
@@ -174,7 +168,6 @@ public final class AssignmentsManager {
         int nodeId,
         Supplier<MetadataImage> metadataImageSupplier,
         Function<Uuid, String> directoryIdToDescription,
-        Function<Uuid, String> topicIdToDescription,
         MetricsRegistry metricsRegistry
     ) {
         this.log = new LogContext("[AssignmentsManager id=" + nodeId + "] ").
@@ -184,7 +177,6 @@ public final class AssignmentsManager {
         this.channelManager = channelManager;
         this.nodeId = nodeId;
         this.directoryIdToDescription = directoryIdToDescription;
-        this.topicIdToDescription = topicIdToDescription;
         this.metadataImageSupplier = metadataImageSupplier;
         this.ready = new ConcurrentHashMap<>();
         this.inflight = Collections.emptyMap();
@@ -222,10 +214,14 @@ public final class AssignmentsManager {
                 topicIdPartition, directoryId, nowNs, successCallback);
         ready.put(topicIdPartition, assignment);
         if (log.isTraceEnabled()) {
-            log.trace("Registered assignment {}: {}, moving {} into {}",
+            String topicDescription = Optional.ofNullable(metadataImageSupplier.get().topics().
+                getTopic(assignment.topicIdPartition().topicId())).
+                    map(TopicImage::name).orElse(assignment.topicIdPartition().topicId().toString());
+            log.trace("Registered assignment {}: {}, moving {}-{} into {}",
                 assignment,
                 reason,
-                topicIdToDescription.apply(assignment.topicIdPartition().topicId()),
+                topicDescription,
+                topicIdPartition.partitionId(),
                 directoryIdToDescription.apply(assignment.directoryId()));
         }
         rescheduleMaybeSendAssignmentsEvent(nowNs);
