@@ -6837,7 +6837,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
-      FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -7342,7 +7342,7 @@ class KafkaApisTest extends Logging {
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
@@ -7481,7 +7481,7 @@ class KafkaApisTest extends Logging {
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
 
     when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
-      FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
