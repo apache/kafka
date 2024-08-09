@@ -10215,40 +10215,40 @@ public class GroupMetadataManagerTest {
             CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId),
 
             // Create the new consumer group with the static member.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedClassicMember),
-            CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 0),
-            CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, memberId, expectedClassicMember.assignedPartitions()),
-            CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, 0),
-            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedClassicMember),
+            CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedClassicMember),
+            CoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 0),
+            CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, expectedClassicMember.assignedPartitions()),
+            CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 0),
+            CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedClassicMember),
 
             // Remove the static member because the rejoining member replaces it.
-            CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
-            CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
-            CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
+            CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
+            CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
+            CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
 
             // Create the new static member.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedReplacingConsumerMember),
-            CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0))),
-            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedReplacingConsumerMember),
+            CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedReplacingConsumerMember),
+            CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0))),
+            CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedReplacingConsumerMember),
 
             // The static member rejoins the new consumer group.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedFinalConsumerMember),
+            CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedFinalConsumerMember),
 
             // The subscription metadata hasn't been updated during the conversion, so a new one is computed.
-            CoordinatorRecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+            CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
                     put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 1, mkMapOfPartitionRacks(1)));
                 }
             }),
 
             // Newly joining static member bumps the group epoch. A new target assignment is computed.
-            CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 1),
-            CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0))),
-            CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, 1),
+            CoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 1),
+            CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0))),
+            CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 1),
 
             // The newly created static member takes the assignment from the existing member.
             // Bump its member epoch and transition to STABLE.
-            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedFinalConsumerMember)
+            CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalConsumerMember)
         );
 
         assertRecordsEquals(expectedRecords, result.records());
@@ -10339,7 +10339,7 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10))
             .build();
 
-        context.replay(CoordinatorRecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+        context.replay(CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
             {
                 put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
                 put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
@@ -10381,21 +10381,21 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             // Remove the existing static member 1 because the rejoining member replaces it.
-            CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId1),
-            CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId1),
-            CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
+            CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
+            CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
 
             // Create the new static member 1.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedReplacingConsumerMember),
-            CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, newMemberId1, member1.assignedPartitions()),
-            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedReplacingConsumerMember),
+            CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedReplacingConsumerMember),
+            CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, newMemberId1, member1.assignedPartitions()),
+            CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedReplacingConsumerMember),
 
             // The static member rejoins the new consumer group.
-            CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, expectedFinalConsumerMember),
+            CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedFinalConsumerMember),
 
             // The newly created static member 1 takes the assignment from the existing member 1.
             // Bump its member epoch and transition to STABLE.
-            CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, expectedFinalConsumerMember)
+            CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedFinalConsumerMember)
         );
 
         assertRecordsEquals(expectedRecords, result.records());
@@ -13788,8 +13788,8 @@ public class GroupMetadataManagerTest {
         ));
 
         List<String> groupIds = Arrays.asList("group-id-1", "group-id-2");
-        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupIds.get(0), 100, GroupType.SHARE));
-        context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupIds.get(1), 15, GroupType.SHARE));
+        context.replay(CoordinatorRecordHelpers.newShareGroupEpochRecord(groupIds.get(0), 100));
+        context.replay(CoordinatorRecordHelpers.newShareGroupEpochRecord(groupIds.get(1), 15));
 
         CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
