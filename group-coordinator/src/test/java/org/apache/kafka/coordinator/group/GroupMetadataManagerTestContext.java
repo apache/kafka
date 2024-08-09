@@ -118,6 +118,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
 public class GroupMetadataManagerTestContext {
+    static final String DEFAULT_CLIENT_ID = "client";
+    static final InetAddress DEFAULT_CLIENT_ADDRESS = InetAddress.getLoopbackAddress();
 
     public static void assertNoOrEmptyResult(List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts) {
         assertTrue(timeouts.size() <= 1);
@@ -579,11 +581,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.CONSUMER_GROUP_HEARTBEAT,
                 ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -609,11 +611,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.SHARE_GROUP_HEARTBEAT,
                 ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -761,11 +763,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.JOIN_GROUP,
                 joinGroupVersion,
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -911,11 +913,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.SYNC_GROUP,
                 ApiKeys.SYNC_GROUP.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -1203,11 +1205,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.HEARTBEAT,
                 ApiKeys.HEARTBEAT.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -1329,11 +1331,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.LEAVE_GROUP,
                 ApiKeys.LEAVE_GROUP.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
