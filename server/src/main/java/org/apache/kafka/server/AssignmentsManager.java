@@ -325,7 +325,7 @@ public final class AssignmentsManager {
     void maybeSendAssignments() {
         int inflightSize = inflight.size();
         if (log.isTraceEnabled()) {
-            log.info("maybeSendAssignments: inflightSize = {}.", inflightSize);
+            log.trace("maybeSendAssignments: inflightSize = {}.", inflightSize);
         }
         if (inflightSize > 0) {
             log.trace("maybeSendAssignments: cannot send new assignments because there are " +
