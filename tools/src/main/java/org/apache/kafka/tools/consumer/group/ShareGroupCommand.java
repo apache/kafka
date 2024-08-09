@@ -89,10 +89,13 @@ public class ShareGroupCommand {
     }
 
     static Set<ShareGroupState> shareGroupStatesFromString(String input) {
-        Set<ShareGroupState> parsedStates = Arrays.stream(input.split(",")).map(s -> ShareGroupState.parse(s.trim())).collect(Collectors.toSet());
+        Set<ShareGroupState> parsedStates =
+            Arrays.stream(input.split(",")).map(s -> ShareGroupState.parse(s.trim())).collect(Collectors.toSet());
         if (parsedStates.contains(ShareGroupState.UNKNOWN)) {
-            Collection<ShareGroupState> validStates = Arrays.stream(ShareGroupState.values()).filter(s -> s != ShareGroupState.UNKNOWN).collect(Collectors.toList());
-            throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " + validStates.stream().map(Object::toString).collect(Collectors.joining(", ")));
+            Collection<ShareGroupState> validStates =
+                Arrays.stream(ShareGroupState.values()).filter(s -> s != ShareGroupState.UNKNOWN).collect(Collectors.toList());
+            throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " +
+                validStates.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
         return parsedStates;
     }
@@ -105,17 +108,20 @@ public class ShareGroupCommand {
     // Visibility for testing
     static class ShareGroupService implements AutoCloseable {
         final ShareGroupCommandOptions opts;
-        final Map<String, String> configOverrides;
         private final Admin adminClient;
 
         public ShareGroupService(ShareGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
-            this.configOverrides = configOverrides;
             try {
                 this.adminClient = createAdminClient(configOverrides);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        public ShareGroupService(ShareGroupCommandOptions opts, Admin adminClient) {
+            this.opts = opts;
+            this.adminClient = adminClient;
         }
 
         public void listGroups() throws ExecutionException, InterruptedException {
@@ -198,6 +204,7 @@ public class ShareGroupCommand {
                 earliest.put(tp, OffsetSpec.earliest());
                 latest.put(tp, OffsetSpec.latest());
             }
+            // This call to obtain the earliest offsets will be replaced once adminClient.listShareGroupOffsets is implemented
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(earliest).all().get();
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(latest).all().get();
 
@@ -221,7 +228,6 @@ public class ShareGroupCommand {
         }
 
         private static String printOffsetFormat(ShareGroupDescription description, Map<TopicPartition, Long> offsets) {
-            // find proper columns width
             int groupLen = Math.max(15, description.groupId().length());
             int maxTopicLen = 15;
             for (TopicPartition topicPartition : offsets.keySet()) {
