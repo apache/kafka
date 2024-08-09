@@ -1648,9 +1648,24 @@ public final class Utils {
      * @param <V> the type of values stored in the map
      */
     public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip) {
+        return entriesWithPrefix(map, prefix, strip, false);
+    }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, optionally removing that prefix
+     * from all resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @param strip whether the keys of the returned map should not include the prefix
+     * @param allowMatchingLength whether to include keys that are exactly the same length as the prefix
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix}; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip, boolean allowMatchingLength) {
         Map<String, V> result = new HashMap<>();
         for (Map.Entry<String, V> entry : map.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+            if (entry.getKey().startsWith(prefix) && (allowMatchingLength || entry.getKey().length() > prefix.length())) {
                 if (strip)
                     result.put(entry.getKey().substring(prefix.length()), entry.getValue());
                 else

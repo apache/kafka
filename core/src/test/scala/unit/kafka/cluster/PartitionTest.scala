@@ -4085,4 +4085,33 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue(res)
     verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Some(topicId), Some(targetDirectory))
   }
+
+  @Test
+  def tryCompleteDelayedRequestsCatchesExceptions(): Unit = {
+    val requestKey = TopicPartitionOperationKey(topicPartition)
+
+    val produce = mock(classOf[DelayedOperationPurgatory[DelayedProduce]])
+    when(produce.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val fetch = mock(classOf[DelayedOperationPurgatory[DelayedFetch]])
+    when(fetch.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val deleteRecords = mock(classOf[DelayedOperationPurgatory[DelayedDeleteRecords]])
+    when(deleteRecords.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val delayedOperations = new DelayedOperations(topicPartition, produce, fetch, deleteRecords)
+    val spyLogManager = spy(logManager)
+    val partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
+      interBrokerProtocolVersion = MetadataVersion.latestTesting,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      spyLogManager,
+      alterPartitionManager)
+    partition.tryCompleteDelayedRequests()
+  }
 }

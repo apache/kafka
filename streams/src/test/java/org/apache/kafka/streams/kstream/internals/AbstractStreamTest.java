@@ -24,7 +24,6 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -52,9 +51,11 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class AbstractStreamTest {
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerSupplier<?, ?> valueTransformerSupplier = mock(ValueTransformerSupplier.class);
+        final org.apache.kafka.streams.kstream.ValueTransformerSupplier<?, ?> valueTransformerSupplier =
+            mock(org.apache.kafka.streams.kstream.ValueTransformerSupplier.class);
         when(valueTransformerSupplier.get())
             .thenReturn(new NoopValueTransformer<>())
             .thenReturn(new NoopValueTransformer<>());

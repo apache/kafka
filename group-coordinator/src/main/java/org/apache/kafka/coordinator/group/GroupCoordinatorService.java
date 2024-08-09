@@ -40,6 +40,7 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
@@ -54,6 +55,7 @@ import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -628,8 +630,47 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public CompletableFuture<List<DescribedGroup>> shareGroupDescribe(
         RequestContext context,
         List<String> groupIds) {
-        // TODO: Implement this method as part of KIP-932.
-        throw new UnsupportedOperationException();
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(ShareGroupDescribeRequest.getErrorDescribedGroupList(
+                groupIds,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
+        }
+
+        final List<CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>>> futures =
+            new ArrayList<>(groupIds.size());
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            if (isGroupIdNotEmpty(groupId)) {
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
+                    .add(groupId);
+            } else {
+                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                    new ShareGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(null)
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                )));
+            }
+        });
+
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> future =
+                runtime.scheduleReadOperation(
+                    "share-group-describe",
+                    topicPartition,
+                    (coordinator, lastCommittedOffset) -> coordinator.shareGroupDescribe(groupIds, lastCommittedOffset)
+                ).exceptionally(exception -> handleOperationException(
+                    "share-group-describe",
+                    groupList,
+                    exception,
+                    (error, __) -> ShareGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
+                ));
+
+            futures.add(future);
+        });
+
+        return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
 
     /**
@@ -784,7 +825,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     Collections.emptyList(),
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
                 )
-            );
+            ).exceptionally(exception -> handleOffsetFetchException(
+                "fetch-offsets",
+                request,
+                exception
+            ));
         } else {
             return runtime.scheduleReadOperation(
                 "fetch-offsets",
@@ -835,7 +880,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     Collections.emptyList(),
                     coordinator.fetchAllOffsets(request, Long.MAX_VALUE)
                 )
-            );
+            ).exceptionally(exception -> handleOffsetFetchException(
+                "fetch-all-offsets",
+                request,
+                exception
+            ));
         } else {
             return runtime.scheduleReadOperation(
                 "fetch-all-offsets",
@@ -1174,6 +1223,51 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             default:
                 return handler.apply(apiError.error(), apiError.message());
+        }
+    }
+
+    /**
+     * This is the handler used by offset fetch operations to convert errors to coordinator errors.
+     * The handler also handles and log unexpected errors.
+     *
+     * @param operationName     The name of the operation.
+     * @param request           The OffsetFetchRequestGroup request.
+     * @param exception         The exception to handle.
+     * @return The OffsetFetchRequestGroup response.
+     */
+    private OffsetFetchResponseData.OffsetFetchResponseGroup handleOffsetFetchException(
+        String operationName,
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
+        Throwable exception
+    ) {
+        ApiError apiError = ApiError.fromThrowable(exception);
+
+        switch (apiError.error()) {
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case NOT_ENOUGH_REPLICAS:
+            case REQUEST_TIMED_OUT:
+                // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
+                // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
+                // additionally triggers coordinator re-lookup, which is necessary if the client is
+                // talking to a zombie coordinator.
+                //
+                // While handleOperationException does remap UNKNOWN_TOPIC_OR_PARTITION,
+                // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
+                // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
+                // 3.9.
+                return new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(request.groupId())
+                    .setErrorCode(Errors.NOT_COORDINATOR.code());
+
+            default:
+                return handleOperationException(
+                    operationName,
+                    request,
+                    exception,
+                    (error, __) -> new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                        .setGroupId(request.groupId())
+                        .setErrorCode(error.code())
+                );
         }
     }
 }

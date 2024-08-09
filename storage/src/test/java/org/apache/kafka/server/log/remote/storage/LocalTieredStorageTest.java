@@ -303,7 +303,7 @@ public final class LocalTieredStorageTest {
 
         final LocalTieredStorageSnapshot snapshot = takeSnapshot(tieredStorage);
 
-        assertEquals(asList(topicPartition), snapshot.getTopicPartitions());
+        assertEquals(Collections.singletonList(topicPartition), snapshot.getTopicPartitions());
         assertEquals(asList(wrap(record1), wrap(record2)), extractRecordsValue(snapshot, id));
     }
 
@@ -330,7 +330,7 @@ public final class LocalTieredStorageTest {
         actual.put(idA, extractRecordsValue(snapshot, idA));
         actual.put(idB, extractRecordsValue(snapshot, idB));
 
-        assertEquals(asList(topicPartition), snapshot.getTopicPartitions());
+        assertEquals(Collections.singletonList(topicPartition), snapshot.getTopicPartitions());
         assertEquals(expected, actual);
     }
 
@@ -358,7 +358,7 @@ public final class LocalTieredStorageTest {
 
     private RemoteLogSegmentMetadata newRemoteLogSegmentMetadata(final RemoteLogSegmentId id) {
         return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, 1000L,
-                1024, Collections.singletonMap(0, 0L), 0);
+                1024, Collections.singletonMap(0, 0L));
     }
 
     private RemoteLogSegmentId newRemoteLogSegmentId() {
@@ -539,7 +539,7 @@ public final class LocalTieredStorageTest {
 
         private RemoteLogSegmentMetadata newMetadata(final RemoteLogSegmentId id) {
             return new RemoteLogSegmentMetadata(id, 0, 0, -1L, -1, 1000,
-                    1024, Collections.singletonMap(0, 0L), 0);
+                    1024, Collections.singletonMap(0, 0L));
         }
 
         private String getStorageRootDirectory() {
