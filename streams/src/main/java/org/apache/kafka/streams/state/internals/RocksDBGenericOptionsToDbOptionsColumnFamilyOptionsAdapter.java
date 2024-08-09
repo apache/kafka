@@ -321,12 +321,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return this;
     }
 
-    @Deprecated
-    @Override
-    public int maxBackgroundCompactions() {
-        return dbOptions.maxBackgroundCompactions();
-    }
-
     @Override
     public Options setStatistics(final Statistics statistics) {
         dbOptions.setStatistics(statistics);
@@ -339,28 +333,11 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Deprecated
-    public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
-        final String message = "This method has been removed from the underlying RocksDB. " +
-                "It was not affecting compaction even in earlier versions. " +
-                "It is currently a no-op method. " +
-                "RocksDB decides the number of background compactions based on the maxBackgroundJobs(...) method";
-        log.warn(message);
-        // no-op
-    }
-
-    @Deprecated
     public int baseBackgroundCompactions() {
         final String message = "This method has been removed from the underlying RocksDB. " +
                 "It is currently a no-op method which returns a default value of -1.";
         log.warn(message);
         return -1;
-    }
-
-    @Deprecated
-    @Override
-    public Options setMaxBackgroundCompactions(final int maxBackgroundCompactions) {
-        dbOptions.setMaxBackgroundCompactions(maxBackgroundCompactions);
-        return this;
     }
 
     @Override
@@ -372,19 +349,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public int maxSubcompactions() {
         return dbOptions.maxSubcompactions();
-    }
-
-    @Deprecated
-    @Override
-    public int maxBackgroundFlushes() {
-        return dbOptions.maxBackgroundFlushes();
-    }
-
-    @Deprecated
-    @Override
-    public Options setMaxBackgroundFlushes(final int maxBackgroundFlushes) {
-        dbOptions.setMaxBackgroundFlushes(maxBackgroundFlushes);
-        return this;
     }
 
     @Override
