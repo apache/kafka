@@ -20,9 +20,9 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
+import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
-import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
@@ -232,7 +232,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             log.warn("Group membership manager not present when processing a subscribe event");
             return;
         }
-        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        ConsumerMembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         membershipManager.onSubscriptionUpdated();
     }
 
@@ -246,7 +246,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      */
     private void process(final UnsubscribeEvent event) {
         if (requestManagers.heartbeatRequestManager.isPresent()) {
-            MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
+            ConsumerMembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
             CompletableFuture<Void> future = membershipManager.leaveGroup();
             future.whenComplete(complete(event.future()));
         } else {
@@ -286,7 +286,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             );
             return;
         }
-        MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        ConsumerMembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
         manager.consumerRebalanceListenerCallbackCompleted(event);
     }
 

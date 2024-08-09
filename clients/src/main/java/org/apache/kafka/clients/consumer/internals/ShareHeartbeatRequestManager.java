@@ -262,7 +262,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
                                                                      final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
-        shareMembershipManager.onHeartbeatRequestSent();
+        shareMembershipManager.onHeartbeatRequestGenerated();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
         heartbeatRequestState.resetTimer();
         return request;
@@ -305,6 +305,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
     private void onFailure(final Throwable exception, final long responseTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
         this.heartbeatState.reset();
+        this.shareMembershipManager.onHeartbeatFailure(exception instanceof RetriableException);
         if (exception instanceof RetriableException) {
             String message = String.format("ShareGroupHeartbeatRequest failed because of retriable exception. " +
                             "Will retry in %s ms: %s",
@@ -333,8 +334,9 @@ public class ShareHeartbeatRequestManager implements RequestManager {
         String errorMessage = response.data().errorMessage();
         String message;
 
-        this.heartbeatState.reset();
-        this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
+        heartbeatState.reset();
+        heartbeatRequestState.onFailedAttempt(currentTimeMs);
+        shareMembershipManager.onHeartbeatFailure(false);
 
         switch (error) {
             case NOT_COORDINATOR:
