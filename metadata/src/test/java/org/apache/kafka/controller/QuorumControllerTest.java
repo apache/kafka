@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
@@ -106,6 +107,7 @@ import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -118,6 +120,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
@@ -685,6 +688,58 @@ public class QuorumControllerTest {
                 maxReplicationDelayMs,
                 "Active controller didn't write NoOpRecord the second time"
             );
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"0, 0", "0, 1", "1, 0", "1, 1"})
+    public void testRegisterBrokerKRaftVersions(short controllerKraftVersion, short brokerKraftVersion) throws Throwable {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+                setLastKRaftVersion(controllerKraftVersion).
+                build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder ->
+                    controllerBuilder.setConfigSchema(SCHEMA)).
+                setBootstrapMetadata(SIMPLE_BOOTSTRAP).
+                build()
+        ) {
+            ListenerCollection listeners = new ListenerCollection();
+            listeners.add(new Listener().setName("PLAINTEXT").
+                setHost("localhost").setPort(9092));
+            QuorumController active = controlEnv.activeController();
+            BrokerRegistrationRequestData.FeatureCollection brokerFeatures = new BrokerRegistrationRequestData.FeatureCollection();
+            brokerFeatures.add(new BrokerRegistrationRequestData.Feature()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
+                .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()));
+            brokerFeatures.add(new BrokerRegistrationRequestData.Feature()
+                .setName(KRaftVersion.FEATURE_NAME)
+                .setMinSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel())
+                .setMaxSupportedVersion(brokerKraftVersion));
+            BrokerRegistrationRequestData request = new BrokerRegistrationRequestData().
+                setBrokerId(0).
+                setClusterId(active.clusterId()).
+                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
+                setFeatures(brokerFeatures).
+                setLogDirs(Collections.singletonList(Uuid.fromString("vBpaRsZVSaGsQT53wtYGtg"))).
+                setListeners(listeners);
+
+            if (brokerKraftVersion < controllerKraftVersion) {
+                Throwable exception = assertThrows(ExecutionException.class, () -> active.registerBroker(
+                    ANONYMOUS_CONTEXT,
+                    request).get());
+                assertEquals(UnsupportedVersionException.class, exception.getCause().getClass());
+                assertEquals("Unable to register because the broker does not support version " +
+                        controllerKraftVersion + " of kraft.version. It wants a version between 0 and " +
+                        brokerKraftVersion + ", inclusive.",
+                    exception.getCause().getMessage());
+            } else {
+                BrokerRegistrationReply reply = active.registerBroker(
+                    ANONYMOUS_CONTEXT,
+                    request).get();
+                assertEquals(5, reply.epoch());
+            }
         }
     }
 

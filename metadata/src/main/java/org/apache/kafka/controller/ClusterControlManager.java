@@ -51,6 +51,7 @@ import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -408,6 +409,15 @@ public class ClusterControlManager {
 
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
+        }
+        if (request.features().find(KRaftVersion.FEATURE_NAME) == null) {
+            // Brokers that don't send a supported kraft.version are assumed to only
+            // support the original kraft.version.
+            record.features().add(processRegistrationFeature(brokerId, finalizedFeatures,
+                    new BrokerRegistrationRequestData.Feature().
+                            setName(KRaftVersion.FEATURE_NAME).
+                            setMinSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel()).
+                            setMaxSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel())));
         }
         if (request.features().find(MetadataVersion.FEATURE_NAME) == null) {
             // Brokers that don't send a supported metadata.version range are assumed to only
