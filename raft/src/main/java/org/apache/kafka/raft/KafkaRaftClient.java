@@ -670,10 +670,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         resetConnections();
     }
 
-    private void transitionToVoted(ReplicaKey candidateKey, int epoch) {
-        quorum.transitionToVoted(epoch, candidateKey);
-        maybeFireLeaderChange();
-        resetConnections();
+    private void transitionToUnattachedVoted(ReplicaKey candidateKey, int epoch) {
+        quorum.transitionToUnattachedVotedState(epoch, candidateKey);
     }
 
     private void onBecomeFollower(long currentTimeMs) {
@@ -816,8 +814,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0
         );
 
-        if (voteGranted && quorum.isUnattached()) {
-            transitionToVoted(candidateKey, candidateEpoch);
+        if (voteGranted && quorum.isUnattachedNotVoted()) {
+            transitionToUnattachedVoted(candidateKey, candidateEpoch);
         }
 
         logger.info("Vote request {} with epoch {} is {}", request, candidateEpoch, voteGranted ? "granted" : "rejected");
@@ -3095,24 +3093,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private long pollVoted(long currentTimeMs) {
-        VotedState state = quorum.votedStateOrThrow();
-        GracefulShutdown shutdown = this.shutdown.get();
-
-        if (shutdown != null) {
-            // If shutting down, then remain in this state until either the
-            // shutdown completes or an epoch bump forces another state transition
-            return shutdown.remainingTimeMs();
-        } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
-            // KAFKA-17067 is going to fix this. VotedState doesn't mean that the replica is a voter
-            // we need to treat VotedState similar to UnattachedState.
-            transitionToCandidate(currentTimeMs);
-            return 0L;
-        } else {
-            return state.remainingElectionTimeMs(currentTimeMs);
-        }
-    }
-
     private long pollUnattached(long currentTimeMs) {
         UnattachedState state = quorum.unattachedStateOrThrow();
         if (quorum.isVoter()) {
@@ -3148,8 +3128,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return pollCandidate(currentTimeMs);
         } else if (quorum.isFollower()) {
             return pollFollower(currentTimeMs);
-        } else if (quorum.isVoted()) {
-            return pollVoted(currentTimeMs);
         } else if (quorum.isUnattached()) {
             return pollUnattached(currentTimeMs);
         } else if (quorum.isResigned()) {
