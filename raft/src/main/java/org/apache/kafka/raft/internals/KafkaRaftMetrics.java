@@ -72,7 +72,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 return "leader";
             } else if (state.isCandidate()) {
                 return "candidate";
-            } else if (state.isVoted()) {
+            } else if (state.isUnattachedAndVoted()) {
                 return "voted";
             } else if (state.isFollower()) {
                 // a broker is special kind of follower, as not being a voter, it's an observer
@@ -95,8 +95,8 @@ public class KafkaRaftMetrics implements AutoCloseable {
             if (state.isLeader() || state.isCandidate()) {
                 return state.localIdOrThrow();
             } else {
-                return (double) state.maybeVotedState()
-                    .map(votedState -> votedState.votedKey().id())
+                return (double) state.maybeUnattachedState()
+                    .flatMap(votedState -> votedState.votedKey().map(ReplicaKey::id))
                     .orElse(-1);
             }
         });
@@ -110,8 +110,8 @@ public class KafkaRaftMetrics implements AutoCloseable {
             if (state.isLeader() || state.isCandidate()) {
                 return state.localDirectoryId().toString();
             } else {
-                return state.maybeVotedState()
-                    .flatMap(votedState -> votedState.votedKey().directoryId())
+                return state.maybeUnattachedState()
+                    .flatMap(votedState -> votedState.votedKey().flatMap(ReplicaKey::directoryId))
                     .orElse(Uuid.ZERO_UUID)
                     .toString();
             }
