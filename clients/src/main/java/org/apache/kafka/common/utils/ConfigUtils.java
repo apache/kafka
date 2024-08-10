@@ -55,7 +55,7 @@ public class ConfigUtils {
      */
     public static <T> Map<String, T> translateDeprecatedConfigs(Map<String, T> configs, String[][] aliasGroups) {
         return translateDeprecatedConfigs(configs, Stream.of(aliasGroups)
-            .collect(Collectors.toMap(x -> x[0], x -> Stream.of(x).skip(1).collect(Collectors.toList()))));
+            .collect(Collectors.toMap(x -> x[0], x -> (List<String>)Stream.of(x).skip(1).collect(Collectors.toList()))));
     }
 
     /**
