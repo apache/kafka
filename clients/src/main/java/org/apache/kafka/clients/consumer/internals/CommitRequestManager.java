@@ -24,6 +24,8 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -981,24 +983,25 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                final Errors responseError) {
             log.debug("Offset fetch failed: {}", responseError.message());
             onFailedAttempt(currentTimeMs);
+            ApiException exception = responseError.exception();
             if (responseError == COORDINATOR_LOAD_IN_PROGRESS) {
-                future.completeExceptionally(responseError.exception());
+                future.completeExceptionally(exception);
             } else if (responseError == Errors.UNKNOWN_MEMBER_ID) {
                 log.error("OffsetFetch failed with {} because the member is not part of the group" +
                     " anymore.", responseError);
-                future.completeExceptionally(responseError.exception());
+                future.completeExceptionally(exception);
             } else if (responseError == Errors.STALE_MEMBER_EPOCH) {
                 log.error("OffsetFetch failed with {} and the consumer is not part " +
                     "of the group anymore (it probably left the group, got fenced" +
                     " or failed). The request cannot be retried and will fail.", responseError);
-                future.completeExceptionally(responseError.exception());
+                future.completeExceptionally(exception);
             } else if (responseError == Errors.NOT_COORDINATOR || responseError == Errors.COORDINATOR_NOT_AVAILABLE) {
                 // Re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
-                future.completeExceptionally(responseError.exception());
-            } else if (responseError.exception() instanceof RetriableException) {
+                future.completeExceptionally(exception);
+            } else if (exception instanceof RetriableException && !(exception instanceof TimeoutException)) {
                 // If fail with a retriable KafkaException, then retry
-                future.completeExceptionally(responseError.exception());
+                future.completeExceptionally(exception);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
             } else {

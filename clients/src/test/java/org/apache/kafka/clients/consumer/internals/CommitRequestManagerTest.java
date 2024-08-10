@@ -649,7 +649,7 @@ public class CommitRequestManagerTest {
             1,
             error);
         // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
-        if (isRetriableOnOffsetFetch(error))
+        if (error.exception() instanceof RetriableException && !(error.exception() instanceof TimeoutException))
             testRetriable(commitRequestManager, futures);
         else {
             testNonRetriable(futures);
@@ -671,7 +671,7 @@ public class CommitRequestManagerTest {
                 1,
                 error);
 
-        if (isRetriableOnOffsetFetch(error)) {
+        if (error.exception() instanceof  RetriableException) {
             futures.forEach(f -> assertFalse(f.isDone()));
 
             // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
@@ -685,11 +685,6 @@ public class CommitRequestManagerTest {
             futures.forEach(f -> assertFutureThrows(f, KafkaException.class));
             assertEmptyPendingRequests(commitRequestManager);
         }
-    }
-
-    private boolean isRetriableOnOffsetFetch(Errors error) {
-        return error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE
-                || error == Errors.UNKNOWN_TOPIC_OR_PARTITION || error == Errors.REQUEST_TIMED_OUT || error == Errors.UNSTABLE_OFFSET_COMMIT;
     }
 
     @Test
@@ -1208,10 +1203,18 @@ public class CommitRequestManagerTest {
                                final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
         futures.forEach(f -> assertFalse(f.isDone()));
 
-        // The manager should backoff for 100ms
-        time.sleep(100);
-        commitRequestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
+        assertEquals(0, poll.unsentRequests.size());
+        // The manager should backoff before retry
+        time.sleep(retryBackoffMs);
+        poll = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, poll.unsentRequests.size());
         futures.forEach(f -> assertFalse(f.isDone()));
+        // Sleep util timeout
+        time.sleep(defaultApiTimeoutMs);
+        poll = commitRequestManager.poll(time.milliseconds());
+        assertEquals(0, poll.unsentRequests.size());
+        futures.forEach(f -> assertTrue(f.isCompletedExceptionally()));
     }
 
     private void testNonRetriable(final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
