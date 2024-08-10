@@ -1579,7 +1579,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val startMs = time.milliseconds
 
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      startMs - segment.largestTimestamp > retentionMs
+      val shouldDelete = startMs - segment.largestTimestamp > retentionMs
+      debug(s"$segment retentionMs breached: $shouldDelete, startMs=$startMs, retentionMs=$retentionMs")
+      shouldDelete
     }
 
     deleteOldSegments(shouldDelete, RetentionMsBreach(this, remoteLogEnabled()))
@@ -1590,12 +1592,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     if (retentionSize < 0 || size < retentionSize) return 0
     var diff = size - retentionSize
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      if (diff - segment.size >= 0) {
-        diff -= segment.size
-        true
-      } else {
-        false
+      val segmentSize = segment.size
+      val shouldDelete = diff - segmentSize >= 0
+      debug(s"$segment retentionSize breached: $shouldDelete, log size before delete segment=$diff, after delete segment=${diff - segmentSize}")
+      if (shouldDelete) {
+        diff -= segmentSize
       }
+      shouldDelete
     }
 
     deleteOldSegments(shouldDelete, RetentionSizeBreach(this, remoteLogEnabled()))
@@ -1603,7 +1606,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
-      nextSegmentOpt.exists(_.baseOffset <= (if (remoteLogEnabled()) localLogStartOffset() else logStartOffset))
+      val isRemoteLogEnabled = remoteLogEnabled()
+      val localLSO = localLogStartOffset()
+      val shouldDelete = nextSegmentOpt.exists(_.baseOffset <= (if (isRemoteLogEnabled) localLSO else logStartOffset))
+      debug(s"$segment logStartOffset breached: $shouldDelete, nextSegmentOpt=$nextSegmentOpt, " +
+        s"${if (isRemoteLogEnabled) s"localLogStartOffset=$localLSO" else s"logStartOffset=$logStartOffset"}")
+      shouldDelete
     }
 
     deleteOldSegments(shouldDelete, StartOffsetBreach(this, remoteLogEnabled()))
