@@ -111,15 +111,12 @@ public class JaasModule {
 
     private final boolean debug;
 
-    private final String toString;
+    private final Map<String, String> entries;
 
     private JaasModule(String name, boolean debug, Map<String, String> entries) {
         this.name = name;
         this.debug = debug;
-        this.toString = String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
-                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                .reduce((e1, e2) -> e1 + "\n  " + e2)
-                .orElse(""));
+        this.entries = entries;
     }
 
     public String name() {
@@ -132,6 +129,9 @@ public class JaasModule {
 
     @Override
     public String toString() {
-        return toString;
+        return String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
+                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
+                .reduce((e1, e2) -> e1 + "\n  " + e2)
+                .orElse(""));
     }
 }
