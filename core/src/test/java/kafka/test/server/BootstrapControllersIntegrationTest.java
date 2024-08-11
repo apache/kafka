@@ -17,9 +17,11 @@
 
 package kafka.test.server;
 
-import kafka.server.ControllerServer;
-import kafka.testkit.KafkaClusterTestKit;
-import kafka.testkit.TestKitNodes;
+import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTestDefaults;
+import kafka.test.annotation.Type;
+import kafka.test.junit.ClusterTestExtensions;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -39,25 +41,17 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
-import org.apache.kafka.controller.QuorumController;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -71,53 +65,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(120)
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@ExtendWith(ClusterTestExtensions.class)
+@ClusterTestDefaults(types = {Type.KRAFT})
 public class BootstrapControllersIntegrationTest {
-    private KafkaClusterTestKit cluster;
-
-    private String bootstrapControllerString;
-
-    @BeforeAll
-    public void createCluster() throws Exception {
-        this.cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder().
-                setNumBrokerNodes(3).
-                setNumControllerNodes(3).build()).build();
-        this.cluster.format();
-        this.cluster.startup();
-        this.cluster.waitForActiveController();
-        this.cluster.waitForReadyBrokers();
-        StringBuilder bootstrapControllerStringBuilder = new StringBuilder();
-        String prefix = "";
-        for (ControllerServer controller : cluster.controllers().values()) {
-            bootstrapControllerStringBuilder.append(prefix);
-            prefix = ",";
-            int port = controller.socketServerFirstBoundPortFuture().get(1, TimeUnit.MINUTES);
-            bootstrapControllerStringBuilder.append("localhost:").append(port);
-        }
-        bootstrapControllerString = bootstrapControllerStringBuilder.toString();
+    private Map<String, Object> adminConfig(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
+        return usingBootstrapControllers ?
+                Collections.singletonMap(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()) :
+                Collections.singletonMap(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
     }
 
-    @AfterAll
-    public void destroyCluster() throws Exception {
-        cluster.close();
-    }
-
-    private Properties adminProperties(boolean usingBootstrapControllers) {
-        Properties properties = cluster.clientProperties();
-        if (usingBootstrapControllers) {
-            properties.remove(BOOTSTRAP_SERVERS_CONFIG);
-            properties.setProperty(BOOTSTRAP_CONTROLLERS_CONFIG, bootstrapControllerString);
-        }
-        return properties;
-    }
-
-    @Test
-    public void testPutBrokersInBootstrapControllersConfig() {
-        Properties properties = cluster.clientProperties();
-        properties.put(BOOTSTRAP_CONTROLLERS_CONFIG, properties.getProperty(BOOTSTRAP_SERVERS_CONFIG));
-        properties.remove(BOOTSTRAP_SERVERS_CONFIG);
-        try (Admin admin = Admin.create(properties)) {
+    @ClusterTest
+    public void testPutBrokersInBootstrapControllersConfig(ClusterInstance clusterInstance) {
+        Map<String, Object> config = Collections.singletonMap(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapServers());
+        try (Admin admin = Admin.create(config)) {
             ExecutionException exception = assertThrows(ExecutionException.class,
                 () -> admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES));
             assertNotNull(exception.getCause());
@@ -128,11 +88,10 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @Disabled
-    @Test
-    public void testPutControllersInBootstrapBrokersConfig() {
-        Properties properties = cluster.clientProperties();
-        properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapControllerString);
-        try (Admin admin = Admin.create(properties)) {
+    @ClusterTest
+    public void testPutControllersInBootstrapBrokersConfig(ClusterInstance clusterInstance) {
+        Map<String, Object> config = Collections.singletonMap(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapControllers());
+        try (Admin admin = Admin.create(config)) {
             ExecutionException exception = assertThrows(ExecutionException.class,
                     () -> admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES));
             assertNotNull(exception.getCause());
@@ -142,64 +101,93 @@ public class BootstrapControllersIntegrationTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testDescribeCluster(boolean usingBootstrapControllers) throws Exception {
-        try (Admin admin = Admin.create(adminProperties(usingBootstrapControllers))) {
+    @ClusterTest
+    public void testDescribeClusterByControllers(ClusterInstance clusterInstance) throws Exception {
+        testDescribeCluster(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testDescribeCluster(ClusterInstance clusterInstance) throws Exception {
+        testDescribeCluster(clusterInstance, false);
+    }
+
+    private void testDescribeCluster(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeClusterResult result = admin.describeCluster();
-            assertEquals(cluster.controllers().values().iterator().next().clusterId(),
-                    result.clusterId().get(1, TimeUnit.MINUTES));
+            assertEquals(clusterInstance.clusterId(), result.clusterId().get(1, TimeUnit.MINUTES));
             if (usingBootstrapControllers) {
-                assertEquals(((QuorumController) cluster.waitForActiveController()).nodeId(),
-                    result.controller().get().id());
+                assertTrue(clusterInstance.controllerIds().contains(result.controller().get().id()));
             }
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testDescribeFeatures(boolean usingBootstrapControllers) throws Exception {
-        try (Admin admin = Admin.create(adminProperties(usingBootstrapControllers))) {
+    @ClusterTest
+    public void testDescribeFeaturesByControllers(ClusterInstance clusterInstance) throws Exception {
+        testDescribeFeatures(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testDescribeFeatures(ClusterInstance clusterInstance) throws Exception {
+        testDescribeFeatures(clusterInstance, false);
+    }
+
+    private void testDescribeFeatures(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeFeaturesResult result = admin.describeFeatures();
-            short metadataVersion = cluster.controllers().values().iterator().next().
-                featuresPublisher().features().metadataVersion().featureLevel();
+            short metadataVersion = clusterInstance.config().metadataVersion().featureLevel();
             assertEquals(new FinalizedVersionRange(metadataVersion, metadataVersion),
-                result.featureMetadata().get(1, TimeUnit.MINUTES).finalizedFeatures().
-                    get(MetadataVersion.FEATURE_NAME));
+                    result.featureMetadata().get(1, TimeUnit.MINUTES).finalizedFeatures().
+                            get(MetadataVersion.FEATURE_NAME));
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testUpdateFeatures(boolean usingBootstrapControllers) {
-        try (Admin admin = Admin.create(adminProperties(usingBootstrapControllers))) {
+    @ClusterTest
+    public void testUpdateFeaturesByControllers(ClusterInstance clusterInstance) {
+        testUpdateFeatures(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testUpdateFeatures(ClusterInstance clusterInstance) {
+        testUpdateFeatures(clusterInstance, false);
+    }
+
+    private void testUpdateFeatures(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             UpdateFeaturesResult result = admin.updateFeatures(Collections.singletonMap("foo.bar.feature",
-                new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)),
+                            new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)),
                     new UpdateFeaturesOptions());
             ExecutionException exception =
-                assertThrows(ExecutionException.class,
-                    () -> result.all().get(1, TimeUnit.MINUTES));
+                    assertThrows(ExecutionException.class,
+                            () -> result.all().get(1, TimeUnit.MINUTES));
             assertNotNull(exception.getCause());
             assertEquals(InvalidUpdateVersionException.class, exception.getCause().getClass());
             assertTrue(exception.getCause().getMessage().endsWith("does not support this feature."),
-                "expected message to end with 'does not support this feature', but it was: " +
-                    exception.getCause().getMessage());
+                    "expected message to end with 'does not support this feature', but it was: " +
+                            exception.getCause().getMessage());
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testDescribeMetadataQuorum(boolean usingBootstrapControllers) throws Exception {
-        try (Admin admin = Admin.create(adminProperties(usingBootstrapControllers))) {
+    @ClusterTest
+    public void testDescribeMetadataQuorumByControllers(ClusterInstance clusterInstance) throws Exception {
+        testDescribeMetadataQuorum(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testDescribeMetadataQuorum(ClusterInstance clusterInstance) throws Exception {
+        testDescribeMetadataQuorum(clusterInstance, false);
+    }
+
+    private void testDescribeMetadataQuorum(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeMetadataQuorumResult result = admin.describeMetadataQuorum();
-            assertEquals(((QuorumController) cluster.waitForActiveController()).nodeId(),
-                result.quorumInfo().get(1, TimeUnit.MINUTES).leaderId());
+            assertTrue(clusterInstance.controllerIds().contains(
+                    result.quorumInfo().get(1, TimeUnit.MINUTES).leaderId()));
         }
     }
 
-    @Test
-    public void testUsingBootstrapControllersOnUnsupportedAdminApi() {
-        try (Admin admin = Admin.create(adminProperties(true))) {
+    @ClusterTest
+    public void testUsingBootstrapControllersOnUnsupportedAdminApi(ClusterInstance clusterInstance) {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
             ListOffsetsResult result = admin.listOffsets(Collections.singletonMap(
                     new TopicPartition("foo", 0), OffsetSpec.earliest()));
             ExecutionException exception =
@@ -212,32 +200,40 @@ public class BootstrapControllersIntegrationTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testIncrementalAlterConfigs(boolean usingBootstrapControllers) throws Exception {
-        try (Admin admin = Admin.create(adminProperties(usingBootstrapControllers))) {
+    @ClusterTest
+    public void testIncrementalAlterConfigsByControllers(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterConfigs(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testIncrementalAlterConfigs(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterConfigs(clusterInstance, false);
+    }
+
+    private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             int nodeId = usingBootstrapControllers ?
-                cluster.controllers().values().iterator().next().config().nodeId() :
-                cluster.brokers().values().iterator().next().config().nodeId();
+                    clusterInstance.controllers().values().iterator().next().config().nodeId() :
+                    clusterInstance.brokers().values().iterator().next().config().nodeId();
             ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
             ConfigResource defaultResource = new ConfigResource(BROKER, "");
             Map<ConfigResource, Collection<AlterConfigOp>> alterations = new HashMap<>();
-            alterations.put(nodeResource, Arrays.asList(
-                new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"),
-                    AlterConfigOp.OpType.SET)));
-            alterations.put(defaultResource, Arrays.asList(
-                new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"),
-                    AlterConfigOp.OpType.SET)));
+            alterations.put(nodeResource, Collections.singletonList(
+                    new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"),
+                            AlterConfigOp.OpType.SET)));
+            alterations.put(defaultResource, Collections.singletonList(
+                    new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"),
+                            AlterConfigOp.OpType.SET)));
             admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
             TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                Config config = admin.describeConfigs(Arrays.asList(nodeResource)).
-                    all().get(1, TimeUnit.MINUTES).get(nodeResource);
+                Config config = admin.describeConfigs(Collections.singletonList(nodeResource)).
+                        all().get(1, TimeUnit.MINUTES).get(nodeResource);
                 ConfigEntry entry = config.entries().stream().
-                    filter(e -> e.name().equals("my.custom.config")).
-                    findFirst().get();
+                        filter(e -> e.name().equals("my.custom.config")).
+                        findFirst().get();
                 assertEquals(DYNAMIC_BROKER_CONFIG, entry.source(),
-                    "Expected entry for my.custom.config to come from DYNAMIC_BROKER_CONFIG. " +
-                    "Instead, the entry was: " + entry);
+                        "Expected entry for my.custom.config to come from DYNAMIC_BROKER_CONFIG. " +
+                                "Instead, the entry was: " + entry);
             });
         }
     }
