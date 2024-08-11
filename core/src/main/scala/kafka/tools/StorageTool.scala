@@ -21,13 +21,13 @@ import kafka.server.KafkaConfig
 
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
-import kafka.utils.{Exit, Logging}
+import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace}
 import net.sourceforge.argparse4j.internal.HelpScreenException
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
@@ -54,7 +54,7 @@ object StorageTool extends Logging {
         message = Some(e.getMessage)
     }
     message.foreach(System.err.println)
-    Exit.exit(exitCode, message)
+    Exit.exit(exitCode, message.orNull)
   }
 
   /**

@@ -22,7 +22,6 @@ import kafka.server.KafkaServer;
 import kafka.server.QuorumTestHarness;
 import kafka.server.QuotaType;
 import kafka.utils.EmptyTestInfo;
-import kafka.utils.Exit;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -35,6 +34,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
@@ -123,7 +123,7 @@ public class ReplicationQuotasTestRig {
         experiments.forEach(def -> run(def, journal, displayChartsOnScreen));
 
         if (!displayChartsOnScreen)
-            Exit.exit(0, Option.empty());
+            Exit.exit(0);
     }
 
     static void run(ExperimentDef config, Journal journal, boolean displayChartsOnScreen) {
