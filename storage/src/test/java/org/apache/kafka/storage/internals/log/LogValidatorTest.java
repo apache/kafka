@@ -21,7 +21,6 @@ import kafka.server.RequestLocal;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
@@ -1747,11 +1746,11 @@ public class LogValidatorTest {
         );
 
         // Records from the producer were created with gzip max level
-        Compression gzipMax = Compression.gzip().level(GzipCompression.MAX_LEVEL).build();
+        Compression gzipMax = Compression.gzip().level(CompressionType.GZIP.maxLevel()).build();
         MemoryRecords recordsGzipMax = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMax);
 
         // The topic is configured with gzip min level
-        Compression gzipMin = Compression.gzip().level(GzipCompression.MIN_LEVEL).build();
+        Compression gzipMin = Compression.gzip().level(CompressionType.GZIP.minLevel()).build();
         MemoryRecords recordsGzipMin = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMin);
 
         // Ensure data compressed with gzip max and min is different
@@ -1789,11 +1788,11 @@ public class LogValidatorTest {
         );
 
         // Records from the producer were created with gzip max level
-        Compression gzipMax = Compression.gzip().level(GzipCompression.MAX_LEVEL).build();
+        Compression gzipMax = Compression.gzip().level(CompressionType.GZIP.maxLevel()).build();
         MemoryRecords recordsGzipMax = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMax);
 
         // The topic is configured with lz4 min level
-        Compression lz4Min = Compression.lz4().level(GzipCompression.MIN_LEVEL).build();
+        Compression lz4Min = Compression.lz4().level(CompressionType.GZIP.minLevel()).build();
         MemoryRecords recordsLz4Min = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, lz4Min);
 
         LogValidator validator = new LogValidator(recordsGzipMax,
