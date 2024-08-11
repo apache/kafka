@@ -3282,9 +3282,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testClientInstanceId() {
+    public void testClientInstanceId(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
 
         ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
         clientTelemetryReporter.configure(any());
@@ -3305,9 +3306,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testClientInstanceIdInvalidTimeout() {
+    public void testClientInstanceIdInvalidTimeout(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
 
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         Exception exception = assertThrows(IllegalArgumentException.class, () -> consumer.clientInstanceId(Duration.ofMillis(-1)));
@@ -3316,10 +3318,11 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testClientInstanceIdNoTelemetryReporterRegistered() {
+    public void testClientInstanceIdNoTelemetryReporterRegistered(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
 
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         Exception exception = assertThrows(IllegalStateException.class, () -> consumer.clientInstanceId(Duration.ofMillis(0)));
