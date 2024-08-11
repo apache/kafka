@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, Exit, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
@@ -36,7 +36,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs, ZkConfigs}
 import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}

@@ -24,12 +24,12 @@ import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet, OptionSpec}
 import kafka.common.MessageReader
 import kafka.utils.Implicits._
-import kafka.utils.{Exit, Logging, ToolsUtils}
+import kafka.utils.{Logging, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, Producer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.tools.api.RecordReader
 

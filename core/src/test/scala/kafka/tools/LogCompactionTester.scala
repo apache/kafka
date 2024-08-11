@@ -32,7 +32,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsume
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
-import org.apache.kafka.common.utils.{AbstractIterator, Utils}
+import org.apache.kafka.common.utils.{Exit, AbstractIterator, Utils}
 import org.apache.kafka.server.util.CommandLineUtils
 
 import scala.jdk.CollectionConverters._

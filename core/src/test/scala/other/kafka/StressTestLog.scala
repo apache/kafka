@@ -25,7 +25,7 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.FileRecords
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -63,7 +63,7 @@ object StressTestLog {
     val reader = new ReaderThread(log)
     reader.start()
 
-    Exit.addShutdownHook("stress-test-shutdown-hook", {
+    Exit.addShutdownHook("stress-test-shutdown-hook", () => {
         running.set(false)
         writer.join()
         reader.join()

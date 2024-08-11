@@ -25,7 +25,7 @@ import java.nio.file.Files
 import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 
-import kafka.utils.{CoreUtils, Exit, Logging}
+import kafka.utils.{CoreUtils, Logging}
 
 import scala.jdk.CollectionConverters._
 import org.apache.commons.lang.text.StrSubstitutor
@@ -49,7 +49,7 @@ import org.apache.directory.server.kerberos.shared.keytab.{Keytab, KeytabEntry}
 import org.apache.directory.server.protocol.shared.transport.{TcpTransport, UdpTransport}
 import org.apache.directory.server.xdbm.Index
 import org.apache.directory.shared.kerberos.KerberosTime
-import org.apache.kafka.common.utils.{Java, Utils}
+import org.apache.kafka.common.utils.{Exit, Java, Utils}
 
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -397,7 +397,7 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc.stop())
+    Exit.addShutdownHook("minikdc-shutdown-hook", () => miniKdc.stop())
     miniKdc
   }
 

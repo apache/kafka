@@ -23,11 +23,12 @@ import scala.util.matching.Regex
 import collection.mutable
 import java.util.Date
 import java.text.SimpleDateFormat
-import kafka.utils.{CoreUtils, Exit, Logging}
+import kafka.utils.{CoreUtils, Logging}
 
 import java.io.{BufferedOutputStream, OutputStream}
 import java.nio.charset.StandardCharsets
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.server.util.CommandLineUtils
 
 /**

@@ -18,10 +18,11 @@ package kafka.docker
 
 import kafka.Kafka
 import kafka.tools.StorageTool
-import kafka.utils.{Exit, Logging}
+import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import net.sourceforge.argparse4j.inf.Namespace
+import org.apache.kafka.common.utils.Exit
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
@@ -41,7 +42,7 @@ object KafkaDockerWrapper extends Logging {
           case e: Throwable =>
             val errMsg = s"error while preparing configs: ${e.getMessage}"
             System.err.println(errMsg)
-            Exit.exit(1, Some(errMsg))
+            Exit.exit(1, errMsg)
         }
 
         val formatCmd = formatStorageCmd(finalConfigsPath, envVars)
