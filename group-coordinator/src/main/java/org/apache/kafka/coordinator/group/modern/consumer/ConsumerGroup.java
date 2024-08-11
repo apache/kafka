@@ -123,6 +123,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     private final TimelineHashMap<String, Integer> classicProtocolMembersSupportedProtocols;
 
+    /**
+     * The current partition epoch maps each topic-partitions to their current epoch where
+     * the epoch is the epoch of their owners. When a member revokes a partition, it removes
+     * its epochs from this map. When a member gets a partition, it adds its epochs to this map.
+     */
+    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
+
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId,
@@ -135,6 +142,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.metrics = Objects.requireNonNull(metrics);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
         this.classicProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -344,6 +352,26 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     public Map<String, String> staticMembers() {
         return Collections.unmodifiableMap(staticMembers);
+    }
+
+    /**
+     * Returns the current epoch of a partition or -1 if the partition
+     * does not have one.
+     *
+     * @param topicId       The topic id.
+     * @param partitionId   The partition id.
+     *
+     * @return The epoch or -1.
+     */
+    public int currentPartitionEpoch(
+        Uuid topicId, int partitionId
+    ) {
+        Map<Integer, Integer> partitions = currentPartitionEpoch.get(topicId);
+        if (partitions == null) {
+            return -1;
+        } else {
+            return partitions.getOrDefault(partitionId, -1);
+        }
     }
 
     /**
@@ -675,6 +703,73 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
             removePartitionEpochs(oldMember.partitionsPendingRevocation(), oldMember.memberEpoch());
         }
+    }
+
+    /**
+     * Removes the partition epochs based on the provided assignment.
+     *
+     * @param assignment    The assignment.
+     * @param expectedEpoch The expected epoch.
+     * @throws IllegalStateException if the epoch does not match the expected one.
+     * package-private for testing.
+     */
+    void removePartitionEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int expectedEpoch
+    ) {
+        assignment.forEach((topicId, assignedPartitions) -> {
+            currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
+                if (partitionsOrNull != null) {
+                    assignedPartitions.forEach(partitionId -> {
+                        Integer prevValue = partitionsOrNull.remove(partitionId);
+                        if (prevValue != expectedEpoch) {
+                            throw new IllegalStateException(
+                                String.format("Cannot remove the epoch %d from %s-%s because the partition is " +
+                                    "still owned at a different epoch %d", expectedEpoch, topicId, partitionId, prevValue));
+                        }
+                    });
+                    if (partitionsOrNull.isEmpty()) {
+                        return null;
+                    } else {
+                        return partitionsOrNull;
+                    }
+                } else {
+                    throw new IllegalStateException(
+                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
+                            expectedEpoch, topicId));
+                }
+            });
+        });
+    }
+
+    /**
+     * Adds the partitions epoch based on the provided assignment.
+     *
+     * @param assignment    The assignment.
+     * @param epoch         The new epoch.
+     * @throws IllegalStateException if the partition already has an epoch assigned.
+     * package-private for testing.
+     */
+    void addPartitionEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int epoch
+    ) {
+        assignment.forEach((topicId, assignedPartitions) -> {
+            currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
+                if (partitionsOrNull == null) {
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
+                }
+                for (Integer partitionId : assignedPartitions) {
+                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
+                    if (prevValue != null) {
+                        throw new IllegalStateException(
+                            String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
+                                "still owned at epoch %d", topicId, partitionId, epoch, prevValue));
+                    }
+                }
+                return partitionsOrNull;
+            });
+        });
     }
 
     public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
