@@ -162,7 +162,6 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
 
         ShareGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
-        maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateGroupState();
     }
 
@@ -174,7 +173,6 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     public void removeMember(String memberId) {
         ShareGroupMember oldMember = members.remove(memberId);
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, null);
-        maybeRemovePartitionEpoch(oldMember);
         maybeUpdateGroupState();
     }
 
@@ -249,33 +247,6 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         }
 
         state.set(newState);
-    }
-
-    /**
-     * Updates the partition epochs based on the old and the new member.
-     *
-     * @param oldMember The old member.
-     * @param newMember The new member.
-     */
-    private void maybeUpdatePartitionEpoch(
-        ShareGroupMember oldMember,
-        ShareGroupMember newMember
-    ) {
-        maybeRemovePartitionEpoch(oldMember);
-        addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-    }
-
-    /**
-     * Removes the partition epochs for the provided member.
-     *
-     * @param oldMember The old member.
-     */
-    private void maybeRemovePartitionEpoch(
-        ShareGroupMember oldMember
-    ) {
-        if (oldMember != null) {
-            removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
-        }
     }
 
     public ShareGroupDescribeResponseData.DescribedGroup asDescribedGroup(
