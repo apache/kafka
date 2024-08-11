@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -54,13 +53,9 @@ public class ConfigUtils {
      *                    (e.g. the first synonym takes precedence over the second one)
      * @return a new configuration map with deprecated  keys translated to their non-deprecated equivalents
      */
-    
     public static <T> Map<String, T> translateDeprecatedConfigs(Map<String, T> configs, String[][] aliasGroups) {
-    	Function<String[], String> getConfig = array -> array[0];
-        Function<String[], List<String>> getSynonyms = array -> Stream.of(array).skip(1).collect(Collectors.toList());
-        
         return translateDeprecatedConfigs(configs, Stream.of(aliasGroups)
-                                                          .collect(Collectors.toMap(getConfig, getSynonyms)));
+            .collect(Collectors.toMap(x -> x[0], x -> Stream.of(x).skip(1).collect(Collectors.toList()))));
     }
 
     /**
