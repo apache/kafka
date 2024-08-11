@@ -119,6 +119,9 @@
       <allow pkg="org.apache.kafka.clients"/>
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
+    <subpackage name="server">
+      <allow pkg="kafka.test" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="admin">
