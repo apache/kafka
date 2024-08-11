@@ -121,7 +121,7 @@ abstract class EmbeddedConnect {
     };
 
     /**
-     * Start the Connect cluster and the embedded Kafka and Zookeeper cluster,
+     * Start the Connect cluster and the embedded Kafka KRaft cluster,
      * and wait for the Kafka and Connect clusters to become healthy.
      */
     public void start() {
@@ -163,7 +163,7 @@ abstract class EmbeddedConnect {
     }
 
     /**
-     * Stop the connect cluster and the embedded Kafka and Zookeeper cluster.
+     * Stop the Connect cluster and the embedded Kafka KRaft cluster.
      * Clean up any temp directories created locally.
      *
      * @throws RuntimeException if Kafka brokers fail to stop

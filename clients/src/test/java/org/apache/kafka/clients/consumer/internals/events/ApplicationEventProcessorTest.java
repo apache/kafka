@@ -17,11 +17,11 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
+import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
-import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
 public class ApplicationEventProcessorTest {
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
     private final HeartbeatRequestManager heartbeatRequestManager = mock(HeartbeatRequestManager.class);
-    private final MembershipManager membershipManager = mock(MembershipManager.class);
+    private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
     private final SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private ApplicationEventProcessor processor;
 

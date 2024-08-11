@@ -29,11 +29,6 @@ public class WindowedSerdes {
             super(new TimeWindowedSerializer<>(), new TimeWindowedDeserializer<>());
         }
 
-        @Deprecated
-        public TimeWindowedSerde(final Serde<T> inner) {
-            super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer()));
-        }
-
         // This constructor can be used for serialize/deserialize a windowed topic
         public TimeWindowedSerde(final Serde<T> inner, final long windowSize) {
             super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer(), windowSize));
@@ -56,14 +51,6 @@ public class WindowedSerdes {
         public SessionWindowedSerde(final Serde<T> inner) {
             super(new SessionWindowedSerializer<>(inner.serializer()), new SessionWindowedDeserializer<>(inner.deserializer()));
         }
-    }
-
-    /**
-     * Construct a {@code TimeWindowedSerde} object for the specified inner class type.
-     */
-    @Deprecated
-    public static <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type) {
-        return new TimeWindowedSerde<>(Serdes.serdeFrom(type));
     }
 
     /**
