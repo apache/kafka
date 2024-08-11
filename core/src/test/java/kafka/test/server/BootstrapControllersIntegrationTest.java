@@ -38,6 +38,7 @@ import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
@@ -208,6 +209,16 @@ public class BootstrapControllersIntegrationTest {
     @ClusterTest
     public void testIncrementalAlterConfigs(ClusterInstance clusterInstance) throws Exception {
         testIncrementalAlterConfigs(clusterInstance, false);
+    }
+
+    @ClusterTest(brokers = 2)
+    public void testUnregisterBroker(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
+            int brokerToBeUnregistered = 1;
+            clusterInstance.shutdownBroker(brokerToBeUnregistered);
+            admin.unregisterBroker(brokerToBeUnregistered).all().get(10, TimeUnit.SECONDS);
+            TestUtils.assertFutureThrows(admin.unregisterBroker(brokerToBeUnregistered).all(), BrokerIdNotRegisteredException.class);
+        }
     }
 
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
