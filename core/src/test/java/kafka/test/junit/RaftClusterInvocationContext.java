@@ -27,6 +27,7 @@ import kafka.test.annotation.Type;
 import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
 import kafka.zk.EmbeddedZookeeper;
+import org.apache.kafka.test.TestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -237,6 +238,17 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             return clusterTestKit.brokers().entrySet()
                     .stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        }
+
+        @Override
+        public void consistentMetadata() throws InterruptedException {
+            long controllerOffset = controllers().values().stream().findAny().get()
+                    .raftManager().replicatedLog().endOffset().offset();
+
+            TestUtils.waitForCondition(() ->
+                    brokers().values().stream().allMatch(broker ->
+                            ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset
+                    ), "Timeout waiting for controller metadata propagating to brokers");
         }
 
         @Override

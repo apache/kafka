@@ -187,7 +187,9 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }
-    
+
+    default void consistentMetadata() throws InterruptedException {}
+
     default void createTopic(String topicName, int partitions, short replicas) {
         try (Admin admin = createAdminClient()) {
             admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
