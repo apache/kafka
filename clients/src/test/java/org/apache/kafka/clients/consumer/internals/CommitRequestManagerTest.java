@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -650,7 +651,7 @@ public class CommitRequestManagerTest {
             error);
         // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
         if (error.exception() instanceof RetriableException && !(error.exception() instanceof TimeoutException))
-            testRetriable(commitRequestManager, futures);
+            testRetriable(commitRequestManager, futures, error);
         else {
             testNonRetriable(futures);
             assertEmptyPendingRequests(commitRequestManager);
@@ -671,7 +672,8 @@ public class CommitRequestManagerTest {
                 1,
                 error);
 
-        if (error.exception() instanceof  RetriableException) {
+        ApiException exception = error.exception();
+        if (exception instanceof RetriableException && !(exception instanceof TimeoutException)) {
             futures.forEach(f -> assertFalse(f.isDone()));
 
             // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
@@ -1200,20 +1202,22 @@ public class CommitRequestManagerTest {
     }
 
     private void testRetriable(final CommitRequestManager commitRequestManager,
-                               final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
+                               final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures,
+                               final Errors error
+    ) {
         futures.forEach(f -> assertFalse(f.isDone()));
 
-        NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
-        assertEquals(0, poll.unsentRequests.size());
         // The manager should backoff before retry
         time.sleep(retryBackoffMs);
-        poll = commitRequestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, poll.unsentRequests.size());
         futures.forEach(f -> assertFalse(f.isDone()));
+        poll.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(poll.unsentRequests.get(0), new HashSet<>(), error));
+
         // Sleep util timeout
         time.sleep(defaultApiTimeoutMs);
         poll = commitRequestManager.poll(time.milliseconds());
-        assertEquals(0, poll.unsentRequests.size());
+        assertEquals(1, poll.unsentRequests.size());
         futures.forEach(f -> assertTrue(f.isCompletedExceptionally()));
     }
 
@@ -1303,7 +1307,7 @@ public class CommitRequestManagerTest {
                 Errors.NONE,
                 false));
         if (isRetriable)
-            testRetriable(commitRequestManager, Collections.singletonList(future));
+            testRetriable(commitRequestManager, Collections.singletonList(future), error);
         else
             testNonRetriable(Collections.singletonList(future));
     }
