@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.internals;
 
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.function.Supplier;
@@ -93,7 +91,8 @@ public final class ApiUtils {
     /**
      * @throws IllegalArgumentException if the same instance is obtained each time
      */
-    public static <VR, V> void checkSupplier(final ValueTransformerSupplier<V, VR> supplier) {
+    @SuppressWarnings("deprecation")
+    public static <VR, V> void checkSupplier(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<V, VR> supplier) {
         if (supplier.get() == supplier.get()) {
             final String supplierClass = supplier.getClass().getName();
             throw new IllegalArgumentException(String.format("%s generates single reference." +

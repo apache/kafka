@@ -45,10 +45,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,7 +62,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
     private final String threadId = Thread.currentThread().getName();
 
     @Test
-    public void shouldFailWhenProcessingExceptionOccurs() {
+    public void shouldFailWhenProcessingExceptionOccursIfExceptionHandlerReturnsFail() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-1", "ID123-A1"),
             new KeyValue<>("ID123-2-ERR", "ID123-A2"),
@@ -91,8 +94,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
 
             assertTrue(exception.getMessage().contains("Exception caught in process. "
                 + "taskId=0_0, processor=KSTREAM-SOURCE-0000000000, topic=TOPIC_NAME, "
-                + "partition=0, offset=1, stacktrace=java.lang.RuntimeException: "
-                + "Exception should be handled by processing exception handler"));
+                + "partition=0, offset=1"));
             assertEquals(1, processor.theCapturedProcessor().processed().size());
             assertIterableEquals(expectedProcessedRecords, processor.theCapturedProcessor().processed());
 
@@ -105,7 +107,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldContinueWhenProcessingExceptionOccurs() {
+    public void shouldContinueWhenProcessingExceptionOccursIfExceptionHandlerReturnsContinue() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-1", "ID123-A1"),
             new KeyValue<>("ID123-2-ERR", "ID123-A2"),
@@ -149,9 +151,155 @@ public class ProcessingExceptionHandlerIntegrationTest {
         }
     }
 
+    @Test
+    public void shouldStopOnFailedProcessorWhenProcessingExceptionOccursInFailProcessingExceptionHandler() {
+        final KeyValue<String, String> event = new KeyValue<>("ID123-1", "ID123-A1");
+        final KeyValue<String, String> eventError = new KeyValue<>("ID123-2-ERR", "ID123-A2");
+
+        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
+        final StreamsBuilder builder = new StreamsBuilder();
+        final AtomicBoolean isExecuted = new AtomicBoolean(false);
+        builder
+            .stream("TOPIC_NAME", Consumed.with(Serdes.String(), Serdes.String()))
+            .map(KeyValue::new)
+            .mapValues(value -> value)
+            .process(runtimeErrorProcessorSupplierMock())
+            .map((k, v) -> {
+                isExecuted.set(true);
+                return KeyValue.pair(k, v);
+            })
+            .process(processor);
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, FailProcessingExceptionHandlerMockTest.class);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+            isExecuted.set(false);
+            inputTopic.pipeInput(event.key, event.value, Instant.EPOCH);
+            assertTrue(isExecuted.get());
+            isExecuted.set(false);
+            final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, Instant.EPOCH));
+            assertTrue(e.getMessage().contains("Exception caught in process. "
+                + "taskId=0_0, processor=KSTREAM-SOURCE-0000000000, topic=TOPIC_NAME, "
+                + "partition=0, offset=1"));
+            assertFalse(isExecuted.get());
+        }
+    }
+
+    @Test
+    public void shouldStopOnFailedProcessorWhenProcessingExceptionOccursInContinueProcessingExceptionHandler() {
+        final KeyValue<String, String> event = new KeyValue<>("ID123-1", "ID123-A1");
+        final KeyValue<String, String> eventFalse = new KeyValue<>("ID123-2-ERR", "ID123-A2");
+
+        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
+        final StreamsBuilder builder = new StreamsBuilder();
+        final AtomicBoolean isExecuted = new AtomicBoolean(false);
+        builder
+            .stream("TOPIC_NAME", Consumed.with(Serdes.String(), Serdes.String()))
+            .map(KeyValue::new)
+            .mapValues(value -> value)
+            .process(runtimeErrorProcessorSupplierMock())
+            .map((k, v) -> {
+                isExecuted.set(true);
+                return KeyValue.pair(k, v);
+            })
+            .process(processor);
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+            isExecuted.set(false);
+            inputTopic.pipeInput(event.key, event.value, Instant.EPOCH);
+            assertTrue(isExecuted.get());
+            isExecuted.set(false);
+            inputTopic.pipeInput(eventFalse.key, eventFalse.value, Instant.EPOCH);
+            assertFalse(isExecuted.get());
+        }
+    }
+
+    @Test
+    public void shouldStopProcessingWhenProcessingExceptionHandlerReturnsNull() {
+        final KeyValue<String, String> event = new KeyValue<>("ID123-1", "ID123-A1");
+        final KeyValue<String, String> eventError = new KeyValue<>("ID123-ERR-NULL", "ID123-A2");
+
+        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
+        final StreamsBuilder builder = new StreamsBuilder();
+        final AtomicBoolean isExecuted = new AtomicBoolean(false);
+        builder
+            .stream("TOPIC_NAME", Consumed.with(Serdes.String(), Serdes.String()))
+            .map(KeyValue::new)
+            .mapValues(value -> value)
+            .process(runtimeErrorProcessorSupplierMock())
+            .map((k, v) -> {
+                isExecuted.set(true);
+                return KeyValue.pair(k, v);
+            })
+            .process(processor);
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+            isExecuted.set(false);
+            inputTopic.pipeInput(event.key, event.value, Instant.EPOCH);
+            assertTrue(isExecuted.get());
+            isExecuted.set(false);
+            final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, Instant.EPOCH));
+            assertEquals("Fatal user code error in processing error callback", e.getMessage());
+            assertInstanceOf(NullPointerException.class, e.getCause());
+            assertEquals("Invalid ProductionExceptionHandler response.", e.getCause().getMessage());
+            assertFalse(isExecuted.get());
+        }
+    }
+
+    @Test
+    public void shouldStopProcessingWhenFatalUserExceptionProcessingExceptionHandler() {
+        final KeyValue<String, String> event = new KeyValue<>("ID123-1", "ID123-A1");
+        final KeyValue<String, String> eventError = new KeyValue<>("ID123-ERR-FATAL", "ID123-A2");
+
+        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
+        final StreamsBuilder builder = new StreamsBuilder();
+        final AtomicBoolean isExecuted = new AtomicBoolean(false);
+        builder
+            .stream("TOPIC_NAME", Consumed.with(Serdes.String(), Serdes.String()))
+            .map(KeyValue::new)
+            .mapValues(value -> value)
+            .process(runtimeErrorProcessorSupplierMock())
+            .map((k, v) -> {
+                isExecuted.set(true);
+                return KeyValue.pair(k, v);
+            })
+            .process(processor);
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
+            isExecuted.set(false);
+            inputTopic.pipeInput(event.key, event.value, Instant.EPOCH);
+            assertTrue(isExecuted.get());
+            isExecuted.set(false);
+            final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, Instant.EPOCH));
+            assertEquals("Fatal user code error in processing error callback", e.getMessage());
+            assertEquals("KABOOM!", e.getCause().getMessage());
+            assertFalse(isExecuted.get());
+        }
+    }
+
     public static class ContinueProcessingExceptionHandlerMockTest implements ProcessingExceptionHandler {
         @Override
         public ProcessingExceptionHandler.ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+            if (((String) record.key()).contains("FATAL")) {
+                throw new RuntimeException("KABOOM!");
+            }
+            if (((String) record.key()).contains("NULL")) {
+                return null;
+            }
             assertProcessingExceptionHandlerInputs(context, record, exception);
             return ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE;
         }
