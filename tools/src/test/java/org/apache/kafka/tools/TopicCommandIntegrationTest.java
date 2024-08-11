@@ -34,7 +34,6 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
@@ -63,13 +62,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -83,11 +81,9 @@ public class TopicCommandIntegrationTest {
     private final short defaultReplicationFactor = 1;
     private final int defaultNumPartitions = 1;
 
-    private final ClusterInstance clusterInstance;
-
     private static final int CLUSTER_WAIT_MS = 60000;
 
-    private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(String... opts) {
+    private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(ClusterInstance clusterInstance, String... opts) {
         String bootstrapServer = clusterInstance.bootstrapServers();
         String[] finalOptions = Stream.concat(Arrays.stream(opts),
                 Stream.of("--bootstrap-server", bootstrapServer)
@@ -129,12 +125,8 @@ public class TopicCommandIntegrationTest {
         );
     }
 
-    TopicCommandIntegrationTest(ClusterInstance clusterInstance) {
-        this.clusterInstance = clusterInstance;
-    }
-
     @ClusterTemplate("generate")
-    public void testCreate() throws InterruptedException, ExecutionException {
+    public void testCreate(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -152,7 +144,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithDefaults() throws InterruptedException, ExecutionException {
+    public void testCreateWithDefaults(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -179,7 +171,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithDefaultReplication() throws InterruptedException, ExecutionException {
+    public void testCreateWithDefaultReplication(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -197,7 +189,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithDefaultPartitions() throws InterruptedException, ExecutionException {
+    public void testCreateWithDefaultPartitions(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -216,7 +208,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithConfigs() throws Exception {
+    public void testCreateWithConfigs(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -235,12 +227,12 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWhenAlreadyExists() throws Exception {
+    public void testCreateWhenAlreadyExists(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(
-                    "--create", "--partitions", Integer.toString(defaultNumPartitions), "--replication-factor", "1",
+                    clusterInstance, "--create", "--partitions", Integer.toString(defaultNumPartitions), "--replication-factor", "1",
                     "--topic", testTopicName);
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
@@ -253,7 +245,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWhenAlreadyExistsWithIfNotExists() throws Exception {
+    public void testCreateWhenAlreadyExistsWithIfNotExists(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -261,7 +253,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
 
             TopicCommand.TopicCommandOptions createOpts =
-                    buildTopicCommandOptionsWithBootstrap("--create", "--topic", testTopicName, "--if-not-exists");
+                    buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", testTopicName, "--if-not-exists");
             topicService.createTopic(createOpts);
         }
     }
@@ -271,7 +263,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithReplicaAssignment() throws Exception {
+    public void testCreateWithReplicaAssignment(ClusterInstance clusterInstance) throws Exception {
         Map<Integer, List<Integer>> replicaAssignmentMap = new HashMap<>();
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String testTopicName = TestUtils.randomString(10);
@@ -303,45 +295,45 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithInvalidReplicationFactor() throws Exception {
+    public void testCreateWithInvalidReplicationFactor(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
-            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "2", "--replication-factor", Integer.toString(Short.MAX_VALUE + 1),
+            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--partitions", "2", "--replication-factor", Integer.toString(Short.MAX_VALUE + 1),
                     "--topic", testTopicName);
             assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
         }
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithNegativeReplicationFactor() throws Exception {
+    public void testCreateWithNegativeReplicationFactor(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
-            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create",
+            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create",
                     "--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName);
             assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
         }
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithNegativePartitionCount() throws Exception {
+    public void testCreateWithNegativePartitionCount(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
-            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap("--create", "--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName);
+            TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName);
             assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
         }
     }
 
     @ClusterTemplate("generate")
-    public void testInvalidTopicLevelConfig() {
+    public void testInvalidTopicLevelConfig(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
 
-            TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap("--create",
+            TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create",
                     "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
                     "--config", "message.timestamp.type=boom");
             assertThrows(ConfigException.class, () -> topicService.createTopic(createOpts), "Expected ConfigException to throw");
@@ -349,19 +341,19 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testListTopics() throws InterruptedException {
+    public void testListTopics(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
             clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
 
-            String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list"));
+            String output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list"));
             assertTrue(output.contains(testTopicName), "Expected topic name to be present in output: " + output);
         }
     }
 
     @ClusterTemplate("generate")
-    public void testListTopicsWithIncludeList() throws InterruptedException {
+    public void testListTopicsWithIncludeList(ClusterInstance clusterInstance) throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String topic1 = "kafka.testTopic1";
             String topic2 = "kafka.testTopic2";
@@ -375,7 +367,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(topic2, partition);
             clusterInstance.waitForTopic(topic3, partition);
 
-            String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--topic", "kafka.*"));
+            String output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list", "--topic", "kafka.*"));
             assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
             assertTrue(output.contains(topic2), "Expected topic name " + topic2 + " to be present in output: " + output);
             assertFalse(output.contains(topic3), "Do not expect topic name " + topic3 + " to be present in output: " + output);
@@ -383,7 +375,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testListTopicsWithExcludeInternal() throws InterruptedException {
+    public void testListTopicsWithExcludeInternal(ClusterInstance clusterInstance) throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String topic1 = "kafka.testTopic1";
             String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
@@ -392,14 +384,14 @@ public class TopicCommandIntegrationTest {
             adminClient.createTopics(Collections.singletonList(new NewTopic(topic1, partition, replicationFactor)));
             clusterInstance.waitForTopic(topic1, partition);
 
-            String output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--exclude-internal"));
+            String output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list", "--exclude-internal"));
             assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
             assertFalse(output.contains(hiddenConsumerTopic), "Do not expect topic name " + hiddenConsumerTopic + " to be present in output: " + output);
         }
     }
 
     @ClusterTemplate("generate")
-    public void testAlterPartitionCount() throws Exception {
+    public void testAlterPartitionCount(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -407,7 +399,7 @@ public class TopicCommandIntegrationTest {
             short replicationFactor = 2;
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partition, replicationFactor)));
             clusterInstance.waitForTopic(testTopicName, partition);
-            topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "3"));
+            topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName, "--partitions", "3"));
 
             TestUtils.waitForCondition(
                     () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
@@ -424,7 +416,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testAlterAssignment() throws Exception {
+    public void testAlterAssignment(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -434,7 +426,7 @@ public class TopicCommandIntegrationTest {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partition, replicationFactor)));
             clusterInstance.waitForTopic(testTopicName, partition);
 
-            topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter",
+            topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
                     "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3"));
 
             TestUtils.waitForCondition(
@@ -456,7 +448,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testAlterAssignmentWithMoreAssignmentThanPartitions() throws Exception {
+    public void testAlterAssignmentWithMoreAssignmentThanPartitions(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -467,7 +459,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(testTopicName, partition);
 
             assertThrows(ExecutionException.class,
-                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter",
+                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
                             "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3")),
                     "Expected to fail with ExecutionException");
 
@@ -475,7 +467,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testAlterAssignmentWithMorePartitionsThanAssignment() throws Exception {
+    public void testAlterAssignmentWithMorePartitionsThanAssignment(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -485,7 +477,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(testTopicName, partition);
 
             assertThrows(ExecutionException.class,
-                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName,
+                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName,
                             "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6")),
                     "Expected to fail with ExecutionException");
 
@@ -493,7 +485,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testAlterWithInvalidPartitionCount() throws Exception {
+    public void testAlterWithInvalidPartitionCount(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient();
@@ -502,37 +494,37 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
 
             assertThrows(ExecutionException.class,
-                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--partitions", "-1", "--topic", testTopicName)),
+                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--partitions", "-1", "--topic", testTopicName)),
                     "Expected to fail with ExecutionException");
         }
     }
 
     @ClusterTemplate("generate")
-    public void testAlterWhenTopicDoesntExist() throws Exception {
+    public void testAlterWhenTopicDoesntExist(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             // alter a topic that does not exist without --if-exists
-            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "1");
+            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName, "--partitions", "1");
             assertThrows(IllegalArgumentException.class, () -> topicService.alterTopic(alterOpts), "Expected to fail with IllegalArgumentException");
 
         }
     }
 
     @ClusterTemplate("generate")
-    public void testAlterWhenTopicDoesntExistWithIfExists() throws Exception {
+    public void testAlterWhenTopicDoesntExistWithIfExists(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         Admin adminClient = clusterInstance.createAdminClient();
 
         TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
-        topicService.alterTopic(buildTopicCommandOptionsWithBootstrap("--alter", "--topic", testTopicName, "--partitions", "1", "--if-exists"));
+        topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName, "--partitions", "1", "--if-exists"));
         adminClient.close();
         topicService.close();
     }
 
     @ClusterTemplate("generate")
-    public void testCreateAlterTopicWithRackAware() throws Exception {
+    public void testCreateAlterTopicWithRackAware(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -561,7 +553,7 @@ public class TopicCommandIntegrationTest {
 
             int alteredNumPartitions = 36;
             // verify that adding partitions will also be rack aware
-            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter",
+            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
                     "--partitions", Integer.toString(alteredNumPartitions),
                     "--topic", testTopicName);
             topicService.alterTopic(alterOpts);
@@ -584,7 +576,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testConfigPreservationAcrossPartitionAlteration() throws Exception {
+    public void testConfigPreservationAcrossPartitionAlteration(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -602,7 +594,7 @@ public class TopicCommandIntegrationTest {
 
             // modify the topic to add new partitions
             int numPartitionsModified = 3;
-            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap("--alter",
+            TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
                     "--partitions", Integer.toString(numPartitionsModified), "--topic", testTopicName);
             topicService.alterTopic(alterOpts);
 
@@ -618,7 +610,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testTopicDeletion() throws Exception {
+    public void testTopicDeletion(ClusterInstance clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             String testTopicName = TestUtils.randomString(10);
@@ -627,7 +619,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
 
             // delete the NormalTopic
-            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName);
+            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", testTopicName);
             topicService.deleteTopic(deleteOpts);
 
             TestUtils.waitForCondition(
@@ -638,7 +630,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testTopicWithCollidingCharDeletionAndCreateAgain() throws Exception {
+    public void testTopicWithCollidingCharDeletionAndCreateAgain(ClusterInstance clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             // create the topic with colliding chars
@@ -647,7 +639,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(topicWithCollidingChar, defaultNumPartitions);
 
             // delete the topic
-            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", topicWithCollidingChar);
+            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", topicWithCollidingChar);
             topicService.deleteTopic(deleteOpts);
             TestUtils.waitForCondition(
                     () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(topicWithCollidingChar)),
@@ -663,7 +655,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDeleteInternalTopic() throws Exception {
+    public void testDeleteInternalTopic(ClusterInstance clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
@@ -678,7 +670,7 @@ public class TopicCommandIntegrationTest {
             // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.
             // If deleting internal topics is not desired, ACLS should be used to control it.
             TopicCommand.TopicCommandOptions deleteOffsetTopicOpts =
-                    buildTopicCommandOptionsWithBootstrap("--delete", "--topic", Topic.GROUP_METADATA_TOPIC_NAME);
+                    buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", Topic.GROUP_METADATA_TOPIC_NAME);
 
             topicService.deleteTopic(deleteOffsetTopicOpts);
             TestUtils.waitForCondition(
@@ -690,28 +682,28 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDeleteWhenTopicDoesntExist() throws Exception {
+    public void testDeleteWhenTopicDoesntExist(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             // delete a topic that does not exist
-            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName);
+            TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", testTopicName);
             assertThrows(IllegalArgumentException.class, () -> topicService.deleteTopic(deleteOpts),
                     "Expected an exception when trying to delete a topic that does not exist.");
         }
     }
 
     @ClusterTemplate("generate")
-    public void testDeleteWhenTopicDoesntExistWithIfExists() throws Exception {
+    public void testDeleteWhenTopicDoesntExistWithIfExists(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
-            topicService.deleteTopic(buildTopicCommandOptionsWithBootstrap("--delete", "--topic", testTopicName, "--if-exists"));
+            topicService.deleteTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", testTopicName, "--if-exists"));
         }
     }
 
     @ClusterTemplate("generate")
-    public void testDescribe() throws InterruptedException {
+    public void testDescribe(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             int partition = 2;
@@ -719,7 +711,7 @@ public class TopicCommandIntegrationTest {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partition, replicationFactor)));
             clusterInstance.waitForTopic(testTopicName, partition);
 
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName));
             String[] rows = output.split(System.lineSeparator());
             assertEquals(3, rows.length, "Expected 3 rows in output, got " + rows.length);
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Row does not start with " + testTopicName + ". Row is: " + rows[0]);
@@ -727,7 +719,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeWithDescribeTopicPartitionsApi() throws InterruptedException {
+    public void testDescribeWithDescribeTopicPartitionsApi(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -746,7 +738,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic("test-4", 5);
             clusterInstance.waitForTopic("test-5", 100);
 
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap(
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance,
                     "--describe", "--partition-size-limit-per-response=20", "--exclude-internal"));
             String[] rows = output.split("\n");
 
@@ -758,25 +750,25 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeWhenTopicDoesntExist() {
+    public void testDescribeWhenTopicDoesntExist(ClusterInstance clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
 
             assertThrows(IllegalArgumentException.class,
-                    () -> topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName)),
+                    () -> topicService.describeTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName)),
                     "Expected an exception when trying to describe a topic that does not exist.");
         }
 
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeWhenTopicDoesntExistWithIfExists() throws Exception {
+    public void testDescribeWhenTopicDoesntExistWithIfExists(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
 
-            topicService.describeTopic(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--if-exists"));
+            topicService.describeTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName, "--if-exists"));
 
             adminClient.close();
             topicService.close();
@@ -784,7 +776,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeUnavailablePartitions() throws ExecutionException, InterruptedException {
+    public void testDescribeUnavailablePartitions(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -802,7 +794,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(testTopicName, 6);
 
             // grab the console output and assert
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName, "--unavailable-partitions"));
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName, "--unavailable-partitions"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
                     "Unexpected Topic " + rows[0] + " received. Expect " + String.format("Topic: %s", testTopicName));
@@ -813,7 +805,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeUnderReplicatedPartitions() throws InterruptedException {
+    public void testDescribeUnderReplicatedPartitions(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             int partitions = 1;
@@ -833,7 +825,7 @@ public class TopicCommandIntegrationTest {
                             }
                     ), CLUSTER_WAIT_MS, String.format("Meta data propogation fail in %s ms", CLUSTER_WAIT_MS));
 
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-replicated-partitions"));
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), String.format("Unexpected output: %s", rows[0]));
         }
@@ -841,7 +833,7 @@ public class TopicCommandIntegrationTest {
 
 
     @ClusterTemplate("generate")
-    public void testDescribeUnderMinIsrPartitions() throws InterruptedException {
+    public void testDescribeUnderMinIsrPartitions(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -860,7 +852,7 @@ public class TopicCommandIntegrationTest {
                     CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
             );
 
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-min-isr-partitions", "--exclude-internal"));
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
                     "Unexpected topic: " + rows[0]);
@@ -868,11 +860,11 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress() throws ExecutionException, InterruptedException {
+    public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient();
-            KafkaProducer<String, String> producer = createProducer()) {
+            KafkaProducer<String, String> producer = createProducer(clusterInstance)) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
             clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
 
@@ -906,14 +898,14 @@ public class TopicCommandIntegrationTest {
             );
 
             // describe the topic and test if it's under-replicated
-            String simpleDescribeOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
+            String simpleDescribeOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName));
             String[] simpleDescribeOutputRows = simpleDescribeOutput.split(System.lineSeparator());
             assertTrue(simpleDescribeOutputRows[0].startsWith(String.format("Topic: %s", testTopicName)),
                     "Unexpected describe output: " + simpleDescribeOutputRows[0]);
             assertEquals(2, simpleDescribeOutputRows.length,
                     "Unexpected describe output length: " + simpleDescribeOutputRows.length);
 
-            String underReplicatedOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-replicated-partitions"));
+            String underReplicatedOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
             assertEquals("", underReplicatedOutput,
                     String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
 
@@ -941,7 +933,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeAtMinIsrPartitions() throws InterruptedException {
+    public void testDescribeAtMinIsrPartitions(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.createAdminClient()) {
@@ -964,7 +956,7 @@ public class TopicCommandIntegrationTest {
             );
 
 
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--at-min-isr-partitions", "--exclude-internal"));
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--at-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
                     "Unexpected output: " + rows[0]);
@@ -982,7 +974,7 @@ public class TopicCommandIntegrationTest {
      * Output should only display the (1) topic with partition under min ISR count and (3) topic with offline partition
      */
     @ClusterTemplate("generate")
-    public void testDescribeUnderMinIsrPartitionsMixed() throws InterruptedException {
+    public void testDescribeUnderMinIsrPartitionsMixed(ClusterInstance clusterInstance) throws InterruptedException {
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String underMinIsrTopic = "under-min-isr-topic";
             String notUnderMinIsrTopic = "not-under-min-isr-topic";
@@ -1027,7 +1019,7 @@ public class TopicCommandIntegrationTest {
                     CLUSTER_WAIT_MS,  String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
 
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--under-min-isr-partitions", "--exclude-internal"));
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", underMinIsrTopic)),
                     "Unexpected output: " + rows[0]);
@@ -1039,7 +1031,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeReportOverriddenConfigs() throws InterruptedException {
+    public void testDescribeReportOverriddenConfigs(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             String config = "file.delete.delay.ms=1000";
@@ -1052,27 +1044,27 @@ public class TopicCommandIntegrationTest {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(topicConfig)));
             clusterInstance.waitForTopic(testTopicName, partitions);
 
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe"));
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe"));
             assertTrue(output.contains(config), String.format("Describe output should have contained %s", config));
         }
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeAndListTopicsWithoutInternalTopics() throws InterruptedException {
+    public void testDescribeAndListTopicsWithoutInternalTopics(ClusterInstance clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.createAdminClient()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
             clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
 
             // test describe
-            String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--describe", "--exclude-internal"));
+            String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--describe", "--exclude-internal"));
             assertTrue(output.contains(testTopicName),
                     String.format("Output should have contained %s", testTopicName));
             assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME),
                     "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
 
             // test list
-            output = captureListTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--list", "--exclude-internal"));
+            output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list", "--exclude-internal"));
             assertTrue(output.contains(testTopicName), String.format("Output should have contained %s", testTopicName));
             assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME),
                     "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
@@ -1080,7 +1072,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized() throws Exception {
+    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(ClusterInstance clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         Admin adminClient = clusterInstance.createAdminClient();
 
@@ -1095,7 +1087,7 @@ public class TopicCommandIntegrationTest {
         adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
         clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
 
-        String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
+        String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName));
         String[] rows = output.split(System.lineSeparator());
         assertEquals(2, rows.length, "Unexpected output: " + output);
         assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)), "Unexpected output: " + rows[0]);
@@ -1104,7 +1096,7 @@ public class TopicCommandIntegrationTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithTopicNameCollision() throws Exception {
+    public void testCreateWithTopicNameCollision(ClusterInstance clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.createAdminClient();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
@@ -1115,7 +1107,7 @@ public class TopicCommandIntegrationTest {
             clusterInstance.waitForTopic(topic, defaultNumPartitions);
 
             assertThrows(TopicExistsException.class,
-                    () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap("--create", "--topic", topic)));
+                    () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", topic)));
 
         }
     }
@@ -1161,7 +1153,7 @@ public class TopicCommandIntegrationTest {
         }
     }
 
-    private String captureDescribeTopicStandardOut(TopicCommand.TopicCommandOptions opts) {
+    private String captureDescribeTopicStandardOut(ClusterInstance clusterInstance, TopicCommand.TopicCommandOptions opts) {
         Runnable runnable = () -> {
             try (Admin adminClient = clusterInstance.createAdminClient();
                  TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -1173,7 +1165,7 @@ public class TopicCommandIntegrationTest {
         return ToolsTestUtils.captureStandardOut(runnable);
     }
 
-    private String captureListTopicStandardOut(TopicCommand.TopicCommandOptions opts) {
+    private String captureListTopicStandardOut(ClusterInstance clusterInstance, TopicCommand.TopicCommandOptions opts) {
         Runnable runnable = () -> {
             try (Admin adminClient = clusterInstance.createAdminClient();
                  TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -1235,7 +1227,7 @@ public class TopicCommandIntegrationTest {
     }
 
 
-    private KafkaProducer<String, String> createProducer() {
+    private KafkaProducer<String, String> createProducer(ClusterInstance clusterInstance) {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         producerProps.put(ProducerConfig.ACKS_CONFIG, "-1");
@@ -1243,15 +1235,7 @@ public class TopicCommandIntegrationTest {
     }
 
     private void sendProducerRecords(String testTopicName, KafkaProducer<String, String> producer, int numMessage) {
-        List<ProducerRecord<String, String>> records = generateProduceMessage(testTopicName, numMessage);
-        List<Future<RecordMetadata>> features = records.stream().map(producer::send).collect(Collectors.toList());
-
-        assertDoesNotThrow(() -> features.forEach(s -> {
-            try {
-                s.get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
-        }));
+        IntStream.range(0, numMessage).forEach(i -> producer.send(new ProducerRecord<>(testTopicName, "test-" + i)));
+        producer.flush();
     }
 }
