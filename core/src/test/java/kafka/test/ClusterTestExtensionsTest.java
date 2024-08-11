@@ -236,6 +236,19 @@ public class ClusterTestExtensionsTest {
         Assertions.assertEquals(1, clusterInstance.supportedGroupProtocols().size());
     }
 
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 3)
+    public void testCreateTopic(ClusterInstance clusterInstance) throws Exception {
+        String topicName = "test";
+        int partitions = 3;
+        short replicas = 3;
+        clusterInstance.createTopic(topicName, partitions, replicas);
+        clusterInstance.waitForTopic(topicName, partitions);
+
+        try (Admin admin = clusterInstance.createAdminClient()) {
+            Assertions.assertTrue(admin.listTopics().listings().get().stream().anyMatch(s -> s.name().equals(topicName)));
+        }
+    }
+
     @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
     public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
         clusterInstance.waitForReadyBrokers();
