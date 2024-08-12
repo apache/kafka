@@ -42,8 +42,6 @@ import java.util.HashSet;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
@@ -114,123 +112,6 @@ public class ShareGroupTest {
         shareGroup.removeMember("member");
         assertFalse(shareGroup.hasMember("member"));
 
-    }
-
-    @Test
-    public void testUpdatingMemberUpdatesPartitionEpoch() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
-        ShareGroup shareGroup = createShareGroup("foo");
-        ShareGroupMember member;
-
-        member = new ShareGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .build();
-
-        shareGroup.updateMember(member);
-
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 1));
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 2));
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 3));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(barTopicId, 4));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(barTopicId, 5));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(barTopicId, 6));
-
-        member = new ShareGroupMember.Builder(member)
-            .setMemberEpoch(11)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(barTopicId, 1, 2, 3)))
-            .build();
-
-        shareGroup.updateMember(member);
-
-        assertEquals(11, shareGroup.currentPartitionEpoch(barTopicId, 1));
-        assertEquals(11, shareGroup.currentPartitionEpoch(barTopicId, 2));
-        assertEquals(11, shareGroup.currentPartitionEpoch(barTopicId, 3));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 1));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 2));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 3));
-    }
-
-    @Test
-    public void testRemovePartitionEpochs() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        ShareGroup shareGroup = createShareGroup("foo");
-
-        // Removing should fail because there is no epoch set.
-        assertThrows(IllegalStateException.class, () -> shareGroup.removePartitionEpochs(
-            mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ),
-            10
-        ));
-
-        ShareGroupMember m1 = new ShareGroupMember.Builder("m1")
-            .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
-            .build();
-
-        shareGroup.updateMember(m1);
-
-        // Removing should fail because the expected epoch is incorrect.
-        assertThrows(IllegalStateException.class, () -> shareGroup.removePartitionEpochs(
-            mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ),
-            11
-        ));
-    }
-
-    @Test
-    public void testAddPartitionEpochs() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        ShareGroup shareGroup = createShareGroup("foo");
-
-        shareGroup.addPartitionEpochs(
-            mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ),
-            10
-        );
-
-        // Changing the epoch should fail because the owner of the partition
-        // should remove it first.
-        assertThrows(IllegalStateException.class, () -> shareGroup.addPartitionEpochs(
-            mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ),
-            11
-        ));
-    }
-
-    @Test
-    public void testDeletingMemberRemovesPartitionEpoch() {
-        Uuid fooTopicId = Uuid.randomUuid();
-
-        ShareGroup shareGroup = createShareGroup("foo");
-        ShareGroupMember member;
-
-        member = new ShareGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .build();
-
-        shareGroup.updateMember(member);
-
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 1));
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 2));
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 3));
-
-        shareGroup.removeMember(member.memberId());
-
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 1));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 2));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 3));
     }
 
     @Test

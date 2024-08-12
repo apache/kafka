@@ -51,6 +51,7 @@ import org.apache.kafka.image.MetadataImage;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -400,6 +401,23 @@ public interface GroupCoordinator {
      * @return Properties of the internal topic.
      */
     Properties groupMetadataTopicConfigs();
+
+    /**
+     * Return the configuration of the provided group.
+     *
+     * @param groupId       The group id.
+     * @return The group config.
+     */
+    Optional<GroupConfig> groupConfig(String groupId);
+
+    /**
+     * Update the configuration of the provided group.
+     *
+     * @param groupId           The group id.
+     * @param newGroupConfig    The new group config
+     * @return void
+     */
+    void updateGroupConfig(String groupId, Properties newGroupConfig);
 
     /**
      * Startup the group coordinator.
