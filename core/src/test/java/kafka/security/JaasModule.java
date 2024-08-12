@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class JaasModule {
     public static JaasModule zkDigestModule(boolean debug, Map<String, String> entries) {
@@ -131,7 +132,6 @@ public class JaasModule {
     public String toString() {
         return String.format("%s required\n  debug=%b\n  %s;\n", name, debug, entries.entrySet().stream()
                 .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                .reduce((e1, e2) -> e1 + "\n  " + e2)
-                .orElse(""));
+                .collect(Collectors.joining("\n  ")));
     }
 }
