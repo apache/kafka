@@ -85,6 +85,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -109,6 +110,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private Timer timer;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
         private GroupCoordinatorMetrics groupCoordinatorMetrics;
+        private GroupConfigManager groupConfigManager;
 
         public Builder(
             int nodeId,
@@ -148,6 +150,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withGroupConfigManager(GroupConfigManager groupConfigManager) {
+            this.groupConfigManager = groupConfigManager;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -163,12 +170,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
             if (groupCoordinatorMetrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
+            if (groupConfigManager == null)
+                throw new IllegalArgumentException("GroupConfigManager must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
-                new GroupCoordinatorShard.Builder(config);
+                new GroupCoordinatorShard.Builder(config, groupConfigManager);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
@@ -200,7 +209,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 logContext,
                 config,
                 runtime,
-                groupCoordinatorMetrics
+                groupCoordinatorMetrics,
+                groupConfigManager
             );
         }
     }
@@ -226,6 +236,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final GroupCoordinatorMetrics groupCoordinatorMetrics;
 
     /**
+     * The group config manager.
+     */
+    private final GroupConfigManager groupConfigManager;
+
+    /**
      * Boolean indicating whether the coordinator is active or not.
      */
     private final AtomicBoolean isActive = new AtomicBoolean(false);
@@ -242,17 +257,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param config                    The group coordinator config.
      * @param runtime                   The runtime.
      * @param groupCoordinatorMetrics   The group coordinator metrics.
+     * @param groupConfigManager        The group config manager.
      */
     GroupCoordinatorService(
         LogContext logContext,
         GroupCoordinatorConfig config,
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
-        GroupCoordinatorMetrics groupCoordinatorMetrics
+        GroupCoordinatorMetrics groupCoordinatorMetrics,
+        GroupConfigManager groupConfigManager
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
         this.runtime = runtime;
         this.groupCoordinatorMetrics = groupCoordinatorMetrics;
+        this.groupConfigManager = groupConfigManager;
     }
 
     /**
@@ -1133,6 +1151,22 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#groupConfig(String)}.
+     */
+    @Override
+    public Optional<GroupConfig> groupConfig(String groupId) {
+        return groupConfigManager.groupConfig(groupId);
+    }
+
+    /**
+     * See {@link GroupCoordinator#updateGroupConfig(String, Properties)}.
+     */
+    @Override
+    public void updateGroupConfig(String groupId, Properties newGroupConfig) {
+        groupConfigManager.updateGroupConfig(groupId, newGroupConfig);
+    }
+
+    /**
      * See {@link GroupCoordinator#startup(IntSupplier)}.
      */
     @Override
@@ -1164,6 +1198,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
+        Utils.closeQuietly(groupConfigManager, "group config manager");
         log.info("Shutdown complete.");
     }
 
