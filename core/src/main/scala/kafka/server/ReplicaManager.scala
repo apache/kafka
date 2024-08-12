@@ -51,7 +51,7 @@ import org.apache.kafka.common.replica._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
@@ -99,7 +99,10 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
   }
 }
 
-case class StopPartition(topicPartition: TopicPartition, deleteLocalLog: Boolean, deleteRemoteLog: Boolean = false)
+case class StopPartition(topicPartition: TopicPartition,
+                         deleteLocalLog: Boolean,
+                         deleteRemoteLog: Boolean = false,
+                         stopRemoteLogMetadataManager: Boolean = false)
 
 /**
  * Result metadata of a log read operation on the log

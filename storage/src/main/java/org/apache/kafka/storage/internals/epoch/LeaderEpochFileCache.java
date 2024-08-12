@@ -202,15 +202,14 @@ public class LeaderEpochFileCache {
      * which has messages assigned to it.
      */
     public OptionalInt latestEpoch() {
-        Optional<EpochEntry> entry = latestEntry();
-        return entry.isPresent() ? OptionalInt.of(entry.get().epoch) : OptionalInt.empty();
+        return latestEntry().map(epochEntry -> OptionalInt.of(epochEntry.epoch)).orElseGet(OptionalInt::empty);
     }
 
     public OptionalInt previousEpoch() {
         lock.readLock().lock();
         try {
-            Optional<Map.Entry<Integer, EpochEntry>> lowerEntry = latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch)));
-            return lowerEntry.isPresent() ? OptionalInt.of(lowerEntry.get().getKey()) : OptionalInt.empty();
+            return latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch)))
+                    .map(integerEpochEntryEntry -> OptionalInt.of(integerEpochEntryEntry.getKey())).orElseGet(OptionalInt::empty);
         } finally {
             lock.readLock().unlock();
         }
@@ -222,7 +221,7 @@ public class LeaderEpochFileCache {
     public Optional<EpochEntry> earliestEntry() {
         lock.readLock().lock();
         try {
-            return Optional.ofNullable(epochs.firstEntry()).map(x -> x.getValue());
+            return Optional.ofNullable(epochs.firstEntry()).map(Map.Entry::getValue);
         } finally {
             lock.readLock().unlock();
         }
@@ -287,7 +286,7 @@ public class LeaderEpochFileCache {
     public Map.Entry<Integer, Long> endOffsetFor(int requestedEpoch, long logEndOffset) {
         lock.readLock().lock();
         try {
-            Map.Entry<Integer, Long> epochAndOffset = null;
+            Map.Entry<Integer, Long> epochAndOffset;
             if (requestedEpoch == UNDEFINED_EPOCH) {
                 // This may happen if a bootstrapping follower sends a request with undefined epoch or
                 // a follower is on the older message format where leader epochs are not recorded

@@ -21,7 +21,9 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ClusterId", "type": "string", "versions": "0+" },
+    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+" },
+    { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "0+",
+      "about": "The current leader epoch of the partition, -1 for unknown leader epoch" },
     { "name": "VoterId", "type": "int32", "versions": "0+",
       "about": "The replica id of the voter getting updated in the topic partition" },
     { "name": "VoterDirectoryId", "type": "uuid", "versions": "0+",

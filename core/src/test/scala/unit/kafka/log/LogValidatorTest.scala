@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.TestUtils.meterCount
-import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{PrimitiveRef, Time}
@@ -30,6 +30,7 @@ import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogValidator, RecordValidationException}
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -110,8 +111,8 @@ class LogValidatorTest {
     assertThrows(classOf[RecordValidationException],
       () => validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compression), batchMagic, compression.`type`(), compression)
     )
-    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}")), 1)
-    assertTrue(meterCount(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}") > 0)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicMetrics.INVALID_MAGIC_NUMBER_RECORDS_PER_SEC}")), 1)
+    assertTrue(meterCount(s"${BrokerTopicMetrics.INVALID_MAGIC_NUMBER_RECORDS_PER_SEC}") > 0)
   }
 
   private def validateMessages(records: MemoryRecords,
@@ -732,8 +733,8 @@ class LogValidatorTest {
         )
     )
 
-    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}")), 1)
-    assertTrue(meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicMetrics.INVALID_MESSAGE_CRC_RECORDS_PER_SEC}")), 1)
+    assertTrue(meterCount(s"${BrokerTopicMetrics.INVALID_MESSAGE_CRC_RECORDS_PER_SEC}") > 0)
   }
 
 
@@ -1421,8 +1422,8 @@ class LogValidatorTest {
     ).validateMessagesAndAssignOffsets(
       PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     ))
-    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}")), 1)
-    assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}") > 0)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicMetrics.INVALID_OFFSET_OR_SEQUENCE_RECORDS_PER_SEC}")), 1)
+    assertTrue(meterCount(s"${BrokerTopicMetrics.INVALID_OFFSET_OR_SEQUENCE_RECORDS_PER_SEC}") > 0)
   }
 
   @Test
@@ -1619,11 +1620,11 @@ class LogValidatorTest {
       List.fill(256)("data").mkString("").getBytes
     )
     // Records from the producer were created with gzip max level
-    val gzipMax: Compression = Compression.gzip().level(GzipCompression.MAX_LEVEL).build()
+    val gzipMax: Compression = Compression.gzip().level(CompressionType.GZIP.maxLevel()).build()
     val recordsGzipMax = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMax)
 
     // The topic is configured with gzip min level
-    val gzipMin: Compression = Compression.gzip().level(GzipCompression.MIN_LEVEL).build()
+    val gzipMin: Compression = Compression.gzip().level(CompressionType.GZIP.minLevel()).build()
     val recordsGzipMin = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMin)
 
     // ensure data compressed with gzip max and min is different
@@ -1657,11 +1658,11 @@ class LogValidatorTest {
       List.fill(256)("data").mkString("").getBytes
     )
     // Records from the producer were created with gzip max level
-    val gzipMax: Compression = Compression.gzip().level(GzipCompression.MAX_LEVEL).build()
+    val gzipMax: Compression = Compression.gzip().level(CompressionType.GZIP.maxLevel()).build()
     val recordsGzipMax = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMax)
 
     // The topic is configured with lz4 min level
-    val lz4Min: Compression = Compression.lz4().level(Lz4Compression.MIN_LEVEL).build()
+    val lz4Min: Compression = Compression.lz4().level(CompressionType.LZ4.minLevel()).build()
     val recordsLz4Min = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, lz4Min)
 
     val validator = new LogValidator(recordsGzipMax,

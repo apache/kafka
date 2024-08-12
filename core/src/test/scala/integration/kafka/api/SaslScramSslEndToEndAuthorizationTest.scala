@@ -17,12 +17,11 @@
 package kafka.api
 
 import java.util.Properties
-
 import kafka.utils._
-import kafka.tools.StorageTool
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.test.TestSslUtils
 
 import scala.jdk.CollectionConverters._
@@ -30,9 +29,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-
-import scala.collection.mutable.ArrayBuffer
-import org.apache.kafka.server.common.ApiMessageAndVersion
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -55,17 +51,10 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   }
 
   // Create the admin credentials for KRaft as part of controller initialization
-  override def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = {
-    val args = Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "-S",
-                   s"SCRAM-SHA-256=[name=${JaasTestUtils.KafkaScramAdmin},password=${JaasTestUtils.KafkaScramAdminPassword}]")
-    val namespace = StorageTool.parseArguments(args.toArray)
-    val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
-    StorageTool.getUserScramCredentialRecords(namespace).foreach {
-      userScramCredentialRecords => for (record <- userScramCredentialRecords) {
-        metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
-      }
-    }
-    Some(metadataRecords)
+  override def addFormatterSettings(formatter: Formatter): Unit = {
+    formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ")
+    formatter.setScramArguments(List(
+      s"SCRAM-SHA-256=[name=${JaasTestUtils.KafkaScramAdmin},password=${JaasTestUtils.KafkaScramAdminPassword}]").asJava)
   }
 
   override def configureListeners(props: collection.Seq[Properties]): Unit = {
