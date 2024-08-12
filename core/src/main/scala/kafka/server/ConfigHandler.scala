@@ -31,6 +31,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
@@ -300,5 +301,14 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
 class ClientMetricsConfigHandler(private val clientMetricsManager: ClientMetricsManager) extends ConfigHandler with Logging {
   def processConfigChanges(subscriptionGroupId: String, properties: Properties): Unit = {
     clientMetricsManager.updateSubscription(subscriptionGroupId, properties)
+  }
+}
+
+/**
+ * The GroupConfigHandler will process individual group config changes.
+ */
+class GroupConfigHandler(private val groupCoordinator: GroupCoordinator) extends ConfigHandler with Logging {
+  override def processConfigChanges(groupId: String, properties: Properties): Unit = {
+    groupCoordinator.updateGroupConfig(groupId, properties)
   }
 }

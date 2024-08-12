@@ -47,7 +47,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC, USER}
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, USER}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
@@ -480,6 +480,12 @@ class ControllerApis(
           new ApiError(NONE)
         } else {
           new ApiError(TOPIC_AUTHORIZATION_FAILED)
+        }
+      case ConfigResource.Type.GROUP =>
+        if (authHelper.authorize(requestContext, ALTER_CONFIGS, GROUP, resource.name)) {
+          new ApiError(NONE)
+        } else {
+          new ApiError(GROUP_AUTHORIZATION_FAILED)
         }
       case rt => new ApiError(INVALID_REQUEST, s"Unexpected resource type $rt.")
     }

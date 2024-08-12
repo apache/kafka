@@ -19,9 +19,10 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.common.config.TopicConfig.{REMOTE_LOG_STORAGE_ENABLE_CONFIG, SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
@@ -173,5 +174,41 @@ class ControllerConfigurationValidatorTest {
     assertEquals("Illegal client matching pattern: 10",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap())). getMessage)
+  }
+
+  @Test
+  def testValidGroupConfig(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000")
+    validator.validate(new ConfigResource(GROUP, "group"), config, emptyMap())
+  }
+
+  @Test
+  def testInvalidGroupNameGroupConfig(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    assertEquals("Default group resources are not allowed.",
+      assertThrows(classOf[InvalidRequestException], () => validator.validate(
+        new ConfigResource(GROUP, ""), config, emptyMap())).getMessage)
+  }
+
+  @Test
+  def testNullGroupConfigValue(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, null)
+    assertEquals("Null value not supported for group configs: consumer.heartbeat.interval.ms",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+        new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
+  }
+
+  @Test
+  def testInvalidGroupConfig(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put("foobar", "abc")
+    assertEquals("Unknown group config name: foobar",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+        new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
   }
 }

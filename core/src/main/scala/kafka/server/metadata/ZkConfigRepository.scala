@@ -36,6 +36,7 @@ class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository 
       case Type.TOPIC => ConfigType.TOPIC
       case Type.BROKER => ConfigType.BROKER
       case Type.CLIENT_METRICS => throw new InvalidRequestException("Config type client-metrics is only supported on KRaft clusters")
+      case Type.GROUP => throw new InvalidRequestException("Config type groups is only supported on KRaft clusters")
       case tpe => throw new IllegalArgumentException(s"Unsupported config type: $tpe")
     }
     // ZK stores cluster configs under "<default>".

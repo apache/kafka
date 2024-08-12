@@ -108,13 +108,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private SnapshotRegistry snapshotRegistry;
         private Time time;
         private CoordinatorTimer<Void, CoordinatorRecord> timer;
+        private GroupConfigManager groupConfigManager;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
 
         public Builder(
-            GroupCoordinatorConfig config
+            GroupCoordinatorConfig config,
+            GroupConfigManager groupConfigManager
         ) {
             this.config = config;
+            this.groupConfigManager = groupConfigManager;
         }
 
         @Override
@@ -178,6 +181,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 throw new IllegalArgumentException("CoordinatorMetrics must be set and be of type GroupCoordinatorMetrics.");
             if (topicPartition == null)
                 throw new IllegalArgumentException("TopicPartition must be set.");
+            if (groupConfigManager == null)
+                throw new IllegalArgumentException("GroupConfigManager must be set.");
 
             GroupCoordinatorMetricsShard metricsShard = ((GroupCoordinatorMetrics) coordinatorMetrics)
                 .newMetricsShard(snapshotRegistry, topicPartition);
@@ -187,6 +192,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withTimer(timer)
+                .withGroupConfigManager(groupConfigManager)
                 .withConsumerGroupAssignors(config.consumerGroupAssignors())
                 .withConsumerGroupMaxSize(config.consumerGroupMaxSize())
                 .withConsumerGroupSessionTimeout(config.consumerGroupSessionTimeoutMs())
