@@ -53,11 +53,8 @@ public class AdminFetchMetricsManagerTest {
 
     @AfterEach
     public void tearDown() {
-        if (metrics != null) {
-            Utils.closeQuietly(metrics, "metrics");
-            metrics = null;
-        }
-
+        Utils.closeQuietly(metrics, "metrics");
+        metrics = null;
         adminFetchMetricsManager = null;
     }
 
