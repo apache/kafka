@@ -20,7 +20,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -32,17 +31,17 @@ import java.util.stream.Stream;
  */
 public class StreamsTopology {
 
-    private final byte[] topologyHash;
+    private final String topologyId;
 
     private final Map<String, Subtopology> subtopologies;
 
-    public StreamsTopology(final byte[] topologyHash, final Map<String, Subtopology> subtopologies) {
-        this.topologyHash = topologyHash;
+    public StreamsTopology(final String topologyId, final Map<String, Subtopology> subtopologies) {
+        this.topologyId = topologyId;
         this.subtopologies = subtopologies;
     }
 
-    public byte[] topologyHash() {
-        return topologyHash;
+    public String topologyId() {
+        return topologyId;
     }
 
     public Map<String, Subtopology> subtopologies() {
@@ -60,7 +59,7 @@ public class StreamsTopology {
         StreamsGroupTopologyValue record
     ) {
         return new StreamsTopology(
-            record.topologyHash(),
+            record.topologyId(),
             record.topology().stream().collect(Collectors.toMap(Subtopology::subtopology, x -> x))
         );
     }
@@ -74,18 +73,18 @@ public class StreamsTopology {
             return false;
         }
         final StreamsTopology that = (StreamsTopology) o;
-        return Objects.deepEquals(topologyHash, that.topologyHash) && Objects.equals(subtopologies, that.subtopologies);
+        return Objects.deepEquals(topologyId, that.topologyId) && Objects.equals(subtopologies, that.subtopologies);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(Arrays.hashCode(topologyHash), subtopologies);
+        return Objects.hash(topologyId, subtopologies);
     }
 
     @Override
     public String toString() {
         return "StreamsTopology{" +
-            "topologyHash=" + Arrays.toString(topologyHash) +
+            "topologyId=" + topologyId +
             ", subtopologies=" + subtopologies +
             '}';
     }

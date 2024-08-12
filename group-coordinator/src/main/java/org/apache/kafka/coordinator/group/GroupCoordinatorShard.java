@@ -39,10 +39,10 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsInitializeRequestData;
-import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -381,9 +381,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return A Result containing the StreamsInitialize response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> streamsInitialize(
+    public CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsInitialize(
         RequestContext context,
-        StreamsInitializeRequestData request
+        StreamsGroupInitializeRequestData request
     ) {
         return groupMetadataManager.streamsInitialize(context, request);
     }
@@ -397,9 +397,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return A Result containing the StreamsHeartbeat response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
+    public CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
         RequestContext context,
-        StreamsHeartbeatRequestData request
+        StreamsGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.streamsHeartbeat(context, request);
     }

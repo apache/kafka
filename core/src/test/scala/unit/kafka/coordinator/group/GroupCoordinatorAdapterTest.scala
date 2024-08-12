@@ -20,7 +20,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.{InvalidGroupIdException, UnsupportedVersionException}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupHeartbeatRequestData, StreamsHeartbeatRequestData, StreamsInitializeRequestData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupHeartbeatRequestData, StreamsGroupHeartbeatRequestData, StreamsGroupInitializeRequestData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
@@ -83,8 +83,8 @@ class GroupCoordinatorAdapterTest {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
-    val ctx = makeContext(ApiKeys.STREAMS_INITIALIZE, ApiKeys.STREAMS_INITIALIZE.latestVersion)
-    val request = new StreamsInitializeRequestData()
+    val ctx = makeContext(ApiKeys.STREAMS_GROUP_INITIALIZE, ApiKeys.STREAMS_GROUP_INITIALIZE.latestVersion)
+    val request = new StreamsGroupInitializeRequestData()
       .setGroupId("group")
 
     val future = adapter.streamsInitialize(ctx, request)
@@ -99,8 +99,8 @@ class GroupCoordinatorAdapterTest {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
-    val ctx = makeContext(ApiKeys.STREAMS_HEARTBEAT, ApiKeys.STREAMS_HEARTBEAT.latestVersion)
-    val request = new StreamsHeartbeatRequestData()
+    val ctx = makeContext(ApiKeys.STREAMS_GROUP_HEARTBEAT, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion)
+    val request = new StreamsGroupHeartbeatRequestData()
       .setGroupId("group")
 
     val future = adapter.streamsHeartbeat(ctx, request)

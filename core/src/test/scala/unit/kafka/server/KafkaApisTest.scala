@@ -11189,11 +11189,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsInitializeRequest(): Unit = {
-    val streamsInitializeRequest = new StreamsInitializeRequestData().setGroupId("group")
+    val streamsInitializeRequest = new StreamsGroupInitializeRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsInitializeRequest.Builder(streamsInitializeRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupInitializeRequest.Builder(streamsInitializeRequest, true).build())
 
-    val future = new CompletableFuture[StreamsInitializeResponseData]()
+    val future = new CompletableFuture[StreamsGroupInitializeResponseData]()
     when(groupCoordinator.streamsInitialize(
       requestChannelRequest.context,
       streamsInitializeRequest
@@ -11203,20 +11203,20 @@ class KafkaApisTest extends Logging {
     ))
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
-    val streamsInitializeResponse = new StreamsInitializeResponseData()
+    val streamsInitializeResponse = new StreamsGroupInitializeResponseData()
 
     future.complete(streamsInitializeResponse)
-    val response = verifyNoThrottling[StreamsInitializeResponse](requestChannelRequest)
+    val response = verifyNoThrottling[StreamsGroupInitializeResponse](requestChannelRequest)
     assertEquals(streamsInitializeResponse, response.data)
   }
 
   @Test
   def testStreamsInitializeRequestFutureFailed(): Unit = {
-    val streamsInitializeRequest = new StreamsInitializeRequestData().setGroupId("group")
+    val streamsInitializeRequest = new StreamsGroupInitializeRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsInitializeRequest.Builder(streamsInitializeRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupInitializeRequest.Builder(streamsInitializeRequest, true).build())
 
-    val future = new CompletableFuture[StreamsInitializeResponseData]()
+    val future = new CompletableFuture[StreamsGroupInitializeResponseData]()
     when(groupCoordinator.streamsInitialize(
       requestChannelRequest.context,
       streamsInitializeRequest
@@ -11227,15 +11227,15 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
-    val response = verifyNoThrottling[StreamsInitializeResponse](requestChannelRequest)
+    val response = verifyNoThrottling[StreamsGroupInitializeResponse](requestChannelRequest)
     assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.errorCode)
   }
 
   @Test
   def testStreamsInitializeRequestAuthorizationFailed(): Unit = {
-    val streamsInitializeRequest = new StreamsInitializeRequestData().setGroupId("group")
+    val streamsInitializeRequest = new StreamsGroupInitializeRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsInitializeRequest.Builder(streamsInitializeRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupInitializeRequest.Builder(streamsInitializeRequest, true).build())
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
@@ -11246,18 +11246,18 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
-    val response = verifyNoThrottling[StreamsInitializeResponse](requestChannelRequest)
+    val response = verifyNoThrottling[StreamsGroupInitializeResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
   }
 
 
   @Test
   def testStreamsHeartbeatRequest(): Unit = {
-    val streamsHeartbeatRequest = new StreamsHeartbeatRequestData().setGroupId("group")
+    val streamsHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsHeartbeatRequest.Builder(streamsHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsHeartbeatRequest, true).build())
 
-    val future = new CompletableFuture[StreamsHeartbeatResponseData]()
+    val future = new CompletableFuture[StreamsGroupHeartbeatResponseData]()
     when(groupCoordinator.streamsHeartbeat(
       requestChannelRequest.context,
       streamsHeartbeatRequest
@@ -11267,21 +11267,21 @@ class KafkaApisTest extends Logging {
     ))
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
-    val streamsHeartbeatResponse = new StreamsHeartbeatResponseData()
+    val streamsHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
     future.complete(streamsHeartbeatResponse)
-    val response = verifyNoThrottling[StreamsHeartbeatResponse](requestChannelRequest)
+    val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsHeartbeatResponse, response.data)
   }
 
   @Test
   def testStreamsHeartbeatRequestFutureFailed(): Unit = {
-    val streamsHeartbeatRequest = new StreamsHeartbeatRequestData().setGroupId("group")
+    val streamsHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsHeartbeatRequest.Builder(streamsHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsHeartbeatRequest, true).build())
 
-    val future = new CompletableFuture[StreamsHeartbeatResponseData]()
+    val future = new CompletableFuture[StreamsGroupHeartbeatResponseData]()
     when(groupCoordinator.streamsHeartbeat(
       requestChannelRequest.context,
       streamsHeartbeatRequest
@@ -11292,15 +11292,15 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
-    val response = verifyNoThrottling[StreamsHeartbeatResponse](requestChannelRequest)
+    val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.errorCode)
   }
 
   @Test
   def testStreamsHeartbeatRequestAuthorizationFailed(): Unit = {
-    val streamsHeartbeatRequest = new StreamsHeartbeatRequestData().setGroupId("group")
+    val streamsHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsHeartbeatRequest.Builder(streamsHeartbeatRequest, true).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsHeartbeatRequest, true).build())
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
@@ -11311,7 +11311,7 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
-    val response = verifyNoThrottling[StreamsHeartbeatResponse](requestChannelRequest)
+    val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
   }
 

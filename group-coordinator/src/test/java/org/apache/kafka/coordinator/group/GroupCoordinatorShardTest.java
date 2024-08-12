@@ -24,10 +24,10 @@ import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsInitializeRequestData;
-import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -149,11 +149,11 @@ public class GroupCoordinatorShardTest {
             metricsShard
         );
 
-        RequestContext context = requestContext(ApiKeys.STREAMS_INITIALIZE);
-        StreamsInitializeRequestData request = new StreamsInitializeRequestData();
-        CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
+        RequestContext context = requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE);
+        StreamsGroupInitializeRequestData request = new StreamsGroupInitializeRequestData();
+        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
             Collections.emptyList(),
-            new StreamsInitializeResponseData()
+            new StreamsGroupInitializeResponseData()
         );
 
         when(groupMetadataManager.streamsInitialize(
@@ -181,11 +181,11 @@ public class GroupCoordinatorShardTest {
             metricsShard
         );
 
-        RequestContext context = requestContext(ApiKeys.STREAMS_HEARTBEAT);
-        StreamsHeartbeatRequestData request = new StreamsHeartbeatRequestData();
-        CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
+        RequestContext context = requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT);
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData();
+        CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
             Collections.emptyList(),
-            new StreamsHeartbeatResponseData()
+            new StreamsGroupHeartbeatResponseData()
         );
 
         when(groupMetadataManager.streamsHeartbeat(

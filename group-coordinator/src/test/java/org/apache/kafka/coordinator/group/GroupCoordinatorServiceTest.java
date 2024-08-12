@@ -54,10 +54,10 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsInitializeRequestData;
-import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -275,16 +275,16 @@ public class GroupCoordinatorServiceTest {
             new GroupCoordinatorMetrics()
         );
 
-        StreamsInitializeRequestData request = new StreamsInitializeRequestData()
+        StreamsGroupInitializeRequestData request = new StreamsGroupInitializeRequestData()
             .setGroupId("foo");
 
-        CompletableFuture<StreamsInitializeResponseData> future = service.streamsInitialize(
-            requestContext(ApiKeys.STREAMS_INITIALIZE),
+        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsInitialize(
+            requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
 
         assertEquals(
-            new StreamsInitializeResponseData()
+            new StreamsGroupInitializeResponseData()
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
             future.get()
         );
@@ -300,7 +300,7 @@ public class GroupCoordinatorServiceTest {
             new GroupCoordinatorMetrics()
         );
 
-        StreamsInitializeRequestData request = new StreamsInitializeRequestData()
+        StreamsGroupInitializeRequestData request = new StreamsGroupInitializeRequestData()
             .setGroupId("foo");
 
         service.startup(() -> 1);
@@ -311,15 +311,15 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
-            new StreamsInitializeResponseData()
+            new StreamsGroupInitializeResponseData()
         ));
 
-        CompletableFuture<StreamsInitializeResponseData> future = service.streamsInitialize(
-            requestContext(ApiKeys.STREAMS_INITIALIZE),
+        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsInitialize(
+            requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
 
-        assertEquals(new StreamsInitializeResponseData(), future.get(5, TimeUnit.SECONDS));
+        assertEquals(new StreamsGroupInitializeResponseData(), future.get(5, TimeUnit.SECONDS));
     }
 
     private static Stream<Arguments> testStreamsInitializeWithExceptionSource() {
@@ -352,7 +352,7 @@ public class GroupCoordinatorServiceTest {
             new GroupCoordinatorMetrics()
         );
 
-        StreamsInitializeRequestData request = new StreamsInitializeRequestData()
+        StreamsGroupInitializeRequestData request = new StreamsGroupInitializeRequestData()
             .setGroupId("foo");
 
         service.startup(() -> 1);
@@ -364,13 +364,13 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
-        CompletableFuture<StreamsInitializeResponseData> future = service.streamsInitialize(
-            requestContext(ApiKeys.STREAMS_INITIALIZE),
+        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsInitialize(
+            requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
 
         assertEquals(
-            new StreamsInitializeResponseData()
+            new StreamsGroupInitializeResponseData()
                 .setErrorCode(expectedErrorCode)
                 .setErrorMessage(expectedErrorMessage),
             future.get(5, TimeUnit.SECONDS)
@@ -387,16 +387,16 @@ public class GroupCoordinatorServiceTest {
             new GroupCoordinatorMetrics()
         );
 
-        StreamsHeartbeatRequestData request = new StreamsHeartbeatRequestData()
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
             .setGroupId("foo");
 
-        CompletableFuture<StreamsHeartbeatResponseData> future = service.streamsHeartbeat(
-            requestContext(ApiKeys.STREAMS_HEARTBEAT),
+        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
             request
         );
 
         assertEquals(
-            new StreamsHeartbeatResponseData()
+            new StreamsGroupHeartbeatResponseData()
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
             future.get()
         );
@@ -412,7 +412,7 @@ public class GroupCoordinatorServiceTest {
             new GroupCoordinatorMetrics()
         );
 
-        StreamsHeartbeatRequestData request = new StreamsHeartbeatRequestData()
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
             .setGroupId("foo");
 
         service.startup(() -> 1);
@@ -423,15 +423,15 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
-            new StreamsHeartbeatResponseData()
+            new StreamsGroupHeartbeatResponseData()
         ));
 
-        CompletableFuture<StreamsHeartbeatResponseData> future = service.streamsHeartbeat(
-            requestContext(ApiKeys.STREAMS_HEARTBEAT),
+        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
             request
         );
 
-        assertEquals(new StreamsHeartbeatResponseData(), future.get(5, TimeUnit.SECONDS));
+        assertEquals(new StreamsGroupHeartbeatResponseData(), future.get(5, TimeUnit.SECONDS));
     }
 
     private static Stream<Arguments> testStreamsHeartbeatWithExceptionSource() {
@@ -463,7 +463,7 @@ public class GroupCoordinatorServiceTest {
             new GroupCoordinatorMetrics()
         );
 
-        StreamsHeartbeatRequestData request = new StreamsHeartbeatRequestData()
+        StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
             .setGroupId("foo");
 
         service.startup(() -> 1);
@@ -475,13 +475,13 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
-        CompletableFuture<StreamsHeartbeatResponseData> future = service.streamsHeartbeat(
-            requestContext(ApiKeys.STREAMS_HEARTBEAT),
+        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
             request
         );
 
         assertEquals(
-            new StreamsHeartbeatResponseData()
+            new StreamsGroupHeartbeatResponseData()
                 .setErrorCode(expectedErrorCode)
                 .setErrorMessage(expectedErrorMessage),
             future.get(5, TimeUnit.SECONDS)

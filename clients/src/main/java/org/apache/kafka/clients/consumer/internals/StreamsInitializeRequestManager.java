@@ -18,10 +18,10 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
-import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.StreamsInitializeRequest;
-import org.apache.kafka.common.requests.StreamsInitializeResponse;
+import org.apache.kafka.common.requests.StreamsGroupInitializeRequest;
+import org.apache.kafka.common.requests.StreamsGroupInitializeResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -66,12 +66,12 @@ public class StreamsInitializeRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeRequest() {
-        final StreamsInitializeRequestData streamsInitializeRequestData = new StreamsInitializeRequestData();
-        streamsInitializeRequestData.setGroupId(groupId);
-        final List<StreamsInitializeRequestData.Subtopology> topology = getTopologyFromStreams();
-        streamsInitializeRequestData.setTopology(topology);
-        final StreamsInitializeRequest.Builder streamsInitializeRequestBuilder = new StreamsInitializeRequest.Builder(
-            streamsInitializeRequestData
+        final StreamsGroupInitializeRequestData streamsGroupInitializeRequestData = new StreamsGroupInitializeRequestData();
+        streamsGroupInitializeRequestData.setGroupId(groupId);
+        final List<StreamsGroupInitializeRequestData.Subtopology> topology = getTopologyFromStreams();
+        streamsGroupInitializeRequestData.setTopology(topology);
+        final StreamsGroupInitializeRequest.Builder streamsInitializeRequestBuilder = new StreamsGroupInitializeRequest.Builder(
+            streamsGroupInitializeRequestData
         );
         return new NetworkClientDelegate.UnsentRequest(
             streamsInitializeRequestBuilder,
@@ -79,30 +79,30 @@ public class StreamsInitializeRequestManager implements RequestManager {
         );
     }
 
-    private List<StreamsInitializeRequestData.Subtopology> getTopologyFromStreams() {
+    private List<StreamsGroupInitializeRequestData.Subtopology> getTopologyFromStreams() {
         final Map<String, StreamsAssignmentInterface.Subtopology> subTopologyMap = streamsAssignmentInterface.subtopologyMap();
-        final List<StreamsInitializeRequestData.Subtopology> topology = new ArrayList<>(subTopologyMap.size());
+        final List<StreamsGroupInitializeRequestData.Subtopology> topology = new ArrayList<>(subTopologyMap.size());
         for (final Map.Entry<String, StreamsAssignmentInterface.Subtopology> subtopology : subTopologyMap.entrySet()) {
             topology.add(getSubtopologyFromStreams(subtopology.getKey(), subtopology.getValue()));
         }
         return topology;
     }
 
-    private static StreamsInitializeRequestData.Subtopology getSubtopologyFromStreams(final String subtopologyName,
-                                                                                      final StreamsAssignmentInterface.Subtopology subtopology) {
-        final StreamsInitializeRequestData.Subtopology subtopologyData = new StreamsInitializeRequestData.Subtopology();
+    private static StreamsGroupInitializeRequestData.Subtopology getSubtopologyFromStreams(final String subtopologyName,
+                                                                                           final StreamsAssignmentInterface.Subtopology subtopology) {
+        final StreamsGroupInitializeRequestData.Subtopology subtopologyData = new StreamsGroupInitializeRequestData.Subtopology();
         subtopologyData.setSubtopology(subtopologyName);
         subtopologyData.setSourceTopics(new ArrayList<>(subtopology.sourceTopics));
-        subtopologyData.setSinkTopics(new ArrayList<>(subtopology.sinkTopics));
+        subtopologyData.setRepartitionSinkTopics(new ArrayList<>(subtopology.sinkTopics));
         subtopologyData.setRepartitionSourceTopics(getRepartitionTopicsInfoFromStreams(subtopology));
         subtopologyData.setStateChangelogTopics(getChangelogTopicsInfoFromStreams(subtopology));
         return subtopologyData;
     }
 
-    private static List<StreamsInitializeRequestData.TopicInfo> getRepartitionTopicsInfoFromStreams(final StreamsAssignmentInterface.Subtopology subtopologyDataFromStreams) {
-        final List<StreamsInitializeRequestData.TopicInfo> repartitionTopicsInfo = new ArrayList<>();
+    private static List<StreamsGroupInitializeRequestData.TopicInfo> getRepartitionTopicsInfoFromStreams(final StreamsAssignmentInterface.Subtopology subtopologyDataFromStreams) {
+        final List<StreamsGroupInitializeRequestData.TopicInfo> repartitionTopicsInfo = new ArrayList<>();
         for (final Map.Entry<String, StreamsAssignmentInterface.TopicInfo> repartitionTopic : subtopologyDataFromStreams.repartitionSourceTopics.entrySet()) {
-            final StreamsInitializeRequestData.TopicInfo repartitionTopicInfo = new StreamsInitializeRequestData.TopicInfo();
+            final StreamsGroupInitializeRequestData.TopicInfo repartitionTopicInfo = new StreamsGroupInitializeRequestData.TopicInfo();
             repartitionTopicInfo.setName(repartitionTopic.getKey());
             repartitionTopic.getValue().numPartitions.ifPresent(repartitionTopicInfo::setPartitions);
             repartitionTopicsInfo.add(repartitionTopicInfo);
@@ -110,10 +110,10 @@ public class StreamsInitializeRequestManager implements RequestManager {
         return repartitionTopicsInfo;
     }
 
-    private static List<StreamsInitializeRequestData.TopicInfo> getChangelogTopicsInfoFromStreams(final StreamsAssignmentInterface.Subtopology subtopologyDataFromStreams) {
-        final List<StreamsInitializeRequestData.TopicInfo> changelogTopicsInfo = new ArrayList<>();
+    private static List<StreamsGroupInitializeRequestData.TopicInfo> getChangelogTopicsInfoFromStreams(final StreamsAssignmentInterface.Subtopology subtopologyDataFromStreams) {
+        final List<StreamsGroupInitializeRequestData.TopicInfo> changelogTopicsInfo = new ArrayList<>();
         for (final Map.Entry<String, StreamsAssignmentInterface.TopicInfo> changelogTopic : subtopologyDataFromStreams.stateChangelogTopics.entrySet()) {
-            final StreamsInitializeRequestData.TopicInfo changelogTopicInfo = new StreamsInitializeRequestData.TopicInfo();
+            final StreamsGroupInitializeRequestData.TopicInfo changelogTopicInfo = new StreamsGroupInitializeRequestData.TopicInfo();
             changelogTopicInfo.setName(changelogTopic.getKey());
             changelogTopicsInfo.add(changelogTopicInfo);
         }
@@ -125,11 +125,11 @@ public class StreamsInitializeRequestManager implements RequestManager {
             // todo: handle error
             logger.error("Error during Streams initialization: ", exception);
         } else {
-            onResponse((StreamsInitializeResponse) response.responseBody());
+            onResponse((StreamsGroupInitializeResponse) response.responseBody());
         }
     }
 
-    private void onResponse(final StreamsInitializeResponse response) {
+    private void onResponse(final StreamsGroupInitializeResponse response) {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
             onSuccessResponse(response);
         } else {
@@ -137,12 +137,12 @@ public class StreamsInitializeRequestManager implements RequestManager {
         }
     }
 
-    private void onErrorResponse(final StreamsInitializeResponse response) {
+    private void onErrorResponse(final StreamsGroupInitializeResponse response) {
         // todo: handle error
         logger.error("Error during Streams initialization: {}", response);
     }
 
-    private void onSuccessResponse(final StreamsInitializeResponse response) {
+    private void onSuccessResponse(final StreamsGroupInitializeResponse response) {
         // todo: handle success
         logger.info("Streams initialization successful {}", response);
     }

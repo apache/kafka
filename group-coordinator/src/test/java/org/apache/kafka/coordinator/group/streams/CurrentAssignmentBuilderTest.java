@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -230,10 +230,10 @@ public class CurrentAssignmentBuilderTest {
                 mkTaskAssignment(subtopologyId2, 5, 6))))
             .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> -1)
             .withOwnedActiveTasks(Arrays.asList(
-                new StreamsHeartbeatRequestData.TaskIds()
+                new StreamsGroupHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId1)
                     .setPartitions(Arrays.asList(2, 3)),
-                new StreamsHeartbeatRequestData.TaskIds()
+                new StreamsGroupHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId2)
                     .setPartitions(Arrays.asList(5, 6))))
             .build();
@@ -286,10 +286,10 @@ public class CurrentAssignmentBuilderTest {
             member,
             currentAssignmentBuilder
                 .withOwnedActiveTasks(Arrays.asList(
-                    new StreamsHeartbeatRequestData.TaskIds()
+                    new StreamsGroupHeartbeatRequestData.TaskIds()
                         .setSubtopology(subtopologyId1)
                         .setPartitions(Arrays.asList(1, 2, 3)),
-                    new StreamsHeartbeatRequestData.TaskIds()
+                    new StreamsGroupHeartbeatRequestData.TaskIds()
                         .setSubtopology(subtopologyId2)
                         .setPartitions(Arrays.asList(5, 6))))
                 .build()
@@ -299,10 +299,10 @@ public class CurrentAssignmentBuilderTest {
             member,
             currentAssignmentBuilder
                 .withOwnedActiveTasks(Arrays.asList(
-                    new StreamsHeartbeatRequestData.TaskIds()
+                    new StreamsGroupHeartbeatRequestData.TaskIds()
                         .setSubtopology(subtopologyId1)
                         .setPartitions(Arrays.asList(2, 3)),
-                    new StreamsHeartbeatRequestData.TaskIds()
+                    new StreamsGroupHeartbeatRequestData.TaskIds()
                         .setSubtopology(subtopologyId2)
                         .setPartitions(Arrays.asList(4, 5, 6))))
                 .build()
@@ -332,10 +332,10 @@ public class CurrentAssignmentBuilderTest {
                 mkTaskAssignment(subtopologyId2, 6))))
             .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> -1)
             .withOwnedActiveTasks(Arrays.asList(
-                new StreamsHeartbeatRequestData.TaskIds()
+                new StreamsGroupHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId1)
                     .setPartitions(Arrays.asList(2, 3)),
-                new StreamsHeartbeatRequestData.TaskIds()
+                new StreamsGroupHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId2)
                     .setPartitions(Arrays.asList(5, 6))))
             .build();
@@ -376,10 +376,10 @@ public class CurrentAssignmentBuilderTest {
                 mkTaskAssignment(subtopologyId2, 5, 6, 7))))
             .withCurrentActiveTaskEpoch((subtopologyId, partitionId) -> 10)
             .withOwnedActiveTasks(Arrays.asList(
-                new StreamsHeartbeatRequestData.TaskIds()
+                new StreamsGroupHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId1)
                     .setPartitions(Arrays.asList(2, 3)),
-                new StreamsHeartbeatRequestData.TaskIds()
+                new StreamsGroupHeartbeatRequestData.TaskIds()
                     .setSubtopology(subtopologyId2)
                     .setPartitions(Arrays.asList(5, 6))))
             .build();

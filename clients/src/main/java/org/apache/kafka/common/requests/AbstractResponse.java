@@ -287,10 +287,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return DeleteShareGroupStateResponse.parse(responseBuffer, version);
             case READ_SHARE_GROUP_STATE_SUMMARY:
                 return ReadShareGroupStateSummaryResponse.parse(responseBuffer, version);
-            case STREAMS_HEARTBEAT:
-                return StreamsHeartbeatResponse.parse(responseBuffer, version);
-            case STREAMS_INITIALIZE:
-                return StreamsInitializeResponse.parse(responseBuffer, version);
+            case STREAMS_GROUP_HEARTBEAT:
+                return StreamsGroupHeartbeatResponse.parse(responseBuffer, version);
+            case STREAMS_GROUP_INITIALIZE:
+                return StreamsGroupInitializeResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

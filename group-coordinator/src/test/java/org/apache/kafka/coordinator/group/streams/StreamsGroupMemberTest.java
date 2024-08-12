@@ -31,7 +31,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTaskAssignment;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -50,13 +49,11 @@ public class StreamsGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setTopologyHash("topology-hash".getBytes())
+            .setTopologyId("topology-hash")
             .setAssignor("assignor")
             .setProcessId("process-id")
-            .setHostInfo(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090))
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
-            .setUserData("user-data".getBytes())
-            .setAssignmentConfigs(mkMap(mkEntry("assignment", "config")))
             .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 1, 2, 3)))
             .setAssignedStandbyTasks(mkAssignment(mkTaskAssignment(subtopologyId2, 6, 5, 4)))
             .setAssignedWarmupTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 7, 8, 9)))
@@ -70,18 +67,13 @@ public class StreamsGroupMemberTest {
         assertEquals("rack-id", member.rackId());
         assertEquals("client-id", member.clientId());
         assertEquals("hostname", member.clientHost());
-        assertArrayEquals("topology-hash".getBytes(), member.topologyHash());
+        assertEquals("topology-hash", member.topologyId());
         assertEquals("assignor", member.assignor().get());
         assertEquals("process-id", member.processId());
-        assertEquals(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090), member.hostInfo());
+        assertEquals(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090), member.userEndpoint());
         assertEquals(
             mkMap(mkEntry("client", "tag")),
             member.clientTags()
-        );
-        assertArrayEquals("user-data".getBytes(), member.userData());
-        assertEquals(
-            mkMap(mkEntry("assignment", "config")),
-            member.assignmentConfigs()
         );
         assertEquals(
             mkAssignment(mkTaskAssignment(subtopologyId1, 1, 2, 3)),
@@ -114,13 +106,11 @@ public class StreamsGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setTopologyHash("topology-hash".getBytes())
+            .setTopologyId("topology-hash")
             .setAssignor("assignor")
             .setProcessId("process-id")
-            .setHostInfo(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090))
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
-            .setUserData("user-data".getBytes())
-            .setAssignmentConfigs(mkMap(mkEntry("assignment", "config")))
             .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 1, 2, 3)))
             .setAssignedStandbyTasks(mkAssignment(mkTaskAssignment(subtopologyId2, 6, 5, 4)))
             .setAssignedWarmupTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 7, 8, 9)))
@@ -135,13 +125,11 @@ public class StreamsGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setTopologyHash("topology-hash".getBytes())
+            .setTopologyId("topology-hash")
             .setAssignor("assignor")
             .setProcessId("process-id")
-            .setHostInfo(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090))
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
-            .setUserData("user-data".getBytes())
-            .setAssignmentConfigs(mkMap(mkEntry("assignment", "config")))
             .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 1, 2, 3)))
             .setAssignedStandbyTasks(mkAssignment(mkTaskAssignment(subtopologyId2, 6, 5, 4)))
             .setAssignedWarmupTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 7, 8, 9)))
@@ -156,13 +144,11 @@ public class StreamsGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setTopologyHash("topology-hash".getBytes())
+            .setTopologyId("topology-hash")
             .setAssignor("assignor")
             .setProcessId("process-id")
-            .setHostInfo(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090))
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
-            .setUserData("user-data".getBytes())
-            .setAssignmentConfigs(mkMap(mkEntry("assignment", "config")))
             .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 1, 2, 3)))
             .setAssignedStandbyTasks(mkAssignment(mkTaskAssignment(subtopologyId2, 6, 5, 4)))
             .setAssignedWarmupTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 7, 8, 9)))
@@ -186,13 +172,11 @@ public class StreamsGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setTopologyHash("topology-hash".getBytes())
+            .setTopologyId("topology-hash")
             .setAssignor("assignor")
             .setProcessId("process-id")
-            .setHostInfo(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090))
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
-            .setUserData("user-data".getBytes())
-            .setAssignmentConfigs(mkMap(mkEntry("assignment", "config")))
             .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 1, 2, 3)))
             .setAssignedStandbyTasks(mkAssignment(mkTaskAssignment(subtopologyId2, 6, 5, 4)))
             .setAssignedWarmupTasks(mkAssignment(mkTaskAssignment(subtopologyId1, 7, 8, 9)))
@@ -230,13 +214,10 @@ public class StreamsGroupMemberTest {
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(1000)
-            .setTopologyHash("topology-hash".getBytes())
-            .setAssignor("assignor")
+            .setTopologyId("topology-hash")
             .setProcessId("process-id")
-            .setHostInfo(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090))
-            .setClientTags(Collections.singletonList(new KeyValue().setKey("client").setValue("tag")))
-            .setUserData("user-data".getBytes())
-            .setAssignmentConfigs(Collections.singletonList(new KeyValue().setKey("assignment").setValue("config")));
+            .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
+            .setClientTags(Collections.singletonList(new KeyValue().setKey("client").setValue("tag")));
 
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
             .updateWith(record)
@@ -247,18 +228,12 @@ public class StreamsGroupMemberTest {
         assertEquals("client-id", member.clientId());
         assertEquals("host-id", member.clientHost());
         assertEquals(1000, member.rebalanceTimeoutMs());
-        assertArrayEquals("topology-hash".getBytes(), member.topologyHash());
-        assertEquals("assignor", member.assignor().get());
+        assertEquals("topology-hash", member.topologyId());
         assertEquals("process-id", member.processId());
-        assertEquals(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090), member.hostInfo());
+        assertEquals(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090), member.userEndpoint());
         assertEquals(
             mkMap(mkEntry("client", "tag")),
             member.clientTags()
-        );
-        assertArrayEquals("user-data".getBytes(), member.userData());
-        assertEquals(
-            mkMap(mkEntry("assignment", "config")),
-            member.assignmentConfigs()
         );
     }
 

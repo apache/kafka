@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.errors.FencedMemberEpochException;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,7 +47,7 @@ public class CurrentAssignmentBuilder {
     /**
      * The target assignment.
      */
-    private org.apache.kafka.coordinator.group.streams.Assignment targetAssignment;
+    private Assignment targetAssignment;
 
     /**
      * A function which returns the current epoch of a topic-partition or -1 if the topic-partition is not assigned. The current epoch is
@@ -58,17 +58,17 @@ public class CurrentAssignmentBuilder {
     /**
      * The active tasks owned by the streams. This is directly provided by the member in the StreamsHeartbeat request.
      */
-    private List<StreamsHeartbeatRequestData.TaskIds> ownedActiveTasks;
+    private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks;
 
     /**
      * The standby tasks owned by the streams. This is directly provided by the member in the StreamsHeartbeat request.
      */
-    private List<StreamsHeartbeatRequestData.TaskIds> ownedStandbyTasks;
+    private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks;
 
     /**
      * The warmup tasks owned by the streams. This is directly provided by the member in the StreamsHeartbeat request.
      */
-    private List<StreamsHeartbeatRequestData.TaskIds> ownedWarmupTasks;
+    private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks;
 
     /**
      * Constructs the CurrentAssignmentBuilder based on the current state of the provided streams group member.
@@ -117,7 +117,7 @@ public class CurrentAssignmentBuilder {
      * @return This object.
      */
     public CurrentAssignmentBuilder withOwnedActiveTasks(
-        List<StreamsHeartbeatRequestData.TaskIds> ownedActiveTasks
+        List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks
     ) {
         this.ownedActiveTasks = ownedActiveTasks;
         return this;
@@ -131,7 +131,7 @@ public class CurrentAssignmentBuilder {
      * @return This object.
      */
     public CurrentAssignmentBuilder withOwnedStandbyTasks(
-        List<StreamsHeartbeatRequestData.TaskIds> ownedStandbyTasks
+        List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks
     ) {
         this.ownedStandbyTasks = ownedStandbyTasks;
         return this;
@@ -145,7 +145,7 @@ public class CurrentAssignmentBuilder {
      * @return This object.
      */
     public CurrentAssignmentBuilder withOwnedWarmupTasks(
-        List<StreamsHeartbeatRequestData.TaskIds> ownedWarmupTasks
+        List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks
     ) {
         this.ownedWarmupTasks = ownedWarmupTasks;
         return this;
@@ -241,7 +241,7 @@ public class CurrentAssignmentBuilder {
             return true;
         }
 
-        for (StreamsHeartbeatRequestData.TaskIds activeTasks : ownedActiveTasks) {
+        for (StreamsGroupHeartbeatRequestData.TaskIds activeTasks : ownedActiveTasks) {
             Set<Integer> tasksPendingRevocation =
                 assignment.getOrDefault(activeTasks.subtopology(), Collections.emptySet());
 

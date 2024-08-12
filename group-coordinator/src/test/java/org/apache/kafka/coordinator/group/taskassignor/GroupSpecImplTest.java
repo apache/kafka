@@ -48,7 +48,6 @@ public class GroupSpecImplTest {
             Collections.emptyMap(),
             "test-process",
             Collections.emptyMap(),
-            Collections.emptyMap(),
             Collections.emptyMap()
         ));
 

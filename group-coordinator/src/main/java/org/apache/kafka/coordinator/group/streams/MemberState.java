@@ -46,7 +46,7 @@ public enum MemberState {
      */
     UNKNOWN((byte) 127);
 
-    private final static Map<Byte, MemberState> VALUES_TO_ENUMS = new HashMap<>();
+    private static final Map<Byte, MemberState> VALUES_TO_ENUMS = new HashMap<>();
 
     static {
         for (MemberState state : MemberState.values()) {

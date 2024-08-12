@@ -63,11 +63,6 @@ public class AssignmentMemberSpec {
     private final Map<String, String> clientTags;
 
     /**
-     * The assignment configs for customizing the assignment.
-     */
-    private final Map<String, String> assignmentConfigs;
-
-    /**
      * The last received cumulative task offsets of assigned tasks or dormant tasks.
      */
     private final Map<TaskId, Long> taskOffsets;
@@ -115,10 +110,6 @@ public class AssignmentMemberSpec {
         return clientTags;
     }
 
-    public Map<String, String> assignmentConfigs() {
-        return assignmentConfigs;
-    }
-
     public String processId() {
         return processId;
     }
@@ -130,7 +121,6 @@ public class AssignmentMemberSpec {
                                 final Map<String, Set<Integer>> warmupTasks,
                                 final String processId,
                                 final Map<String, String> clientTags,
-                                final Map<String, String> assignmentConfigs,
                                 final Map<TaskId, Long> taskOffsets) {
         this.instanceId = Objects.requireNonNull(instanceId);
         this.rackId = Objects.requireNonNull(rackId);
@@ -139,7 +129,6 @@ public class AssignmentMemberSpec {
         this.warmupTasks = Collections.unmodifiableMap(Objects.requireNonNull(warmupTasks));
         this.processId = Objects.requireNonNull(processId);
         this.clientTags = Collections.unmodifiableMap(Objects.requireNonNull(clientTags));
-        this.assignmentConfigs = Collections.unmodifiableMap(Objects.requireNonNull(assignmentConfigs));
         this.taskOffsets = Collections.unmodifiableMap(Objects.requireNonNull(taskOffsets));
     }
 
@@ -159,7 +148,6 @@ public class AssignmentMemberSpec {
             && Objects.equals(warmupTasks, that.warmupTasks)
             && Objects.equals(processId, that.processId)
             && Objects.equals(clientTags, that.clientTags)
-            && Objects.equals(assignmentConfigs, that.assignmentConfigs)
             && Objects.equals(taskOffsets, that.taskOffsets);
     }
 
@@ -173,7 +161,6 @@ public class AssignmentMemberSpec {
             warmupTasks,
             processId,
             clientTags,
-            assignmentConfigs,
             taskOffsets
         );
     }
@@ -188,7 +175,6 @@ public class AssignmentMemberSpec {
             ", warmupTasks=" + warmupTasks +
             ", processId='" + processId + '\'' +
             ", clientTags=" + clientTags +
-            ", assignmentConfigs=" + assignmentConfigs +
             ", taskOffsets=" + taskOffsets +
             '}';
     }

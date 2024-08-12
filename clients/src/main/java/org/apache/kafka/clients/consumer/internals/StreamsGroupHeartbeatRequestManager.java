@@ -28,14 +28,14 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.TopicPartitions;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData.TaskIds;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData.HostInfo;
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskIds;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Endpoint;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.StreamsHeartbeatRequest;
-import org.apache.kafka.common.requests.StreamsHeartbeatResponse;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -51,19 +51,17 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class StreamsHeartbeatRequestManager implements RequestManager {
+public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final Logger logger;
 
     private final CoordinatorRequestManager coordinatorRequestManager;
 
-    private final StreamsHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
+    private final StreamsGroupHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
 
-    private final StreamsHeartbeatRequestManager.HeartbeatState heartbeatState;
+    private final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState;
 
     private final MembershipManager membershipManager;
-
-    private final StreamsPrepareAssignmentRequestManager streamsPrepareAssignmentRequestManager;
 
     private final StreamsInitializeRequestManager streamsInitializeRequestManager;
 
@@ -79,13 +77,12 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
 
     private final ConsumerMetadata metadata;
 
-    public StreamsHeartbeatRequestManager(
+    public StreamsGroupHeartbeatRequestManager(
         final LogContext logContext,
         final Time time,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final StreamsInitializeRequestManager streamsInitializeRequestManager,
-        final StreamsPrepareAssignmentRequestManager streamsPrepareAssignmentRequestManager,
         final MembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics,
@@ -96,14 +93,13 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         this.logger = logContext.logger(getClass());
         this.membershipManager = membershipManager;
         this.streamsInitializeRequestManager = streamsInitializeRequestManager;
-        this.streamsPrepareAssignmentRequestManager = streamsPrepareAssignmentRequestManager;
         this.backgroundEventHandler = backgroundEventHandler;
         int maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatState = new StreamsHeartbeatRequestManager.HeartbeatState(streamsAssignmentInterface, membershipManager,
+        this.heartbeatState = new StreamsGroupHeartbeatRequestManager.HeartbeatState(streamsAssignmentInterface, membershipManager,
             maxPollIntervalMs);
-        this.heartbeatRequestState = new StreamsHeartbeatRequestManager.HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
+        this.heartbeatRequestState = new StreamsGroupHeartbeatRequestManager.HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
         this.metricsManager = new HeartbeatMetricsManager(metrics);
@@ -169,7 +165,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new StreamsHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
+            new StreamsGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
             coordinatorRequestManager.coordinator());
         if (ignoreResponse) {
             return logResponse(request);
@@ -178,7 +174,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
                 long completionTimeMs = request.handler().completionTimeMs();
                 if (response != null) {
                     metricsManager.recordRequestLatency(response.requestLatencyMs());
-                    onResponse((StreamsHeartbeatResponse) response.responseBody(), completionTimeMs);
+                    onResponse((StreamsGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
                 } else {
                     onFailure(exception, completionTimeMs);
                 }
@@ -191,7 +187,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
             if (response != null) {
                 metricsManager.recordRequestLatency(response.requestLatencyMs());
                 Errors error =
-                    Errors.forCode(((StreamsHeartbeatResponse) response.responseBody()).data().errorCode());
+                    Errors.forCode(((StreamsGroupHeartbeatResponse) response.responseBody()).data().errorCode());
                 if (error == Errors.NONE) {
                     logger.debug("StreamsHeartbeat responded successfully: {}", response);
                 } else {
@@ -218,7 +214,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         }
     }
 
-    private void onResponse(final StreamsHeartbeatResponse response, long currentTimeMs) {
+    private void onResponse(final StreamsGroupHeartbeatResponse response, long currentTimeMs) {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
             onSuccessResponse(response, currentTimeMs);
         } else {
@@ -226,8 +222,8 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         }
     }
 
-    private void onSuccessResponse(final StreamsHeartbeatResponse response, final long currentTimeMs) {
-        final StreamsHeartbeatResponseData data = response.data();
+    private void onSuccessResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
+        final StreamsGroupHeartbeatResponseData data = response.data();
 
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
@@ -236,10 +232,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         if (data.shouldInitializeTopology()) {
             streamsInitializeRequestManager.initialize();
         }
-        if (data.shouldComputeAssignment()) {
-            streamsPrepareAssignmentRequestManager.prepareAssignment();
-        }
-        if (data.partitionsByHost() != null) {
+        if (data.partitionsByUserEndpoint() != null) {
             streamsInterface.partitionsByHost.set(convertHostInfoMap(data));
         }
 
@@ -251,19 +244,13 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         cgData.setThrottleTimeMs(data.throttleTimeMs());
         cgData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
 
-        Errors assignmentError = response.assignmentError();
-        String assignmentErrorMessage = response.data().errorMessage();
-        if (assignmentError != Errors.NONE) {
-            logger.warn("Assignment incomplete. {}. {}", assignmentError.message(), assignmentErrorMessage);
-            switch (assignmentError) {
-                case STREAMS_SHUTDOWN_APPLICATION:
-                    streamsInterface.requestShutdown();
-                    break;
-                case STREAMS_INCONSISTENT_TOPOLOGY:
-                case STREAMS_MISSING_SOURCE_TOPICS:
-                case STREAMS_GROUP_UNINITIALIZED:
-                    break;
-            }
+        List<StreamsGroupHeartbeatResponseData.Status> statuses = data.status();
+
+        if (statuses != null && !statuses.isEmpty()) {
+            String statusDetails = statuses.stream()
+                .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
+                .collect(Collectors.joining(", "));
+            logger.warn("Membership is in the following statuses: {}.", statusDetails);
         }
 
         if (data.activeTasks() != null && data.standbyTasks() != null && data.warmupTasks() != null) {
@@ -280,7 +267,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         membershipManager.onHeartbeatSuccess(cgData);
     }
 
-    private void setTargetAssignmentForConsumerGroup(final StreamsHeartbeatResponseData data, final ConsumerGroupHeartbeatResponseData cgData) {
+    private void setTargetAssignmentForConsumerGroup(final StreamsGroupHeartbeatResponseData data, final ConsumerGroupHeartbeatResponseData cgData) {
         Map<String, TopicPartitions> tps = new HashMap<>();
         data.activeTasks().forEach(taskId -> Stream.concat(
                 streamsInterface.subtopologyMap().get(taskId.subtopology()).sourceTopics.stream(),
@@ -307,7 +294,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         cgData.setAssignment(cgAssignment);
     }
 
-    private void setTargetAssignment(final StreamsHeartbeatResponseData data) {
+    private void setTargetAssignment(final StreamsGroupHeartbeatResponseData data) {
         Assignment targetAssignment = new Assignment();
         updateTaskIdCollection(data.activeTasks(), targetAssignment.activeTasks);
         updateTaskIdCollection(data.standbyTasks(), targetAssignment.standbyTasks);
@@ -315,21 +302,21 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         streamsInterface.targetAssignment.set(targetAssignment);
     }
 
-    private static Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> convertHostInfoMap(
-        final StreamsHeartbeatResponseData data) {
+    private static Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> convertHostInfoMap(final StreamsGroupHeartbeatResponseData data) {
         Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> partitionsByHost = new HashMap<>();
-        data.partitionsByHost().forEach(hostInfo -> {
-            List<TopicPartition> topicPartitions = hostInfo.partitions().stream()
+        data.partitionsByUserEndpoint().forEach(endpoint -> {
+            List<TopicPartition> topicPartitions = endpoint.partitions().stream()
                 .flatMap(partition ->
                     partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
                 .collect(Collectors.toList());
-            partitionsByHost.put(new StreamsAssignmentInterface.HostInfo(hostInfo.host(), hostInfo.port()), topicPartitions);
+            Endpoint userEndpoint = endpoint.userEndpoint();
+            partitionsByHost.put(new StreamsAssignmentInterface.HostInfo(userEndpoint.host(), userEndpoint.port()), topicPartitions);
         });
         return partitionsByHost;
     }
 
     private void updateTaskIdCollection(
-        final List<StreamsHeartbeatResponseData.TaskIds> source,
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> source,
         final Set<StreamsAssignmentInterface.TaskId> target
     ) {
         target.clear();
@@ -340,7 +327,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
         });
     }
 
-    private void onErrorResponse(final StreamsHeartbeatResponse response,
+    private void onErrorResponse(final StreamsGroupHeartbeatResponse response,
                                  final long currentTimeMs) {
         Errors error = Errors.forCode(response.data().errorCode());
         String errorMessage = response.data().errorMessage();
@@ -428,7 +415,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
     }
 
     private void logInfo(final String message,
-                         final StreamsHeartbeatResponse response,
+                         final StreamsGroupHeartbeatResponse response,
                          final long currentTimeMs) {
         logger.info("{} in {}ms: {}",
             message,
@@ -464,7 +451,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
             final long retryBackoffMs,
             final long retryBackoffMaxMs,
             final double jitter) {
-            super(logContext, StreamsHeartbeatRequestManager.HeartbeatRequestState.class.getName(), retryBackoffMs, 2, retryBackoffMaxMs,
+            super(logContext, StreamsGroupHeartbeatRequestManager.HeartbeatRequestState.class.getName(), retryBackoffMs, 2, retryBackoffMaxMs,
                 jitter);
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatTimer = time.timer(heartbeatIntervalMs);
@@ -518,7 +505,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
 
         private final MembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
-        private final StreamsHeartbeatRequestManager.HeartbeatState.SentFields sentFields;
+        private final StreamsGroupHeartbeatRequestManager.HeartbeatState.SentFields sentFields;
 
         /*
          * StreamsGroupMetadata holds the metadata for the streams group
@@ -531,7 +518,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
             final int rebalanceTimeoutMs) {
             this.membershipManager = membershipManager;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-            this.sentFields = new StreamsHeartbeatRequestManager.HeartbeatState.SentFields();
+            this.sentFields = new StreamsGroupHeartbeatRequestManager.HeartbeatState.SentFields();
             this.streamsInterface = streamsInterface;
         }
 
@@ -539,8 +526,8 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
             sentFields.reset();
         }
 
-        public StreamsHeartbeatRequestData buildRequestData() {
-            StreamsHeartbeatRequestData data = new StreamsHeartbeatRequestData();
+        public StreamsGroupHeartbeatRequestData buildRequestData() {
+            StreamsGroupHeartbeatRequestData data = new StreamsGroupHeartbeatRequestData();
 
             // GroupId - always sent
             data.setGroupId(membershipManager.groupId());
@@ -565,28 +552,21 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
             // Immutable -- only sent when joining
             if (joining) {
                 data.setProcessId(streamsInterface.processID().toString());
-                HostInfo hostInfo = new HostInfo();
-                hostInfo.setHost(streamsInterface.endPoint().host);
-                hostInfo.setPort(streamsInterface.endPoint().port);
-                data.setHostInfo(hostInfo);
-                data.setAssignor(streamsInterface.assignor());
-                data.setClientTags(streamsInterface.clientTags().entrySet().stream().map(entry -> {
-                    StreamsHeartbeatRequestData.KeyValue tag = new StreamsHeartbeatRequestData.KeyValue();
-                    tag.setKey(entry.getKey());
-                    tag.setValue(entry.getValue());
-                    return tag;
-                }).collect(Collectors.toList()));
-                data.setAssignmentConfigs(streamsInterface.assignmentConfiguration().entrySet().stream().filter(
-                    entry -> entry.getValue() != null
-                ).map(entry -> {
-                    StreamsHeartbeatRequestData.KeyValue config = new StreamsHeartbeatRequestData.KeyValue();
-                    config.setKey(entry.getKey());
-                    config.setValue(entry.getValue().toString());
-                    return config;
-                }).collect(Collectors.toList()));
-            } else {
-                // FIXME: This seems to be a bug in the RPC serialization code. The default should be null, but it's empty.
-                data.setAssignor(null);
+//                data.setActiveTasks(Collections.emptyList());
+//                data.setStandbyTasks(Collections.emptyList());
+//                data.setWarmupTasks(Collections.emptyList());
+                streamsInterface.endpoint().ifPresent(streamsEndpoint -> {
+                    data.setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint()
+                        .setHost(streamsEndpoint.host)
+                        .setPort(streamsEndpoint.port)
+                    );
+                });
+                data.setClientTags(streamsInterface.clientTags().entrySet().stream()
+                    .map(entry -> new StreamsGroupHeartbeatRequestData.KeyValue()
+                        .setKey(entry.getKey())
+                        .setValue(entry.getValue())
+                    )
+                    .collect(Collectors.toList()));
             }
 
             if (streamsInterface.shutdownRequested()) {

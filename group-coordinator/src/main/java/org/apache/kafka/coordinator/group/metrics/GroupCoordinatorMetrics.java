@@ -74,8 +74,8 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String SHARE_GROUP_COUNT_METRIC_NAME = "group-count";
     public static final String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
     public static final String SHARE_GROUP_COUNT_STATE_TAG = CONSUMER_GROUP_COUNT_STATE_TAG;
-    public final static String STREAMS_GROUP_COUNT_METRIC_NAME = "streams-group-count";
-    public final static String STREAMS_GROUP_COUNT_STATE_TAG = "state";
+    public static final String STREAMS_GROUP_COUNT_METRIC_NAME = "streams-group-count";
+    public static final String STREAMS_GROUP_COUNT_STATE_TAG = "state";
 
     public static final String OFFSET_COMMITS_SENSOR_NAME = "OffsetCommits";
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";

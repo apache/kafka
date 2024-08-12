@@ -16,7 +16,7 @@
 {
   "apiKey": 89,
   "type": "response",
-  "name": "StreamsHeartbeatResponse",
+  "name": "StreamsGroupHeartbeatResponse",
   "validVersions": "0",
   "flexibleVersions": "0+",
   // Supported errors:
@@ -27,7 +27,6 @@
   // - INVALID_REQUEST (version 0+)
   // - UNKNOWN_MEMBER_ID (version 0+)
   // - FENCED_MEMBER_EPOCH (version 0+)
-  // - UNSUPPORTED_ASSIGNOR (version 0+)
   // - UNRELEASED_INSTANCE_ID (version 0+)
   // - GROUP_MAX_SIZE_REACHED (version 0+)
   "fields": [
@@ -44,45 +43,52 @@
       "about": "The member epoch." },
     { "name": "HeartbeatIntervalMs", "type": "int32", "versions": "0+",
       "about": "The heartbeat interval in milliseconds." },
+    { "name": "AcceptableRecoveryLag", "type": "int32", "versions": "0+",
+      "about": "The maximal lag a warm-up task can have to be considered caught-up." },
+    { "name": "TaskOffsetIntervalMs", "type": "int32", "versions": "0+",
+      "about": "The interval in which the changelog task offsets on a client are updated on the broker. The offsets are sent with the next heartbeat after this time has passed." },
 
-    // Assigning specific roles to the consumer
-    { "name": "ShouldComputeAssignment", "type":  "bool", "versions":  "0+", "default": false,
-      "about": "true if this streams application should compute the next assignment." },
+    // Topology updating
     { "name": "ShouldInitializeTopology", "type":  "bool", "versions":  "0+", "default": false,
       "about": "true if this streams application should initialize the topology on the broker" },
+    { "name": "GroupTopologyId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": null,
+      "about": "The current ID of the topology for the group. Null if unchanged since last heartbeat, empty if group is unitialized." },
 
-    // Possible errors:
-    // - STREAMS_INCONSISTENT_TOPOLOGY (version 0+)
-    // - STREAMS_MISSING_SOURCE_TOPICS (version 0+)
-    // - STREAMS_SHUTDOWN_APPLICATION (version 0+)
-    // - STREAMS_GROUP_UNITIALIZED (version 0+)
-    { "name": "AssignmentErrorCode", "type":  "int16", "versions":  "0+", "default": 0,
-      "about": "An error code relating to the current state of the assignment to this member." },
-    { "name": "AssignmentErrorMessage", "type":  "string", "versions":  "0+", "default": "",
-      "about": "An error message relating to the current state of the assignment to this member." },
+    { "name": "Status", "type":  "[]Status", "versions":  "0+",  "nullableVersions": "0+", "default": "null",
+      "about": "Indicate zero or more status for the group.  Null if unchanged since last heartbeat." },
 
     // The streams app knows which partitions to fetch from given this information
     { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Local assignment for this consumer. Null if unchanged since last heartbeat." },
+      "about": "Assigned active tasks for this client. Null if unchanged since last heartbeat." },
     { "name": "StandbyTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Local standby tasks for this consumer. Null if unchanged since last heartbeat." },
+      "about": "Assigned standby tasks for this client. Null if unchanged since last heartbeat." },
     { "name": "WarmupTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Local warming up tasks for this consumer. Null if unchanged since last heartbeat." },
+      "about": "Assigned warm-up tasks for this client. Null if unchanged since last heartbeat." },
 
     // IQ-related information
-    { "name": "PartitionsByHost", "type": "[]HostInfo", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "PartitionsByUserEndpoint", "type": "[]EndpointToPartitions", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Global assignment information used for IQ. Null if unchanged since last heartbeat." ,
       "fields": [
-        { "name": "Host", "type": "string", "versions": "0+",
-          "about": "Hostname of the node" },
-        { "name": "Port", "type": "int32", "versions": "0+",
-          "about": "Port of the node" },
+        { "name": "UserEndpoint", "type": "Endpoint", "versions": "0+",
+          "about": "User-defined endpoint to connect to the node" },
         { "name": "Partitions", "type": "[]TopicPartition", "versions": "0+",
           "about": "All partitions available on the node" }
       ]
     }
   ],
   "commonStructs": [
+    { "name": "Status", "versions": "0+", "fields": [
+      // Possible status codes
+      //  0 - UNITIALIZED_TOPOLOGY    - The group is not initialized.
+      //  1 - INCONSISTENT_TOPOLOGY   - The topology ID supplied is inconsistent with the topology for this streams group.
+      //  2 - MISSING_SOURCE_TOPICS   - One or more source topics do not exist. Missing topics are indicated in the StatusDetail.
+      //  3 - MISSING_INTERNAL_TOPICS - One or more internal topics do not exist. Missing topics are indicated in the StatusDetail.
+      //  4 - SHUTDOWN_APPLICATION    - A client requested the shutdown of the whole application.
+      { "name": "StatusCode", "type": "int8", "versions": "0+",
+        "about": "A code to indicate that a particular status is active for the group membership" },
+      { "name": "StatusDetail", "type": "string", "versions": "0+",
+        "about": "A string representation of the status." }
+    ]},
     { "name": "TopicPartition", "versions": "0+", "fields": [
       { "name": "Topic", "type": "string", "versions": "0+",
         "about": "topic name" },
@@ -90,12 +96,16 @@
         "about": "partitions" }
     ]},
     { "name": "TaskIds", "versions": "0+", "fields": [
-      // We are using strings here, to avoid fixing a structure on task IDs which will
-      // allow introducing stable naming for subtopologies in the future.
       { "name": "Subtopology", "type": "string", "versions": "0+",
-        "about": "subtopology ID" },
+        "about": "The subtopology identifier." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "partitions" }
+        "about": "The partitions of the input topics processed by this member." }
+    ]},
+    { "name": "Endpoint", "versions": "0+", "fields": [
+      { "name": "Host", "type": "string", "versions": "0+",
+        "about": "host of the endpoint" },
+      { "name": "Port", "type": "uint16", "versions": "0+",
+        "about": "port of the endpoint" }
     ]}
   ]
 }

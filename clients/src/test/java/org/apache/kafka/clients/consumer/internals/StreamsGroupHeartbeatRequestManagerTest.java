@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.Assignment;
-import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.HostInfo;
 import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.Subtopology;
 import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.TaskId;
 import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.TopicInfo;
@@ -29,13 +28,13 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.TopicPartitions;
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.StreamsHeartbeatRequest;
-import org.apache.kafka.common.requests.StreamsHeartbeatResponse;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -68,14 +67,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class StreamsHeartbeatRequestManagerTest {
+class StreamsGroupHeartbeatRequestManagerTest {
 
     public static final String TEST_GROUP_ID = "testGroupId";
     public static final String TEST_MEMBER_ID = "testMemberId";
     public static final int TEST_MEMBER_EPOCH = 5;
     public static final String TEST_INSTANCE_ID = "instanceId";
     public static final int TEST_THROTTLE_TIME_MS = 5;
-    private StreamsHeartbeatRequestManager heartbeatRequestManager;
+    private StreamsGroupHeartbeatRequestManager heartbeatRequestManager;
 
     private Time time;
 
@@ -88,9 +87,6 @@ class StreamsHeartbeatRequestManagerTest {
 
     @Mock
     private StreamsInitializeRequestManager streamsInitializeRequestManager;
-
-    @Mock
-    private StreamsPrepareAssignmentRequestManager streamsPrepareAssignmentRequestManager;
 
     @Mock
     private MembershipManager membershipManager;
@@ -107,7 +103,7 @@ class StreamsHeartbeatRequestManagerTest {
     // Static data for testing
     private final UUID processID = new UUID(1, 1);
 
-    private final HostInfo endPoint = new HostInfo("localhost", 9092);
+    private final StreamsAssignmentInterface.HostInfo endPoint = new StreamsAssignmentInterface.HostInfo("localhost", 8080);
 
     private final String assignor = "test";
 
@@ -129,7 +125,7 @@ class StreamsHeartbeatRequestManagerTest {
         streamsAssignmentInterface =
             new StreamsAssignmentInterface(
                 processID,
-                endPoint,
+                Optional.of(endPoint),
                 assignor,
                 subtopologyMap,
                 assignmentConfiguration,
@@ -140,13 +136,12 @@ class StreamsHeartbeatRequestManagerTest {
 
         MockitoAnnotations.openMocks(this);
         when(metrics.sensor(anyString())).thenReturn(mock(Sensor.class));
-        heartbeatRequestManager = new StreamsHeartbeatRequestManager(
+        heartbeatRequestManager = new StreamsGroupHeartbeatRequestManager(
             logContext,
             time,
             config,
             coordinatorRequestManager,
             streamsInitializeRequestManager,
-            streamsPrepareAssignmentRequestManager,
             membershipManager,
             backgroundEventHandler,
             metrics,
@@ -192,7 +187,7 @@ class StreamsHeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         assertEquals(Optional.of(coordinatorNode), result.unsentRequests.get(0).node());
 
-        StreamsHeartbeatRequest request = (StreamsHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
+        StreamsGroupHeartbeatRequest request = (StreamsGroupHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
 
         assertEquals(TEST_GROUP_ID, request.data().groupId());
         assertEquals(TEST_MEMBER_ID, request.data().memberId());
@@ -201,9 +196,7 @@ class StreamsHeartbeatRequestManagerTest {
 
         // Static information is null
         assertNull(request.data().processId());
-        assertNull(request.data().hostInfo());
-        assertNull(request.data().assignor());
-        assertNull(request.data().assignmentConfigs());
+        assertNull(request.data().userEndpoint());
         assertNull(request.data().clientTags());
     }
 
@@ -218,15 +211,10 @@ class StreamsHeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         assertEquals(Optional.of(coordinatorNode), result.unsentRequests.get(0).node());
 
-        StreamsHeartbeatRequest request = (StreamsHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
+        StreamsGroupHeartbeatRequest request = (StreamsGroupHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
 
         assertEquals(processID.toString(), request.data().processId());
-        assertEquals(endPoint.host, request.data().hostInfo().host());
-        assertEquals(endPoint.port, request.data().hostInfo().port());
-        assertEquals(assignor, request.data().assignor());
-        assertEquals(1, request.data().assignmentConfigs().size());
-        assertEquals("config1", request.data().assignmentConfigs().get(0).key());
-        assertEquals("value1", request.data().assignmentConfigs().get(0).value());
+        assertEquals(endPoint, request.data().userEndpoint());
         assertEquals(1, request.data().clientTags().size());
         assertEquals("clientTag1", request.data().clientTags().get(0).key());
         assertEquals("value2", request.data().clientTags().get(0).value());
@@ -242,7 +230,7 @@ class StreamsHeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         assertEquals(Optional.of(coordinatorNode), result.unsentRequests.get(0).node());
 
-        StreamsHeartbeatRequest request = (StreamsHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
+        StreamsGroupHeartbeatRequest request = (StreamsGroupHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
 
         assertEquals(true, request.data().shutdownApplication());
     }
@@ -284,7 +272,7 @@ class StreamsHeartbeatRequestManagerTest {
                 Collections.singletonMap("changelog2", emptyTopicInfo)
             ));
 
-        StreamsHeartbeatResponseData data = new StreamsHeartbeatResponseData()
+        StreamsGroupHeartbeatResponseData data = new StreamsGroupHeartbeatResponseData()
             .setErrorCode(Errors.NONE.code())
             .setThrottleTimeMs(0)
             .setMemberId(TEST_MEMBER_ID)
@@ -292,11 +280,11 @@ class StreamsHeartbeatRequestManagerTest {
             .setThrottleTimeMs(TEST_THROTTLE_TIME_MS)
             .setHeartbeatIntervalMs(1000)
             .setActiveTasks(Collections.singletonList(
-                new StreamsHeartbeatResponseData.TaskIds().setSubtopology("0").setPartitions(Collections.singletonList(0))))
+                new StreamsGroupHeartbeatResponseData.TaskIds().setSubtopology("0").setPartitions(Collections.singletonList(0))))
             .setStandbyTasks(Collections.singletonList(
-                new StreamsHeartbeatResponseData.TaskIds().setSubtopology("1").setPartitions(Collections.singletonList(1))))
+                new StreamsGroupHeartbeatResponseData.TaskIds().setSubtopology("1").setPartitions(Collections.singletonList(1))))
             .setWarmupTasks(Collections.singletonList(
-                new StreamsHeartbeatResponseData.TaskIds().setSubtopology("2").setPartitions(Collections.singletonList(2))));
+                new StreamsGroupHeartbeatResponseData.TaskIds().setSubtopology("2").setPartitions(Collections.singletonList(2))));
 
         mockResponse(data);
 
@@ -332,27 +320,11 @@ class StreamsHeartbeatRequestManagerTest {
 
     }
 
-
-    @Test
-    void testPrepareAssignment() {
-        mockJoiningState();
-
-        StreamsHeartbeatResponseData data = new StreamsHeartbeatResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(0)
-            .setMemberEpoch(TEST_MEMBER_EPOCH)
-            .setShouldComputeAssignment(true);
-
-        mockResponse(data);
-
-        verify(streamsPrepareAssignmentRequestManager).prepareAssignment();
-    }
-
     @Test
     void testInitializeTopology() {
         mockJoiningState();
 
-        StreamsHeartbeatResponseData data = new StreamsHeartbeatResponseData()
+        StreamsGroupHeartbeatResponseData data = new StreamsGroupHeartbeatResponseData()
             .setErrorCode(Errors.NONE.code())
             .setThrottleTimeMs(0)
             .setMemberEpoch(TEST_MEMBER_EPOCH)
@@ -363,7 +335,7 @@ class StreamsHeartbeatRequestManagerTest {
         verify(streamsInitializeRequestManager).initialize();
     }
 
-    private void mockResponse(final StreamsHeartbeatResponseData data) {
+    private void mockResponse(final StreamsGroupHeartbeatResponseData data) {
 
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
@@ -383,11 +355,11 @@ class StreamsHeartbeatRequestManagerTest {
 
     private ClientResponse createHeartbeatResponse(
         final NetworkClientDelegate.UnsentRequest request,
-        final StreamsHeartbeatResponseData data
+        final StreamsGroupHeartbeatResponseData data
     ) {
-        StreamsHeartbeatResponse response = new StreamsHeartbeatResponse(data);
+        StreamsGroupHeartbeatResponse response = new StreamsGroupHeartbeatResponse(data);
         return new ClientResponse(
-            new RequestHeader(ApiKeys.STREAMS_HEARTBEAT, ApiKeys.STREAMS_HEARTBEAT.latestVersion(), "client-id", 1),
+            new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
             request.handler(),
             "0",
             time.milliseconds(),

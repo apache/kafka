@@ -20,8 +20,8 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "TopologyHash", "type": "bytes", "versions": "0+",
-      "about": "The hash of the topology. " },
+    { "name": "TopologyId", "type": "string", "versions": "0+",
+      "about": "The ID of the topology. Must be non-empty. " },
     { "name":  "Topology", "type": "[]Subtopology", "versions": "0+",
       "about": "The sub-topologies of the streams application.",
       "fields": [
@@ -29,12 +29,12 @@
           "about": "String to uniquely identify the subtopology." },
         { "name": "SourceTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology reads from." },
-        { "name": "SourceTopicRegex", "type": "string", "versions": "0+",
-          "about": "The regular expressions identifying topics the topology reads from." },
-        { "name": "SinkTopics", "type": "[]string", "versions": "0+",
-          "about": "The topics the topology writes to." },
+        { "name": "SourceTopicRegex", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+          "about": "The regular expressions identifying topics the topology reads from. null if not provided." },
         { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
           "about": "The set of state changelog topics associated with this subtopology. " },
+        { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+",
+          "about": "The repartition topics the sub-topology writes to." },
         { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
           "about": "The set of source topics that are internally created repartition topics. " }
       ]

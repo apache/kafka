@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 
-public class StreamsHeartbeatRequest extends AbstractRequest {
+public class StreamsGroupHeartbeatRequest extends AbstractRequest {
 
     /**
      * A member epoch of <code>-1</code> means that the member wants to leave the group.
@@ -37,21 +37,21 @@ public class StreamsHeartbeatRequest extends AbstractRequest {
      */
     public static final int JOIN_GROUP_MEMBER_EPOCH = 0;
 
-    public static class Builder extends AbstractRequest.Builder<StreamsHeartbeatRequest> {
-        private final StreamsHeartbeatRequestData data;
+    public static class Builder extends AbstractRequest.Builder<StreamsGroupHeartbeatRequest> {
+        private final StreamsGroupHeartbeatRequestData data;
 
-        public Builder(StreamsHeartbeatRequestData data) {
+        public Builder(StreamsGroupHeartbeatRequestData data) {
             this(data, false);
         }
 
-        public Builder(StreamsHeartbeatRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.STREAMS_HEARTBEAT, enableUnstableLastVersion);
+        public Builder(StreamsGroupHeartbeatRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.STREAMS_GROUP_HEARTBEAT, enableUnstableLastVersion);
             this.data = data;
         }
 
         @Override
-        public StreamsHeartbeatRequest build(short version) {
-            return new StreamsHeartbeatRequest(data, version);
+        public StreamsGroupHeartbeatRequest build(short version) {
+            return new StreamsGroupHeartbeatRequest(data, version);
         }
 
         @Override
@@ -60,29 +60,29 @@ public class StreamsHeartbeatRequest extends AbstractRequest {
         }
     }
 
-    private final StreamsHeartbeatRequestData data;
+    private final StreamsGroupHeartbeatRequestData data;
 
-    public StreamsHeartbeatRequest(StreamsHeartbeatRequestData data, short version) {
-        super(ApiKeys.STREAMS_HEARTBEAT, version);
+    public StreamsGroupHeartbeatRequest(StreamsGroupHeartbeatRequestData data, short version) {
+        super(ApiKeys.STREAMS_GROUP_HEARTBEAT, version);
         this.data = data;
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new StreamsHeartbeatResponse(
-            new StreamsHeartbeatResponseData()
+        return new StreamsGroupHeartbeatResponse(
+            new StreamsGroupHeartbeatResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(Errors.forException(e).code())
         );
     }
 
     @Override
-    public StreamsHeartbeatRequestData data() {
+    public StreamsGroupHeartbeatRequestData data() {
         return data;
     }
 
-    public static StreamsHeartbeatRequest parse(ByteBuffer buffer, short version) {
-        return new StreamsHeartbeatRequest(new StreamsHeartbeatRequestData(
+    public static StreamsGroupHeartbeatRequest parse(ByteBuffer buffer, short version) {
+        return new StreamsGroupHeartbeatRequest(new StreamsGroupHeartbeatRequestData(
             new ByteBufferAccessor(buffer), version), version);
     }
 }
