@@ -4316,7 +4316,9 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --topic tieredTopic --from-beginning --max-messages 1 --bootstrap-server localhost:9092 --property print.offset=true</code></pre>
 
-<p>If you want to disable tiered storage at the topic level to let the remote logs become read-only and no more local logs copied to the remote storage,
+<p>In KRaft mode, you can disable tiered storage at the topic level, to make the remote logs as read-only logs, or completely delete all remote logs.</p>
+
+<p>If you want to let the remote logs become read-only and no more local logs copied to the remote storage,
   you can set <code>remote.storage.enable=true,remote.log.copy.disable=true</code> to the topic.</p>
 
 <p>Note: You also need to set <code>local.retention.ms</code> and <code>local.retention.bytes</code> to the same value as
