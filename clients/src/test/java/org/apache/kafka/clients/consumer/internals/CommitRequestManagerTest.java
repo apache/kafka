@@ -1217,7 +1217,7 @@ public class CommitRequestManagerTest {
         // Sleep util timeout
         time.sleep(defaultApiTimeoutMs);
         poll = commitRequestManager.poll(time.milliseconds());
-        assertEquals(1, poll.unsentRequests.size());
+        assertEquals(0, poll.unsentRequests.size());
         futures.forEach(f -> {
             assertTrue(f.isCompletedExceptionally());
             assertFutureThrows(f, TimeoutException.class);

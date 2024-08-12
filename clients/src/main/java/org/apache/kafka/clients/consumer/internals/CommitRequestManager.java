@@ -1188,12 +1188,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 .map(OffsetCommitRequestState::toUnsentRequest)
                 .collect(Collectors.toCollection(ArrayList::new));
 
+            failAndRemoveExpiredFetchRequests();
+
             // Partition the unsent offset fetch requests into sendable and non-sendable lists
             Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
                     unsentOffsetFetches.stream()
                             .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
-
-            failAndRemoveExpiredFetchRequests();
 
             // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
             for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
