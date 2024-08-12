@@ -23,9 +23,9 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupR
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
-import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.util.Comparator
@@ -434,6 +434,22 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     consumerGroupDescribeResponse.data.groups.asScala.toList
   }
 
+  protected def shareGroupDescribe(
+     groupIds: List[String],
+     includeAuthorizedOperations: Boolean,
+     version: Short = ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)
+   ): List[ShareGroupDescribeResponseData.DescribedGroup] = {
+    val shareGroupDescribeRequest = new ShareGroupDescribeRequest.Builder(
+      new ShareGroupDescribeRequestData()
+        .setGroupIds(groupIds.asJava)
+        .setIncludeAuthorizedOperations(includeAuthorizedOperations),
+      true
+    ).build(version)
+
+    val shareGroupDescribeResponse = connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
+    shareGroupDescribeResponse.data.groups.asScala.toList
+  }
+
   protected def heartbeat(
     groupId: String,
     generationId: Int,
@@ -491,6 +507,35 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     }, msg = s"Could not heartbeat successfully. Last response $consumerGroupHeartbeatResponse.")
 
     consumerGroupHeartbeatResponse.data
+  }
+
+  protected def shareGroupHeartbeat(
+    groupId: String,
+    memberId: String = "",
+    memberEpoch: Int = 0,
+    rackId: String = null,
+    subscribedTopicNames: List[String] = null,
+    expectedError: Errors = Errors.NONE
+  ): ShareGroupHeartbeatResponseData = {
+    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+      new ShareGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setMemberEpoch(memberEpoch)
+        .setRackId(rackId)
+        .setSubscribedTopicNames(subscribedTopicNames.asJava),
+      true
+    ).build()
+
+    // Send the request until receiving a successful response. There is a delay
+    // here because the group coordinator is loaded in the background.
+    var shareGroupHeartbeatResponse: ShareGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      shareGroupHeartbeatResponse = connectAndReceive[ShareGroupHeartbeatResponse](shareGroupHeartbeatRequest)
+      shareGroupHeartbeatResponse.data.errorCode == expectedError.code
+    }, msg = s"Could not heartbeat successfully. Last response $shareGroupHeartbeatResponse.")
+
+    shareGroupHeartbeatResponse.data
   }
 
   protected def leaveGroupWithNewProtocol(
