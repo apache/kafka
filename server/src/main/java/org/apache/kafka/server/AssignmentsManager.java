@@ -426,6 +426,8 @@ public class AssignmentsManager {
                         Errors error = Errors.forCode(partition.errorCode());
                         if (error == Errors.NOT_LEADER_OR_FOLLOWER) {
                             log.info("Dropping late directory assignment for partition {} into directory {} because this broker is no longer a replica", partition, event.dirId);
+                        } else if (error == Errors.UNKNOWN_TOPIC_ID) {
+                            log.info("Dropping late directory assignment for partition {} into directory {} because this topic no longer exists.", partition, event.dirId);
                         } else if (error != Errors.NONE) {
                             log.error("Controller returned error {} for assignment of partition {} into directory {}",
                                     error.name(), partition, event.dirId);
