@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.checkpoint;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -79,4 +80,3 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest {
         assertEquals(epochs, checkpoint2.read());
     }
 }
-
