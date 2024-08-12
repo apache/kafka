@@ -1218,7 +1218,10 @@ public class CommitRequestManagerTest {
         time.sleep(defaultApiTimeoutMs);
         poll = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, poll.unsentRequests.size());
-        futures.forEach(f -> assertTrue(f.isCompletedExceptionally()));
+        futures.forEach(f -> {
+            assertTrue(f.isCompletedExceptionally());
+            assertFutureThrows(f, TimeoutException.class);
+        });
     }
 
     private void testNonRetriable(final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
