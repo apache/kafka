@@ -63,7 +63,6 @@ public class MockAssignorTest {
             Collections.emptyMap(),
             "test-process",
             Collections.emptyMap(),
-            Collections.emptyMap(),
             Collections.emptyMap()
         );
 
@@ -95,7 +94,6 @@ public class MockAssignorTest {
             Collections.emptyMap(),
             "test-process",
             Collections.emptyMap(),
-            Collections.emptyMap(),
             Collections.emptyMap()
         );
 
@@ -106,7 +104,6 @@ public class MockAssignorTest {
             Collections.emptyMap(),
             Collections.emptyMap(),
             "test-process",
-            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap()
         );
@@ -151,7 +148,6 @@ public class MockAssignorTest {
             Collections.emptyMap(),
             "test-process",
             Collections.emptyMap(),
-            Collections.emptyMap(),
             Collections.emptyMap()
         );
 
@@ -165,7 +161,6 @@ public class MockAssignorTest {
             Collections.emptyMap(),
             Collections.emptyMap(),
             "test-process",
-            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap()
         );

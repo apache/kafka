@@ -16,8 +16,8 @@
 {
   "apiKey": 88,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
-  "name": "StreamsInitializeRequest",
+  "listeners": ["broker"],
+  "name": "StreamsGroupInitializeRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
@@ -27,15 +27,15 @@
       "about": "The sub-topologies of the streams application.",
       "fields": [
         { "name": "Subtopology", "type": "string", "versions": "0+",
-          "about": "String to uniquely identify the subtopology." },
+          "about": "String to uniquely identify the sub-topology. Deterministically generated from the topology" },
         { "name": "SourceTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology reads from." },
-        { "name": "SourceTopicRegex", "type": "string", "versions": "0+",
-          "about": "The regular expressions identifying topics the topology reads from." },
-        { "name": "SinkTopics", "type": "[]string", "versions": "0+",
-          "about": "The topics the topology writes to." },
+        { "name": "SourceTopicRegex", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+          "about": "The regular expressions identifying topics the sub-topology reads from." },
         { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
-          "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
+          "about": "The set of state changelog topics associated with this sub-topology. Created automatically." },
+        { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+",
+          "about": "The repartition topics the sub-topology writes to." },
         { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
           "about": "The set of source topics that are internally created repartition topics. Created automatically." }
       ]

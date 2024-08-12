@@ -24,7 +24,6 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -57,13 +56,11 @@ public class StreamsGroupMember {
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private byte[] topologyHash;
+        private String topologyId;
         private String assignor;
         private String processId;
-        private StreamsGroupMemberMetadataValue.HostInfo hostInfo;
+        private StreamsGroupMemberMetadataValue.Endpoint userEndpoint;
         private Map<String, String> clientTags;
-        private byte[] userData;
-        private Map<String, String> assignmentConfigs;
         private Map<String, Set<Integer>> assignedActiveTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedStandbyTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedWarmupTasks = Collections.emptyMap();
@@ -84,13 +81,11 @@ public class StreamsGroupMember {
             this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
             this.clientId = member.clientId;
             this.clientHost = member.clientHost;
-            this.topologyHash = member.topologyHash;
+            this.topologyId = member.topologyId;
             this.assignor = member.assignor;
             this.processId = member.processId;
-            this.hostInfo = member.hostInfo;
+            this.userEndpoint = member.userEndpoint;
             this.clientTags = member.clientTags;
-            this.userData = member.userData;
-            this.assignmentConfigs = member.assignmentConfigs;
             this.state = member.state;
             this.assignedActiveTasks = member.assignedActiveTasks;
             this.assignedStandbyTasks = member.assignedStandbyTasks;
@@ -165,13 +160,13 @@ public class StreamsGroupMember {
             return this;
         }
 
-        public Builder setTopologyHash(byte[] topologyHash) {
-            this.topologyHash = topologyHash;
+        public Builder setTopologyId(String topologyId) {
+            this.topologyId = topologyId;
             return this;
         }
 
-        public Builder maybeUpdateTopologyHash(Optional<byte[]> topologyHash) {
-            this.topologyHash = topologyHash.orElse(this.topologyHash);
+        public Builder maybeUpdateTopologyId(Optional<String> topologyId) {
+            this.topologyId = topologyId.orElse(this.topologyId);
             return this;
         }
 
@@ -190,13 +185,13 @@ public class StreamsGroupMember {
             return this;
         }
         
-        public Builder setHostInfo(StreamsGroupMemberMetadataValue.HostInfo hostInfo) {
-            this.hostInfo = hostInfo;
+        public Builder setUserEndpoint(StreamsGroupMemberMetadataValue.Endpoint userEndpoint) {
+            this.userEndpoint = userEndpoint;
             return this;
         }
 
-        public Builder maybeUpdateHostInfo(Optional<StreamsGroupMemberMetadataValue.HostInfo> hostInfo) {
-            this.hostInfo = hostInfo.orElse(this.hostInfo);
+        public Builder maybeUpdateUserEndpoint(Optional<StreamsGroupMemberMetadataValue.Endpoint> userEndpoint) {
+            this.userEndpoint = userEndpoint.orElse(this.userEndpoint);
             return this;
         }
 
@@ -207,26 +202,6 @@ public class StreamsGroupMember {
 
         public Builder maybeUpdateClientTags(Optional<Map<String, String>> clientTags) {
             this.clientTags = clientTags.orElse(this.clientTags);
-            return this;
-        }
-
-        public Builder setUserData(byte[] userData) {
-            this.userData = userData;
-            return this;
-        }
-
-        public Builder maybeUpdateUserData(Optional<byte[]> userData) {
-            this.userData = userData.orElse(this.userData);
-            return this;
-        }
-
-        public Builder setAssignmentConfigs(Map<String, String> assignmentConfigs) {
-            this.assignmentConfigs = assignmentConfigs;
-            return this;
-        }
-
-        public Builder maybeUpdateAssignmentConfigs(Optional<Map<String, String>> assignmentConfigs) {
-            this.assignmentConfigs = assignmentConfigs.orElse(this.assignmentConfigs);
             return this;
         }
 
@@ -256,16 +231,10 @@ public class StreamsGroupMember {
             setClientId(record.clientId());
             setClientHost(record.clientHost());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
-            setTopologyHash(record.topologyHash());
-            setAssignor(record.assignor());
+            setTopologyId(record.topologyId());
             setProcessId(record.processId());
-            setHostInfo(record.hostInfo());
+            setUserEndpoint(record.userEndpoint());
             setClientTags(record.clientTags().stream().collect(Collectors.toMap(
-                StreamsGroupMemberMetadataValue.KeyValue::key,
-                StreamsGroupMemberMetadataValue.KeyValue::value
-            )));
-            setUserData(record.userData());
-            setAssignmentConfigs(record.assignmentConfigs().stream().collect(Collectors.toMap(
                 StreamsGroupMemberMetadataValue.KeyValue::key,
                 StreamsGroupMemberMetadataValue.KeyValue::value
             )));
@@ -301,13 +270,11 @@ public class StreamsGroupMember {
                 rebalanceTimeoutMs,
                 clientId,
                 clientHost,
-                topologyHash,
+                topologyId,
                 assignor,
                 processId,
-                hostInfo,
+                userEndpoint,
                 clientTags,
-                userData,
-                assignmentConfigs,
                 state,
                 assignedActiveTasks,
                 assignedStandbyTasks,
@@ -363,9 +330,9 @@ public class StreamsGroupMember {
     private final String clientHost;
 
     /**
-     * The topology hash
+     * The topology ID
      */
-    private final byte[] topologyHash;
+    private final String topologyId;
 
     /**
      * The assignor
@@ -378,24 +345,14 @@ public class StreamsGroupMember {
     private final String processId;
 
     /**
-     * The host info
+     * The endpoint
      */
-    private final StreamsGroupMemberMetadataValue.HostInfo hostInfo;
+    private final StreamsGroupMemberMetadataValue.Endpoint userEndpoint;
 
     /**
      * The client tags
      */
     private final Map<String, String> clientTags;
-
-    /**
-     * The user data
-     */
-    private final byte[] userData;
-
-    /**
-     * The assignment configs
-     */
-    private final Map<String, String> assignmentConfigs;
 
     /**
      * Active tasks assigned to this member.
@@ -427,13 +384,11 @@ public class StreamsGroupMember {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        byte[] topologyHash,
+        String topologyId,
         String assignor,
         String processId,
-        StreamsGroupMemberMetadataValue.HostInfo hostInfo,
+        StreamsGroupMemberMetadataValue.Endpoint userEndpoint,
         Map<String, String> clientTags,
-        byte[] userData,
-        Map<String, String> assignmentConfigs,
         MemberState state,
         Map<String, Set<Integer>> assignedActiveTasks,
         Map<String, Set<Integer>> assignedStandbyTasks,
@@ -449,13 +404,11 @@ public class StreamsGroupMember {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.clientId = clientId;
         this.clientHost = clientHost;
-        this.topologyHash = topologyHash;
+        this.topologyId = topologyId;
         this.assignor = assignor;
         this.processId = processId;
-        this.hostInfo = hostInfo;
+        this.userEndpoint = userEndpoint;
         this.clientTags = clientTags;
-        this.userData = userData;
-        this.assignmentConfigs = assignmentConfigs;
         this.assignedActiveTasks = assignedActiveTasks;
         this.assignedStandbyTasks = assignedStandbyTasks;
         this.assignedWarmupTasks = assignedWarmupTasks;
@@ -519,10 +472,10 @@ public class StreamsGroupMember {
     }
 
     /**
-     * @return The process ID
+     * @return The topology ID
      */
-    public byte[] topologyHash() {
-        return topologyHash;
+    public String topologyId() {
+        return topologyId;
     }
 
     /**
@@ -540,10 +493,10 @@ public class StreamsGroupMember {
     }
 
     /**
-     * @return The host info
+     * @return The user endpoint
      */
-    public StreamsGroupMemberMetadataValue.HostInfo hostInfo() {
-        return hostInfo;
+    public StreamsGroupMemberMetadataValue.Endpoint userEndpoint() {
+        return userEndpoint;
     }
 
     /**
@@ -551,17 +504,6 @@ public class StreamsGroupMember {
      */
     public Map<String, String> clientTags() {
         return clientTags;
-    }
-
-    public byte[] userData() {
-        return userData;
-    }
-
-    /**
-     * @return The assignment configs
-     */
-    public Map<String, String> assignmentConfigs() {
-        return assignmentConfigs;
     }
 
     /**
@@ -654,13 +596,11 @@ public class StreamsGroupMember {
             && Objects.equals(rackId, that.rackId)
             && Objects.equals(clientId, that.clientId)
             && Objects.equals(clientHost, that.clientHost)
-            && Objects.deepEquals(topologyHash, that.topologyHash)
+            && Objects.deepEquals(topologyId, that.topologyId)
             && Objects.equals(assignor, that.assignor)
             && Objects.equals(processId, that.processId)
-            && Objects.equals(hostInfo, that.hostInfo)
+            && Objects.equals(userEndpoint, that.userEndpoint)
             && Objects.equals(clientTags, that.clientTags)
-            && Objects.deepEquals(userData, that.userData)
-            && Objects.equals(assignmentConfigs, that.assignmentConfigs)
             && Objects.equals(assignedActiveTasks, that.assignedActiveTasks)
             && Objects.equals(assignedStandbyTasks, that.assignedStandbyTasks)
             && Objects.equals(assignedWarmupTasks, that.assignedWarmupTasks)
@@ -678,13 +618,11 @@ public class StreamsGroupMember {
         result = 31 * result + rebalanceTimeoutMs;
         result = 31 * result + Objects.hashCode(clientId);
         result = 31 * result + Objects.hashCode(clientHost);
-        result = 31 * result + Arrays.hashCode(topologyHash);
+        result = 31 * result + Objects.hashCode(topologyId);
         result = 31 * result + Objects.hashCode(assignor);
         result = 31 * result + Objects.hashCode(processId);
-        result = 31 * result + Objects.hashCode(hostInfo);
+        result = 31 * result + Objects.hashCode(userEndpoint);
         result = 31 * result + Objects.hashCode(clientTags);
-        result = 31 * result + Arrays.hashCode(userData);
-        result = 31 * result + Objects.hashCode(assignmentConfigs);
         result = 31 * result + Objects.hashCode(assignedActiveTasks);
         result = 31 * result + Objects.hashCode(assignedStandbyTasks);
         result = 31 * result + Objects.hashCode(assignedWarmupTasks);

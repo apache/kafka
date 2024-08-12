@@ -39,10 +39,10 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsInitializeRequestData;
-import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -95,9 +95,9 @@ public interface GroupCoordinator {
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
-    CompletableFuture<StreamsInitializeResponseData> streamsInitialize(
+    CompletableFuture<StreamsGroupInitializeResponseData> streamsInitialize(
         RequestContext context,
-        StreamsInitializeRequestData request
+        StreamsGroupInitializeRequestData request
     );
 
     /**
@@ -109,9 +109,9 @@ public interface GroupCoordinator {
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
-    CompletableFuture<StreamsHeartbeatResponseData> streamsHeartbeat(
+    CompletableFuture<StreamsGroupHeartbeatResponseData> streamsHeartbeat(
         RequestContext context,
-        StreamsHeartbeatRequestData request
+        StreamsGroupHeartbeatRequestData request
     );
 
     /**

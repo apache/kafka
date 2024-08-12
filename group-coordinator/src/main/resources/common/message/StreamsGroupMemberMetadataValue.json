@@ -31,32 +31,23 @@
     { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
       "about": "The rebalance timeout." },
 
-    { "name": "TopologyHash", "type": "bytes", "versions": "0+",
-      "about": "The hash of the topology. " },
-    { "name": "Assignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": null,
-      "about": "The desired assignor. If set to null, the vote goes towards the broker taking a pick." },
+    { "name": "TopologyId", "type": "string", "versions": "0+",
+      "about": "The ID of the topology. Must be non-empty." },
 
     { "name": "ProcessId", "type": "string", "versions": "0+",
       "about": "Identity of the streams instance that may have multiple consumers." },
-    { "name": "HostInfo", "type": "HostInfo", "versions": "0+",
-      "about": "Host information for running interactive queries on this instance.",
-      "fields": [
-        { "name": "Host", "type": "string", "versions": "0+",
-          "about": "Host for running interactive queries on this instance." },
-        { "name": "Port", "type": "int32", "versions": "0+",
-          "about": "Port for running interactive queries on this instance." }
-      ]
-    },
-    // TODO: maybe it would be nice to just stuff this info into "AssignmentConfigs", since it's quite specific
+    { "name": "UserEndpoint", "type": "Endpoint", "nullableVersions": "0+", "versions": "0+",
+      "about": "User-defined endpoint for running interactive queries on this instance." },
     { "name": "ClientTags", "type": "[]KeyValue", "versions": "0+",
-      "about": "Used for rack-aware assignment algorithm." },
-
-    { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Opaque user data to be passed to the client-side assignor. Null for server-side assignors." },
-    { "name": "AssignmentConfigs", "type": "[]KeyValue", "versions": "0+",
-      "about": "Generic array of assignment configuration strings." }
+      "about": "Used for rack-aware assignment algorithm." }
   ],
   "commonStructs": [
+    { "name": "Endpoint", "versions": "0+", "fields": [
+      { "name": "Host", "type": "string", "versions": "0+",
+        "about": "host of the endpoint" },
+      { "name": "Port", "type": "uint16", "versions": "0+",
+        "about": "port of the endpoint" }
+    ]},
     { "name": "KeyValue", "versions": "0+",
       "fields": [
         { "name": "Key", "type": "string", "versions": "0+",

@@ -16,31 +16,31 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.StreamsInitializeRequestData;
-import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 
-public class StreamsInitializeRequest extends AbstractRequest {
+public class StreamsGroupInitializeRequest extends AbstractRequest {
 
-    public static class Builder extends AbstractRequest.Builder<StreamsInitializeRequest> {
-        private final StreamsInitializeRequestData data;
+    public static class Builder extends AbstractRequest.Builder<StreamsGroupInitializeRequest> {
+        private final StreamsGroupInitializeRequestData data;
 
-        public Builder(StreamsInitializeRequestData data) {
+        public Builder(StreamsGroupInitializeRequestData data) {
             this(data, false);
         }
 
-        public Builder(StreamsInitializeRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.STREAMS_INITIALIZE, enableUnstableLastVersion);
+        public Builder(StreamsGroupInitializeRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.STREAMS_GROUP_INITIALIZE, enableUnstableLastVersion);
             this.data = data;
         }
 
         @Override
-        public StreamsInitializeRequest build(short version) {
-            return new StreamsInitializeRequest(data, version);
+        public StreamsGroupInitializeRequest build(short version) {
+            return new StreamsGroupInitializeRequest(data, version);
         }
 
         @Override
@@ -49,29 +49,29 @@ public class StreamsInitializeRequest extends AbstractRequest {
         }
     }
 
-    private final StreamsInitializeRequestData data;
+    private final StreamsGroupInitializeRequestData data;
 
-    public StreamsInitializeRequest(StreamsInitializeRequestData data, short version) {
-        super(ApiKeys.STREAMS_INITIALIZE, version);
+    public StreamsGroupInitializeRequest(StreamsGroupInitializeRequestData data, short version) {
+        super(ApiKeys.STREAMS_GROUP_INITIALIZE, version);
         this.data = data;
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new StreamsInitializeResponse(
-            new StreamsInitializeResponseData()
+        return new StreamsGroupInitializeResponse(
+            new StreamsGroupInitializeResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(Errors.forException(e).code())
         );
     }
 
     @Override
-    public StreamsInitializeRequestData data() {
+    public StreamsGroupInitializeRequestData data() {
         return data;
     }
 
-    public static StreamsInitializeRequest parse(ByteBuffer buffer, short version) {
-        return new StreamsInitializeRequest(new StreamsInitializeRequestData(
+    public static StreamsGroupInitializeRequest parse(ByteBuffer buffer, short version) {
+        return new StreamsGroupInitializeRequest(new StreamsGroupInitializeRequestData(
             new ByteBufferAccessor(buffer), version), version);
     }
 }

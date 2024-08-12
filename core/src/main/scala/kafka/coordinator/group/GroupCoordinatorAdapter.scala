@@ -20,7 +20,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.server.{KafkaConfig, ReplicaManager}
 import kafka.utils.Implicits.MapExtensionMethods
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, StreamsHeartbeatRequestData, StreamsHeartbeatResponseData, StreamsInitializeRequestData, StreamsInitializeResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData, StreamsGroupInitializeRequestData, StreamsGroupInitializeResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
@@ -80,19 +80,19 @@ private[group] class GroupCoordinatorAdapter(
 
   override def streamsInitialize(
                                    context: RequestContext,
-                                   request: StreamsInitializeRequestData
-                                 ): CompletableFuture[StreamsInitializeResponseData] = {
+                                   request: StreamsGroupInitializeRequestData
+                                 ): CompletableFuture[StreamsGroupInitializeResponseData] = {
     FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-      s"The old group coordinator does not support ${ApiKeys.STREAMS_INITIALIZE.name} API."
+      s"The old group coordinator does not support ${ApiKeys.STREAMS_GROUP_INITIALIZE.name} API."
     ))
   }
 
   override def streamsHeartbeat(
                                  context: RequestContext,
-                                 request: StreamsHeartbeatRequestData
-                               ): CompletableFuture[StreamsHeartbeatResponseData] = {
+                                 request: StreamsGroupHeartbeatRequestData
+                               ): CompletableFuture[StreamsGroupHeartbeatResponseData] = {
     FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-      s"The old group coordinator does not support ${ApiKeys.STREAMS_HEARTBEAT.name} API."
+      s"The old group coordinator does not support ${ApiKeys.STREAMS_GROUP_HEARTBEAT.name} API."
     ))
   }
 

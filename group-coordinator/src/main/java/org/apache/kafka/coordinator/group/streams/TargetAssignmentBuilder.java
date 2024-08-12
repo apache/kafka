@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.taskassignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.taskassignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.taskassignor.GroupSpecImpl;
@@ -34,8 +33,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochRecord;
 
 /**
  * Build a new Target Assignment based on the provided parameters. As a result, it yields the records that must be persisted to the log and
@@ -327,7 +324,7 @@ public class TargetAssignmentBuilder {
 
             if (oldMemberAssignment == null) {
                 // If the member had no assignment, we always create a record for it.
-                records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord(
+                records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(
                     groupId,
                     memberId,
                     newMemberAssignment.activeTasks(),
@@ -338,7 +335,7 @@ public class TargetAssignmentBuilder {
                 // If the member had an assignment, we only create a record if the
                 // new assignment is different.
                 if (!newMemberAssignment.equals(oldMemberAssignment)) {
-                    records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord(
+                    records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(
                         groupId,
                         memberId,
                         newMemberAssignment.activeTasks(),
@@ -350,7 +347,7 @@ public class TargetAssignmentBuilder {
         });
 
         // Bump the target assignment epoch.
-        records.add(newStreamsTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochRecord(groupId, groupEpoch));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
     }
@@ -383,7 +380,6 @@ public class TargetAssignmentBuilder {
             targetAssignment.warmupTasks(),
             member.processId(),
             member.clientTags(),
-            member.assignmentConfigs(),
             Collections.emptyMap() // TODO: TaskOffsets is missing
         );
     }

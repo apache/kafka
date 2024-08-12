@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
@@ -40,8 +39,9 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTaskAssignment;
@@ -59,7 +59,7 @@ public class TargetAssignmentBuilderTest {
         private final String groupId;
         private final int groupEpoch;
         private final TaskAssignor assignor = mock(TaskAssignor.class);
-        private final StreamsTopology topology = new StreamsTopology(new byte[0], new HashMap<>());
+        private final StreamsTopology topology = new StreamsTopology("", new HashMap<>());
         private final Map<String, StreamsGroupMember> members = new HashMap<>();
         private final Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata = new HashMap<>();
         private final Map<String, StreamsGroupMember> updatedMembers = new HashMap<>();
@@ -91,8 +91,7 @@ public class TargetAssignmentBuilderTest {
             StreamsGroupMember.Builder memberBuilder = new StreamsGroupMember.Builder(memberId);
             memberBuilder.setProcessId("processId");
             memberBuilder.setClientTags(Collections.emptyMap());
-            memberBuilder.setAssignmentConfigs(Collections.emptyMap());
-            memberBuilder.setHostInfo(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090));
+            memberBuilder.setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090));
 
             if (instanceId != null) {
                 memberBuilder.setInstanceId(instanceId);
@@ -146,8 +145,7 @@ public class TargetAssignmentBuilderTest {
                 builder = new StreamsGroupMember.Builder(memberId);
                 builder.setProcessId("processId");
                 builder.setClientTags(Collections.emptyMap());
-                builder.setAssignmentConfigs(Collections.emptyMap());
-                builder.setHostInfo(new StreamsGroupMemberMetadataValue.HostInfo().setHost("host").setPort(9090));
+                builder.setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090));
             }
             updatedMembers.put(memberId, builder
                 .maybeUpdateInstanceId(instanceId)
@@ -271,7 +269,6 @@ public class TargetAssignmentBuilderTest {
             .setProcessId("processId")
             .setAssignor("assignor")
             .setClientTags(clientTags)
-            .setAssignmentConfigs(assignmentConfigs)
             .build();
 
         org.apache.kafka.coordinator.group.streams.Assignment assignment = new org.apache.kafka.coordinator.group.streams.Assignment(
@@ -293,7 +290,6 @@ public class TargetAssignmentBuilderTest {
             assignment.warmupTasks(),
             "processId",
             clientTags,
-            assignmentConfigs,
             Collections.emptyMap()
         ), assignmentMemberSpec);
     }
@@ -398,11 +394,11 @@ public class TargetAssignmentBuilderTest {
         assertEquals(3, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 4, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
                 mkTaskAssignment(barSubtopologyId, 1, 2, 3)
             ), Collections.emptyMap(), Collections.emptyMap())
@@ -468,15 +464,15 @@ public class TargetAssignmentBuilderTest {
         assertEquals(4, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1, 2),
                 mkTaskAssignment(barSubtopologyId, 1, 2)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 3, 4),
                 mkTaskAssignment(barSubtopologyId, 3, 4)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
@@ -554,15 +550,15 @@ public class TargetAssignmentBuilderTest {
         assertEquals(4, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1, 2),
                 mkTaskAssignment(barSubtopologyId, 1, 2)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 3, 4),
                 mkTaskAssignment(barSubtopologyId, 3, 4)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
@@ -636,11 +632,11 @@ public class TargetAssignmentBuilderTest {
 
         // Member 1 has no record because its assignment did not change.
         assertUnorderedListEquals(Arrays.asList(
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 3, 4, 5),
                 mkTaskAssignment(barSubtopologyId, 3, 4, 5)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 6),
                 mkTaskAssignment(barSubtopologyId, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
@@ -710,11 +706,11 @@ public class TargetAssignmentBuilderTest {
         assertEquals(3, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
                 mkTaskAssignment(barSubtopologyId, 1, 2, 3)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 4, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
@@ -790,7 +786,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(2, result.records().size());
 
         assertUnorderedListEquals(Collections.singletonList(
-            CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
+            newStreamsTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())

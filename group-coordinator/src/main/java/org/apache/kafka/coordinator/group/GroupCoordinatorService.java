@@ -44,10 +44,10 @@ import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsInitializeRequestData;
-import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -347,15 +347,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#streamsInitialize(RequestContext, StreamsInitializeRequestData)}.
+     * See {@link GroupCoordinator#streamsInitialize(RequestContext, org.apache.kafka.common.message.StreamsGroupInitializeRequestData)}.
      */
     @Override
-    public CompletableFuture<StreamsInitializeResponseData> streamsInitialize(
+    public CompletableFuture<StreamsGroupInitializeResponseData> streamsInitialize(
         RequestContext context,
-        StreamsInitializeRequestData request
+        StreamsGroupInitializeRequestData request
     ) {
         if (!isActive.get()) {
-            return CompletableFuture.completedFuture(new StreamsInitializeResponseData()
+            return CompletableFuture.completedFuture(new StreamsGroupInitializeResponseData()
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             );
         }
@@ -369,22 +369,22 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "streams-group-initialize",
             request,
             exception,
-            (error, message) -> new StreamsInitializeResponseData()
+            (error, message) -> new StreamsGroupInitializeResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(message)
         ));
     }
 
     /**
-     * See {@link GroupCoordinator#streamsHeartbeat(RequestContext, StreamsHeartbeatRequestData)}.
+     * See {@link GroupCoordinator#streamsHeartbeat(RequestContext, org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData)}.
      */
     @Override
-    public CompletableFuture<StreamsHeartbeatResponseData> streamsHeartbeat(
+    public CompletableFuture<StreamsGroupHeartbeatResponseData> streamsHeartbeat(
         RequestContext context,
-        StreamsHeartbeatRequestData request
+        StreamsGroupHeartbeatRequestData request
     ) {
         if (!isActive.get()) {
-            return CompletableFuture.completedFuture(new StreamsHeartbeatResponseData()
+            return CompletableFuture.completedFuture(new StreamsGroupHeartbeatResponseData()
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             );
         }
@@ -398,7 +398,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "streams-heartbeat",
             request,
             exception,
-            (error, message) -> new StreamsHeartbeatResponseData()
+            (error, message) -> new StreamsGroupHeartbeatResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(message)
         ));

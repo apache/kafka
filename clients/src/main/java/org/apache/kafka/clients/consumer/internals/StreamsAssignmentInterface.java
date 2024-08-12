@@ -39,7 +39,7 @@ public class StreamsAssignmentInterface {
 
     private UUID processID;
 
-    private HostInfo endPoint;
+    private Optional<HostInfo> endpoint;
 
     private String assignor;
 
@@ -57,8 +57,8 @@ public class StreamsAssignmentInterface {
         return processID;
     }
 
-    public HostInfo endPoint() {
-        return endPoint;
+    public Optional<HostInfo> endpoint() {
+        return endpoint;
     }
 
     public String assignor() {
@@ -264,14 +264,14 @@ public class StreamsAssignmentInterface {
     }
 
     public StreamsAssignmentInterface(UUID processID,
-                                      HostInfo endPoint,
+                                      Optional<HostInfo> endpoint,
                                       String assignor,
                                       Map<String, Subtopology> subtopologyMap,
                                       Map<String, Object> assignmentConfiguration,
                                       Map<String, String> clientTags
     ) {
         this.processID = processID;
-        this.endPoint = endPoint;
+        this.endpoint = endpoint;
         this.assignor = assignor;
         this.subtopologyMap = subtopologyMap;
         this.assignmentConfiguration = assignmentConfiguration;
@@ -284,7 +284,7 @@ public class StreamsAssignmentInterface {
     public String toString() {
         return "StreamsAssignmentMetadata{" +
             "processID=" + processID +
-            ", endPoint='" + endPoint + '\'' +
+            ", endpoint='" + endpoint + '\'' +
             ", assignor='" + assignor + '\'' +
             ", subtopologyMap=" + subtopologyMap +
             ", assignmentConfiguration=" + assignmentConfiguration +

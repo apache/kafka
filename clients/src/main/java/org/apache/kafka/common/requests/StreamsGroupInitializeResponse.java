@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -33,26 +33,19 @@ import java.util.Map;
  * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
  * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
  * - {@link Errors#INVALID_REQUEST}
- * - {@link Errors#UNKNOWN_MEMBER_ID}
- * - {@link Errors#FENCED_MEMBER_EPOCH}
- * - {@link Errors#UNSUPPORTED_ASSIGNOR}
- * - {@link Errors#UNRELEASED_INSTANCE_ID}
- * - {@link Errors#GROUP_MAX_SIZE_REACHED}
- * - {@link Errors#STREAMS_SHUTDOWN_APPLICATION}
- * - {@link Errors#STREAMS_INCONSISTENT_TOPOLOGY}
- * - {@link Errors#STREAMS_MISSING_SOURCE_TOPICS}
- * - {@link Errors#STREAMS_GROUP_UNINITIALIZED}
+ * - {@link Errors#STREAMS_INVALID_TOPOLOGY}
  */
-public class StreamsHeartbeatResponse extends AbstractResponse {
-    private final StreamsHeartbeatResponseData data;
+public class StreamsGroupInitializeResponse extends AbstractResponse {
 
-    public StreamsHeartbeatResponse(StreamsHeartbeatResponseData data) {
-        super(ApiKeys.STREAMS_HEARTBEAT);
+    private final StreamsGroupInitializeResponseData data;
+
+    public StreamsGroupInitializeResponse(StreamsGroupInitializeResponseData data) {
+        super(ApiKeys.STREAMS_GROUP_INITIALIZE);
         this.data = data;
     }
 
     @Override
-    public StreamsHeartbeatResponseData data() {
+    public StreamsGroupInitializeResponseData data() {
         return data;
     }
 
@@ -71,20 +64,8 @@ public class StreamsHeartbeatResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    /**
-     * Possible error codes.
-     *
-     * - {@link Errors#STREAMS_SHUTDOWN_APPLICATION}
-     * - {@link Errors#STREAMS_INCONSISTENT_TOPOLOGY}
-     * - {@link Errors#STREAMS_MISSING_SOURCE_TOPICS}
-     * - {@link Errors#STREAMS_GROUP_UNINITIALIZED}
-     */
-    public Errors assignmentError() {
-        return Errors.forCode(data.assignmentErrorCode());
-    }
-
-    public static StreamsHeartbeatResponse parse(ByteBuffer buffer, short version) {
-        return new StreamsHeartbeatResponse(new StreamsHeartbeatResponseData(
+    public static StreamsGroupInitializeResponse parse(ByteBuffer buffer, short version) {
+        return new StreamsGroupInitializeResponse(new StreamsGroupInitializeResponseData(
             new ByteBufferAccessor(buffer), version));
     }
 }

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -33,19 +33,26 @@ import java.util.Map;
  * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
  * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
  * - {@link Errors#INVALID_REQUEST}
- * - {@link Errors#STREAMS_INVALID_TOPOLOGY}
+ * - {@link Errors#UNKNOWN_MEMBER_ID}
+ * - {@link Errors#FENCED_MEMBER_EPOCH}
+ * - {@link Errors#UNSUPPORTED_ASSIGNOR}
+ * - {@link Errors#UNRELEASED_INSTANCE_ID}
+ * - {@link Errors#GROUP_MAX_SIZE_REACHED}
+ * - {@link Errors#STREAMS_SHUTDOWN_APPLICATION}
+ * - {@link Errors#STREAMS_INCONSISTENT_TOPOLOGY}
+ * - {@link Errors#STREAMS_MISSING_SOURCE_TOPICS}
+ * - {@link Errors#STREAMS_GROUP_UNINITIALIZED}
  */
-public class StreamsInitializeResponse extends AbstractResponse {
+public class StreamsGroupHeartbeatResponse extends AbstractResponse {
+    private final StreamsGroupHeartbeatResponseData data;
 
-    private final StreamsInitializeResponseData data;
-
-    public StreamsInitializeResponse(StreamsInitializeResponseData data) {
-        super(ApiKeys.STREAMS_INITIALIZE);
+    public StreamsGroupHeartbeatResponse(StreamsGroupHeartbeatResponseData data) {
+        super(ApiKeys.STREAMS_GROUP_HEARTBEAT);
         this.data = data;
     }
 
     @Override
-    public StreamsInitializeResponseData data() {
+    public StreamsGroupHeartbeatResponseData data() {
         return data;
     }
 
@@ -64,8 +71,8 @@ public class StreamsInitializeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static StreamsInitializeResponse parse(ByteBuffer buffer, short version) {
-        return new StreamsInitializeResponse(new StreamsInitializeResponseData(
+    public static StreamsGroupHeartbeatResponse parse(ByteBuffer buffer, short version) {
+        return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData(
             new ByteBufferAccessor(buffer), version));
     }
 }

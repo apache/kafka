@@ -45,13 +45,11 @@
           "about": "The group epoch." },
         { "name": "AssignmentEpoch", "type": "int32", "versions": "0+",
           "about": "The assignment epoch." },
-        { "name": "AssignorName", "type": "string", "versions": "0+",
-          "about": "The selected assignor." },
         { "name":  "Topology", "type": "[]Subtopology", "versions": "0+",
           "about": "The sub-topologies of the streams application.",
           "fields": [
             { "name": "Subtopology", "type": "string", "versions": "0+",
-              "about": "String to uniquely identify the subtopology." },
+              "about": "String to uniquely identify the sub-topology." },
             { "name": "SourceTopics", "type": "[]string", "versions": "0+",
               "about": "The topics the topology reads from." },
             { "name": "SourceTopicRegex", "type": "string", "versions": "0+",
@@ -59,7 +57,7 @@
             { "name": "SinkTopics", "type": "[]string", "versions": "0+",
               "about": "The topics the topology writes to." },
             { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
-              "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
+              "about": "The set of state changelog topics associated with this sub-topology. Created automatically." },
             { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
               "about": "The set of source topics that are internally created repartition topics. Created automatically." }
           ]
@@ -81,30 +79,17 @@
             { "name": "ClientHost", "type": "string", "versions": "0+",
               "about": "The client host." },
 
-            { "name": "TopologyHash", "type": "bytes", "versions": "0+",
-              "about": "The hash of the topology." },
+            { "name": "TopologyId", "type": "string", "versions": "0+",
+              "about": "The ID of the topology. Must be non-empty." },
 
             { "name": "ProcessId", "type": "uuid", "versions": "0+",
               "about": "Identity of the streams instance that may have multiple clients. " },
             { "name": "ClientTags", "type": "[]KeyValue", "versions": "0+",
               "about": "Used for rack-aware assignment algorithm." },
-            { "name": "TaskOffsetUpdateReason", "type":  "int8", "versions": "0+", "default": 0,
-              "about": "Reason for updating task offset. 0 if no update, 1 if task catches up with acceptable.recovery.lag, 2 if task falls behind acceptable.recovery.lag, 3 if a standby task is added or removed, 4 if triggerd by a time-interval" },
-            { "name": "TaskOffset", "type": "[]TaskOffset", "versions": "0+", "nullableVersions": "0+", "default": "null",
-              "about": "Cumulative offsets for assigned and dormant standby tasks. Only updatable when TaskOffsetUpdateReason is not zero. Null if unchanged since last heartbeat.",
-              "fields": [
-                { "name": "Subtopology", "type": "string", "versions": "0+",
-                  "about": "A unique identifier of the subtopology." },
-                { "name": "Partition", "type": "int32", "versions": "0+",
-                  "about": "The partition of the input topics." },
-                { "name": "Offset", "type": "int64", "versions": "0+",
-                  "about": "The cumulative offset for the task" }
-              ]
-            },
-            { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": "null",
-              "about": "Opaque user data to be passed to the client-side assignor. Null if unchanged since last heartbeat." },
-            { "name": "AssignmentConfigs", "type": "[]KeyValue", "versions": "0+", "nullableVersions": "0+", "default": "null",
-              "about": "Generic array of assignment configuration strings."},
+            { "name": "TaskOffsets", "type": "[]TaskOffset", "versions": "0+",
+              "about": "Cumulative offsets for tasks." },
+            { "name": "TaskEndOffsets", "type": "[]TaskOffset", "versions": "0+",
+              "about": "Cumulative end offsets for tasks." },
 
             { "name": "Assignment", "type": "Assignment", "versions": "0+",
               "about": "The current assignment." },
@@ -117,19 +102,35 @@
     }
   ],
   "commonStructs": [
+    { "name": "TaskOffset", "versions": "0+", "fields": [
+      { "name": "Subtopology", "type": "string", "versions": "0+",
+        "about": "The sub-topology identifier." },
+      { "name": "Partition", "type": "int32", "versions": "0+",
+        "about": "The partition." },
+      { "name": "Offset", "type": "int64", "versions": "0+",
+        "about": "The offset." }
+    ]},
+    { "name": "TopicPartitions", "versions": "0+", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+",
+        "about": "The topic ID." },
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "The partitions." }
+    ]},
     { "name": "Assignment", "versions": "0+", "fields": [
       { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Active tasks for this client." },
       { "name": "StandbyTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Standby tasks for this client." },
       { "name": "WarmupTasks", "type": "[]TaskIds", "versions": "0+",
-        "about": "Warming up tasks for this client. " }
+        "about": "Warm-up tasks for this client. " }
     ]},
     { "name": "TaskIds", "versions": "0+", "fields": [
       { "name": "Subtopology", "type": "string", "versions": "0+",
-        "about": "subtopology ID" },
+        "about": "The sub-topology identifier." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "partitions" }
+        "about": "The partitions of the input topics processed by this member." }
     ]},
     { "name": "KeyValue", "versions": "0+", "fields": [
       { "name": "Key", "type": "string", "versions": "0+",
@@ -137,18 +138,12 @@
       { "name": "Value", "type": "string", "versions": "0+",
         "about": "value of the config" }
     ]},
-    { "name": "TopicConfig", "versions": "0+", "fields": [
-      { "name": "key", "type": "string", "versions": "0+",
-        "about": "The key of the topic-level configuration." },
-      { "name": "value", "type": "string", "versions": "0+",
-        "about": "The value of the topic-level configuration," }
-    ]},
     { "name": "TopicInfo", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+",
         "about": "The name of the topic." },
       { "name": "Partitions", "type": "int32", "versions": "0+",
         "about": "The number of partitions in the topic. Can be 0 if no specific number of partitions is enforced. Always 0 for changelog topics." },
-      { "name": "TopicConfigs", "type": "[]TopicConfig", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      { "name": "TopicConfigs", "type": "[]KeyValue", "versions": "0+", "nullableVersions": "0+", "default": "null",
         "about": "Topic-level configurations as key-value pairs."
       }
     ]}

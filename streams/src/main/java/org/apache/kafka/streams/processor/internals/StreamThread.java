@@ -534,18 +534,18 @@ public class StreamThread extends Thread implements ProcessingThread {
         return streamThread.updateThreadMetadata(adminClientId(clientId));
     }
 
-    private static HostInfo parseHostInfo(final String endPoint) {
-        final HostInfo hostInfo = HostInfo.buildFromEndpoint(endPoint);
+    private static Optional<StreamsAssignmentInterface.HostInfo> parseHostInfo(final String endpoint) {
+        final HostInfo hostInfo = HostInfo.buildFromEndpoint(endpoint);
         if (hostInfo == null) {
-            return StreamsMetadataState.UNKNOWN_HOST;
+            return Optional.empty();
         } else {
-            return hostInfo;
+            return Optional.of(new StreamsAssignmentInterface.HostInfo(hostInfo.host(), hostInfo.port()));
         }
     }
 
     private static StreamsAssignmentInterface initAssignmentInterface(final UUID processId,
                                                                       final StreamsConfig config,
-                                                                      final HostInfo hostInfo,
+                                                                      final Optional<StreamsAssignmentInterface.HostInfo> endpoint,
                                                                       final TopologyMetadata topologyMetadata) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
@@ -592,7 +592,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         return new StreamsAssignmentInterface(
             processId,
-            new StreamsAssignmentInterface.HostInfo(hostInfo.host(), hostInfo.port()),
+            endpoint,
             null,
             subtopologyMap,
             assignmentProperties,
@@ -1372,9 +1372,9 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
 
             // Process metadata from Streams Rebalance Protocol
-            final Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> hostInfoListMap = streamsAssignmentInterface.partitionsByHost.get();
+            final Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> partitionsByEndpoint = streamsAssignmentInterface.partitionsByHost.get();
             final Map<HostInfo, Set<TopicPartition>> convertedHostInfoMap = new HashMap<>();
-            hostInfoListMap.forEach((hostInfo, topicPartitions) ->
+            partitionsByEndpoint.forEach((hostInfo, topicPartitions) ->
                 convertedHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(topicPartitions)));
             streamsMetadataState.onChange(
                 convertedHostInfoMap,
@@ -1397,6 +1397,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                     activeTasksWithPartitions,
                     standbyTasksWithPartitions
                 );
+                streamsAssignmentInterface.reconciledAssignment.set(newAssignment);
             }
         }
     }

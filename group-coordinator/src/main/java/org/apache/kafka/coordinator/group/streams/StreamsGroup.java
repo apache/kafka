@@ -25,7 +25,6 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -883,21 +882,21 @@ public class StreamsGroup implements Group {
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newStreamsCurrentAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentTombstoneRecord(groupId(), memberId))
         );
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(CoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(groupId()));
-        records.add(CoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
-        records.add(CoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(groupId()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
     }
 
     @Override
@@ -1124,13 +1123,13 @@ public class StreamsGroup implements Group {
         List<CoordinatorRecord> records
     ) {
         members().forEach((__, streamsGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId(), streamsGroupMember))
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupMemberRecord(groupId(), streamsGroupMember))
         );
 
-        records.add(CoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId(), groupEpoch()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(groupId(), groupEpoch()));
 
         members().forEach((streamsGroupMemberId, streamsGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentRecord(
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(
                 groupId(),
                 streamsGroupMemberId,
                 targetAssignment(streamsGroupMemberId).activeTasks(),
@@ -1139,11 +1138,11 @@ public class StreamsGroup implements Group {
             ))
         );
 
-        records.add(CoordinatorRecordHelpers.newStreamsTargetAssignmentEpochRecord(groupId(), groupEpoch()));
-        records.add(CoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId(), subscriptionMetadata()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId(), subscriptionMetadata()));
 
         members().forEach((__, streamsGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newStreamsCurrentAssignmentRecord(groupId(), streamsGroupMember))
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentRecord(groupId(), streamsGroupMember))
         );
     }
 
@@ -1189,7 +1188,7 @@ public class StreamsGroup implements Group {
     }
 
     public void setTopology(final StreamsGroupTopologyValue topology) {
-        this.topology.set(Optional.of(new StreamsTopology(topology.topologyHash(), topology.topology().stream().collect(Collectors.toMap(
+        this.topology.set(Optional.of(new StreamsTopology(topology.topologyId(), topology.topology().stream().collect(Collectors.toMap(
             Subtopology::subtopology, x -> x)))));
     }
 }

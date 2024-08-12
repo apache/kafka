@@ -214,5 +214,7 @@ public class SmokeTestDriverIntegrationTest extends IntegrationTestHarness {
             throw new AssertionError(driver.exception());
         }
         assertTrue(driver.result().passed(), driver.result().result());
+
+
     }
 }

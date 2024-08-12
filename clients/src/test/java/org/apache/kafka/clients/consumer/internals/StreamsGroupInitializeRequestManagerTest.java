@@ -17,9 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.StreamsInitializeRequest;
+import org.apache.kafka.common.requests.StreamsGroupInitializeRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,10 +42,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class StreamsInitializeRequestManagerTest {
+class StreamsGroupInitializeRequestManagerTest {
 
-    final private String groupId = "groupId";
-    final private LogContext logContext = new LogContext("test");
+    private final String groupId = "groupId";
+    private final LogContext logContext = new LogContext("test");
 
     @Test
     public void shouldPollEmptyResult() {
@@ -104,19 +104,19 @@ class StreamsInitializeRequestManagerTest {
         final NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
         assertTrue(unsentRequest.node().isPresent());
         assertEquals(node, unsentRequest.node().get());
-        assertEquals(ApiKeys.STREAMS_INITIALIZE, unsentRequest.requestBuilder().apiKey());
-        final StreamsInitializeRequest.Builder streamsInitializeRequestBuilder = (StreamsInitializeRequest.Builder) unsentRequest.requestBuilder();
-        final StreamsInitializeRequest streamsInitializeRequest = streamsInitializeRequestBuilder.build();
-        final StreamsInitializeRequestData streamsInitializeRequestData = streamsInitializeRequest.data();
-        assertEquals(ApiKeys.STREAMS_INITIALIZE.id, streamsInitializeRequestData.apiKey());
-        assertEquals(groupId, streamsInitializeRequestData.groupId());
-        assertNotNull(streamsInitializeRequestData.topology());
-        final List<StreamsInitializeRequestData.Subtopology> subtopologies = streamsInitializeRequestData.topology();
+        assertEquals(ApiKeys.STREAMS_GROUP_INITIALIZE, unsentRequest.requestBuilder().apiKey());
+        final StreamsGroupInitializeRequest.Builder streamsInitializeRequestBuilder = (StreamsGroupInitializeRequest.Builder) unsentRequest.requestBuilder();
+        final StreamsGroupInitializeRequest streamsGroupInitializeRequest = streamsInitializeRequestBuilder.build();
+        final StreamsGroupInitializeRequestData streamsGroupInitializeRequestData = streamsGroupInitializeRequest.data();
+        assertEquals(ApiKeys.STREAMS_GROUP_INITIALIZE.id, streamsGroupInitializeRequestData.apiKey());
+        assertEquals(groupId, streamsGroupInitializeRequestData.groupId());
+        assertNotNull(streamsGroupInitializeRequestData.topology());
+        final List<StreamsGroupInitializeRequestData.Subtopology> subtopologies = streamsGroupInitializeRequestData.topology();
         assertEquals(1, subtopologies.size());
-        final StreamsInitializeRequestData.Subtopology subtopology = subtopologies.get(0);
+        final StreamsGroupInitializeRequestData.Subtopology subtopology = subtopologies.get(0);
         assertEquals(subtopologyName1, subtopology.subtopology());
         assertEquals(new ArrayList<>(sourceTopics), subtopology.sourceTopics());
-        assertEquals(new ArrayList<>(sinkTopics), subtopology.sinkTopics());
+        assertEquals(new ArrayList<>(sinkTopics), subtopology.repartitionSinkTopics());
         assertEquals(repartitionTopics.size(), subtopology.repartitionSourceTopics().size());
         subtopology.repartitionSourceTopics().forEach(topicInfo -> {
             final StreamsAssignmentInterface.TopicInfo repartitionTopic = repartitionTopics.get(topicInfo.name());
