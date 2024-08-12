@@ -29,7 +29,6 @@ import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.io.Closeable;
@@ -60,18 +59,19 @@ public class BatchAccumulator<T> implements Closeable {
 
     private final int epoch;
     private final Time time;
-    private final SimpleTimer lingerTimer;
     private final int lingerMs;
     private final int maxBatchSize;
     private final Compression compression;
     private final MemoryPool memoryPool;
-    private final ReentrantLock appendLock;
     private final RecordSerde<T> serde;
 
-    private final ConcurrentLinkedQueue<CompletedBatch<T>> completed;
-    private volatile DrainStatus drainStatus;
+    private final SimpleTimer lingerTimer = new SimpleTimer();
+    private final AtomicLong drainOffset = new AtomicLong(Long.MAX_VALUE);
+    private final ConcurrentLinkedQueue<CompletedBatch<T>> completed = new ConcurrentLinkedQueue<>();
+    private volatile DrainStatus drainStatus = DrainStatus.NONE;
 
     // These fields are protected by the append lock
+    private final ReentrantLock appendLock = new ReentrantLock();
     private long nextOffset;
     private BatchBuilder<T> currentBatch;
 
@@ -94,38 +94,25 @@ public class BatchAccumulator<T> implements Closeable {
         this.maxBatchSize = maxBatchSize;
         this.memoryPool = memoryPool;
         this.time = time;
-        this.lingerTimer = new SimpleTimer();
         this.compression = compression;
         this.serde = serde;
         this.nextOffset = baseOffset;
-        this.drainStatus = DrainStatus.NONE;
-        this.completed = new ConcurrentLinkedQueue<>();
-        this.appendLock = new ReentrantLock();
     }
 
     /**
      * Append to the accumulator.
      *
-     * @param epoch                             The leader epoch to append at.
-     * @param records                           The records to append.
-     * @param requiredBaseOffset                If this is non-empty, the base offset which we must use.
-     * @param isAtomic                          True if we should append the records as a single batch.
-     * @return                                  The end offset.
+     * @param epoch the leader epoch to append at
+     * @param records the records to append
+     * @param delayDrain whether the records could be drained
+     * @return the offset of the last record
      *
-     * @throws NotLeaderException               Indicates that an append operation cannot be completed
-     *                                          because the provided leader epoch was too old.
-     * @throws IllegalArgumentException         Indicates that an append operation cannot be completed
-     *                                          because the provided leader epoch was too new.
-     * @throws UnexpectedBaseOffsetException    Indicates that an append operation cannot
-     *                                          be completed because it would have resulted
-     *                                          in an unexpected base offset.
+     * @throws NotLeaderException indicates that an append operation cannot be completed because the
+     *         provided leader epoch was too old
+     * @throws IllegalArgumentException indicates that an append operation cannot be completed
+     *         because the provided leader epoch was too new
      */
-    public long append(
-        int epoch,
-        List<T> records,
-        OptionalLong requiredBaseOffset,
-        boolean isAtomic
-    ) {
+    public long append(int epoch, List<T> records, boolean delayDrain) {
         if (epoch < this.epoch) {
             throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
                     "Current leader epoch = " + this.epoch());
@@ -139,28 +126,20 @@ public class BatchAccumulator<T> implements Closeable {
         appendLock.lock();
         try {
             long lastOffset = nextOffset + records.size() - 1;
-            requiredBaseOffset.ifPresent(r -> {
-                if (r != nextOffset) {
-                    throw new UnexpectedBaseOffsetException("Wanted base offset " + r +
-                            ", but the next offset was " + nextOffset);
-                }
-            });
             maybeCompleteDrain();
 
             BatchBuilder<T> batch = null;
-            if (isAtomic) {
-                batch = maybeAllocateBatch(records, serializationCache);
+            batch = maybeAllocateBatch(records, serializationCache);
+            if (batch == null) {
+                throw new BufferAllocationException("Append failed because we failed to allocate memory to write the batch");
+            }
+
+            if (delayDrain) {
+                // TODO: explain this
+                drainOffset.compareAndSet(Long.MAX_VALUE, nextOffset);
             }
 
             for (T record : records) {
-                if (!isAtomic) {
-                    batch = maybeAllocateBatch(Collections.singleton(record), serializationCache);
-                }
-
-                if (batch == null) {
-                    throw new BufferAllocationException("Append failed because we failed to allocate memory to write the batch");
-                }
-
                 batch.appendRecord(record, serializationCache);
             }
 
@@ -216,6 +195,11 @@ public class BatchAccumulator<T> implements Closeable {
             currentBatch.initialBuffer()
         ));
         currentBatch = null;
+    }
+
+    // TODO: document this
+    public void allowDrain() {
+        drainOffset.set(Long.MAX_VALUE);
     }
 
     /**
@@ -512,12 +496,14 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     private List<CompletedBatch<T>> drainCompleted() {
-        List<CompletedBatch<T>> res = new ArrayList<>(completed.size());
+        List<CompletedBatch<T>> res = new ArrayList<>();
         while (true) {
-            CompletedBatch<T> batch = completed.poll();
-            if (batch == null) {
+            CompletedBatch<T> batch = completed.peek();
+            if (batch == null || batch.lastOffset() >= drainOffset.get()) {
                 return res;
             } else {
+                // The batch can be drained so remove the batch and add it to the result.
+                completed.poll();
                 res.add(batch);
             }
         }
@@ -530,14 +516,6 @@ public class BatchAccumulator<T> implements Closeable {
         return !lingerTimer.isRunning();
     }
 
-    /**
-     * Get the number of completed batches which are ready to be drained.
-     * This does not include the batch that is currently being filled.
-     */
-    public int numCompletedBatches() {
-        return completed.size();
-    }
-
     @Override
     public void close() {
         List<CompletedBatch<T>> unwritten = drain();
@@ -546,6 +524,7 @@ public class BatchAccumulator<T> implements Closeable {
 
     public static class CompletedBatch<T> {
         public final long baseOffset;
+        // TODO assert that numRecords is greater than 0
         public final int numRecords;
         public final Optional<List<T>> records;
         public final MemoryRecords data;
@@ -601,6 +580,10 @@ public class BatchAccumulator<T> implements Closeable {
             // 2. maxTimestamp is the append time of the batch. This needs to be changed
             //    to return the LastContainedLogTimestamp of the SnapshotHeaderRecord
             return data.firstBatch().maxTimestamp();
+        }
+
+        public long lastOffset() {
+            return baseOffset + numRecords - 1;
         }
     }
 

@@ -23,8 +23,6 @@ import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -33,20 +31,14 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
-import java.util.OptionalLong;
 import java.util.concurrent.CountDownLatch;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -109,7 +101,7 @@ class BatchAccumulatorTest {
 
     @Test
     public void testForceDrain() {
-        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+        asList(APPEND_ATOMIC).forEach(appender -> {
             int leaderEpoch = 17;
             long baseOffset = 157;
             int lingerMs = 50;
@@ -155,7 +147,7 @@ class BatchAccumulatorTest {
 
     @Test
     public void testForceDrainBeforeAppendLeaderChangeMessage() {
-        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+        asList(APPEND_ATOMIC).forEach(appender -> {
             int leaderEpoch = 17;
             long baseOffset = 157;
             int lingerMs = 50;
@@ -244,7 +236,7 @@ class BatchAccumulatorTest {
         );
 
         time.sleep(15);
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), OptionalLong.empty(), false));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), false));
         assertEquals(lingerMs, acc.timeUntilDrain(time.milliseconds()));
         assertFalse(acc.isEmpty());
 
@@ -276,7 +268,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), OptionalLong.empty(), false));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), false));
         time.sleep(lingerMs);
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
@@ -305,14 +297,14 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), OptionalLong.empty(), false));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), false));
         acc.close();
         Mockito.verify(memoryPool).release(buffer);
     }
 
     @Test
     public void testSingleBatchAccumulation() {
-        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+        asList(APPEND_ATOMIC).forEach(appender -> {
             int leaderEpoch = 17;
             long baseOffset = 157;
             int lingerMs = 50;
@@ -353,7 +345,7 @@ class BatchAccumulatorTest {
 
     @Test
     public void testMultipleBatchAccumulation() {
-        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+        asList(APPEND_ATOMIC).forEach(appender -> {
             int leaderEpoch = 17;
             long baseOffset = 157;
             int lingerMs = 50;
@@ -369,55 +361,15 @@ class BatchAccumulatorTest {
                 maxBatchSize
             );
 
-            // Append entries until we have 4 batches to drain (3 completed, 1 building)
-            while (acc.numCompletedBatches() < 3) {
+            // Append enough records so that multiple batches get created
+            for (int records = 0; records < maxBatchSize; records++) {
                 appender.call(acc, leaderEpoch, singletonList("foo"));
             }
 
             List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
-            assertEquals(4, batches.size());
+            assertTrue(batches.size() > 1, () -> String.format("number of batches is %s", batches.size()));
             assertTrue(batches.stream().allMatch(batch -> batch.data.sizeInBytes() <= maxBatchSize));
         });
-    }
-
-    @Test
-    public void testRecordsAreSplit() {
-        int leaderEpoch = 17;
-        long baseOffset = 157;
-        int lingerMs = 50;
-        String record = "a";
-        int numberOfRecords = 9;
-        int recordsPerBatch = 2;
-        int batchHeaderSize = AbstractRecords.recordBatchHeaderSizeInBytes(
-            RecordBatch.MAGIC_VALUE_V2,
-            CompressionType.NONE
-        );
-        int maxBatchSize = batchHeaderSize + recordsPerBatch * recordSizeInBytes(record, recordsPerBatch);
-
-        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
-            .thenReturn(ByteBuffer.allocate(maxBatchSize));
-
-        BatchAccumulator<String> acc = buildAccumulator(
-            leaderEpoch,
-            baseOffset,
-            lingerMs,
-            maxBatchSize
-        );
-
-        List<String> records = Stream
-            .generate(() -> record)
-            .limit(numberOfRecords)
-            .collect(Collectors.toList());
-        assertEquals(baseOffset + numberOfRecords - 1, acc.append(leaderEpoch, records, OptionalLong.empty(), false));
-
-        time.sleep(lingerMs);
-        assertTrue(acc.needsDrain(time.milliseconds()));
-
-        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
-        // ceilingDiv(records.size(), recordsPerBatch)
-        int expectedBatches = (records.size() + recordsPerBatch - 1) / recordsPerBatch;
-        assertEquals(expectedBatches, batches.size());
-        assertTrue(batches.stream().allMatch(batch -> batch.data.sizeInBytes() <= maxBatchSize));
     }
 
     @Test
@@ -463,7 +415,7 @@ class BatchAccumulatorTest {
         // Do the first append outside the thread to start the linger timer
         Mockito.when(memoryPool.tryAllocate(maxBatchSize))
             .thenReturn(ByteBuffer.allocate(maxBatchSize));
-        acc.append(leaderEpoch, singletonList("a"), OptionalLong.empty(), false);
+        acc.append(leaderEpoch, singletonList("a"), false);
 
         // Let the serde block to simulate a slow append
         Mockito.doAnswer(invocation -> {
@@ -478,7 +430,7 @@ class BatchAccumulatorTest {
             Mockito.any(Writable.class)
         );
 
-        Thread appendThread = new Thread(() -> acc.append(leaderEpoch, singletonList("b"), OptionalLong.empty(), false));
+        Thread appendThread = new Thread(() -> acc.append(leaderEpoch, singletonList("b"), false));
         appendThread.start();
 
         // Attempt to drain while the append thread is holding the lock
@@ -520,47 +472,9 @@ class BatchAccumulatorTest {
         Long call(BatchAccumulator<String> acc, int epoch, List<String> records);
     }
 
+    // TODO: maybe remove this. this is not need anymore I think
     static final Appender APPEND_ATOMIC = (acc, epoch, records) ->
-            acc.append(epoch, records, OptionalLong.empty(), true);
-
-    static final Appender APPEND = (acc, epoch, records) ->
-            acc.append(epoch, records, OptionalLong.empty(), false);
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testAppendWithRequiredBaseOffset(boolean correctOffset) {
-        int leaderEpoch = 17;
-        long baseOffset = 157;
-        int lingerMs = 50;
-        int maxBatchSize = 512;
-
-        ByteBuffer buffer = ByteBuffer.allocate(maxBatchSize);
-        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
-                .thenReturn(buffer);
-
-        BatchAccumulator<String> acc = buildAccumulator(
-                leaderEpoch,
-                baseOffset,
-                lingerMs,
-                maxBatchSize
-        );
-
-        if (correctOffset) {
-            assertEquals(baseOffset, acc.append(leaderEpoch,
-                    singletonList("a"),
-                    OptionalLong.of(baseOffset),
-                    true));
-        } else {
-            assertEquals("Wanted base offset 156, but the next offset was 157",
-                assertThrows(UnexpectedBaseOffsetException.class, () ->
-                    acc.append(leaderEpoch,
-                        singletonList("a"),
-                        OptionalLong.of(baseOffset - 1),
-                        true)
-                ).getMessage());
-        }
-        acc.close();
-    }
+            acc.append(epoch, records, false);
 
     @Test
     public void testMultipleControlRecords() {

@@ -36,7 +36,6 @@ import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalLong;
 
 public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
     private final RawSnapshotWriter snapshot;
@@ -109,7 +108,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             throw new IllegalStateException(message);
         }
 
-        accumulator.append(snapshot.snapshotId().epoch(), records, OptionalLong.empty(), false);
+        accumulator.append(snapshot.snapshotId().epoch(), records, false);
 
         if (accumulator.needsDrain(time.milliseconds())) {
             appendBatches(accumulator.drain());

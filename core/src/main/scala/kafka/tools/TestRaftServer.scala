@@ -212,6 +212,7 @@ class TestRaftServer(
       recordCount.incrementAndGet()
       try {
         val offset = raftManager.client.scheduleAppend(leaderEpoch, List(payload).asJava)
+        raftManager.client.scheduleFlush()
         pendingAppends.offer(PendingAppend(offset, currentTimeMs))
       } catch {
         case e: NotLeaderException =>

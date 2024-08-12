@@ -3283,15 +3283,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public long scheduleAppend(int epoch, List<T> records) {
-        return append(epoch, records, OptionalLong.empty(), false);
+        return append(epoch, records);
     }
 
-    @Override
-    public long scheduleAtomicAppend(int epoch, OptionalLong requiredBaseOffset, List<T> records) {
-        return append(epoch, records, requiredBaseOffset, true);
-    }
-
-    private long append(int epoch, List<T> records, OptionalLong requiredBaseOffset, boolean isAtomic) {
+    private long append(int epoch, List<T> records) {
         if (!isInitialized()) {
             throw new NotLeaderException("Append failed because the replica is not the current leader");
         }
@@ -3302,7 +3297,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         BatchAccumulator<T> accumulator = leaderState.accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
-        final long offset = accumulator.append(epoch, records, requiredBaseOffset, isAtomic);
+        final long offset = accumulator.append(epoch, records, true);
 
         // Wakeup the network channel if either this is the first append
         // or the accumulator is ready to drain now. Checking for the first
@@ -3310,9 +3305,24 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // the linger timeout so that it can schedule its own wakeup in case
         // there are no additional appends.
         if (isFirstAppend || accumulator.needsDrain(time.milliseconds())) {
+            // TODO: checking of needsDrain may not be enough anymore. There records may not be ready because of the drainOffset
             wakeup();
         }
         return offset;
+    }
+
+    @Override
+    public void scheduleFlush() {
+        if (!isInitialized()) {
+            throw new NotLeaderException("Flush failed because the replica is not the current leader");
+        }
+
+        LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
+            () -> new NotLeaderException("Flush failed because the replica is not the current leader")
+        );
+
+        leaderState.accumulator().allowDrain();
+        wakeup();
     }
 
     @Override
@@ -3609,10 +3619,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         /**
          * This API is used for committed records originating from {@link #scheduleAppend(int, List)}
-         * or {@link #scheduleAtomicAppend(int, OptionalLong, List)} on this instance. In this case,
-         * we are able to save the original record objects, which saves the need to read them back
-         * from disk. This is a nice optimization for the leader which is typically doing more work
-         * than all of the * followers.
+         * on this instance. In this case, we are able to save the original record objects, which
+         * saves the need to read them back from disk. This is a nice optimization for the leader
+         * which is typically doing more work than all of the * followers.
          */
         private void fireHandleCommit(
             long baseOffset,
