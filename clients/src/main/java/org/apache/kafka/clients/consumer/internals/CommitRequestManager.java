@@ -1000,7 +1000,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
                 future.completeExceptionally(exception);
             } else if (exception instanceof RetriableException && !(exception instanceof TimeoutException)) {
-                // If fail with a retriable KafkaException, then retry
+                // If fail with a retriable KafkaException, then retry (except for timeout)
                 future.completeExceptionally(exception);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));

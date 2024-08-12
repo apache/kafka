@@ -650,7 +650,8 @@ public class CommitRequestManagerTest {
             1,
             error);
         // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
-        if (error.exception() instanceof RetriableException && !(error.exception() instanceof TimeoutException))
+        ApiException exception = error.exception();
+        if (exception instanceof RetriableException && !(exception instanceof TimeoutException))
             testRetriable(commitRequestManager, futures, error);
         else {
             testNonRetriable(futures);
