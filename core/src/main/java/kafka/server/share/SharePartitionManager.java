@@ -36,8 +36,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
+import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.group.share.Persister;
@@ -355,7 +355,7 @@ public class SharePartitionManager implements AutoCloseable {
      * @return The new share fetch context object
      */
     public ShareFetchContext newContext(String groupId, Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData,
-                                        List<TopicIdPartition> toForget, ShareFetchMetadata reqMetadata, Boolean isAcknowledgeDataPresent) {
+                                        List<TopicIdPartition> toForget, ShareRequestMetadata reqMetadata, Boolean isAcknowledgeDataPresent) {
         ShareFetchContext context;
         // TopicPartition with maxBytes as 0 should not be added in the cachedPartitions
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchDataWithMaxBytes = new HashMap<>();
@@ -366,7 +366,7 @@ public class SharePartitionManager implements AutoCloseable {
         // new session in case it is INITIAL_EPOCH. Hence, we need to treat them as special cases.
         if (reqMetadata.isFull()) {
             ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
-            if (reqMetadata.epoch() == ShareFetchMetadata.FINAL_EPOCH) {
+            if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
                 // If the epoch is FINAL_EPOCH, don't try to create a new session.
                 if (!shareFetchDataWithMaxBytes.isEmpty()) {
                     throw Errors.INVALID_REQUEST.exception();
@@ -419,7 +419,7 @@ public class SharePartitionManager implements AutoCloseable {
                 Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
                         shareFetchDataWithMaxBytes, toForget);
                 cache.touch(shareSession, time.milliseconds());
-                shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+                shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
                 log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
                                 "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
                         partitionsToLogString(modifiedTopicIdPartitions.get(
@@ -438,11 +438,11 @@ public class SharePartitionManager implements AutoCloseable {
      * @param groupId The group id in the share fetch request.
      * @param reqMetadata The metadata in the share acknowledge request.
      */
-    public void acknowledgeSessionUpdate(String groupId, ShareFetchMetadata reqMetadata) {
-        if (reqMetadata.epoch() == ShareFetchMetadata.INITIAL_EPOCH) {
+    public void acknowledgeSessionUpdate(String groupId, ShareRequestMetadata reqMetadata) {
+        if (reqMetadata.epoch() == ShareRequestMetadata.INITIAL_EPOCH) {
             // ShareAcknowledge Request cannot have epoch as INITIAL_EPOCH (0)
             throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
-        } else if (reqMetadata.epoch() == ShareFetchMetadata.FINAL_EPOCH) {
+        } else if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
             ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
             if (cache.remove(key) == null) {
                 log.error("Share session error for {}: no such share session found", key);
@@ -464,7 +464,7 @@ public class SharePartitionManager implements AutoCloseable {
                         throw  Errors.INVALID_SHARE_SESSION_EPOCH.exception();
                     } else {
                         cache.touch(shareSession, time.milliseconds());
-                        shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+                        shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
                     }
                 }
             }

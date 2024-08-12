@@ -4054,7 +4054,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val shareFetchData = shareFetchRequest.shareFetchData(topicIdNames)
     val forgottenTopics = shareFetchRequest.forgottenTopics(topicIdNames)
 
-    val newReqMetadata: ShareFetchMetadata = new ShareFetchMetadata(Uuid.fromString(memberId), shareSessionEpoch)
+    val newReqMetadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.fromString(memberId), shareSessionEpoch)
     var shareFetchContext: ShareFetchContext = null
 
     try {
@@ -4177,7 +4177,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             shareFetchResponse.data.responses.add(topicData)
           }
 
-          if (shareSessionEpoch == ShareFetchMetadata.FINAL_EPOCH) {
+          if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
             sharePartitionManagerInstance.releaseAcquiredRecords(groupId, memberId).
               whenComplete((releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
@@ -4361,7 +4361,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val memberId = shareAcknowledgeRequest.data.memberId
     val shareSessionEpoch = shareAcknowledgeRequest.data.shareSessionEpoch
-    val newReqMetadata: ShareFetchMetadata = new ShareFetchMetadata(Uuid.fromString(memberId), shareSessionEpoch)
+    val newReqMetadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.fromString(memberId), shareSessionEpoch)
 
     try {
       // Updating the cache for Share Session Handling
@@ -4399,7 +4399,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
         } else {
-          if (shareSessionEpoch == ShareFetchMetadata.FINAL_EPOCH) {
+          if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
             sharePartitionManagerInstance.releaseAcquiredRecords(groupId, memberId).
               whenComplete{ (releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {

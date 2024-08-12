@@ -23,10 +23,10 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchRequest.SharePartitionData;
 import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.server.share.CachedSharePartition;
 import org.apache.kafka.server.share.ShareSession;
 
@@ -51,7 +51,7 @@ public class ShareSessionContext extends ShareFetchContext {
 
     private static final Logger log = LoggerFactory.getLogger(ShareSessionContext.class);
 
-    private final ShareFetchMetadata reqMetadata;
+    private final ShareRequestMetadata reqMetadata;
     private final boolean isSubsequent;
     private Map<TopicIdPartition, SharePartitionData> shareFetchData;
     private ShareSession session;
@@ -62,7 +62,7 @@ public class ShareSessionContext extends ShareFetchContext {
      * @param reqMetadata        The request metadata.
      * @param shareFetchData     The share partition data from the share fetch request.
      */
-    public ShareSessionContext(ShareFetchMetadata reqMetadata,
+    public ShareSessionContext(ShareRequestMetadata reqMetadata,
                                Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
         this.reqMetadata = reqMetadata;
         this.shareFetchData = shareFetchData;
@@ -75,7 +75,7 @@ public class ShareSessionContext extends ShareFetchContext {
      * @param reqMetadata  The request metadata.
      * @param session      The subsequent fetch request session.
      */
-    public ShareSessionContext(ShareFetchMetadata reqMetadata, ShareSession session) {
+    public ShareSessionContext(ShareRequestMetadata reqMetadata, ShareSession session) {
         this.reqMetadata = reqMetadata;
         this.session = session;
         this.isSubsequent = true;
@@ -107,7 +107,7 @@ public class ShareSessionContext extends ShareFetchContext {
             return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
                     Collections.emptyIterator(), Collections.emptyList()));
         }
-        int expectedEpoch = ShareFetchMetadata.nextEpoch(reqMetadata.epoch());
+        int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
         int sessionEpoch;
         synchronized (session) {
             sessionEpoch = session.epoch;
@@ -184,7 +184,7 @@ public class ShareSessionContext extends ShareFetchContext {
         if (!isSubsequent)
             return ShareFetchResponse.sizeOf(version, updates.entrySet().iterator());
         synchronized (session) {
-            int expectedEpoch = ShareFetchMetadata.nextEpoch(reqMetadata.epoch());
+            int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
             if (session.epoch != expectedEpoch) {
                 return ShareFetchResponse.sizeOf(version, Collections.emptyIterator());
             }
@@ -200,7 +200,7 @@ public class ShareSessionContext extends ShareFetchContext {
             return new ShareFetchResponse(ShareFetchResponse.toMessage(
                     Errors.NONE, 0, updates.entrySet().iterator(), Collections.emptyList()));
         } else {
-            int expectedEpoch = ShareFetchMetadata.nextEpoch(reqMetadata.epoch());
+            int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
             int sessionEpoch;
             synchronized (session) {
                 sessionEpoch = session.epoch;
