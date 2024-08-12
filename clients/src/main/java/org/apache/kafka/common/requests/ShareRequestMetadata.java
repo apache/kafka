@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
 
-public class ShareFetchMetadata {
+public class ShareRequestMetadata {
     /**
      * The first epoch. When used in a ShareFetch request, indicates that the client
      * wants to create a session.
@@ -73,25 +73,25 @@ public class ShareFetchMetadata {
      */
     private final int epoch;
 
-    public ShareFetchMetadata(Uuid memberId, int epoch) {
+    public ShareRequestMetadata(Uuid memberId, int epoch) {
         this.memberId = memberId;
         this.epoch = epoch;
     }
 
-    public static ShareFetchMetadata initialEpoch(Uuid memberId) {
-        return new ShareFetchMetadata(memberId, INITIAL_EPOCH);
+    public static ShareRequestMetadata initialEpoch(Uuid memberId) {
+        return new ShareRequestMetadata(memberId, INITIAL_EPOCH);
     }
 
-    public ShareFetchMetadata nextEpoch() {
-        return new ShareFetchMetadata(memberId, nextEpoch(epoch));
+    public ShareRequestMetadata nextEpoch() {
+        return new ShareRequestMetadata(memberId, nextEpoch(epoch));
     }
 
-    public ShareFetchMetadata nextCloseExistingAttemptNew() {
-        return new ShareFetchMetadata(memberId, INITIAL_EPOCH);
+    public ShareRequestMetadata nextCloseExistingAttemptNew() {
+        return new ShareRequestMetadata(memberId, INITIAL_EPOCH);
     }
 
-    public ShareFetchMetadata finalEpoch() {
-        return new ShareFetchMetadata(memberId, FINAL_EPOCH);
+    public ShareRequestMetadata finalEpoch() {
+        return new ShareRequestMetadata(memberId, FINAL_EPOCH);
     }
 
     public Uuid memberId() {
