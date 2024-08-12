@@ -313,7 +313,7 @@ public class DelegationTokenControlManager {
         if (requestData.expiryTimePeriodMs() < 0) { // expire immediately
             responseData
                 .setErrorCode(NONE.code())
-                .setExpiryTimestampMs(requestData.expiryTimePeriodMs());
+                .setExpiryTimestampMs(time.milliseconds());
             records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
                 setTokenId(myTokenInformation.tokenId()), (short) 0));
         } else {
