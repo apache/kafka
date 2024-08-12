@@ -2464,7 +2464,7 @@ class KafkaApisTest extends Logging {
       ).build(version.toShort)
       val request = buildRequest(endTxnRequest)
 
-      val clientTransactionVersion = if (version >= 4) 2 else 0
+      val clientTransactionVersion = if (version > 4) 2 else 0
 
       val requestLocal = RequestLocal.withThreadConfinedCaching
       when(txnCoordinator.handleEndTransaction(

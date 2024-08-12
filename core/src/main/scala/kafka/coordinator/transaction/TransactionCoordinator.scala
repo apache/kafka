@@ -524,8 +524,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
           txnMetadata.inLock {
-            val currentTxnMetadataIsAtLeastTransactionsV2 = txnMetadata.clientTransactionVersion >=2
-            if (txnMetadata.producerId != producerId)
+            val currentTxnMetadataIsAtLeastTransactionsV2 = txnMetadata.clientTransactionVersion >= 2
+            if (txnMetadata.producerId != producerId && !(txnMetadata.previousProducerId == producerId && txnMetadata.producerEpoch == 0 && currentTxnMetadataIsAtLeastTransactionsV2))
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // New transactions will bump epoch on each transaction. On retries, if already in prepare state, return immediately
             else if (currentTxnMetadataIsAtLeastTransactionsV2 && isRetryEndTxn(txnMetadata, producerId, producerEpoch)) {
