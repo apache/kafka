@@ -26,7 +26,6 @@ import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import kafka.test.junit.ZkClusterInvocationContext;
-import kafka.utils.Exit;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -38,6 +37,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;

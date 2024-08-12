@@ -24,7 +24,7 @@ import joptsimple.{OptionException, OptionSpec}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
-import kafka.utils.{CoreUtils, Exit, Logging}
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -33,7 +33,7 @@ import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, RaftClient, QuorumConfig}
@@ -479,7 +479,7 @@ object TestRaftServer extends Logging {
       val recordSize = opts.options.valueOf(opts.recordSizeOpt)
       val server = new TestRaftServer(config, Uuid.fromString(directoryIdAsString), throughput, recordSize)
 
-      Exit.addShutdownHook("raft-shutdown-hook", server.shutdown())
+      Exit.addShutdownHook("raft-shutdown-hook", () => server.shutdown())
 
       server.startup()
       server.awaitShutdown()

@@ -4088,7 +4088,18 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def tryCompleteDelayedRequestsCatchesExceptions(): Unit = {
-    when(delayedOperations.checkAndCompleteAll()).thenThrow(new RuntimeException("uh oh"))
+    val requestKey = TopicPartitionOperationKey(topicPartition)
+
+    val produce = mock(classOf[DelayedOperationPurgatory[DelayedProduce]])
+    when(produce.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val fetch = mock(classOf[DelayedOperationPurgatory[DelayedFetch]])
+    when(fetch.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val deleteRecords = mock(classOf[DelayedOperationPurgatory[DelayedDeleteRecords]])
+    when(deleteRecords.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val delayedOperations = new DelayedOperations(topicPartition, produce, fetch, deleteRecords)
     val spyLogManager = spy(logManager)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,

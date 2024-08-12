@@ -168,6 +168,138 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     verifyRemoteLogTopicConfigs(topicConfig)
   }
 
+  // `remote.log.delete.on.disable` only works in KRaft mode.
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testCreateTopicRetentionMsValidationWithRemoteCopyDisabled(quorum: String): Unit = {
+    val testTopicName2 = testTopicName + "2"
+    val testTopicName3 = testTopicName + "3"
+    val errorMsgMs = "When `remote.log.copy.disable` is set to true, the `local.retention.ms` and `retention.ms` " +
+      "must be set to the identical value because there will be no more logs copied to the remote storage."
+
+    // 1. create a topic with `remote.log.copy.disable=true` and have different local.retention.ms and retention.ms value,
+    //    it should fail to create the topic
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
+    topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "1000")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+
+    val admin = createAdminClient()
+    val err = assertThrowsException(classOf[InvalidConfigurationException],
+            () => TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions,
+              numReplicationFactor, topicConfig = topicConfig))
+    assertEquals(errorMsgMs, err.getMessage)
+
+    // 2. change the local.retention.ms value to the same value as retention.ms should successfully create the topic
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "1000")
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 3. change the local.retention.ms value to "-2" should also successfully create the topic
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+    TestUtils.createTopicWithAdmin(admin, testTopicName2, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 4. create a topic with `remote.log.copy.disable=false` and have different local.retention.ms and retention.ms value,
+    //    it should successfully creates the topic.
+    topicConfig.clear()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
+    topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "1000")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+    TestUtils.createTopicWithAdmin(admin, testTopicName3, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 5. alter the config to `remote.log.copy.disable=true`, it should fail the config change
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+      ))
+    val err2 = assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get())
+    assertEquals(errorMsgMs, err2.getMessage)
+
+    // 6. alter the config to `remote.log.copy.disable=true` and local.retention.ms == retention.ms, it should work without error
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+        new AlterConfigOp(new ConfigEntry(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "1000"),
+          AlterConfigOp.OpType.SET),
+      ))
+
+    admin.incrementalAlterConfigs(configs).all().get()
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testCreateTopicRetentionBytesValidationWithRemoteCopyDisabled(quorum: String): Unit = {
+    val testTopicName2 = testTopicName + "2"
+    val testTopicName3 = testTopicName + "3"
+    val errorMsgBytes = "When `remote.log.copy.disable` is set to true, the `local.retention.bytes` and `retention.bytes` " +
+      "must be set to the identical value because there will be no more logs copied to the remote storage."
+
+    // 1. create a topic with `remote.log.copy.disable=true` and have different local.retention.bytes and retention.bytes value,
+    //    it should fail to create the topic
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "100")
+    topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+
+    val admin = createAdminClient()
+    val err = assertThrowsException(classOf[InvalidConfigurationException],
+      () => TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions,
+        numReplicationFactor, topicConfig = topicConfig))
+    assertEquals(errorMsgBytes, err.getMessage)
+
+    // 2. change the local.retention.bytes value to the same value as retention.bytes should successfully create the topic
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1000")
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 3. change the local.retention.bytes value to "-2" should also successfully create the topic
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+    TestUtils.createTopicWithAdmin(admin, testTopicName2, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 4. create a topic with `remote.log.copy.disable=false` and have different local.retention.bytes and retention.bytes value,
+    //    it should successfully creates the topic.
+    topicConfig.clear()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "100")
+    topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+    TestUtils.createTopicWithAdmin(admin, testTopicName3, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 5. alter the config to `remote.log.copy.disable=true`, it should fail the config change
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+      ))
+    val err2 = assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get())
+    assertEquals(errorMsgBytes, err2.getMessage)
+
+    // 6. alter the config to `remote.log.copy.disable=true` and local.retention.bytes == retention.bytes, it should work without error
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+        new AlterConfigOp(new ConfigEntry(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1000"),
+          AlterConfigOp.OpType.SET),
+      ))
+    admin.incrementalAlterConfigs(configs).all().get()
+  }
+
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testEnableRemoteLogOnExistingTopicTest(quorum: String): Unit = {
