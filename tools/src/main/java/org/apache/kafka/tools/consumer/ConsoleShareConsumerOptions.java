@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.MessageFormatter;
@@ -32,6 +30,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
 
 public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
     private final OptionSpec<String> messageFormatterOpt;
@@ -52,7 +53,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
 
     public ConsoleShareConsumerOptions(String[] args) throws IOException {
         super(args);
-        topicOpt = parser.accepts("topic", "The topic to consume on.")
+        topicOpt = parser.accepts("topic", "The topic to consume from.")
                 .withRequiredArg()
                 .describedAs("topic")
                 .ofType(String.class);
@@ -60,7 +61,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .withRequiredArg()
                 .describedAs("consumer_prop")
                 .ofType(String.class);
-        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file. Note that " + consumerPropertyOpt + " takes precedence over this config.")
+        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer-config", "Consumer config properties file. Note that " + consumerPropertyOpt + " takes precedence over this config.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
@@ -74,7 +75,6 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                                 " print.timestamp=true|false\n" +
                                 " print.key=true|false\n" +
                                 " print.offset=true|false\n" +
-                                " print.delivery=true|false\n" +
                                 " print.partition=true|false\n" +
                                 " print.headers=true|false\n" +
                                 " print.value=true|false\n" +
@@ -104,16 +104,16 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
         rejectOpt = parser.accepts("reject", "If specified, messages are rejected as they are consumed.");
         releaseOpt = parser.accepts("release", "If specified, messages are released as they are consumed.");
         rejectMessageOnErrorOpt = parser.accepts("reject-message-on-error", "If there is an error when processing a message, " +
-                "reject it instead of halt.");
+                "reject it instead of halting.");
         bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
                 .withRequiredArg()
                 .describedAs("server to connect to")
                 .ofType(String.class);
-        keyDeserializerOpt = parser.accepts("key-deserializer")
+        keyDeserializerOpt = parser.accepts("key-deserializer", "The name of the class to use for deserializing keys.")
                 .withRequiredArg()
                 .describedAs("deserializer for key")
                 .ofType(String.class);
-        valueDeserializerOpt = parser.accepts("value-deserializer")
+        valueDeserializerOpt = parser.accepts("value-deserializer", "The name of the class to use for deserializing values.")
                 .withRequiredArg()
                 .describedAs("deserializer for values")
                 .ofType(String.class);
@@ -172,7 +172,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
             groupIdsProvided.add("console-share-consumer");
         } else if (groupIdsProvided.size() > 1) {
             CommandLineUtils.printUsageAndExit(parser, "The group ids provided in different places (directly using '--group', "
-                    + "via '--consumer-property', or via '--consumer.config') do not match. "
+                    + "via '--consumer-property', or via '--consumer-config') do not match. "
                     + "Detected group ids: "
                     + groupIdsProvided.stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")));
         }

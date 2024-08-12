@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.tools.ToolsTestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -94,7 +96,7 @@ public class ConsoleShareConsumerOptionsTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--consumer.config", propsFile.getAbsolutePath()
+            "--consumer-config", propsFile.getAbsolutePath()
         };
 
         ConsoleShareConsumerOptions config = new ConsoleShareConsumerOptions(args);
@@ -116,7 +118,7 @@ public class ConsoleShareConsumerOptionsTest {
             "--topic", "test",
             "--group", "group-from-arguments",
             "--consumer-property", "group.id=group-from-properties",
-            "--consumer.config", propsFile.getAbsolutePath()
+            "--consumer-config", propsFile.getAbsolutePath()
         };
 
         assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args));
@@ -128,20 +130,20 @@ public class ConsoleShareConsumerOptionsTest {
             "--topic", "test",
             "--group", "test-group",
             "--consumer-property", "group.id=test-group",
-            "--consumer.config", propsFile.getAbsolutePath()
+            "--consumer-config", propsFile.getAbsolutePath()
         };
 
         ConsoleShareConsumerOptions config = new ConsoleShareConsumerOptions(args1);
         Properties props = config.consumerProps();
         assertEquals("test-group", props.getProperty("group.id"));
 
-        // different via --consumer-property and --consumer.config
+        // different via --consumer-property and --consumer-config
         propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
         final String[] args2 = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--consumer-property", "group.id=group-from-properties",
-            "--consumer.config", propsFile.getAbsolutePath()
+            "--consumer-config", propsFile.getAbsolutePath()
         };
 
         assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args2));
@@ -156,13 +158,13 @@ public class ConsoleShareConsumerOptionsTest {
 
         assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args3));
 
-        // different via --group and --consumer.config
+        // different via --group and --consumer-config
         propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
         final String[] args4 = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--group", "group-from-arguments",
-            "--consumer.config", propsFile.getAbsolutePath()
+            "--consumer-config", propsFile.getAbsolutePath()
         };
         assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args4));
 
@@ -222,5 +224,48 @@ public class ConsoleShareConsumerOptionsTest {
         Properties consumerProperties = config.consumerProps();
 
         assertEquals("console-share-consumer", consumerProperties.getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testRejectOption() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--reject"
+        };
+
+        ConsoleShareConsumerOptions config = new ConsoleShareConsumerOptions(args);
+        assertEquals(AcknowledgeType.REJECT, config.acknowledgeType());
+    }
+
+    @Test
+    public void testReleaseOption() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--release"
+        };
+
+        ConsoleShareConsumerOptions config = new ConsoleShareConsumerOptions(args);
+        assertEquals(AcknowledgeType.RELEASE, config.acknowledgeType());
+    }
+
+    @Test
+    public void testRejectAndReleaseOption() throws IOException {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--reject",
+            "--release"
+        };
+
+        try {
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 }

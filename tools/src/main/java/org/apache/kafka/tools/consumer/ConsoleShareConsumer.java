@@ -81,7 +81,7 @@ public class ConsoleShareConsumer {
         }
     }
 
-    static void addShutdownHook(ConsumerWrapper consumer) {
+    private static void addShutdownHook(ConsumerWrapper consumer) {
         Exit.addShutdownHook("consumer-shutdown-hook", () -> {
             try {
                 consumer.wakeup();
@@ -92,7 +92,7 @@ public class ConsoleShareConsumer {
         });
     }
 
-    static void process(int maxMessages, MessageFormatter formatter, ConsumerWrapper consumer, PrintStream output,
+    private static void process(int maxMessages, MessageFormatter formatter, ConsumerWrapper consumer, PrintStream output,
                         boolean rejectMessageOnError, AcknowledgeType acknowledgeType) {
         while (messageCount < maxMessages || maxMessages == -1) {
             ConsumerRecord<byte[], byte[]> msg;
@@ -128,11 +128,11 @@ public class ConsoleShareConsumer {
         }
     }
 
-    static void reportRecordCount() {
+    private static void reportRecordCount() {
         System.err.println("Processed a total of " + messageCount + " messages");
     }
 
-    static boolean checkErr(PrintStream output) {
+    private static boolean checkErr(PrintStream output) {
         boolean gotError = output.checkError();
         if (gotError) {
             // This means no one is listening to our output stream anymore, time to shut down

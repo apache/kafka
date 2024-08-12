@@ -24,6 +24,7 @@ import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.MockTime;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,6 +34,7 @@ import java.time.Duration;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -102,6 +104,30 @@ public class ConsoleShareConsumerTest {
         verify(formatter).writeTo(any(), eq(printStream));
         verify(consumer).receive();
         verify(printStream).checkError();
+
+        consumer.cleanup();
+    }
+
+    @Test
+    public void testRejectMessageOnError() {
+        ConsoleShareConsumer.ConsumerWrapper consumer = mock(ConsoleShareConsumer.ConsumerWrapper.class);
+        MessageFormatter formatter = mock(MessageFormatter.class);
+        PrintStream printStream = mock(PrintStream.class);
+
+        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("foo", 1, 1, new byte[0], new byte[0]);
+
+        when(consumer.receive()).thenReturn(record);
+
+        //Simulate an error on formatter.writeTo() call
+        doThrow(new RuntimeException())
+            .when(formatter)
+            .writeTo(any(), any());
+
+        ConsoleShareConsumer.process(1, formatter, consumer, printStream, true, AcknowledgeType.ACCEPT);
+
+        verify(formatter).writeTo(any(), eq(printStream));
+        verify(consumer).receive();
+        verify(consumer).acknowledge(record, AcknowledgeType.REJECT);
 
         consumer.cleanup();
     }
