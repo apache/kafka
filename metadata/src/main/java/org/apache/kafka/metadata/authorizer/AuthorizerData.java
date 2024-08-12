@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -163,7 +164,6 @@ public interface AuthorizerData {
         return acl.permissionType().equals(ALLOW) ? ALLOWED : DENIED;
     }
 
-
     /**
      * Creates a copy of this AuthorizerData with the loading complete flag set.
      * @param newLoadingComplete the value to set the loading complete flag to.
@@ -231,9 +231,9 @@ public interface AuthorizerData {
     int aclCount();
 
     /**
-     * Gets the AclMutator.  This is the set of superusers provided in {@link #copyWithNewAclMutator(AclMutator)}
-     *      * or as default during the construction of this authorizer.
-     * @return
+     * Gets the AclMutator.  This is the mutator provided in {@link #copyWithNewAclMutator(AclMutator)}.
+     * @return the AclMutator currently registered with this AuthorizerData instance or {@code null} if
+     * no mutator was set.
      */
     AclMutator aclMutator();
 
@@ -253,6 +253,10 @@ public interface AuthorizerData {
 
     /**
      * Attempt to authorize the action within the context.
+     * <p>
+     * The implementation should check to verify that there exists at least one ACL granting authorization to the operation
+     * that is not blocked by a superseding DENY.
+     * </p>
      * @param requestContext the Context of the request.
      * @param action the action that is requested.
      * @return The authorizationResult.  May not be null.
@@ -267,17 +271,11 @@ public interface AuthorizerData {
     /**
      * Check if the caller is authorized to perform the given ACL operation on at least one
      * resource of the given type.
+     * <p>
+     * The implementation should check to verify that there exists at least one ACL granting the operation that is not
+     * blocked by a superseding DENY.
+     * </p>
      *
-     * Custom authorizer implementations should consider overriding this default implementation because:
-     * 1. The default implementation iterates all AclBindings multiple times, without any caching
-     *    by principal, host, operation, permission types, and resource types. More efficient
-     *    implementations may be added in custom authorizers that directly access cached entries.
-     * 2. The default implementation cannot integrate with any audit logging included in the
-     *    authorizer implementation.
-     * 3. The default implementation does not support any custom authorizer configs or other access
-     *    rules apart from ACLs.
-     /**
-     * performs an authorization check forto match any items of the resource type.
      * @param principal the principal to limit the search by.
      * @param host the host to limit the search by.
      * @param operation the operation to limit the search to.

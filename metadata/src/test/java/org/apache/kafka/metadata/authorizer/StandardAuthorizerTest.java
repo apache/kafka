@@ -18,7 +18,9 @@
 package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.server.authorizer.AuthorizationResult;
+
 import org.junit.jupiter.api.Timeout;
+
 import java.util.Set;
 
 @Timeout(value = 40)

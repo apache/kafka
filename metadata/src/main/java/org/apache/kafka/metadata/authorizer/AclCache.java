@@ -19,12 +19,12 @@ package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
-import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.immutable.ImmutableNavigableSet;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * An immutable class that stores the ACLs in KRaft-based clusters.
@@ -53,11 +53,11 @@ public class AclCache {
         return aclsByResource;
     }
 
-    Iterable<AclBinding> acls(AclBindingFilter filter) {
+    Iterable<AclBinding> acls(Predicate<AclBinding> filter) {
         List<AclBinding> aclBindingList = new ArrayList<>();
         aclsByResource.forEach(acl -> {
             AclBinding aclBinding = acl.toBinding();
-            if (filter.matches(aclBinding)) {
+            if (filter.test(aclBinding)) {
                 aclBindingList.add(aclBinding);
             }
         });
