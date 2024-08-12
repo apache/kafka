@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.SaslConfigs.GSSAPI_MECHANISM;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
@@ -61,7 +62,7 @@ public class JaasTestUtils {
         public String toString() {
             return String.format("%s {\n  %s\n};\n",
                     contextName,
-                    String.join("\n  ", modules.stream().map(Object::toString).toArray(String[]::new)));
+                    modules.stream().map(Object::toString).collect(Collectors.joining("\n  ")));
         }
     }
 
