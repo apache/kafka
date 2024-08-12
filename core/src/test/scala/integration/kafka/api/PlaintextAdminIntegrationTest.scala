@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,39 +16,51 @@
  */
 package kafka.api
 
-import kafka.utils.TestUtils._
-import kafka.utils.{Log4jController, TestUtils}
-import org.apache.kafka.clients.HostResolver
-import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors._
-import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
-import org.apache.kafka.common.requests.MetadataResponse
-import org.apache.kafka.common.resource.ResourceType
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common._
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.QuotaConfigs
-import org.apache.kafka.storage.internals.log.LogConfig
-import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
-import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
-
 import java.io.File
 import java.net.InetAddress
+import java.lang.{Long => JLong}
 import java.time.{Duration => JDuration}
+import java.util.Arrays.asList
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
+import kafka.integration.KafkaServerTestHarness
+import kafka.server.metadata.KRaftMetadataCache
+import kafka.server.KafkaConfig
+import kafka.utils.TestUtils._
+import kafka.utils.{Log4jController, TestUtils}
+import org.apache.kafka.clients.HostResolver
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
+import org.apache.kafka.clients.admin._
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfigs, TopicConfig}
+import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
+import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.slf4j.LoggerFactory
+
+import java.util.AbstractMap.SimpleImmutableEntry
+import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
@@ -62,6 +74,7 @@ import scala.util.{Random, Using}
  * Also see [[org.apache.kafka.clients.admin.KafkaAdminClientTest]] for unit tests of the admin client.
  */
 class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
+  import PlaintextAdminIntegrationTest._
 
   val topic = "topic"
   val partition = 0
@@ -95,9 +108,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> clientId).asJava)
     val configEntries = Map(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG -> 1.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 3.0)
-    client.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, configEntries.map { case (k, v) =>
-      new ClientQuotaAlteration.Op(k, v)
-    }.asJavaCollection)).asJavaCollection).all.get
+    client.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, configEntries.map {case (k, v) =>
+      new ClientQuotaAlteration.Op(k,v)}.asJavaCollection)).asJavaCollection).all.get
 
     TestUtils.waitUntilTrue(() => {
       // wait for our ClientQuotaEntity to be set
@@ -106,7 +118,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val quotaEntities = client.describeClientQuotas(ClientQuotaFilter.all()).entities().get()
 
-    assertEquals(configEntries, quotaEntities.get(entity).asScala)
+    assertEquals(configEntries,quotaEntities.get(entity).asScala)
   }
 
   @ParameterizedTest
@@ -292,7 +304,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     def describeTransactions(): TransactionDescription = {
       client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get()
     }
-
     def transactionState(): TransactionState = {
       describeTransactions().state()
     }
@@ -1309,7 +1320,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // start the stopped broker to verify that it will be able to fetch from new log start offset
     restartDeadBrokers()
 
-    waitForFollowerLog(expectedStartOffset = 3L, expectedEndOffset = 100L)
+    waitForFollowerLog(expectedStartOffset=3L, expectedEndOffset=100L)
 
     // after the new replica caught up, all replicas should have same log start offset
     for (i <- 0 until brokerCount)
@@ -1322,7 +1333,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     result1.all().get()
     restartDeadBrokers()
     TestUtils.waitForBrokersInIsr(client, topicPartition, Set(followerIndex))
-    waitForFollowerLog(expectedStartOffset = 117L, expectedEndOffset = 200L)
+    waitForFollowerLog(expectedStartOffset=117L, expectedEndOffset=200L)
   }
 
   @ParameterizedTest
@@ -1472,7 +1483,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
                           topicPartition: TopicPartition): Unit = {
-    val futures = (0 until numRecords).map(i => {
+    val futures = (0 until numRecords).map( i => {
       val record = new ProducerRecord(topicPartition.topic, topicPartition.partition, s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")
       producer.send(record)
@@ -1636,14 +1647,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       // contains two static members and one dynamic member
       val groupInstanceSet = Set(testInstanceId1, testInstanceId2, EMPTY_GROUP_INSTANCE_ID)
-      val consumerSet = groupInstanceSet.map { groupInstanceId => createConsumer(configOverrides = createProperties(groupInstanceId)) }
+      val consumerSet = groupInstanceSet.map { groupInstanceId => createConsumer(configOverrides = createProperties(groupInstanceId))}
       val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
 
       val latch = new CountDownLatch(consumerSet.size)
       try {
-        def createConsumerThread[K, V](consumer: Consumer[K, V], topic: String): Thread = {
+        def createConsumerThread[K,V](consumer: Consumer[K,V], topic: String): Thread = {
           new Thread {
-            override def run: Unit = {
+            override def run : Unit = {
               consumer.subscribe(Collections.singleton(topic))
               try {
                 while (true) {
@@ -2381,7 +2392,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals("delete", configs.get(topic1Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value)
     assertEquals("1000", configs.get(topic1Resource).get(TopicConfig.FLUSH_MS_CONFIG).value) // verify previous change is still intact
     assertEquals("", configs.get(topic1Resource).get(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG).value)
-    assertEquals("", configs.get(topic2Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value)
+    assertEquals("", configs.get(topic2Resource).get(TopicConfig.CLEANUP_POLICY_CONFIG).value )
 
     // Alter topics with validateOnly=true
     topic1AlterConfigs = Seq(
@@ -2474,7 +2485,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
       ("123".equals(broker0Configs.getOrElse(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
         "456".equals(broker0Configs.getOrElse(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "")))
-    }, "Expected to see the broker properties we just set", pause = 25)
+    }, "Expected to see the broker properties we just set", pause=25)
     client.incrementalAlterConfigs(Map(broker0Resource ->
       Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ""),
         AlterConfigOp.OpType.DELETE),
@@ -2489,7 +2500,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       ("".equals(broker0Configs.getOrElse(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
         "654".equals(broker0Configs.getOrElse(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
         "987".equals(broker0Configs.getOrElse(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "")))
-    }, "Expected to see the broker properties we just modified", pause = 25)
+    }, "Expected to see the broker properties we just modified", pause=25)
   }
 
   @ParameterizedTest
@@ -2511,7 +2522,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       ("123".equals(broker0Configs.getOrElse(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
         "456".equals(broker0Configs.getOrElse(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
         "789".equals(broker0Configs.getOrElse(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "")))
-    }, "Expected to see the broker properties we just set", pause = 25)
+    }, "Expected to see the broker properties we just set", pause=25)
     client.incrementalAlterConfigs(Map(broker0Resource ->
       Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ""),
         AlterConfigOp.OpType.DELETE),
@@ -2526,7 +2537,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       ("".equals(broker0Configs.getOrElse(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
         "".equals(broker0Configs.getOrElse(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "")) &&
         "".equals(broker0Configs.getOrElse(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, "")))
-    }, "Expected to see the broker properties we just removed to be deleted", pause = 25)
+    }, "Expected to see the broker properties we just removed to be deleted", pause=25)
   }
 
   @ParameterizedTest
@@ -2877,7 +2888,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = createAdminClient
     val validLoggerName = "kafka.server.KafkaRequestHandler"
     val expectedValidLoggerLogLevel = describeBrokerLoggers().get(validLoggerName)
-
     def assertLogLevelDidNotChange(): Unit = {
       assertEquals(expectedValidLoggerLogLevel, describeBrokerLoggers().get(validLoggerName))
     }
@@ -2977,48 +2987,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     testAppendConfig(props, "0:0", "1:1,0:0")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("quorum=kraft"))
-  def testListClientMetricsResources(ignored: String): Unit = {
-    client = createAdminClient
-
-    def newTopic = new NewTopic(topic, partition, 0.toShort)
-
-    client.createTopics(Collections.singleton(newTopic))
-    assertTrue(client.listClientMetricsResources().all().get().isEmpty)
-
-    def name = "name"
-
-    def configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name)
-
-    val configEntry = new ConfigEntry("interval.ms", "111")
-
-    def configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
-
-    client.incrementalAlterConfigs(Collections.singletonMap(configResource, Collections.singletonList(configOp))).all().get()
-
-    def result = client.listClientMetricsResources().all().get()
-
-    def expected = Collections.singletonList(new ClientMetricsResourceListing(name))
-
-    assertEquals(new util.HashSet(expected), new util.HashSet(result))
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("quorum=kraft"))
-  @Timeout(30)
-  def testListClientMetricsResourcesTimeoutMs(ignored: String): Unit = {
-    client = createInvalidAdminClient()
-    try {
-      def timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
-
-      val exception = assertThrows(classOf[ExecutionException], () =>
-        client.listClientMetricsResources(timeoutOption).all().get())
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally client.close(time.Duration.ZERO)
-  }
-
-
   private def testAppendConfig(props: Properties, append: String, expected: String): Unit = {
     client = createAdminClient
     createTopic(topic, topicConfig = props)
@@ -3037,6 +3005,36 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(expected, config.value())
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("quorum=kraft"))
+  def testListClientMetricsResources(ignored: String): Unit = {
+    client = createAdminClient
+    def newTopic = new NewTopic(topic, partition, 0.toShort)
+    client.createTopics(Collections.singleton(newTopic))
+    assertTrue(client.listClientMetricsResources().all().get().isEmpty)
+    def name = "name"
+    def configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name)
+    val configEntry = new ConfigEntry("interval.ms", "111")
+    def configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
+    client.incrementalAlterConfigs(Collections.singletonMap(configResource, Collections.singletonList(configOp))).all().get()
+    def result = client.listClientMetricsResources().all().get()
+    def expected = Collections.singletonList(new ClientMetricsResourceListing(name))
+    assertEquals(new util.HashSet(expected), new util.HashSet(result))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("quorum=kraft"))
+  @Timeout(30)
+  def testListClientMetricsResourcesTimeoutMs(ignored: String): Unit = {
+    client = createInvalidAdminClient()
+    try {
+      def timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
+      val exception = assertThrows(classOf[ExecutionException], () =>
+        client.listClientMetricsResources(timeoutOption).all().get())
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
+  }
+  
   /**
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
@@ -3289,3 +3287,4 @@ object PlaintextAdminIntegrationTest {
     assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
   }
 }
+
