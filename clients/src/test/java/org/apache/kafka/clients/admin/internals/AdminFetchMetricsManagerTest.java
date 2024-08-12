@@ -24,12 +24,13 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashMap;
+import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,6 +42,7 @@ public class AdminFetchMetricsManagerTest {
     private final Time time = new MockTime(1, 0, 0);
     private Metrics metrics;
     private AdminFetchMetricsManager adminFetchMetricsManager;
+    private final String group = "group";
 
 
     @BeforeEach
@@ -52,7 +54,7 @@ public class AdminFetchMetricsManagerTest {
     @AfterEach
     public void tearDown() {
         if (metrics != null) {
-            metrics.close();
+            Utils.closeQuietly(metrics, "metrics");
             metrics = null;
         }
 
@@ -62,8 +64,8 @@ public class AdminFetchMetricsManagerTest {
     @Test
     public void testSingleNodeLatency() {
         String connectionId = "0";
-        MetricName nodeLatencyAvg = metrics.metricName("request-latency-avg", "group");
-        MetricName nodeLatencyMax = metrics.metricName("request-latency-max", "group");
+        MetricName nodeLatencyAvg = metrics.metricName("request-latency-avg", group);
+        MetricName nodeLatencyMax = metrics.metricName("request-latency-max", group);
         registerNodeLatencyMetric(connectionId, nodeLatencyAvg, nodeLatencyMax);
 
         adminFetchMetricsManager.recordLatency(connectionId, 333);
@@ -89,16 +91,16 @@ public class AdminFetchMetricsManagerTest {
     @Test
     public void testMultiNodeLatency() {
         String connectionId0 = "0";
-        MetricName nodeLatencyAvg0 = metrics.metricName("request-latency-avg", "group", genericTag(connectionId0));
-        MetricName nodeLatencyMax0 = metrics.metricName("request-latency-max", "group", genericTag(connectionId0));
+        MetricName nodeLatencyAvg0 = metrics.metricName("request-latency-avg", group, genericTag(connectionId0));
+        MetricName nodeLatencyMax0 = metrics.metricName("request-latency-max", group, genericTag(connectionId0));
         registerNodeLatencyMetric(connectionId0, nodeLatencyAvg0, nodeLatencyMax0);
         adminFetchMetricsManager.recordLatency(connectionId0, 5);
         adminFetchMetricsManager.recordLatency(connectionId0, 8);
 
         // Record metric against another node.
         String connectionId1 = "1";
-        MetricName nodeLatencyAvg1 = metrics.metricName("request-latency-avg", "group", genericTag(connectionId1));
-        MetricName nodeLatencyMax1 = metrics.metricName("request-latency-max", "group", genericTag(connectionId1));
+        MetricName nodeLatencyAvg1 = metrics.metricName("request-latency-avg", group, genericTag(connectionId1));
+        MetricName nodeLatencyMax1 = metrics.metricName("request-latency-max", group, genericTag(connectionId1));
         registerNodeLatencyMetric(connectionId1, nodeLatencyAvg1, nodeLatencyMax1);
         adminFetchMetricsManager.recordLatency(connectionId1, 105);
         adminFetchMetricsManager.recordLatency(connectionId1, 108);
@@ -150,9 +152,7 @@ public class AdminFetchMetricsManagerTest {
     }
 
     private Map<String, String> genericTag(String connectionId) {
-        Map<String, String> tags = new LinkedHashMap<>();
-        tags.put("node-id", "node-" + connectionId);
-        return tags;
+        return Collections.singletonMap("node-id", "node-" + connectionId);
     }
 
     private void mockSleepTimeWindow() {
@@ -168,6 +168,6 @@ public class AdminFetchMetricsManagerTest {
 
     private double metricValue(MetricName metricName) {
         KafkaMetric metric = metrics.metric(metricName);
-        return (Double) metric.metricValue();
+        return (double) metric.metricValue();
     }
 }
