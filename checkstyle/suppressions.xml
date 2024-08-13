@@ -364,4 +364,6 @@
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
+     <!-- Add the new suppression rule for JaasTestUtils.java -->
+    <suppress checks="ImportControl" files="kafka/security/JaasTestUtils.java" />
 </suppressions>

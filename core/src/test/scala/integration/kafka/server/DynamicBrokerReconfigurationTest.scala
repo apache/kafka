@@ -33,6 +33,7 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.UnifiedLog
 import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
+import kafka.security.JaasTestUtils
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils.TestControllerRequestCompletionHandler
@@ -53,7 +54,7 @@ import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestEx
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
-import org.apache.kafka.common.network.{ListenerName, ConnectionMode}
+import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.MetadataRequest
@@ -1146,12 +1147,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   @Test
   def testAddRemoveSaslListeners(): Unit = {
-    createScramCredentials(adminClients.head, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
-    createScramCredentials(adminClients.head, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+    createScramCredentials(adminClients.head, JaasTestUtils.KAFKA_SCRAM_USER, JaasTestUtils.KAFKA_SCRAM_PASSWORD)
+    createScramCredentials(adminClients.head, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
     initializeKerberos()
     // make sure each server's credential cache has all the created credentials
     // (check after initializing Kerberos to minimize delays)
-    List(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramAdmin).foreach { scramUser =>
+    List(JaasTestUtils.KAFKA_SCRAM_USER, JaasTestUtils.KAFKA_SCRAM_ADMIN).foreach { scramUser =>
       servers.foreach { server =>
         ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach(mechanism =>
           TestUtils.waitUntilTrue(() => server.credentialProvider.credentialCache.cache(
@@ -1395,7 +1396,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private def awaitInitialPositions(consumer: Consumer[_, _]): Unit = {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Timed out while waiting for assignment")
-    consumer.assignment.forEach(consumer.position(_))
+    consumer.assignment.forEach(tp => consumer.position(tp))
   }
 
   private def clientProps(securityProtocol: SecurityProtocol, saslMechanism: Option[String] = None): Properties = {
@@ -1748,7 +1749,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(prefix + SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "kafka")
     mechanisms.foreach { mechanism =>
       val jaasSection = jaasSections(Seq(mechanism), None, KafkaSasl, "").head
-      val jaasConfig = jaasSection.modules.head.toString
+      val jaasConfig = jaasSection.getModules.get(0).toString
       props.put(listenerName.saslMechanismConfigPrefix(mechanism) + SaslConfigs.SASL_JAAS_CONFIG, jaasConfig)
     }
   }
