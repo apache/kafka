@@ -29,8 +29,8 @@ RUN set -eux ; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
     export GNUPGHOME="$(mktemp -d)"; \
-    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" || \
-    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
+    gpg --batch --keyserver hkp://keys.openpgp.org --recv-keys "$GPG_KEY" || \
+    gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     gpgconf --kill all; \
     rm -rf "$GNUPGHOME" kafka.tgz.asc; \
@@ -61,8 +61,8 @@ RUN set -eux ; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
     export GNUPGHOME="$(mktemp -d)"; \
-    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" || \
-    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
+    gpg --batch --keyserver hkp://keys.openpgp.org --recv-keys "$GPG_KEY" || \
+    gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     gpgconf --kill all; \
     rm -rf "$GNUPGHOME" kafka.tgz.asc; \

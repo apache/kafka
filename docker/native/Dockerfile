@@ -35,8 +35,8 @@ RUN mkdir $KAFKA_DIR; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
     wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
     export GNUPGHOME="$(mktemp -d)"; \
-    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" || \
-    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
+    gpg --batch --keyserver hkp://keys.openpgp.org --recv-keys "$GPG_KEY" || \
+    gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     gpgconf --kill all; \
     rm -rf "$GNUPGHOME" kafka.tgz.asc; \
