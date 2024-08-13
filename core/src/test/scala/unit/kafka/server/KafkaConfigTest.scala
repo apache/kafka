@@ -1941,7 +1941,7 @@ class KafkaConfigTest {
     // Setting KRaft's properties.
     props.putAll(kraftProps())
 
-    // Only classic and consumer are supported.
+    // Only classic, consumer and share are supported.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
@@ -1951,9 +1951,21 @@ class KafkaConfigTest {
 
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    val config = KafkaConfig.fromProps(props)
+    var config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
+    assertFalse(config.shareGroupConfig.isShareGroupEnabled)
+
+    // This is OK.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
+    config = KafkaConfig.fromProps(props)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
+    assertTrue(config.isNewGroupCoordinatorEnabled)
+    assertTrue(config.shareGroupConfig.isShareGroupEnabled)
+
+    // If you set share, you must also set consumer.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
