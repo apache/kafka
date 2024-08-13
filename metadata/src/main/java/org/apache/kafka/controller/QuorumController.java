@@ -180,7 +180,7 @@ public final class QuorumController implements Controller {
     /**
      * The maximum records that the controller will write in a single batch.
      */
-    private static final int MAX_RECORDS_PER_BATCH = 10000;
+    static final int MAX_RECORDS_PER_BATCH = 10000;
 
     /**
      * The maximum records any user-initiated operation is allowed to generate.
@@ -849,7 +849,7 @@ public final class QuorumController implements Controller {
 
             // After every controller write event, schedule a leader rebalance if there are any topic partition
             // with leader that is not the preferred leader.
-            maybeScheduleNextBalancePartitionLeaders();
+            maybeScheduleNextAdjustPartitionLeaders();
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
@@ -1251,7 +1251,7 @@ public final class QuorumController implements Controller {
             // generateRecordsAndResult have been applied, so we have the correct value for
             // metadata.version and other in-memory state.
             maybeScheduleNextExpiredDelegationTokenSweep();
-            maybeScheduleNextBalancePartitionLeaders();
+            maybeScheduleNextAdjustPartitionLeaders();
             maybeScheduleNextWriteNoOpRecord();
         }
     }
@@ -1330,9 +1330,9 @@ public final class QuorumController implements Controller {
         queue.cancelDeferred(MAYBE_FENCE_REPLICAS);
     }
 
-    private static final String MAYBE_BALANCE_PARTITION_LEADERS = "maybeBalancePartitionLeaders";
+    private static final String MAYBE_BALANCE_PARTITION_LEADERS = "maybeAdjustPartitionLeaders";
 
-    private void maybeScheduleNextBalancePartitionLeaders() {
+    private void maybeScheduleNextAdjustPartitionLeaders() {
         if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
             leaderImbalanceCheckIntervalNs.isPresent() &&
             replicationControl.arePartitionLeadersImbalanced()) {
@@ -1346,7 +1346,7 @@ public final class QuorumController implements Controller {
             );
 
             ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_BALANCE_PARTITION_LEADERS, () -> {
-                ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
+                ControllerResult<Boolean> result = replicationControl.maybeAdjustPartitionLeaders();
 
                 // reschedule the operation after the leaderImbalanceCheckIntervalNs interval.
                 // Mark the imbalance event as completed and reschedule if necessary
@@ -2070,7 +2070,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                replicationControl.incrementalAlterConfigs(configChanges);
+                configurationControl.incrementalAlterConfigs(configChanges, false);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -2115,7 +2115,7 @@ public final class QuorumController implements Controller {
         }
         return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                replicationControl.legacyAlterConfigs(newConfigs);
+                configurationControl.legacyAlterConfigs(newConfigs, false);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
