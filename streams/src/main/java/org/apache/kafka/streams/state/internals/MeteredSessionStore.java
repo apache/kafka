@@ -129,14 +129,6 @@ public class MeteredSessionStore<K, V>
         );
     }
 
-
-    private void initStoreSerde(final ProcessorContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
-    }
-
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
