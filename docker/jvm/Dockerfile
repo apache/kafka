@@ -28,15 +28,12 @@ RUN set -eux ; \
     apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    for server in ha.pool.sks-keyservers.net $(shuf -e \
-                          hkp://p80.pool.sks-keyservers.net:80 \
-                          keyserver.ubuntu.com \
-                          hkp://keyserver.ubuntu.com:80 \
-                          pgp.mit.edu \
-                          hkp://keys.openpgp.org) ; do \
-      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
-    done && \
-    gpg --batch --verify kafka.tgz.asc kafka.tgz
+    export GNUPGHOME="$(mktemp -d)"; \
+    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" || \
+    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" ; \
+    gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    gpgconf --kill all; \
+    rm -rf "$GNUPGHOME" kafka.tgz.asc; 
 
 RUN mkdir opt/kafka; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
@@ -64,15 +61,12 @@ RUN set -eux ; \
     apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    for server in ha.pool.sks-keyservers.net $(shuf -e \
-                          hkp://p80.pool.sks-keyservers.net:80 \
-                          keyserver.ubuntu.com \
-                          hkp://keyserver.ubuntu.com:80 \
-                          pgp.mit.edu \
-                          hkp://keys.openpgp.org) ; do \
-      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
-    done && \
+    export GNUPGHOME="$(mktemp -d)"; \
+    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" || \
+    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" ; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    gpgconf --kill all; \
+    rm -rf "$GNUPGHOME" kafka.tgz.asc; \
     mkdir opt/kafka; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
     mkdir -p /var/lib/kafka/data /etc/kafka/secrets; \
@@ -84,7 +78,7 @@ RUN set -eux ; \
     cp /opt/kafka/config/log4j.properties /etc/kafka/docker/log4j.properties; \
     cp /opt/kafka/config/tools-log4j.properties /etc/kafka/docker/tools-log4j.properties; \
     cp /opt/kafka/config/kraft/server.properties /etc/kafka/docker/server.properties; \
-    rm kafka.tgz kafka.tgz.asc; \
+    rm kafka.tgz; \
     apk del wget gpg gpg-agent; 
 
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
