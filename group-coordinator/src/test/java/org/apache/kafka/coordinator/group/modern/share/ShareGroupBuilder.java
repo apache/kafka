@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.modern.consumer;
+package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
@@ -31,36 +31,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class ConsumerGroupBuilder {
+public class ShareGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int assignmentEpoch;
-    private final Map<String, ConsumerGroupMember> members = new HashMap<>();
+    private final Map<String, ShareGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
     private Map<String, TopicMetadata> subscriptionMetadata;
 
-    public ConsumerGroupBuilder(String groupId, int groupEpoch) {
+    public ShareGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
         this.assignmentEpoch = 0;
     }
 
-    public ConsumerGroupBuilder withMember(ConsumerGroupMember member) {
+    public ShareGroupBuilder withMember(ShareGroupMember member) {
         this.members.put(member.memberId(), member);
         return this;
     }
 
-    public ConsumerGroupBuilder withSubscriptionMetadata(Map<String, TopicMetadata> subscriptionMetadata) {
+    public ShareGroupBuilder withSubscriptionMetadata(Map<String, TopicMetadata> subscriptionMetadata) {
         this.subscriptionMetadata = subscriptionMetadata;
         return this;
     }
 
-    public ConsumerGroupBuilder withAssignment(String memberId, Map<Uuid, Set<Integer>> assignment) {
+    public ShareGroupBuilder withAssignment(String memberId, Map<Uuid, Set<Integer>> assignment) {
         this.assignments.put(memberId, new Assignment(assignment));
         return this;
     }
 
-    public ConsumerGroupBuilder withAssignmentEpoch(int assignmentEpoch) {
+    public ShareGroupBuilder withAssignmentEpoch(int assignmentEpoch) {
         this.assignmentEpoch = assignmentEpoch;
         return this;
     }
@@ -70,7 +70,7 @@ public class ConsumerGroupBuilder {
 
         // Add subscription records for members.
         members.forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member))
+            records.add(CoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, member))
         );
 
         // Add subscription metadata.
@@ -92,23 +92,23 @@ public class ConsumerGroupBuilder {
         }
 
         if (!subscriptionMetadata.isEmpty()) {
-            records.add(CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            records.add(CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
         }
 
         // Add group epoch record.
-        records.add(CoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch));
+        records.add(CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
+            records.add(CoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
         );
 
         // Add target assignment epoch.
-        records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(CoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member))
+                records.add(CoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member))
         );
 
         return records;
