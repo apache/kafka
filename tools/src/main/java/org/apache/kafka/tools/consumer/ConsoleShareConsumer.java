@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,7 +93,7 @@ public class ConsoleShareConsumer {
         });
     }
 
-    private static void process(int maxMessages, MessageFormatter formatter, ConsumerWrapper consumer, PrintStream output,
+    static void process(int maxMessages, MessageFormatter formatter, ConsumerWrapper consumer, PrintStream output,
                         boolean rejectMessageOnError, AcknowledgeType acknowledgeType) {
         while (messageCount < maxMessages || maxMessages == -1) {
             ConsumerRecord<byte[], byte[]> msg;
