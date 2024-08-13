@@ -88,18 +88,18 @@ public class Assignment implements MemberAssignment {
     }
 
     /**
-     * Creates a {{@link Assignment}} from a {{@link ConsumerGroupTargetAssignmentMemberValue}}.
+     * Creates a {{@link Assignment}} from a {{@link ShareGroupTargetAssignmentMemberValue}}.
      *
      * @param record The record.
      * @return A {{@link Assignment}}.
      */
     public static Assignment fromRecord(
-            ShareGroupTargetAssignmentMemberValue record
+        ShareGroupTargetAssignmentMemberValue record
     ) {
         return new Assignment(
-                record.topicPartitions().stream().collect(Collectors.toMap(
-                        ShareGroupTargetAssignmentMemberValue.TopicPartition::topicId,
-                        topicPartitions -> new HashSet<>(topicPartitions.partitions())))
+            record.topicPartitions().stream().collect(Collectors.toMap(
+                ShareGroupTargetAssignmentMemberValue.TopicPartition::topicId,
+                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
         );
     }
 }
