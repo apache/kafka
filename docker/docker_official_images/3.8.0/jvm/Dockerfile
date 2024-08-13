@@ -20,7 +20,6 @@ FROM eclipse-temurin:21-jre-alpine AS build-jsa
 
 # Get Kafka from https://archive.apache.org/dist/kafka, url passed as env var, for version 3.8.0
 ENV kafka_url https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
-ENV GPG_KEY CF9500821E9557AEB04E026C05EEA67F87749E61
 
 COPY jsa_launch /etc/kafka/docker/jsa_launch
 
@@ -28,17 +27,13 @@ RUN set -eux ; \
     apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    for server in ha.pool.sks-keyservers.net $(shuf -e \
-                          hkp://p80.pool.sks-keyservers.net:80 \
-                          keyserver.ubuntu.com \
-                          hkp://keyserver.ubuntu.com:80 \
-                          pgp.mit.edu \
-                          hkp://keys.openpgp.org) ; do \
-      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
-    done && \
-    gpg --batch --verify kafka.tgz.asc kafka.tgz
-
-RUN mkdir opt/kafka; \
+    export GNUPGHOME="$(mktemp -d)"; \
+    gpg --batch --keyserver hkp://keys.openpgp.org --recv-keys CF9500821E9557AEB04E026C05EEA67F87749E61 || \
+    gpg --batch --keyserver keyserver.ubuntu.com --recv-keys CF9500821E9557AEB04E026C05EEA67F87749E61 ; \
+    gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    gpgconf --kill all; \
+    rm -rf "$GNUPGHOME" kafka.tgz.asc; \
+    mkdir opt/kafka; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
     # Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
     /etc/kafka/docker/jsa_launch
@@ -51,8 +46,7 @@ EXPOSE 9092
 
 # Get Kafka from https://archive.apache.org/dist/kafka, url passed as env var, for version 3.8.0
 ENV kafka_url https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
-ENV build_date 2024-08-01
-ENV GPG_KEY CF9500821E9557AEB04E026C05EEA67F87749E61
+ENV build_date 2024-08-13
 
 LABEL org.opencontainers.image.title="kafka" \
       org.opencontainers.image.description="Apache Kafka" \
@@ -64,15 +58,12 @@ RUN set -eux ; \
     apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    for server in ha.pool.sks-keyservers.net $(shuf -e \
-                          hkp://p80.pool.sks-keyservers.net:80 \
-                          keyserver.ubuntu.com \
-                          hkp://keyserver.ubuntu.com:80 \
-                          pgp.mit.edu \
-                          hkp://keys.openpgp.org) ; do \
-      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
-    done && \
+    export GNUPGHOME="$(mktemp -d)"; \
+    gpg --batch --keyserver hkp://keys.openpgp.org --recv-keys CF9500821E9557AEB04E026C05EEA67F87749E61 || \
+    gpg --batch --keyserver keyserver.ubuntu.com --recv-keys CF9500821E9557AEB04E026C05EEA67F87749E61 ; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    gpgconf --kill all; \
+    rm -rf "$GNUPGHOME" kafka.tgz.asc; \
     mkdir opt/kafka; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
     mkdir -p /var/lib/kafka/data /etc/kafka/secrets; \
@@ -84,7 +75,7 @@ RUN set -eux ; \
     cp /opt/kafka/config/log4j.properties /etc/kafka/docker/log4j.properties; \
     cp /opt/kafka/config/tools-log4j.properties /etc/kafka/docker/tools-log4j.properties; \
     cp /opt/kafka/config/kraft/server.properties /etc/kafka/docker/server.properties; \
-    rm kafka.tgz kafka.tgz.asc; \
+    rm kafka.tgz; \
     apk del wget gpg gpg-agent; 
 
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
