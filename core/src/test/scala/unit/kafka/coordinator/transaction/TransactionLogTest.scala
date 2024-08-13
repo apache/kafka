@@ -23,7 +23,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
 import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
-import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
@@ -48,7 +48,8 @@ class TransactionLogTest {
     val transactionalId = "transactionalId"
     val producerId = 23423L
 
-    val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs, 0)
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], 0, 0, 0)
     txnMetadata.addPartitions(topicPartitions)
 
     assertThrows(classOf[IllegalStateException], () => TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), 2))
@@ -72,8 +73,8 @@ class TransactionLogTest {
 
     // generate transaction log messages
     val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
-      val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs,
-        transactionStates(producerId), 0)
+      val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
+        RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, transactionStates(producerId), collection.mutable.Set.empty[TopicPartition], 0, 0, 0)
 
       if (!txnMetadata.state.equals(Empty))
         txnMetadata.addPartitions(topicPartitions)
@@ -114,8 +115,8 @@ class TransactionLogTest {
     val producerId = 1334L
     val topicPartition = new TopicPartition("topic", 0)
 
-    val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch,
-      transactionTimeoutMs, Ongoing, 0)
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, Ongoing, collection.mutable.Set.empty[TopicPartition], 0, 0, 0)
     txnMetadata.addPartitions(Set(topicPartition))
 
     val keyBytes = TransactionLog.keyToBytes(transactionalId)

@@ -304,6 +304,7 @@ class TransactionCoordinatorTest {
   }
 
   def validateConcurrentTransactions(state: TransactionState): Unit = {
+    // Since the clientTransactionVersion doesn't matter, use 2 since the states are PrepareCommit and PrepareAbort.
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
@@ -315,6 +316,7 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRespondWithProducerFencedOnAddPartitionsWhenEpochsAreDifferent(): Unit = {
+    // Since the clientTransactionVersion doesn't matter, use 2 since the state is PrepareCommit.
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
@@ -462,8 +464,7 @@ class TransactionCoordinatorTest {
         new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID, producerEpoch,
           (producerEpoch - 1).toShort, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
 
-    val requestEpoch = if (clientTransactionVersion >= 2) producerEpoch - 1 else producerEpoch
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.NONE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -476,8 +477,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    val requestEpoch = if (clientTransactionVersion >= 2) producerEpoch - 1 else producerEpoch
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch.toShort, TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.NONE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -490,8 +490,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    val requestEpoch = if (clientTransactionVersion >= 2) producerEpoch - 1 else producerEpoch
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.INVALID_TXN_STATE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -504,8 +503,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    val requestEpoch = if (clientTransactionVersion >= 2) producerEpoch - 1 else producerEpoch
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch.toShort, TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.INVALID_TXN_STATE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -518,8 +516,7 @@ class TransactionCoordinatorTest {
         RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
 
     val isAtLeastTransactionsV2 = clientTransactionVersion >= 2
-    val requestEpoch = if (isAtLeastTransactionsV2) producerEpoch - 1 else producerEpoch
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
     val expectedError = if (isAtLeastTransactionsV2) Errors.NONE else Errors.CONCURRENT_TRANSACTIONS
     assertEquals(expectedError, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -532,8 +529,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, PrepareAbort, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
 
-    val requestEpoch = if (clientTransactionVersion >= 2) producerEpoch - 1 else producerEpoch
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.INVALID_TXN_STATE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -700,8 +696,8 @@ class TransactionCoordinatorTest {
   @ValueSource(shorts = Array(0, 2))
   def shouldReturnInvalidEpochOnEndTxnWhenEpochIsSmaller(clientTransactionVersion: Short): Unit = {
     val serverProducerEpoch = 2.toShort
-    val requestProducerEpoch = if (clientTransactionVersion >= 2) 0 else 1 // Since we bump epoch in transactionV2 the request should be one producer ID older
-    verifyEndTxnEpoch(serverProducerEpoch, requestProducerEpoch.toShort, clientTransactionVersion)
+    // Since we bump epoch in transactionV2 the request should be one producer ID older
+    verifyEndTxnEpoch(serverProducerEpoch, requestEpoch(clientTransactionVersion), clientTransactionVersion)
   }
 
   private def verifyEndTxnEpoch(metadataEpoch: Short, requestEpoch: Short, clientTransactionVersion: Short): Unit = {
@@ -1340,6 +1336,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
 
+    // Since the clientTransactionVersion doesn't matter, use 2 since the states are PrepareCommit and PrepareAbort.
     val metadata = new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_EPOCH,
       0, RecordBatch.NO_PRODUCER_EPOCH, 0, state, mutable.Set[TopicPartition](new TopicPartition("topic", 1)), 0, 0, 2)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
@@ -1421,5 +1418,12 @@ class TransactionCoordinatorTest {
 
   def endTxnCallback(ret: Errors, producerId: Long, epoch: Short): Unit = {
     error = ret
+  }
+
+  def requestEpoch(clientTransactionVersion: Short): Short = {
+    if (clientTransactionVersion >= 2)
+      (producerEpoch - 1).toShort
+    else
+      producerEpoch
   }
 }

@@ -796,14 +796,9 @@ class TransactionStateManagerTest {
     // write the change. If the write fails (e.g. under min isr), the TransactionMetadata
     // is left at it is. If the transactional id is never reused, the TransactionMetadata
     // will be expired and it should succeed.
-    val txnMetadata = TransactionMetadata(
-      transactionalId = transactionalId,
-      producerId = 1,
-      producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-      txnTimeoutMs = transactionTimeoutMs,
-      state = Empty,
-      timestamp = time.milliseconds()
-    )
+    val timestamp = time.milliseconds()
+    val txnMetadata = new TransactionMetadata(transactionalId, 1, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp, 0)
     transactionManager.putTransactionStateIfNotExists(txnMetadata)
 
     time.sleep(txnConfig.transactionalIdExpirationMs + 1)
@@ -1081,7 +1076,9 @@ class TransactionStateManagerTest {
                                   producerId: Long,
                                   state: TransactionState = Empty,
                                   txnTimeout: Int = transactionTimeoutMs): TransactionMetadata = {
-    TransactionMetadata(transactionalId, producerId, 0.toShort, txnTimeout, state, time.milliseconds())
+    val timestamp = time.milliseconds()
+    new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, 0.toShort,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeout, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp, 0)
   }
 
   private def prepareTxnLog(topicPartition: TopicPartition,

@@ -162,27 +162,7 @@ private[transaction] case object PrepareEpochFence extends TransactionState {
   val validPreviousStates: Set[TransactionState] = Set(Ongoing)
 }
 
-// TODO: fix
 private[transaction] object TransactionMetadata {
-  def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
-    new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp, 0)
-
-  def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int,
-            state: TransactionState, timestamp: Long) =
-    new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp, 0)
-
-  def apply(transactionalId: String, producerId: Long, prevProducerId: Long, producerEpoch: Short,
-            lastProducerEpoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) =
-    new TransactionMetadata(transactionalId, producerId, prevProducerId, RecordBatch.NO_PRODUCER_ID, producerEpoch,
-      lastProducerEpoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp, 0)
-
-  def apply(transactionalId: String, producerId: Long, prevProducerId: Long, nextProducerId: Long, producerEpoch: Short,
-            lastProducerEpoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long, clientTransactionVersion: Short) =
-    new TransactionMetadata(transactionalId, producerId, prevProducerId, nextProducerId, producerEpoch,
-      lastProducerEpoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp, clientTransactionVersion)
-
   def isEpochExhausted(producerEpoch: Short): Boolean = producerEpoch >= Short.MaxValue - 1
 }
 

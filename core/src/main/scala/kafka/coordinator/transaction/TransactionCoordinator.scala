@@ -534,7 +534,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               else
                 Left(Errors.NONE)
             }
-            // Strict equality is enforced on the client side requests < version 4, as they shouldn't bump the producer epoch.
+            // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch without server knowledge.
             else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
               Left(Errors.PRODUCER_FENCED)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
