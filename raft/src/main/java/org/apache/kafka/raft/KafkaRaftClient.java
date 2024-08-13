@@ -162,6 +162,7 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  */
 public final class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
+    private static final int MAX_NUMBER_OF_BATCHES = 10;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
@@ -608,6 +609,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             endOffset,
             quorumConfig.appendLingerMs(),
             MAX_BATCH_SIZE_BYTES,
+            MAX_NUMBER_OF_BATCHES,
             memoryPool,
             time,
             Compression.NONE,

@@ -149,6 +149,8 @@ public interface RaftClient<T> extends AutoCloseable {
      *         the elements in records were committed
      * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
      * @throws BufferAllocationException we failed to allocate memory for the records
+     * @throws IllegalStateException if the number of accumulated batches reaches the maximum
+     *         number of batches
      */
     long prepareAppend(int epoch, List<T> records);
 

@@ -58,6 +58,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             0,
             Integer.MAX_VALUE,
             maxBatchSize,
+            10, // maxNumberOfBatches
             memoryPool,
             time,
             compression,

@@ -52,6 +52,7 @@ class BatchAccumulatorTest {
     private final MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
     private final MockTime time = new MockTime();
     private final StringSerde serde = new StringSerde();
+    private final int maxNumberOfBatches = 10;
 
     private BatchAccumulator<String> buildAccumulator(
         int leaderEpoch,
@@ -64,6 +65,7 @@ class BatchAccumulatorTest {
             baseOffset,
             lingerMs,
             maxBatchSize,
+            maxNumberOfBatches,
             memoryPool,
             time,
             Compression.NONE,
@@ -344,6 +346,7 @@ class BatchAccumulatorTest {
         long baseOffset = 157;
         int lingerMs = 50;
         int maxBatchSize = 256;
+        int numberOfRecords = 100;
 
         Mockito.when(memoryPool.tryAllocate(maxBatchSize))
             .thenReturn(ByteBuffer.allocate(maxBatchSize));
@@ -356,7 +359,7 @@ class BatchAccumulatorTest {
         );
 
         // Append enough records so that multiple batches get created
-        for (int records = 0; records < maxBatchSize; records++) {
+        for (int records = 0; records < numberOfRecords; records++) {
             acc.append(leaderEpoch, singletonList("foo"), false);
         }
 
@@ -389,6 +392,7 @@ class BatchAccumulatorTest {
         long baseOffset = 157;
         int lingerMs = 50;
         int maxBatchSize = 256;
+        int maxNumberOfBatches = 10;
 
         StringSerde serde = Mockito.spy(new StringSerde());
         BatchAccumulator<String> acc = new BatchAccumulator<>(
@@ -396,6 +400,7 @@ class BatchAccumulatorTest {
             baseOffset,
             lingerMs,
             maxBatchSize,
+            maxNumberOfBatches,
             memoryPool,
             time,
             Compression.NONE,
@@ -701,6 +706,39 @@ class BatchAccumulatorTest {
 
         acc.close();
         Mockito.verify(memoryPool).release(buffer);
+    }
+
+    @Test
+    public void testMaxNumberOfBatches() {
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 256;
+        int maxNumberOfBatches = 2;
+
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+            .thenReturn(ByteBuffer.allocate(maxBatchSize));
+
+        StringSerde serde = Mockito.spy(new StringSerde());
+        BatchAccumulator<String> acc = new BatchAccumulator<>(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize,
+            maxNumberOfBatches,
+            memoryPool,
+            time,
+            Compression.NONE,
+            serde
+        );
+
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g");
+        assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), true));
+        acc.forceDrain();
+        assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3), true));
+        acc.forceDrain();
+
+        assertThrows(IllegalStateException.class, () -> acc.append(leaderEpoch, records.subList(3, 6), true));
     }
 
     private static MemoryRecordsBuilder controlRecordsBuilder(

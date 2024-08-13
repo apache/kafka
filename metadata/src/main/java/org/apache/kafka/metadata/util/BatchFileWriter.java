@@ -94,6 +94,7 @@ public class BatchFileWriter implements AutoCloseable {
             0,
             Integer.MAX_VALUE,
             MAX_BATCH_SIZE_BYTES,
+            Integer.MAX_VALUE,
             new BatchMemoryPool(5, MAX_BATCH_SIZE_BYTES),
             time,
             Compression.NONE,

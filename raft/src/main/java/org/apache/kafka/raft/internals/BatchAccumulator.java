@@ -61,6 +61,7 @@ public class BatchAccumulator<T> implements Closeable {
     private final Time time;
     private final int lingerMs;
     private final int maxBatchSize;
+    private final int maxNumberOfBatches;
     private final Compression compression;
     private final MemoryPool memoryPool;
     private final RecordSerde<T> serde;
@@ -84,6 +85,7 @@ public class BatchAccumulator<T> implements Closeable {
         long baseOffset,
         int lingerMs,
         int maxBatchSize,
+        int maxNumberOfBatches,
         MemoryPool memoryPool,
         Time time,
         Compression compression,
@@ -92,6 +94,7 @@ public class BatchAccumulator<T> implements Closeable {
         this.epoch = epoch;
         this.lingerMs = lingerMs;
         this.maxBatchSize = maxBatchSize;
+        this.maxNumberOfBatches = maxNumberOfBatches;
         this.memoryPool = memoryPool;
         this.time = time;
         this.compression = compression;
@@ -111,14 +114,25 @@ public class BatchAccumulator<T> implements Closeable {
      *         provided leader epoch was too old
      * @throws IllegalArgumentException indicates that an append operation cannot be completed
      *         because the provided leader epoch was too new
+     * @throws IllegalStateException if the number of accumulated batches reaches the maximum
+     *         number of batches
      */
     public long append(int epoch, List<T> records, boolean delayDrain) {
+        int numberOfCompletedBatches = completed.size();
         if (epoch < this.epoch) {
             throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
                     "Current leader epoch = " + this.epoch());
         } else if (epoch > this.epoch) {
             throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
                 " which is larger than the current epoch " + this.epoch);
+        } else if (numberOfCompletedBatches >= maxNumberOfBatches) {
+            throw new IllegalStateException(
+                String.format(
+                    "Attempting to append records when the number of batches %s reached %s",
+                    numberOfCompletedBatches,
+                    maxNumberOfBatches
+                )
+            );
         }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
