@@ -4337,7 +4337,28 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --topic tieredTopic --from-beginning --max-messages 1 --bootstrap-server localhost:9092 --property print.offset=true</code></pre>
 
-<p>Please note, if you want to disable tiered storage at the cluster level, you should delete the tiered storage enabled topics explicitly.
+<p>In KRaft mode, you can disable tiered storage at the topic level, to make the remote logs as read-only logs, or completely delete all remote logs.</p>
+
+<p>If you want to let the remote logs become read-only and no more local logs copied to the remote storage,
+  you can set <code>remote.storage.enable=true,remote.log.copy.disable=true</code> to the topic.</p>
+
+<p>Note: You also need to set <code>local.retention.ms</code> and <code>local.retention.bytes</code> to the same value as
+  <code>retention.ms</code> and <code>retention.bytes</code>, or set to "-2". This is because after disabling remote log copy,
+  the local retention policies will not be applied anymore, and that might confuse users and cause unexpected disk full.
+</p>
+
+<pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+   --alter --entity-type topics --entity-name tieredTopic \
+   --add-config 'remote.storage.enable=true,remote.log.copy.disable=true,local.retention.ms=-2,local.retention.bytes=-2'</code></pre>
+
+<p>If you want to completely disable tiered storage at the topic level with all remote logs deleted,
+  you can set <code>remote.storage.enable=false,remote.log.delete.on.disable=true</code> to the topic.</p>
+
+  <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+   --alter --entity-type topics --entity-name tieredTopic \
+   --add-config 'remote.storage.enable=false,remote.log.delete.on.disable=true'</code></pre>
+
+<p>You can also re-enable tiered storage feature at the topic level. Please note, if you want to disable tiered storage at the cluster level, you should delete the tiered storage enabled topics explicitly.
   Attempting to disable tiered storage at the cluster level without deleting the topics using tiered storage will result in an exception during startup.</p>
 
 <pre><code class="language-bash">$ bin/kafka-topics.sh --delete --topic tieredTopic --bootstrap-server localhost:9092</code></pre>
@@ -4348,16 +4369,13 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <p>While the early access release of Tiered Storage offers the opportunity to try out this new feature, it is important to be aware of the following limitations:
 <ul>
-  <li>No support for clusters with multiple log directories (i.e. JBOD feature)</li>
   <li>No support for compacted topics</li>
-  <li>Cannot disable tiered storage at the topic level</li>
   <li>Deleting tiered storage enabled topics is required before disabling tiered storage at the broker level</li>
   <li>Admin actions related to tiered storage feature are only supported on clients from version 3.0 onwards</li>
 </ul>
 
 <p>For more information, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+Early+Access+Release+Notes">Tiered Storage Early Access Release Note</a>.
 </p>
-
 
 </script>
 
