@@ -67,6 +67,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)
     }
 
+    // Enable delegationTokenControlManager
     serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "123")
     serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG, "5000")
 
@@ -538,7 +539,10 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Test expiring the token immediately
     val token1 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
     val expireTokeOptions = new ExpireDelegationTokenOptions()
-    val token1ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(token1.hmac(), expireTokeOptions.expiryTimePeriodMs(-1)).expiryTimestamp().get())
+    val token1ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(
+      token1.hmac(),
+      expireTokeOptions.expiryTimePeriodMs(-1)).expiryTimestamp().get()
+    )
     assertTrue(token1ExpireTime < System.currentTimeMillis())
 
     // Test expiring the expired token
@@ -552,7 +556,10 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     // Test shortening the expiryTimestamp
     val token3 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
-    val token3ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(token3.hmac(), expireTokeOptions.expiryTimePeriodMs(1000)).expiryTimestamp().get())
+    val token3ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(
+      token3.hmac(),
+      expireTokeOptions.expiryTimePeriodMs(1000)).expiryTimestamp().get()
+    )
     assertTrue(token3ExpireTime < token3.tokenInfo().expiryTimestamp())
   }
 
