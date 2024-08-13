@@ -39,29 +39,31 @@ def _create_partition_from_dict(d):
 
 class ConsumerEventHandler(object):
 
-    def __init__(self, node, verify_offsets, idx):
-        self.node = node
-        self.idx = idx
-        self.state = ConsumerState.Dead
-        self.revoked_count = 0
-        self.assigned_count = 0
-        self.assignment = []
-        self.position = {}
-        self.committed = {}
-        self.total_consumed = 0
-        self.verify_offsets = verify_offsets
-
-    def populate_states(self, source_handler):
-        self.node = source_handler.node
-        self.idx = source_handler.idx
-        self.state = source_handler.state
-        self.revoked_count = source_handler.revoked_count
-        self.assigned_count = source_handler.assigned_count
-        self.assignment = source_handler.assignment
-        self.position = source_handler.position
-        self.committed = source_handler.committed
-        self.total_consumed = source_handler.total_consumed
-        self.verify_offsets = source_handler.verify_offsets
+    def __init__(self, node=None, verify_offsets=None, idx=None, source_handler=None):
+        if (node is None or verify_offsets is None or idx is None) and source_handler is None:
+            raise ValueError("Either of (node, verify_offsets, dex) or source_handler must be provided.")
+        if source_handler is None:
+            self.node = node
+            self.idx = idx
+            self.state = ConsumerState.Dead
+            self.revoked_count = 0
+            self.assigned_count = 0
+            self.assignment = []
+            self.position = {}
+            self.committed = {}
+            self.total_consumed = 0
+            self.verify_offsets = verify_offsets
+        else:
+            self.node = source_handler.node
+            self.idx = source_handler.idx
+            self.state = source_handler.state
+            self.revoked_count = source_handler.revoked_count
+            self.assigned_count = source_handler.assigned_count
+            self.assignment = source_handler.assignment
+            self.position = source_handler.position
+            self.committed = source_handler.committed
+            self.total_consumed = source_handler.total_consumed
+            self.verify_offsets = source_handler.verify_offsets
 
     def handle_shutdown_complete(self, node=None, logger=None):
         self.state = ConsumerState.Dead
@@ -159,8 +161,8 @@ class ConsumerEventHandler(object):
 
 # This needs to be used for cooperative protocol.
 class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
-    def __init__(self, node, verify_offsets, idx):
-        super().__init__(node, verify_offsets, idx)
+    def __init__(self, node=None, verify_offsets=None, idx=None, source_handler=None):
+        super().__init__(node, verify_offsets, idx, source_handler)
         
     def handle_partitions_revoked(self, event, node, logger):
         self.revoked_count += 1
@@ -190,8 +192,8 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
 
 # This needs to be used for consumer protocol.
 class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHandler):
-    def __init__(self, node, verify_offsets, idx):
-        super().__init__(node, verify_offsets, idx)
+    def __init__(self, node=None, verify_offsets=None, idx=None, source_handler=None):
+        super().__init__(node, verify_offsets, idx, source_handler)
 
     def handle_partitions_revoked(self, event, node, logger):
         # The handler state is not transitioned to Rebalancing as the records can only be
@@ -280,22 +282,17 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         return "VerifiableConsumer"
 
     def create_event_handler(self, idx, node):
+        existing_handler = self.event_handlers[node] if node in self.event_handlers else None
         if self.is_consumer_group_protocol_enabled():
-            return ConsumerProtocolConsumerEventHandler(node, self.verify_offsets, idx)
+            return ConsumerProtocolConsumerEventHandler(node, self.verify_offsets, idx, existing_handler)
         elif self.is_eager():
-            return ConsumerEventHandler(node, self.verify_offsets, idx)
+            return ConsumerEventHandler(node, self.verify_offsets, idx, existing_handler)
         else:
-            return IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
+            return IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx, existing_handler)
 
     def _worker(self, idx, node):
         with self.lock:
-            if node not in self.event_handlers:
-                self.event_handlers[node] = self.create_event_handler(idx, node)
-            else:
-                new_event_handler = self.create_event_handler(idx, node)
-                if self.event_handlers[node].__class__.__name__ != new_event_handler.__class__.__name__:
-                    new_event_handler.populate_states(self.event_handlers[node])
-                    self.event_handlers[node] = new_event_handler
+            self.event_handlers[node] = self.create_event_handler(idx, node)
             handler = self.event_handlers[node]
 
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
