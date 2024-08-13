@@ -17,40 +17,21 @@
 
 package org.apache.kafka.metadata.authorizer.trie;
 
-import java.util.function.Predicate;
-
-/**
- * Simple class to count the number of populated nodes in a Trie.
- * Package private because it is ionly used in testing.
- * @param <T> the data type in the Trie.
- */
-class NodeCounter<T> implements Predicate<Node<T>> {
-    /** The counter */
-    private int counter;
-
-    /**
-     * Constructs a node counter predicate with a zero count.
-     */
-    public NodeCounter() {
-        counter = 0;
-    }
-
-    /**
-     * Destructively returns the count.  Calling this method will reset the count
-     * to zero.
-     * @return the current count.
-     */
-    public int count() {
-        int result = counter;
-        counter = 0;
-        return result;
-    }
+public class StandardInserterTest extends AbstractInserterTest {
 
     @Override
-    public boolean test(Node<T> node) {
-        if (node.getContents() != null) {
-            ++counter;
-        }
-        return false;
+    protected InserterMetadata getMetadata() {
+        return new InserterMetadata() {
+            @Override
+            public Inserter getInserter(String pattern) {
+                return new StandardInserter(pattern);
+            }
+
+            @Override
+            public boolean supportWildcard() {
+                return false;
+            }
+        };
+
     }
 }

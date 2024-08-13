@@ -14,43 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.metadata.authorizer.trie;
 
-import java.util.function.Predicate;
+import java.util.SortedSet;
 
 /**
- * Simple class to count the number of populated nodes in a Trie.
- * Package private because it is ionly used in testing.
- * @param <T> the data type in the Trie.
+ * Information shared across Nodes.
+ * @param <T>
  */
-class NodeCounter<T> implements Predicate<Node<T>> {
-    /** The counter */
-    private int counter;
+public interface NodeData<T> extends FragmentHolder {
+    boolean hasContents();
+    T getContents();
+    String getName();
+    NodeData<T> getParent();
 
-    /**
-     * Constructs a node counter predicate with a zero count.
-     */
-    public NodeCounter() {
-        counter = 0;
-    }
+    SortedSet<? extends NodeData> getChildren();
 
-    /**
-     * Destructively returns the count.  Calling this method will reset the count
-     * to zero.
-     * @return the current count.
-     */
-    public int count() {
-        int result = counter;
-        counter = 0;
-        return result;
-    }
-
-    @Override
-    public boolean test(Node<T> node) {
-        if (node.getContents() != null) {
-            ++counter;
-        }
-        return false;
-    }
 }

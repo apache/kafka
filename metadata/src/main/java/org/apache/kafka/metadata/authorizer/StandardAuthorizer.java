@@ -69,7 +69,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     private volatile AuthorizerData data;
 
     public StandardAuthorizer() {
-        data = StandardAuthorizerData.createEmpty();
+        this(StandardAuthorizerData.createEmpty());
     }
 
     protected StandardAuthorizer(AuthorizerData data) {
@@ -79,6 +79,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     protected AuthorizerData getData() {
         return data;
     }
+
 
     @Override
     public void setAclMutator(AclMutator aclMutator) {

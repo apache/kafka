@@ -18,6 +18,7 @@ package org.apache.kafka.metadata.authorizer.trie;
 
 import java.util.function.Predicate;
 
+
 /**
  * An object that walks the Trie in specific order applying a predicate.
  * <p>
@@ -37,7 +38,7 @@ import java.util.function.Predicate;
  *
  * @see <a href='https://en.wikipedia.org/wiki/Tree_traversal'>Tree Traversal [Wikipedia]</a>
  */
-public class Walker {
+public class Walker<T> {
 
     /**
      * Applies the predicate to each node in a depth-first fashion.
@@ -47,7 +48,7 @@ public class Walker {
      * @return The node on which the predicate returned {@code true} or null if that did not occur.
      *
      */
-    public static <T> Node<T> depthFirst(Predicate<Node<T>> predicate, Node<T> data) {
+    static <T> Node<T> depthFirst(Predicate<Node<T>> predicate, Node<T> data) {
         if (data.getChildren() != null) {
             for (Node<T> child : data.getChildren()) {
                 Node<T> candidate = depthFirst(predicate, child);
@@ -59,24 +60,73 @@ public class Walker {
     }
 
     /**
+     * Applies the predicate to each node in a depth-first fashion.
+     * If the predicate returns true the walker will stop and return the node.
+     * @param predicate the Predicate to apply.
+     * @param data the Trie to search
+     * @return The node on which the predicate returned {@code true} or null if that did not occur.
+     *
+     */
+    public static <T> Matcher.SearchResult<T>  depthFirst(Predicate<Node<T>> predicate, Trie<T> data) {
+        return new Matcher.SearchResult<>(depthFirst(predicate, data.getRoot()));
+    }
+
+    /**
      * Applies the predicate to each node in a pre-order fashion.
      * If the predicate returns true the walker will stop and return the node.
      * @param predicate the Predicate to apply.
      * @param data the Node to start at.
      * @return The node on which the predicate returned {@code true} or null if that did not occur.
      */
-    public static <T> Node<T> preOrder(Predicate<Node<T>> predicate, Node<T> data) {
+    static <T> Node<T> preOrder(Predicate<Node<T>> predicate, Node<T> data) {
         if (predicate.test(data)) {
             return data;
         }
         if (data.getChildren() != null) {
             for (Node<T> child : data.getChildren()) {
                 Node<T> candidate = preOrder(predicate, child);
-                if (candidate != null){
+                if (candidate != null) {
                     return candidate;
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * Applies the predicate to each node in a pre-order fashion.
+     * If the predicate returns true the walker will stop and return the node.
+     * @param predicate the Predicate to apply.
+     * @param data the trie to search.
+     * @return The node on which the predicate returned {@code true} or null if that did not occur.
+     */
+    public static <T> Matcher.SearchResult<T> preOrder(Predicate<Node<T>> predicate, Trie<T> data) {
+        return new Matcher.SearchResult<>(preOrder(predicate, data.getRoot()));
+    }
+
+    public Walker() {
+    }
+
+    public Inserter inserter(String pattern) {
+        return new StandardInserter(pattern);
+    }
+
+    /**
+     * Constructs a Matcher to find the pattern.
+     * @param pattern the pattern to locate
+     * @return A matcher that will perform the matching.
+     */
+    public Matcher<T> matcher(String pattern) {
+        return new StandardMatcher<>(pattern);
+    }
+
+    /**
+     * Constructs a matcher to find the pattern with an early exist check.
+     * @param pattern the pattern to locate
+     * @param exit the early exit check.
+     * @return A matcher that will perform the matching.
+     */
+    public Matcher<T> matcher(String pattern, Predicate<NodeData<T>> exit) {
+        return new StandardMatcher<>(pattern, exit);
     }
 }

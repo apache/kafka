@@ -22,10 +22,10 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-public class StringMatcherTests {
+public class WildcardMatcherTests {
     @Test
     public void getSegmentAndAdvance() {
-        Matcher<String> underTest = new StringMatcher<>("HelloWorld", n -> false);
+        Matcher<String> underTest = new WildcardMatcher<>("HelloWorld", n -> false);
 
         assertEquals("HelloWorld", underTest.getFragment());
         Matcher<String> underTest2 = underTest.advance(1);

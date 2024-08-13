@@ -19,64 +19,71 @@ package org.apache.kafka.metadata.authorizer.trie;
 import java.util.function.Predicate;
 
 /**
- * A {@link Matcher} for String patterns
+ * The standard matching strategy.
+ * <ol>
+ *     <li>While descending the tree each node is checked for the early exit match.</li>
+ *     <li>Descent stops at <ul>
+ *         <li>an exact match for the pattern</li>
+ *         <li>a leaf node</li>
+ *         </ul></li>
+ * </ol>
  * @param <T> the data type stored in the Trie
  */
-public class StringMatcher<T> implements Matcher<T> {
+public abstract class AbstractMatcher<T> implements Matcher<T> {
     /** The base of this string matcher */
     private final StringMatcherBase<T> base;
 
     /** The position within the pattern that this matcher is matching */
     private final int position;
+    /**
+     * Constructs a matcher from the pattern and a predicate to detect early exit conditions.
+     * @param pattern The pattern to match.
+     */
+    protected AbstractMatcher(String pattern) {
+        this(new StringMatcherBase<T>(pattern, Matcher.noExit()), 0);
+    }
+
 
     /**
      * Constructs a matcher from the pattern and a predicate to detect early exit conditions.
      * @param pattern The pattern to match.
      * @param exit the Node Predicate that when {@code  true} causes the match to terminate.
      */
-    public StringMatcher(String pattern, Predicate<Node<T>> exit) {
+    protected AbstractMatcher(String pattern, Predicate<NodeData<T>> exit) {
         this(new StringMatcherBase<>(pattern, exit), 0);
     }
+
+    /**
+     * Constructs a matcher from the current matcher and the
+     * @param advance the number of characters to advance the new matcher.
+     */
+    protected AbstractMatcher(AbstractMatcher<T> existing, int advance) {
+        this(existing.base, existing.position + advance);
+    }
+
 
     /**
      * Constructs a matcher from a StringMatcherBase and a new position
      * @param base the base for the matcher.
      * @param position the new position within the base.
      */
-    private StringMatcher(StringMatcherBase<T> base, int position) {
+    private AbstractMatcher(StringMatcherBase<T> base, int position) {
         this.base = base;
         this.position = position;
     }
 
     @Override
-    public String getFragment() {
-        return this.base.pattern.substring(position);
+    public final String getFragment() {
+        return this.base.getPattern().substring(position);
     }
 
     @Override
-    public StringMatcher<T> advance(int advance) {
-        return new StringMatcher<>(base, position + advance);
+    public final boolean test(Node<T> node) {
+        return base.shouldExit(node);
     }
 
     @Override
-    public boolean test(Node<T> node) {
-        return base.exit.test(node);
-    }
-
-    /**
-     * The base for a string matcher.  This class maintains the pattern and exit condition across all matchers built on
-     * the same pattern.
-     * @param <T> the data type stored in the trie.
-     */
-    private static class StringMatcherBase<T> {
-        /** The pattern */
-        private final String pattern;
-        /** The Node Predicate that determines an early exit */
-        private final Predicate<Node<T>> exit;
-
-        private StringMatcherBase(String pattern, Predicate<Node<T>> exit) {
-            this.pattern = pattern;
-            this.exit = exit;
-        }
+    public String toString() {
+        return getFragment();
     }
 }

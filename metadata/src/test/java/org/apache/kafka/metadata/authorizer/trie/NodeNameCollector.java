@@ -17,40 +17,29 @@
 
 package org.apache.kafka.metadata.authorizer.trie;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * Simple class to count the number of populated nodes in a Trie.
- * Package private because it is ionly used in testing.
- * @param <T> the data type in the Trie.
+ * Return the list of fragment strings of a depth first walk of the trie.
  */
-class NodeCounter<T> implements Predicate<Node<T>> {
-    /** The counter */
-    private int counter;
+public class NodeNameCollector<T> implements Predicate<Node<T>> {
+    private List<String> tokenList;
 
-    /**
-     * Constructs a node counter predicate with a zero count.
-     */
-    public NodeCounter() {
-        counter = 0;
+    NodeNameCollector() {
+        tokenList = new ArrayList<>();
     }
 
-    /**
-     * Destructively returns the count.  Calling this method will reset the count
-     * to zero.
-     * @return the current count.
-     */
-    public int count() {
-        int result = counter;
-        counter = 0;
+    public List<String> tokens() {
+        List<String> result = new ArrayList<>(tokenList);
+        tokenList.clear();
         return result;
     }
 
     @Override
     public boolean test(Node<T> node) {
-        if (node.getContents() != null) {
-            ++counter;
-        }
+        tokenList.add(node.getFragment());
         return false;
     }
 }

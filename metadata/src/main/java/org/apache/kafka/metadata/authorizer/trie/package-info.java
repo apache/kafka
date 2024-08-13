@@ -18,7 +18,7 @@
  * The classes in this package implement a Radix Tree with wildcard searching capabilities.
  * <p>
  *     The tree structure is defined by the {@link org.apache.kafka.metadata.authorizer.trie.Node} class with a specific
- *     String based key implementation handles by the {@link org.apache.kafka.metadata.authorizer.trie.StringTrie} class.
+ *     String based key implementation handles by the {@link org.apache.kafka.metadata.authorizer.trie.Trie} class.
  * </p>
  * <h2>Node structure</h2>
  * <p>
@@ -40,19 +40,14 @@
  * </p>
  * <h2>Insertion Strategy</h2>
  * <p>
- *     In general when inserting a key the StringInserter is used to walk the key match it with the nodes as it descends
- *     the tree.  The inserter recognizes wildcard characters, as defined in the {@link org.apache.kafka.metadata.authorizer.trie.WildcardRegistry},
- *     and will force the wildcard characters to be located on their own Node.
- * </p>
- * <p>
- *     The Node class implements the insertion strategy by using the Inserter to determine if the node fragment matches
- *     the current inserter fragment and creates nodes as necessary.
+ *     When inserting a key an Inserter is used to walk the trie and locate the position for insertion.  The
+ *     inserter creates Nodes as necessary.
+ *     Specific insertion strategies may be implemented by implementing Inserter/Matchers pairs.
  * </p>
  * <h2>Matching Strategy</h2>
  * <p>
- *     In general when searching for a key the StringMatcher is used to walk the key match it with the nodes as the search
- *     descends the tree.  The matcher contains an "exit predicate" that, when true, stops the match and  returns the node
- *     and tracks where in the key the current match is being attempted.
+ *     When searching for a key a Matcher is used to walk trie and detect a match.  The matcher contains an "exit predicate"
+ *     that, when true, stops the match and returns the current node.
  * </p>
  * <p>
  *     The Node class implements the matching strategy.  While descending the tree the Node checks for matching DENY Acls.
@@ -73,4 +68,3 @@
  * </p>
  */
 package org.apache.kafka.metadata.authorizer.trie;
-

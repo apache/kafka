@@ -23,8 +23,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.Stack;
-import java.util.TreeSet;
-import java.util.function.IntConsumer;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * The node definition for the Radix Trie.  There are 4 types of nodes.
@@ -40,7 +43,7 @@ import java.util.function.IntConsumer;
  *
  * @see <a href="https://en.wikipedia.org/wiki/Radix_tree">Radix Tree (Wikipedia)</a>
  */
-public class Node<T> implements FragmentHolder<String> {
+public class Node<T> implements NodeData<T> {
     /**
      * the parent node.  Will be {@code null} in the {@code root} and in {@code exemplar}s.
      */
@@ -56,17 +59,44 @@ public class Node<T> implements FragmentHolder<String> {
      * The children of this node.  May be {@code null}.
      */
     private SortedSet<Node<T>> children;
+
     /**
      * The contents of this node.  Will be {@code null} for root, exemplar, and pure inner nodes.
      */
     private T contents;
 
     /**
+     * Lock to ensure that only one thread updates contents.
+     */
+    private final Lock contentLock;
+
+
+    /**
      * Constructs a new root node for a new Trie
      */
     public static <T> Node<T> makeRoot() {
-        return new Node<>(null, "");
+        return makeRoot("");
     }
+
+    /**
+     * Constructs a new root node for a new Trie
+     */
+    public static <T> Node<T> makeRoot(String fragment) {
+        return new Node<>(null, fragment);
+    }
+
+    /**
+     * Constructs the SortedSet of T for use as the children of this node.
+     * @return
+     * @param <T>
+     */
+    private synchronized SortedSet<Node<T>> createChildren() {
+        if (children == null) {
+            children = new ConcurrentSkipListSet<>();
+        }
+        return children;
+    }
+
 
     /**
      * Constructor.
@@ -80,22 +110,49 @@ public class Node<T> implements FragmentHolder<String> {
         // add this node to the parent if the parent is provided.
         if (up != null) {
             if (up.children == null) {
-                up.children = new TreeSet<>();
+                up.createChildren();
             }
             up.children.add(this);
         }
+        contentLock = new ReentrantLock();
     }
 
     /**
      * Sets the contents of this node.
      *
      * @param value The value for the node
-     * @return the old value for the node if any.
      */
-    T setContents(T value) {
-        T result = contents;
-        contents = value;
-        return result;
+    void setContents(T value) {
+        mergeContents(value, (a, b) -> value);
+    }
+
+    /**
+     * Merge the contents of this node with the value specified using the remappingFunction.
+     * <ul>
+     *  <li>If the current node value is null the {@code value} parameter is used to set the node value.</li>
+     *  <li>If the current node value is not null the current node value and the {@code value} parameter are
+     *  passed to the {@code remappingFunction} in that order.</li>
+     * @param value the desired value.
+     * @param remappingFunction the remapping function to merge existing contents with the new value.
+     */
+    void mergeContents(T value, BiFunction<T, T, T> remappingFunction) {
+        contentLock.lock();
+        try {
+            contents = contents == null ? value : remappingFunction.apply(contents, value);
+        } finally {
+            contentLock.unlock();
+        }
+    }
+
+    void removeContents(Function<T, T> remappingFunction) {
+        contentLock.lock();
+        try {
+            if (contents != null) {
+                contents = remappingFunction.apply(contents);
+            }
+        } finally {
+            contentLock.unlock();
+        }
     }
 
     /**
@@ -103,8 +160,17 @@ public class Node<T> implements FragmentHolder<String> {
      *
      * @return the sorted set of the child nodes of this node.
      */
-    SortedSet<Node<T>> getChildren() {
+    public SortedSet<Node<T>> getChildren() {
         return children == null ? Collections.emptySortedSet() : Collections.unmodifiableSortedSet(children);
+    }
+
+    Node<T> createChild(String fragment) {
+        if (children == null) {
+            children = createChildren();
+        }
+        Node<T> n = new Node<>(this, fragment);
+        children.add(n);
+        return n;
     }
 
     /**
@@ -115,16 +181,18 @@ public class Node<T> implements FragmentHolder<String> {
      * @param newFragment the new fragment.
      * @return the Now node with the proper parent and the parent having a reference ot this node.
      */
-    private Node<T> rename(Node<T> parent, String newFragment) {
+    Node<T> rename(Node<T> parent, String newFragment) {
         Node<T> newNode = new Node<T>(parent, newFragment);
         if (children != null) {
-            newNode.children = new TreeSet<>();
+            newNode.children = createChildren();
             for (Node<T> child : children) {
                 child.up = newNode;
                 newNode.children.add(child);
             }
         }
         newNode.contents = contents;
+        // do not call getChildren as we need to modify the set.
+        this.getParent().children.remove(this);
         return newNode;
     }
 
@@ -156,18 +224,27 @@ public class Node<T> implements FragmentHolder<String> {
         return contents;
     }
 
+    public boolean hasContents() {
+        return contents != null;
+    }
+
     /**
      * Gets the complete name of this node.
      *
      * @return the fully composed name of this node.
      */
     @Override
-    public String toString() {
+    public String getName() {
         StringBuilder sb = new StringBuilder();
         for (Node<T> n : pathTo()) {
             sb.append(n.fragment);
         }
         return sb.toString();
+    }
+
+    @Override
+    public String toString() {
+        return getName();
     }
 
     @Override
@@ -186,134 +263,6 @@ public class Node<T> implements FragmentHolder<String> {
         if (o == null || getClass() != o.getClass()) return false;
         Node<?> node = (Node<?>) o;
         return Objects.equals(fragment, node.fragment) && Objects.equals(up, node.up);
-    }
-
-    /**
-     * Adds a node for the value.
-     * <ol>
-     *     <li>The node may have already existed in which case the located node is returned.</li>
-     *     <li>The node may be added at any level in the Trie structure.</li>
-     * </ol>
-     *
-     * This is a recursive method.
-     *
-     * @param inserter identifies the node to locate.
-     * @return the added or found Node.
-     */
-    Node<T> addNodeFor(StringInserter inserter) {
-        // If the inserter is empty then we have found the Node.
-        if (inserter.isEmpty()) {
-            return this;
-        }
-
-        // if the inserter is on a wildcard use wildcard only.
-        if (inserter.isWildcard()) {
-            // search the children
-            Node<T> test = null;
-            if (children == null) {
-                children = new TreeSet<>();
-            } else {
-                test = new Search().eq(inserter);
-            }
-            // if there is no matching node then create it using this fragment.
-            if (test == null) {
-                test = new Node<>(this, inserter.getFragment());
-            }
-            // recurse adding the next fragment to the found node
-            return test.addNodeFor(inserter.advance(1));
-        }
-
-        // process non-wildcard segments
-        String segment = inserter.getFragment();
-        if (children != null) {
-            for (Node<T> child : children) {
-                // skip wildcard children
-                if (!WildcardRegistry.isWildcard(child.fragment)) {
-                    // segment extends or is equal to child fragment so add child to child.
-                    if (segment.startsWith(child.fragment)) {
-                        return child.addNodeFor(inserter.advance(child.fragment.length()));
-                    }
-
-                    // child extends segment; insert segment as new child and original child as segments's child.
-                    //     A                              A
-                    //   +----+                         +----+
-                    //  BCD   CB   insert "AC" yields  BCD   C
-                    //                                       B
-                    //
-                    if (child.fragment.startsWith(segment)) {
-                        Node<T> newNode = new Node<>(this, segment);
-                        // adds renamed child to newNode.children
-                        child.rename(newNode, child.fragment.substring(segment.length()));
-                        children.remove(child);
-                        return newNode.addNodeFor(inserter.advance(segment.length()));
-                    }
-
-                    // check partial match case
-                    //  ABCD    insert ACAB  yields  A
-                    //                             +----+
-                    //                            BCD  CAB
-                    //
-                    int limit = Math.min(child.fragment.length(), segment.length());
-                    for (int i = 0; i < limit; i++) {
-                        if (child.fragment.charAt(i) != segment.charAt(i)) {
-                            if (i == 0) {
-                                break;
-                            }
-                            // newNode adds inserted children
-                            Node<T> newNode = new Node<>(this, child.fragment.substring(0, i));
-                            // rename adds old child to newNode.children
-                            child.rename(newNode, child.fragment.substring(i));
-                            // newChild contains the remainder of the fragment and is child of newNode,
-                            Node<T> newChild = new Node<>(newNode, segment.substring(i));
-                            // remove the child we are replacing.
-                            children.remove(child);
-                            return newChild.addNodeFor(inserter.advance(segment.length()));
-                        }
-                    }
-                }
-            }
-        }
-        // no children; create child node of this node with the segment, and continue insert.
-        return new Node<T>(this, segment).addNodeFor(inserter.advance(segment.length()));
-    }
-
-    /**
-     * Find a Node based on a Matcher.
-     *
-     * @param matcher the matcher that determines the node to find.
-     * @return The Node on which the find stopped, will be the "root" node if no match is found.
-     */
-    Node<T> findNodeFor(Matcher<T> matcher) {
-        // this node is a match return.
-        if (matcher.test(this)) {
-            return this;
-        }
-
-        Search searcher = new Search();
-        if (children != null) {
-            // find exact(ish) match first.  Will also find tail wildcard.
-            Node<T> candidate = searcher.eq(matcher);
-            if (candidate != null) {
-                return candidate;
-            }
-
-            // find nodes lt matcher.  Navigate down the trie if there is a partial match.
-            candidate = searcher.lt(matcher);
-            if (candidate != null && matcher.getFragment().startsWith(candidate.getFragment())) {
-                candidate = candidate.findNodeFor(matcher.advance(candidate.fragment.length()));
-                if (Matcher.validMatch(candidate)) {
-                    return candidate;
-                }
-            }
-
-            // check for wildcard match after all other tests fail.
-            candidate = WildcardRegistry.processWildcards(this, matcher);
-            if (Matcher.validMatch(candidate)) {
-                return candidate;
-            }
-        }
-        // nothing below this node so return this node.
-        return this;
     }
 
     /**
@@ -356,35 +305,5 @@ public class Node<T> implements FragmentHolder<String> {
             result.add(stack.pop());
         }
         return result;
-    }
-
-    /**
-     * A helper class to perform searches on the children of the Node.
-     */
-    public class Search {
-        /**
-         * Finds the child node who's fragment matches the fragmentHolder.
-         * @param fragmentHolder the fragment to search for.
-         * @return matching child node or {@code null} if none match.
-         */
-        public Node<T> eq(FragmentHolder<String> fragmentHolder) {
-            Node<T> test = new Node<>(null, fragmentHolder.getFragment());
-            SortedSet<Node<T>> set = children.tailSet(test);
-            if (!set.isEmpty()) {
-                return fragmentHolder.compareTo(set.first()) == 0 ? set.first() : null;
-            }
-            return null;
-        }
-
-        /**
-         * Finds the child node that is less than but closest to the fragmentHolder.
-         * @param fragmentHolder the fragment to search for.
-         * @return the nearest child less than the fragment or {@code null} if not found.
-         */
-        public Node<T> lt(FragmentHolder<String> fragmentHolder) {
-            Node<T> test = new Node<>(null, fragmentHolder.getFragment());
-            SortedSet<Node<T>> set = children.headSet(test);
-            return set.isEmpty() ? null : set.last();
-        }
     }
 }

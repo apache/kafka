@@ -21,6 +21,7 @@ import static java.lang.String.format;
 
 /**
  * The registry of all wildcard patterns.
+ * Also contains the method to
  */
 public class WildcardRegistry {
     /* list of wildcard strings.  Order is important.  Most specific match first */
@@ -71,35 +72,35 @@ public class WildcardRegistry {
      * Apply any wildcards in the matcher to a child search on the node.
      * @param parent the node containing the children.
      * @param matcher the matcher to process.
-     * @return matching node or {@code null} if there is no match.
+     * @return the SearchResult
      * @param <T> the type of data in the Trie.
      */
-    public static <T> Node<T> processWildcards(Node<T> parent, Matcher<T> matcher) {
-        // create a searcher on the parent node.
-        Node<T>.Search searcher = parent.new Search();
-        Node<T> match = null;
+    public static <T> Matcher.SearchResult<T> processWildcards(Node<T> parent, Matcher<T> matcher) {
+
+        Matcher.SearchResult<T> searchResult = null;
 
         /** Check the wildcards from most specific to least specific */
         for (String wildcard : PATTERNS) {
+            FragmentHolder fragmentHolder = () -> wildcard;
             // search for and exact match for the wildcard.
-            Node<T> child = searcher.eq(() -> wildcard);
+            Node<T> child = fragmentHolder.eq(parent);
             if (child != null) {
                 switch (wildcard) {
                     case "?":
                         // with a single character wildcard just skip on position in the matcher and
                         // look in the children of the wildcard node.
-                        match = child.findNodeFor(matcher.advance(1));
-                        if (Matcher.validMatch(match)) {
-                            return match;
+                        searchResult = matcher.advance(1).searchIn(child);
+                        if (searchResult.hasContents()) {
+                            return searchResult;
                         }
                         break;
                     case "*":
                         // for multi character wildcards we have to skip 1 to n-1 characters looking for
                         // the match.
                         for (int advance = 1; advance < matcher.getFragment().length(); advance++) {
-                            match = child.findNodeFor(matcher.advance(advance));
-                            if (Matcher.validMatch(match)) {
-                                return match;
+                            searchResult = matcher.advance(advance).searchIn(child);
+                            if (searchResult.hasContents()) {
+                                return searchResult;
                             }
                         }
                         break;
@@ -108,6 +109,6 @@ public class WildcardRegistry {
                 }
             }
         }
-        return null;
+        return matcher.searchResult(null);
     }
 }

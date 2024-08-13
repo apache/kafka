@@ -40,6 +40,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.function.BiPredicate;
+
+import static org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE;
 
 /**
  *
@@ -77,6 +80,20 @@ import java.util.concurrent.CompletionStage;
  */
 @InterfaceStability.Evolving
 public interface Authorizer extends Configurable, Closeable {
+    /**
+     * The default ResourcePattern name matcher.  Will match literal name or wildcard (*) or PREFIXED
+     * where the name starts with the pattern.
+     */
+    BiPredicate<ResourcePattern, String> DEFAULT_NAME_MATCHER = (pattern, name) -> {
+        switch (pattern.patternType()) {
+            case LITERAL:
+                return name.equals(pattern.name()) || pattern.name().equals(WILDCARD_RESOURCE);
+            case PREFIXED:
+                return name.startsWith(pattern.name());
+            default:
+                throw new IllegalArgumentException("Unsupported PatternType: " + pattern.patternType());
+        }
+    };
 
     /**
      * Starts loading authorization metadata and returns futures that can be used to wait until
@@ -159,6 +176,14 @@ public interface Authorizer extends Configurable, Closeable {
      */
     default int aclCount() {
         return -1;
+    }
+
+    /**
+     * The name pattern matcher used by this Authorizer.
+     * @return A BiPredicate that will return true if the pattern matches the name.
+     */
+    default BiPredicate<ResourcePattern, String> patternNameMatcher() {
+        return DEFAULT_NAME_MATCHER;
     }
 
     /**

@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 
 /**
- * An abstract implementation of th eait logging info for Authorizer data.
+ * An abstract implementation of the audit logging info for Authorizer data.
  */
 public abstract class AbstractAuthorizerData implements AuthorizerData {
     /**
