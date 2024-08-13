@@ -29,13 +29,12 @@ RUN set -eux ; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
     export GNUPGHOME="$(mktemp -d)"; \
-    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" || \
-    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" ; \
+    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" || \
+    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     gpgconf --kill all; \
-    rm -rf "$GNUPGHOME" kafka.tgz.asc; 
-
-RUN mkdir opt/kafka; \
+    rm -rf "$GNUPGHOME" kafka.tgz.asc; \
+    mkdir opt/kafka; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
     # Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
     /etc/kafka/docker/jsa_launch
@@ -62,8 +61,8 @@ RUN set -eux ; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
     export GNUPGHOME="$(mktemp -d)"; \
-    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" || \
-    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" ; \
+    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY" || \
+    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     gpgconf --kill all; \
     rm -rf "$GNUPGHOME" kafka.tgz.asc; \
