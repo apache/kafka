@@ -35,7 +35,7 @@ import java.util.Set;
 
 public class WorkerSinkTaskContext implements SinkTaskContext {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(WorkerSinkTaskContext.class);
     private final Map<TopicPartition, Long> offsets;
     private final Consumer<byte[], byte[]> consumer;
     private final WorkerSinkTask sinkTask;

@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.MembershipManager.LocalAssignment;
+import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -49,9 +49,9 @@ import java.util.stream.Collectors;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
- * {@link ConsumerGroupHeartbeatRequest} using the state stored in the {@link MembershipManager} and enqueue it to
+ * {@link ConsumerGroupHeartbeatRequest} using the state stored in the {@link ConsumerMembershipManager} and enqueue it to
  * the network queue to be sent out. Once the response is received, the module will update the state in the
- * {@link MembershipManager} and handle any errors.</p>
+ * {@link ConsumerMembershipManager} and handle any errors.</p>
  *
  * <p>The manager will try to send a heartbeat when the member is in {@link MemberState#STABLE},
  * {@link MemberState#JOINING}, or {@link MemberState#RECONCILING}. Which mean the member is either in a stable
@@ -98,9 +98,9 @@ public class HeartbeatRequestManager implements RequestManager {
     private final HeartbeatState heartbeatState;
 
     /**
-     * MembershipManager manages member's essential attributes like epoch and id, and its rebalance state
+     * ConsumerMembershipManager manages member's essential attributes like epoch and id, and its rebalance state
      */
-    private final MembershipManager membershipManager;
+    private final ConsumerMembershipManager membershipManager;
 
     /**
      * ErrorEventHandler allows the background thread to propagate errors back to the user
@@ -124,7 +124,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
-        final MembershipManager membershipManager,
+        final ConsumerMembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics) {
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -147,7 +147,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final Timer timer,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
-        final MembershipManager membershipManager,
+        final ConsumerMembershipManager membershipManager,
         final HeartbeatState heartbeatState,
         final HeartbeatRequestState heartbeatRequestState,
         final BackgroundEventHandler backgroundEventHandler,
@@ -224,10 +224,10 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * Returns the {@link MembershipManager} that this request manager is using to track the state of the group.
+     * Returns the {@link ConsumerMembershipManager} that this request manager is using to track the state of the group.
      * This is provided so that the {@link ApplicationEventProcessor} can access the state for querying or updating.
      */
-    public MembershipManager membershipManager() {
+    public ConsumerMembershipManager membershipManager() {
         return membershipManager;
     }
 
@@ -537,13 +537,13 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     static class HeartbeatState {
         private final SubscriptionState subscriptions;
-        private final MembershipManager membershipManager;
+        private final ConsumerMembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
         private final SentFields sentFields;
 
         public HeartbeatState(
             final SubscriptionState subscriptions,
-            final MembershipManager membershipManager,
+            final ConsumerMembershipManager membershipManager,
             final int rebalanceTimeoutMs) {
             this.subscriptions = subscriptions;
             this.membershipManager = membershipManager;

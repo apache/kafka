@@ -135,6 +135,8 @@ versions += [
   kafka_35: "3.5.2",
   kafka_36: "3.6.2",
   kafka_37: "3.7.1",
+  kafka_38: "3.8.0",
+  // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
@@ -156,7 +158,9 @@ versions += [
   spotbugs: "4.8.0",
   zinc: "1.9.2",
   zookeeper: "3.8.4",
-  zstd: "1.5.6-3",
+  // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
+  // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
+  zstd: "1.5.6-4",
   junitPlatform: "1.10.2"
 ]
 
@@ -228,6 +232,7 @@ libs += [
   kafkaStreams_35: "org.apache.kafka:kafka-streams:$versions.kafka_35",
   kafkaStreams_36: "org.apache.kafka:kafka-streams:$versions.kafka_36",
   kafkaStreams_37: "org.apache.kafka:kafka-streams:$versions.kafka_37",
+  kafkaStreams_38: "org.apache.kafka:kafka-streams:$versions.kafka_38",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",

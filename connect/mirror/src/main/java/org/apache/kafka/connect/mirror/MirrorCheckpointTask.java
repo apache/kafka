@@ -109,7 +109,7 @@ public class MirrorCheckpointTask extends SourceTask {
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointStore = new CheckpointStore(config, consumerGroups);
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
-        scheduler.execute(() -> {
+        scheduler.executeAsync(() -> {
             // loading the stores are potentially long running operations, so they run asynchronously
             // to avoid blocking task::start (until a task has completed starting it cannot be stopped)
             boolean checkpointsReadOk = checkpointStore.start();

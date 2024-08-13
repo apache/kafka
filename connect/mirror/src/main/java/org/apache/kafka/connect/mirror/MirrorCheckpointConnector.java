@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
 
@@ -63,7 +64,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
     private SourceAndTarget sourceAndTarget;
-    private Set<String> knownConsumerGroups = Collections.emptySet();
+    private Set<String> knownConsumerGroups = null;
 
     public MirrorCheckpointConnector() {
         // nop
@@ -81,7 +82,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        String connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         topicFilter = config.topicFilter();
         groupFilter = config.groupFilter();
@@ -92,8 +92,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
                 "refreshing consumer groups");
-        log.info("Started {} with {} consumer groups.", connectorName, knownConsumerGroups.size());
-        log.debug("Started {} with consumer groups: {}", connectorName, knownConsumerGroups);
     }
 
     @Override
@@ -133,6 +131,13 @@ public class MirrorCheckpointConnector extends SourceConnector {
     // divide consumer groups among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
+        if (knownConsumerGroups == null) {
+            // If knownConsumerGroup is null, it means the initial loading has not finished.
+            // An exception should be thrown to trigger the retry behavior in the framework.
+            log.debug("Initial consumer loading has not yet completed");
+            throw new RetriableException("Timeout while loading consumer groups.");
+        }
+
         // if the replication is disabled, known consumer group is empty, or checkpoint emission is
         // disabled by setting 'emit.checkpoints.enabled' to false, the interval of checkpoint emission
         // will be negative and no 'MirrorCheckpointTask' will be created
@@ -186,6 +191,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private void refreshConsumerGroups()
             throws InterruptedException, ExecutionException {
+        // If loadInitialConsumerGroups fails for any reason(e.g., timeout), knownConsumerGroups may be null.
+        // We still want this method to recover gracefully in such cases.
+        Set<String> knownConsumerGroups = this.knownConsumerGroups == null ? Collections.emptySet() : this.knownConsumerGroups;
         Set<String> consumerGroups = findConsumerGroups();
         Set<String> newConsumerGroups = new HashSet<>(consumerGroups);
         newConsumerGroups.removeAll(knownConsumerGroups);
@@ -196,14 +204,17 @@ public class MirrorCheckpointConnector extends SourceConnector {
                     consumerGroups.size(), sourceAndTarget, newConsumerGroups.size(), deadConsumerGroups.size(),
                     knownConsumerGroups.size());
             log.debug("Found new consumer groups: {}", newConsumerGroups);
-            knownConsumerGroups = consumerGroups;
+            this.knownConsumerGroups = consumerGroups;
             context.requestTaskReconfiguration();
         }
     }
 
     private void loadInitialConsumerGroups()
             throws InterruptedException, ExecutionException {
+        String connectorName = config.connectorName();
         knownConsumerGroups = findConsumerGroups();
+        log.info("Started {} with {} consumer groups.", connectorName, knownConsumerGroups.size());
+        log.debug("Started {} with consumer groups: {}", connectorName, knownConsumerGroups);
     }
 
     Set<String> findConsumerGroups()

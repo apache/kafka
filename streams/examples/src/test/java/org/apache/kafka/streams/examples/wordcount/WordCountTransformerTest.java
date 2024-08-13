@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -37,7 +36,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Transformer} in the {@link WordCountTransformerDemo}.
+ * Demonstrate the use of {@link MockProcessorContext} for testing the {@link org.apache.kafka.streams.kstream.Transformer} in the {@link WordCountTransformerDemo}.
  */
 public class WordCountTransformerTest {
     @Test

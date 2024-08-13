@@ -17,17 +17,14 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.log.remote.metadata.storage.generated.ProducerSnapshot;
 
 import org.slf4j.Logger;
 
@@ -74,36 +71,9 @@ public class ProducerStateManager {
 
     public static final long LATE_TRANSACTION_BUFFER_MS = 5 * 60 * 1000;
 
-    private static final short PRODUCER_SNAPSHOT_VERSION = 1;
-    private static final String VERSION_FIELD = "version";
-    private static final String CRC_FIELD = "crc";
-    private static final String PRODUCER_ID_FIELD = "producer_id";
-    private static final String LAST_SEQUENCE_FIELD = "last_sequence";
-    private static final String PRODUCER_EPOCH_FIELD = "epoch";
-    private static final String LAST_OFFSET_FIELD = "last_offset";
-    private static final String OFFSET_DELTA_FIELD = "offset_delta";
-    private static final String TIMESTAMP_FIELD = "timestamp";
-    private static final String PRODUCER_ENTRIES_FIELD = "producer_entries";
-    private static final String COORDINATOR_EPOCH_FIELD = "coordinator_epoch";
-    private static final String CURRENT_TXN_FIRST_OFFSET_FIELD = "current_txn_first_offset";
-
     private static final int VERSION_OFFSET = 0;
     private static final int CRC_OFFSET = VERSION_OFFSET + 2;
     private static final int PRODUCER_ENTRIES_OFFSET = CRC_OFFSET + 4;
-
-    private static final Schema PRODUCER_SNAPSHOT_ENTRY_SCHEMA =
-            new Schema(new Field(PRODUCER_ID_FIELD, Type.INT64, "The producer ID"),
-                    new Field(PRODUCER_EPOCH_FIELD, Type.INT16, "Current epoch of the producer"),
-                    new Field(LAST_SEQUENCE_FIELD, Type.INT32, "Last written sequence of the producer"),
-                    new Field(LAST_OFFSET_FIELD, Type.INT64, "Last written offset of the producer"),
-                    new Field(OFFSET_DELTA_FIELD, Type.INT32, "The difference of the last sequence and first sequence in the last written batch"),
-                    new Field(TIMESTAMP_FIELD, Type.INT64, "Max timestamp from the last written entry"),
-                    new Field(COORDINATOR_EPOCH_FIELD, Type.INT32, "The epoch of the last transaction coordinator to send an end transaction marker"),
-                    new Field(CURRENT_TXN_FIRST_OFFSET_FIELD, Type.INT64, "The first offset of the on-going transaction (-1 if there is none)"));
-    private static final Schema PID_SNAPSHOT_MAP_SCHEMA =
-            new Schema(new Field(VERSION_FIELD, Type.INT16, "Version of the snapshot file"),
-                    new Field(CRC_FIELD, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
-                    new Field(PRODUCER_ENTRIES_FIELD, new ArrayOf(PRODUCER_SNAPSHOT_ENTRY_SCHEMA), "The entries in the producer table"));
 
     private final Logger log;
 
@@ -646,71 +616,68 @@ public class ProducerStateManager {
     }
 
     public static List<ProducerStateEntry> readSnapshot(File file) throws IOException {
+        byte[] buffer = Files.readAllBytes(file.toPath());
+
+        ByteBuffer byteBuffer = ByteBuffer.wrap(buffer);
+        short version;
+        ProducerSnapshot producerSnapshot;
         try {
-            byte[] buffer = Files.readAllBytes(file.toPath());
-            Struct struct = PID_SNAPSHOT_MAP_SCHEMA.read(ByteBuffer.wrap(buffer));
-
-            Short version = struct.getShort(VERSION_FIELD);
-            if (version != PRODUCER_SNAPSHOT_VERSION)
+            version = byteBuffer.getShort();
+            if (version < ProducerSnapshot.LOWEST_SUPPORTED_VERSION || version > ProducerSnapshot.HIGHEST_SUPPORTED_VERSION)
                 throw new CorruptSnapshotException("Snapshot contained an unknown file version " + version);
-
-            long crc = struct.getUnsignedInt(CRC_FIELD);
-            long computedCrc = Crc32C.compute(buffer, PRODUCER_ENTRIES_OFFSET, buffer.length - PRODUCER_ENTRIES_OFFSET);
-            if (crc != computedCrc)
-                throw new CorruptSnapshotException("Snapshot is corrupt (CRC is no longer valid). Stored crc: " + crc
-                        + ". Computed crc: " + computedCrc);
-
-            Object[] producerEntryFields = struct.getArray(PRODUCER_ENTRIES_FIELD);
-            List<ProducerStateEntry> entries = new ArrayList<>(producerEntryFields.length);
-            for (Object producerEntryObj : producerEntryFields) {
-                Struct producerEntryStruct = (Struct) producerEntryObj;
-                long producerId = producerEntryStruct.getLong(PRODUCER_ID_FIELD);
-                short producerEpoch = producerEntryStruct.getShort(PRODUCER_EPOCH_FIELD);
-                int seq = producerEntryStruct.getInt(LAST_SEQUENCE_FIELD);
-                long offset = producerEntryStruct.getLong(LAST_OFFSET_FIELD);
-                long timestamp = producerEntryStruct.getLong(TIMESTAMP_FIELD);
-                int offsetDelta = producerEntryStruct.getInt(OFFSET_DELTA_FIELD);
-                int coordinatorEpoch = producerEntryStruct.getInt(COORDINATOR_EPOCH_FIELD);
-                long currentTxnFirstOffset = producerEntryStruct.getLong(CURRENT_TXN_FIRST_OFFSET_FIELD);
-
-                OptionalLong currentTxnFirstOffsetVal = currentTxnFirstOffset >= 0 ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty();
-                Optional<BatchMetadata> batchMetadata =
-                        (offset >= 0) ? Optional.of(new BatchMetadata(seq, offset, offsetDelta, timestamp)) : Optional.empty();
-                entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata));
-            }
-
-            return entries;
-        } catch (SchemaException e) {
+            producerSnapshot = new ProducerSnapshot(new ByteBufferAccessor(byteBuffer), version);
+        } catch (Exception e) {
             throw new CorruptSnapshotException("Snapshot failed schema validation: " + e.getMessage());
         }
+
+        long crc = producerSnapshot.crc();
+        long computedCrc = Crc32C.compute(buffer, PRODUCER_ENTRIES_OFFSET, buffer.length - PRODUCER_ENTRIES_OFFSET);
+        if (crc != computedCrc)
+            throw new CorruptSnapshotException("Snapshot is corrupt (CRC is no longer valid). Stored crc: " + crc
+                    + ". Computed crc: " + computedCrc);
+
+        List<ProducerSnapshot.ProducerEntry> producerEntries = producerSnapshot.producerEntries();
+        List<ProducerStateEntry> entries = new ArrayList<>(producerEntries.size());
+        for (ProducerSnapshot.ProducerEntry producerEntry : producerEntries) {
+            long producerId = producerEntry.producerId();
+            short producerEpoch = producerEntry.epoch();
+            int lastSequence = producerEntry.lastSequence();
+            long lastOffset = producerEntry.lastOffset();
+            long timestamp = producerEntry.timestamp();
+            int offsetDelta = producerEntry.offsetDelta();
+            int coordinatorEpoch = producerEntry.coordinatorEpoch();
+            long currentTxnFirstOffset = producerEntry.currentTxnFirstOffset();
+
+            OptionalLong currentTxnFirstOffsetVal = currentTxnFirstOffset >= 0 ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty();
+            Optional<BatchMetadata> batchMetadata =
+                    (lastOffset >= 0) ? Optional.of(new BatchMetadata(lastSequence, lastOffset, offsetDelta, timestamp)) : Optional.empty();
+            entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata));
+        }
+
+        return entries;
     }
 
     // visible for testing
     public static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, boolean sync) throws IOException {
-        Struct struct = new Struct(PID_SNAPSHOT_MAP_SCHEMA);
-        struct.set(VERSION_FIELD, PRODUCER_SNAPSHOT_VERSION);
-        struct.set(CRC_FIELD, 0L); // we'll fill this after writing the entries
-        Struct[] structEntries = new Struct[entries.size()];
-        int i = 0;
+        ProducerSnapshot producerSnapshot = new ProducerSnapshot();
+        List<ProducerSnapshot.ProducerEntry> producerEntries = new ArrayList<>(entries.size());
         for (Map.Entry<Long, ProducerStateEntry> producerIdEntry : entries.entrySet()) {
             Long producerId = producerIdEntry.getKey();
             ProducerStateEntry entry = producerIdEntry.getValue();
-            Struct producerEntryStruct = struct.instance(PRODUCER_ENTRIES_FIELD);
-            producerEntryStruct.set(PRODUCER_ID_FIELD, producerId)
-                    .set(PRODUCER_EPOCH_FIELD, entry.producerEpoch())
-                    .set(LAST_SEQUENCE_FIELD, entry.lastSeq())
-                    .set(LAST_OFFSET_FIELD, entry.lastDataOffset())
-                    .set(OFFSET_DELTA_FIELD, entry.lastOffsetDelta())
-                    .set(TIMESTAMP_FIELD, entry.lastTimestamp())
-                    .set(COORDINATOR_EPOCH_FIELD, entry.coordinatorEpoch())
-                    .set(CURRENT_TXN_FIRST_OFFSET_FIELD, entry.currentTxnFirstOffset().orElse(-1L));
-            structEntries[i++] = producerEntryStruct;
+            ProducerSnapshot.ProducerEntry producerEntry = new ProducerSnapshot.ProducerEntry()
+                    .setProducerId(producerId)
+                    .setEpoch(entry.producerEpoch())
+                    .setLastSequence(entry.lastSeq())
+                    .setLastOffset(entry.lastDataOffset())
+                    .setOffsetDelta(entry.lastOffsetDelta())
+                    .setTimestamp(entry.lastTimestamp())
+                    .setCoordinatorEpoch(entry.coordinatorEpoch())
+                    .setCurrentTxnFirstOffset(entry.currentTxnFirstOffset().orElse(-1L));
+            producerEntries.add(producerEntry);
         }
-        struct.set(PRODUCER_ENTRIES_FIELD, structEntries);
 
-        ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
-        struct.writeTo(buffer);
-        buffer.flip();
+        producerSnapshot.setProducerEntries(producerEntries);
+        ByteBuffer buffer = MessageUtil.toVersionPrefixedByteBuffer(ProducerSnapshot.HIGHEST_SUPPORTED_VERSION, producerSnapshot);
 
         // now fill in the CRC
         long crc = Crc32C.compute(buffer, PRODUCER_ENTRIES_OFFSET, buffer.limit() - PRODUCER_ENTRIES_OFFSET);

@@ -33,6 +33,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -88,6 +89,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -96,6 +98,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Assertions.assertSyncGroupResponseEquals;
+import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createConfigManager;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
@@ -117,6 +120,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
 public class GroupMetadataManagerTestContext {
+    static final String DEFAULT_CLIENT_ID = "client";
+    static final InetAddress DEFAULT_CLIENT_ADDRESS = InetAddress.getLoopbackAddress();
 
     public static void assertNoOrEmptyResult(List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts) {
         assertTrue(timeouts.size() <= 1);
@@ -386,6 +391,7 @@ public class GroupMetadataManagerTestContext {
         private final LogContext logContext = new LogContext();
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage;
+        private GroupConfigManager groupConfigManager;
         private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
         private final List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
@@ -464,6 +470,7 @@ public class GroupMetadataManagerTestContext {
         public GroupMetadataManagerTestContext build() {
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (consumerGroupAssignors == null) consumerGroupAssignors = Collections.emptyList();
+            if (groupConfigManager == null) groupConfigManager = createConfigManager();
 
             GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext(
                 time,
@@ -490,7 +497,9 @@ public class GroupMetadataManagerTestContext {
                     .withConsumerGroupMigrationPolicy(consumerGroupMigrationPolicy)
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withShareGroupMaxSize(shareGroupMaxSize)
+                    .withGroupConfigManager(groupConfigManager)
                     .build(),
+                groupConfigManager,
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs
             );
@@ -509,6 +518,7 @@ public class GroupMetadataManagerTestContext {
     final SnapshotRegistry snapshotRegistry;
     final GroupCoordinatorMetricsShard metrics;
     final GroupMetadataManager groupMetadataManager;
+    final GroupConfigManager groupConfigManager;
     final int classicGroupInitialRebalanceDelayMs;
     final int classicGroupNewMemberJoinTimeoutMs;
 
@@ -521,6 +531,7 @@ public class GroupMetadataManagerTestContext {
         SnapshotRegistry snapshotRegistry,
         GroupCoordinatorMetricsShard metrics,
         GroupMetadataManager groupMetadataManager,
+        GroupConfigManager groupConfigManager,
         int classicGroupInitialRebalanceDelayMs,
         int classicGroupNewMemberJoinTimeoutMs
     ) {
@@ -529,9 +540,10 @@ public class GroupMetadataManagerTestContext {
         this.snapshotRegistry = snapshotRegistry;
         this.metrics = metrics;
         this.groupMetadataManager = groupMetadataManager;
+        this.groupConfigManager = groupConfigManager;
         this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
         this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
-        snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+        snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
     }
 
     public void commit() {
@@ -578,11 +590,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.CONSUMER_GROUP_HEARTBEAT,
                 ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -608,11 +620,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.SHARE_GROUP_HEARTBEAT,
                 ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -760,11 +772,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.JOIN_GROUP,
                 joinGroupVersion,
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -910,11 +922,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.SYNC_GROUP,
                 ApiKeys.SYNC_GROUP.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -1202,11 +1214,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.HEARTBEAT,
                 ApiKeys.HEARTBEAT.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -1232,6 +1244,10 @@ public class GroupMetadataManagerTestContext {
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {
         return groupMetadataManager.describeGroups(groupIds, lastCommittedOffset);
+    }
+
+    public List<ShareGroupDescribeResponseData.DescribedGroup> sendShareGroupDescribe(List<String> groupIds) {
+        return groupMetadataManager.shareGroupDescribe(groupIds, lastCommittedOffset);
     }
 
     public void verifyHeartbeat(
@@ -1324,11 +1340,11 @@ public class GroupMetadataManagerTestContext {
             new RequestHeader(
                 ApiKeys.LEAVE_GROUP,
                 ApiKeys.LEAVE_GROUP.latestVersion(),
-                "client",
+                DEFAULT_CLIENT_ID,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            DEFAULT_CLIENT_ADDRESS,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -1507,10 +1523,14 @@ public class GroupMetadataManagerTestContext {
         }
 
         lastWrittenOffset++;
-        snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+        snapshotRegistry.idempotentCreateSnapshot(lastWrittenOffset);
     }
 
     void onUnloaded() {
         groupMetadataManager.onUnloaded();
+    }
+
+    public void updateGroupConfig(String groupId, Properties newGroupConfig) {
+        groupConfigManager.updateGroupConfig(groupId, newGroupConfig);
     }
 }
