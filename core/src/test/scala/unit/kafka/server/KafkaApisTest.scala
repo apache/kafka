@@ -545,15 +545,13 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(expectedActions.asJava)))
       .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
     val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
     val cgConfigs = new Properties()
     cgConfigs.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
-    when(configRepository.config(resource)).thenReturn(cgConfigs)
+    when(configRepository.groupConfig(consumerGroupId)).thenReturn(cgConfigs)
 
     metadataCache = mock(classOf[ZkMetadataCache])
-    when(metadataCache.contains(consumerGroupId)).thenReturn(true)
     val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
       .setIncludeSynonyms(true)
       .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()

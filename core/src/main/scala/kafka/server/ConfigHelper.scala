@@ -33,6 +33,7 @@ import org.apache.kafka.common.requests.{ApiError, DescribeConfigsRequest, Descr
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -99,22 +100,6 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
           .setConfigs(configEntries.asJava)
       }
 
-      def createDescribeResponse(configType: ConfigResource.Type,
-                               configSource: ConfigSource,
-                               resourceName: String): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val entityProps = configRepository.config(new ConfigResource(configType, resourceName))
-        val configEntries = new ListBuffer[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
-        entityProps.forEach((name, value) => {
-          configEntries += new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name.toString)
-            .setValue(value.toString).setConfigSource(configSource.id())
-            .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava)
-        })
-
-        new DescribeConfigsResponseData.DescribeConfigsResult()
-          .setErrorCode(Errors.NONE.code)
-          .setConfigs(configEntries.asJava)
-      }
-
       try {
         val configResult = ConfigResource.Type.forId(resource.resourceType) match {
           case ConfigResource.Type.TOPIC =>
@@ -155,7 +140,17 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             if (subscriptionName == null || subscriptionName.isEmpty) {
               throw new InvalidRequestException("Client metrics subscription name must not be empty")
             } else {
-              createDescribeResponse(ConfigResource.Type.CLIENT_METRICS, ConfigSource.CLIENT_METRICS_CONFIG, subscriptionName)
+              val entityProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName))
+              val configEntries = new  ListBuffer[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
+              entityProps.forEach((name, value) => {
+                configEntries += new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name.toString)
+                  .setValue(value.toString).setConfigSource(ConfigSource.CLIENT_METRICS_CONFIG.id())
+                  .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava)
+              })
+
+              new DescribeConfigsResponseData.DescribeConfigsResult()
+                .setErrorCode(Errors.NONE.code)
+                .setConfigs(configEntries.asJava)
             }
 
           case ConfigResource.Type.GROUP =>
@@ -163,7 +158,12 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             if (group == null || group.isEmpty) {
               throw new InvalidRequestException("Group name must not be empty")
             } else {
-              createDescribeResponse(ConfigResource.Type.GROUP, ConfigSource.GROUP_CONFIG, group)
+              val groupProps = configRepository.groupConfig(group)
+              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap, groupProps)
+              createResponseConfig(allConfigs(groupConfig),
+                (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
+                  .setValue(value.toString).setConfigSource(ConfigSource.GROUP_CONFIG.id)
+                  .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
             }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
