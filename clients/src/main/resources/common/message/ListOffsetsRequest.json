@@ -39,7 +39,7 @@
   "validVersions": "0-9",
   "deprecatedVersions": "0",
   "flexibleVersions": "6+",
-  "latestVersionUnstable": true,
+  "latestVersionUnstable": false,
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID of the requester, or -1 if this request is being made by a normal consumer." },
