@@ -302,7 +302,7 @@ public final class Lz4BlockInputStream extends InputStream {
         try {
             DECOMPRESSOR.decompress(nonZeroOffsetBuffer, 0, compressedLength, dest, 0, source.length);
         } catch (Exception e) {
-            throw new RuntimeException("Kafka has detected detected a buggy lz4-java library (< 1.4.x) on the classpath."
+            throw new RuntimeException("Kafka has detected a buggy lz4-java library (< 1.4.x) on the classpath."
                                        + " If you are using Kafka client libraries, make sure your application does not"
                                        + " accidentally override the version provided by Kafka or include multiple versions"
                                        + " of the library on the classpath. The lz4-java version on the classpath should"
