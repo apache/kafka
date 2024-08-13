@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.server;
 
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.function.Consumer;
-
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.function.Consumer;
 
 /**
  * Class which centralises the logic for creating/accessing sensors.
