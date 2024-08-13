@@ -30,7 +30,6 @@ import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, ZstdCompression}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
@@ -631,7 +630,7 @@ class KafkaConfigTest {
   }
 
   private def listenerListToEndPoints(listenerList: String,
-                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = EndPoint.DefaultSecurityProtocolMap) =
+                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO.asScala) =
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
@@ -769,7 +768,7 @@ class KafkaConfigTest {
   def testInvalidGzipCompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(ServerConfigs.COMPRESSION_TYPE_CONFIG, "gzip")
-    props.setProperty(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG, (GzipCompression.MAX_LEVEL + 1).toString)
+    props.setProperty(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG, (CompressionType.GZIP.maxLevel() + 1).toString)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -777,7 +776,7 @@ class KafkaConfigTest {
   def testInvalidLz4CompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(ServerConfigs.COMPRESSION_TYPE_CONFIG, "lz4")
-    props.setProperty(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG, (Lz4Compression.MAX_LEVEL + 1).toString)
+    props.setProperty(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG, (CompressionType.LZ4.maxLevel() + 1).toString)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -785,7 +784,7 @@ class KafkaConfigTest {
   def testInvalidZstdCompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(ServerConfigs.COMPRESSION_TYPE_CONFIG, "zstd")
-    props.setProperty(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG, (ZstdCompression.MAX_LEVEL + 1).toString)
+    props.setProperty(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG, (CompressionType.ZSTD.maxLevel() + 1).toString)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -876,12 +875,9 @@ class KafkaConfigTest {
         case ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
 
         case ServerConfigs.BROKER_ID_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case ServerConfigs.NUM_NETWORK_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.NUM_IO_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.BACKGROUND_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ServerConfigs.QUEUED_MAX_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case ServerConfigs.QUEUED_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -910,6 +906,9 @@ class KafkaConfigTest {
           assertPropertyInvalid(baseProperties, name, "127.0.0.1:not_a_number")
         case SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
+        case SocketServerConfigs.QUEUED_MAX_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
         case ServerLogConfigs.NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerLogConfigs.LOG_DIRS_CONFIG => // ignore string
@@ -999,7 +998,7 @@ class KafkaConfigTest {
 
         case ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", ZstdCompression.MAX_LEVEL + 1)
+        case ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", CompressionType.ZSTD.maxLevel() + 1)
 
         //SSL Configs
         case BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG =>
@@ -1942,7 +1941,7 @@ class KafkaConfigTest {
     // Setting KRaft's properties.
     props.putAll(kraftProps())
 
-    // Only classic and consumer are supported.
+    // Only classic, consumer and share are supported.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
@@ -1952,9 +1951,21 @@ class KafkaConfigTest {
 
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    val config = KafkaConfig.fromProps(props)
+    var config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
+    assertFalse(config.shareGroupConfig.isShareGroupEnabled)
+
+    // This is OK.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
+    config = KafkaConfig.fromProps(props)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
+    assertTrue(config.isNewGroupCoordinatorEnabled)
+    assertTrue(config.shareGroupConfig.isShareGroupEnabled)
+
+    // If you set share, you must also set consumer.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test

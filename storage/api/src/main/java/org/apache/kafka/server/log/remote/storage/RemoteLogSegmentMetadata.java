@@ -79,11 +79,6 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
     private final RemoteLogSegmentState state;
 
     /**
-     * The epoch denoting how many times the tiered state has changed
-     */
-    private final int tieredEpoch;
-
-    /**
      * Creates an instance with the given metadata of remote log segment.
      * <p>
      * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
@@ -99,7 +94,6 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
      * @param customMetadata      Custom metadata.
      * @param state               State of the respective segment of remoteLogSegmentId.
      * @param segmentLeaderEpochs leader epochs occurred within this segment.
-     * @param tieredEpoch         The epoch denoting how many times the tiered state has changed
      */
     public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
                                     long startOffset,
@@ -110,11 +104,10 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                                     int segmentSizeInBytes,
                                     Optional<CustomMetadata> customMetadata,
                                     RemoteLogSegmentState state,
-                                    Map<Integer, Long> segmentLeaderEpochs, int tieredEpoch) {
+                                    Map<Integer, Long> segmentLeaderEpochs) {
         super(brokerId, eventTimestampMs);
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");
-        this.tieredEpoch = tieredEpoch;
 
         if (startOffset < 0) {
             throw new IllegalArgumentException("Unexpected start offset = " + startOffset + ". StartOffset for a remote segment cannot be negative");
@@ -151,7 +144,6 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
      * @param eventTimestampMs    Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
      * @param segmentSizeInBytes  Size of this segment in bytes.
      * @param segmentLeaderEpochs leader epochs occurred within this segment
-     * @param tieredEpoch
      */
     public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
                                     long startOffset,
@@ -160,8 +152,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                                     int brokerId,
                                     long eventTimestampMs,
                                     int segmentSizeInBytes,
-                                    Map<Integer, Long> segmentLeaderEpochs,
-                                    int tieredEpoch) {
+                                    Map<Integer, Long> segmentLeaderEpochs) {
         this(remoteLogSegmentId,
                 startOffset,
                 endOffset,
@@ -170,8 +161,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
                 eventTimestampMs, segmentSizeInBytes,
                 Optional.empty(),
                 RemoteLogSegmentState.COPY_SEGMENT_STARTED,
-                segmentLeaderEpochs,
-                tieredEpoch);
+                segmentLeaderEpochs);
     }
 
 
@@ -237,10 +227,6 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
         return state;
     }
 
-    public int tieredEpoch() {
-        return tieredEpoch;
-    }
-
     /**
      * Creates a new RemoteLogSegmentMetadata applying the given {@code rlsmUpdate} on this instance. This method will
      * not update this instance.
@@ -255,7 +241,7 @@ public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
 
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, startOffset,
                 endOffset, maxTimestampMs, rlsmUpdate.brokerId(), rlsmUpdate.eventTimestampMs(),
-                segmentSizeInBytes, rlsmUpdate.customMetadata(), rlsmUpdate.state(), segmentLeaderEpochs, tieredEpoch);
+                segmentSizeInBytes, rlsmUpdate.customMetadata(), rlsmUpdate.state(), segmentLeaderEpochs);
     }
 
     @Override

@@ -96,6 +96,21 @@ public final class VoterSet {
     }
 
     /**
+     * Return true if the provided voter node is a voter and would cause a change in the voter set.
+     *
+     * @param updatedVoterNode the updated voter node
+     * @return true if the updated voter node is different than the node in the voter set; otherwise false.
+     */
+    public boolean voterNodeNeedsUpdate(VoterNode updatedVoterNode) {
+        return Optional.ofNullable(voters.get(updatedVoterNode.voterKey().id()))
+            .map(
+                node -> node.isVoter(updatedVoterNode.voterKey()) &&
+                        !node.equals(updatedVoterNode)
+            )
+            .orElse(false);
+    }
+
+    /**
      * Returns if the node is a voter in the set of voters.
      *
      * If the voter set includes the directory id, the {@code replicaKey} directory id must match the
@@ -188,16 +203,38 @@ public final class VoterSet {
      *
      * This object is immutable. A new voter set is returned if the voter was removed.
      *
-     * A voter can be removed from the voter set if its id and directory id match.
+     * A voter can be removed from the voter set if its id and directory id match and there
+     * are more than one voter in the set of voters.
      *
      * @param voterKey the voter key
      * @return a new voter set if the voter was removed, otherwise {@code Optional.empty()}
      */
     public Optional<VoterSet> removeVoter(ReplicaKey voterKey) {
         VoterNode oldVoter = voters.get(voterKey.id());
-        if (oldVoter != null && Objects.equals(oldVoter.voterKey(), voterKey)) {
+        if (oldVoter != null &&
+            Objects.equals(oldVoter.voterKey(), voterKey) &&
+            voters.size() > 1
+        ) {
             HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
             newVoters.remove(voterKey.id());
+
+            return Optional.of(new VoterSet(newVoters));
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Updates a voter in the voter set.
+     *
+     * @param voter the updated voter
+     * @return a new voter set if the voter was updated, otherwise {@code Optional.empty()}
+     */
+    public Optional<VoterSet> updateVoter(VoterNode voter) {
+        VoterNode oldVoter = voters.get(voter.voterKey().id());
+        if (oldVoter != null && oldVoter.isVoter(voter.voterKey())) {
+            HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
+            newVoters.put(voter.voterKey().id(), voter);
 
             return Optional.of(new VoterSet(newVoters));
         }
@@ -321,7 +358,10 @@ public final class VoterSet {
             }
         }
 
-        Endpoints listeners() {
+        /**
+         * Returns the listeners of the voter node
+         */
+        public Endpoints listeners() {
             return listeners;
         }
 
@@ -359,6 +399,14 @@ public final class VoterSet {
                 listeners,
                 supportedKRaftVersion
             );
+        }
+
+        public static VoterNode of(
+            ReplicaKey voterKey,
+            Endpoints listeners,
+            SupportedVersionRange supportedKRaftVersion
+        ) {
+            return new VoterNode(voterKey, listeners, supportedKRaftVersion);
         }
     }
 
@@ -410,5 +458,9 @@ public final class VoterSet {
             );
 
         return new VoterSet(voterNodes);
+    }
+
+    public static VoterSet fromMap(Map<Integer, VoterNode> voters) {
+        return new VoterSet(new HashMap<>(voters));
     }
 }

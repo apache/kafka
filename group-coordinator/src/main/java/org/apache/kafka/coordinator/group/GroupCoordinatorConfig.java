@@ -26,7 +26,9 @@ import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -74,7 +76,8 @@ public class GroupCoordinatorConfig {
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " +
             Arrays.stream(Group.GroupType.values()).map(Group.GroupType::toString).collect(Collectors.joining(",")) + ". " +
-            "The " + Group.GroupType.CONSUMER + " rebalance protocol is in early access and therefore must not be used in production.";
+            "The " + Group.GroupType.CONSUMER + " rebalance protocol is in preview and therefore must not be used in production. " +
+            "The " + Group.GroupType.SHARE + " rebalance protocol is in early access and therefore must not be used in production.";
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(Group.GroupType.CLASSIC.toString());
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
@@ -132,7 +135,7 @@ public class GroupCoordinatorConfig {
 
     /** Share group configs */
     public static final String SHARE_GROUP_MAX_SIZE_CONFIG = "group.share.max.size";
-    public static final short SHARE_GROUP_MAX_SIZE_DEFAULT = 200;
+    public static final int SHARE_GROUP_MAX_SIZE_DEFAULT = 200;
     public static final String SHARE_GROUP_MAX_SIZE_DOC = "The maximum number of members that a single share group can accommodate.";
 
     public static final String SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG = "group.share.session.timeout.ms";
@@ -248,7 +251,7 @@ public class GroupCoordinatorConfig {
             .define(SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
             .define(SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC)
             .define(SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC)
-            .define(SHARE_GROUP_MAX_SIZE_CONFIG, SHORT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(10, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC);
+            .define(SHARE_GROUP_MAX_SIZE_CONFIG, INT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(10, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC);
 
     /**
      * The timeout used to wait for a new member in milliseconds.
@@ -281,7 +284,7 @@ public class GroupCoordinatorConfig {
     private final int consumerGroupMinHeartbeatIntervalMs;
     private final int consumerGroupMaxHeartbeatIntervalMs;
     // Share group configurations
-    private final short shareGroupMaxSize;
+    private final int shareGroupMaxSize;
     private final int shareGroupSessionTimeoutMs;
     private final int shareGroupMinSessionTimeoutMs;
     private final int shareGroupMaxSessionTimeoutMs;
@@ -326,7 +329,7 @@ public class GroupCoordinatorConfig {
         this.shareGroupHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareGroupMinHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
-        this.shareGroupMaxSize = config.getShort(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
+        this.shareGroupMaxSize = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
 
         require(offsetCommitRequiredAcks >= -1 && offsetCommitRequiredAcks <= offsetsTopicReplicationFactor,
                 String.format("%s must be greater or equal to -1 and less or equal to %s", OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG));
@@ -365,6 +368,16 @@ public class GroupCoordinatorConfig {
         require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
             String.format("%s must be less than or equals to %s",
                 SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to consumer group.
+     */
+    public Map<String, Integer> extractGroupConfigMap() {
+        Map<String, Integer> groupProps = new HashMap<>();
+        groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs());
+        groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
+        return groupProps;
     }
 
     /**

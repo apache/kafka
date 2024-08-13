@@ -202,15 +202,14 @@ public class LeaderEpochFileCache {
      * which has messages assigned to it.
      */
     public OptionalInt latestEpoch() {
-        Optional<EpochEntry> entry = latestEntry();
-        return entry.isPresent() ? OptionalInt.of(entry.get().epoch) : OptionalInt.empty();
+        return latestEntry().map(epochEntry -> OptionalInt.of(epochEntry.epoch)).orElseGet(OptionalInt::empty);
     }
 
     public OptionalInt previousEpoch() {
         lock.readLock().lock();
         try {
-            Optional<Map.Entry<Integer, EpochEntry>> lowerEntry = latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch)));
-            return lowerEntry.isPresent() ? OptionalInt.of(lowerEntry.get().getKey()) : OptionalInt.empty();
+            return latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch)))
+                    .map(integerEpochEntryEntry -> OptionalInt.of(integerEpochEntryEntry.getKey())).orElseGet(OptionalInt::empty);
         } finally {
             lock.readLock().unlock();
         }
@@ -222,7 +221,7 @@ public class LeaderEpochFileCache {
     public Optional<EpochEntry> earliestEntry() {
         lock.readLock().lock();
         try {
-            return Optional.ofNullable(epochs.firstEntry()).map(x -> x.getValue());
+            return Optional.ofNullable(epochs.firstEntry()).map(Map.Entry::getValue);
         } finally {
             lock.readLock().unlock();
         }
@@ -287,7 +286,7 @@ public class LeaderEpochFileCache {
     public Map.Entry<Integer, Long> endOffsetFor(int requestedEpoch, long logEndOffset) {
         lock.readLock().lock();
         try {
-            Map.Entry<Integer, Long> epochAndOffset = null;
+            Map.Entry<Integer, Long> epochAndOffset;
             if (requestedEpoch == UNDEFINED_EPOCH) {
                 // This may happen if a bootstrapping follower sends a request with undefined epoch or
                 // a follower is on the older message format where leader epochs are not recorded
@@ -348,8 +347,7 @@ public class LeaderEpochFileCache {
                 // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
                 //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
                 //     another truncateFromEnd call on log loading procedure, so it won't be a problem
-                List<EpochEntry> entries = new ArrayList<>(epochs.values());
-                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, () -> checkpoint.writeForTruncation(entries));
+                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeIfDirExists);
 
                 log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
             }
@@ -381,8 +379,7 @@ public class LeaderEpochFileCache {
                 // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
                 //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
                 //     another truncateFromStart call on log loading procedure, so it won't be a problem
-                List<EpochEntry> entries = new ArrayList<>(epochs.values());
-                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, () -> checkpoint.writeForTruncation(entries));
+                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeIfDirExists);
 
                 EpochEntry updatedFirstEntry = removedEntries.get(removedEntries.size() - 1);
                 log.debug("Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
@@ -522,6 +519,18 @@ public class LeaderEpochFileCache {
         lock.readLock().lock();
         try {
             checkpoint.write(epochs.values());
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    private void writeIfDirExists() {
+        lock.readLock().lock();
+        try {
+            // If we take a snapshot of the epoch entries here and flush them to disk outside the read lock,
+            // by the time of flushing, the leader epoch file may already be updated with newer epoch entries.
+            // Those newer entries will then be overridden with the old snapshot.
+            checkpoint.writeIfDirExists(epochs.values());
         } finally {
             lock.readLock().unlock();
         }

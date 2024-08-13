@@ -28,7 +28,6 @@ import kafka.log.LogManager
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
-import kafka.utils.FileLock
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
@@ -46,8 +45,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.raft.{Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.common.Features
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.util.KafkaScheduler
+import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
 
@@ -154,7 +154,7 @@ class KafkaRaftManager[T](
   threadNamePrefixOpt: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   bootstrapServers: JCollection[InetSocketAddress],
-  controllerListeners: Endpoints,
+  localListeners: Endpoints,
   fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
 
@@ -237,7 +237,8 @@ class KafkaRaftManager[T](
       logContext,
       clusterId,
       bootstrapServers,
-      controllerListeners,
+      localListeners,
+      Features.KRAFT_VERSION.supportedVersionRange(),
       raftConfig
     )
   }

@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -179,6 +180,7 @@ public class GroupMetadataManager {
         private Time time = null;
         private CoordinatorTimer<Void, CoordinatorRecord> timer = null;
         private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = null;
+        private GroupConfigManager groupConfigManager = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -219,6 +221,11 @@ public class GroupMetadataManager {
 
         Builder withConsumerGroupAssignors(List<ConsumerGroupPartitionAssignor> consumerGroupAssignors) {
             this.consumerGroupAssignors = consumerGroupAssignors;
+            return this;
+        }
+
+        Builder withGroupConfigManager(GroupConfigManager groupConfigManager) {
+            this.groupConfigManager = groupConfigManager;
             return this;
         }
 
@@ -321,6 +328,8 @@ public class GroupMetadataManager {
                 shareGroupAssignor = new SimpleAssignor();
             if (metrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetricsShard must be set.");
+            if (groupConfigManager == null)
+                throw new IllegalArgumentException("GroupConfigManager must be set.");
 
             return new GroupMetadataManager(
                 snapshotRegistry,
@@ -330,6 +339,7 @@ public class GroupMetadataManager {
                 metrics,
                 consumerGroupAssignors,
                 metadataImage,
+                groupConfigManager,
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
@@ -400,17 +410,22 @@ public class GroupMetadataManager {
     private final TimelineHashMap<String, TimelineHashSet<String>> groupsByTopics;
 
     /**
+     * The group manager.
+     */
+    private final GroupConfigManager groupConfigManager;
+
+    /**
      * The maximum number of members allowed in a single consumer group.
      */
     private final int consumerGroupMaxSize;
 
     /**
-     * The heartbeat interval for consumer groups.
+     * The default heartbeat interval for consumer groups.
      */
     private final int consumerGroupHeartbeatIntervalMs;
 
     /**
-     * The session timeout for consumer groups.
+     * The default session timeout for consumer groups.
      */
     private final int consumerGroupSessionTimeoutMs;
 
@@ -496,6 +511,7 @@ public class GroupMetadataManager {
         GroupCoordinatorMetricsShard metrics,
         List<ConsumerGroupPartitionAssignor> consumerGroupAssignors,
         MetadataImage metadataImage,
+        GroupConfigManager groupConfigManager,
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
@@ -523,6 +539,7 @@ public class GroupMetadataManager {
         this.defaultConsumerGroupAssignor = consumerGroupAssignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.groupConfigManager = groupConfigManager;
         this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
@@ -636,6 +653,37 @@ public class GroupMetadataManager {
                 ));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                );
+            }
+        });
+
+        return describedGroups;
+    }
+
+    /**
+     * Handles a ShareGroupDescribe request.
+     *
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the ShareGroupDescribeResponseData.DescribedGroup.
+     */
+    public List<ShareGroupDescribeResponseData.DescribedGroup> shareGroupDescribe(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        final List<ShareGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                describedGroups.add(shareGroup(groupId, committedOffset).asDescribedGroup(
+                    committedOffset,
+                    shareGroupAssignor.name(),
+                    metadataImage.topics()
+                ));
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new ShareGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
                     .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
                 );
@@ -1804,7 +1852,7 @@ public class GroupMetadataManager {
         ConsumerGroupHeartbeatResponseData response = new ConsumerGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
+            .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs(groupId));
 
         // The assignment is only provided in the following cases:
         // 1. The member sent a full request. It does so when joining or rejoining the group with zero
@@ -2232,9 +2280,9 @@ public class GroupMetadataManager {
                     group.groupId(), memberId, instanceId, useClassicProtocol ? "classic" : "consumer");
                 return newMember;
             } else {
-                if (!useClassicProtocol) {
-                    // Static member rejoins with a different member id so it should replace
-                    // the previous instance iff the previous member had sent a leave group.
+                if (!useClassicProtocol && !existingStaticMemberOrNull.useClassicProtocol()) {
+                    // If both the rejoining static member and the existing static member use the consumer
+                    // protocol, replace the previous instance iff the previous member had sent a leave group.
                     throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
                 }
 
@@ -2836,7 +2884,7 @@ public class GroupMetadataManager {
         String groupId,
         String memberId
     ) {
-        scheduleConsumerGroupSessionTimeout(groupId, memberId, consumerGroupSessionTimeoutMs);
+        scheduleConsumerGroupSessionTimeout(groupId, memberId, consumerGroupSessionTimeoutMs(groupId));
     }
 
     /**
@@ -5891,6 +5939,25 @@ public class GroupMetadataManager {
      */
     public Set<String> groupIds() {
         return Collections.unmodifiableSet(this.groups.keySet());
+    }
+
+
+    /**
+     * Get the session timeout of the provided group.
+     */
+    private int consumerGroupSessionTimeoutMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::sessionTimeoutMs)
+            .orElse(consumerGroupSessionTimeoutMs);
+    }
+
+    /**
+     * Get the heartbeat interval of the provided group.
+     */
+    private int consumerGroupHeartbeatIntervalMs(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::heartbeatIntervalMs)
+            .orElse(consumerGroupHeartbeatIntervalMs);
     }
 
     /**

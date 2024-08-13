@@ -19,7 +19,7 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -134,9 +134,9 @@ public class TaskAssignorIntegrationTest {
             final Field delegate = KafkaConsumer.class.getDeclaredField("delegate");
             delegate.setAccessible(true);
             final Consumer<?, ?> consumer = (Consumer<?, ?>)  delegate.get(parentConsumer);
-            assertThat(consumer, instanceOf(LegacyKafkaConsumer.class));
+            assertThat(consumer, instanceOf(ClassicKafkaConsumer.class));
 
-            final Field assignors = LegacyKafkaConsumer.class.getDeclaredField("assignors");
+            final Field assignors = ClassicKafkaConsumer.class.getDeclaredField("assignors");
             assignors.setAccessible(true);
             final List<ConsumerPartitionAssignor> consumerPartitionAssignors = (List<ConsumerPartitionAssignor>) assignors.get(consumer);
             final StreamsPartitionAssignor streamsPartitionAssignor = (StreamsPartitionAssignor) consumerPartitionAssignors.get(0);
