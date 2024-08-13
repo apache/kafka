@@ -714,7 +714,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public long scheduleAppend(
+    public long prepareAppend(
         int epoch,
         List<ApiMessageAndVersion> batch
     ) {
@@ -723,14 +723,14 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         if (throwOnNextAppend.getAndSet(false)) {
-            throw new BufferAllocationException("Test asked to fail the next scheduleAppend");
+            throw new BufferAllocationException("Test asked to fail the next prepareAppend");
         }
 
         return shared.tryAppend(nodeId, leader.epoch(), batch);
     }
 
     @Override
-    public void scheduleFlush() { }
+    public void schedulePreparedAppend() { }
 
     @Override
     public void resign(int epoch) {

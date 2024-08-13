@@ -37,9 +37,9 @@ public interface RaftClient<T> extends AutoCloseable {
          * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
-         * {@link #scheduleAppend(int, List)} and this callback. The Raft implementation is free to
+         * {@link #prepareAppend(int, List)} and this callback. The Raft implementation is free to
          * batch together the records from multiple append calls provided that batch boundaries are
-         * respected. Records specified through {@link #scheduleAppend(int, List)} are guaranteed
+         * respected. Records specified through {@link #prepareAppend(int, List)} are guaranteed
          * to be a subset of a batch provided by the {@link BatchReader}.
          *
          * @param reader reader instance which must be iterated and closed
@@ -139,7 +139,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * to resign its leadership. The state machine is expected to discard all
      * uncommitted entries after observing an epoch change.
      *
-     * TODO: mentioned that the caller must call scheduleFlush for KRaft to drain this records
+     * TODO: mentioned that the caller must call schedulePrepareAppend for KRaft to drain this records
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
@@ -150,10 +150,10 @@ public interface RaftClient<T> extends AutoCloseable {
      * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
      * @throws BufferAllocationException we failed to allocate memory for the records
      */
-    long scheduleAppend(int epoch, List<T> records);
+    long prepareAppend(int epoch, List<T> records);
 
     // TODO: document this
-    void scheduleFlush();
+    void schedulePreparedAppend();
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively

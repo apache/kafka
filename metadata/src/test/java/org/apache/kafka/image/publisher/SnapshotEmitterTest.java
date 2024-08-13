@@ -74,12 +74,12 @@ public class SnapshotEmitterTest {
         }
 
         @Override
-        public long scheduleAppend(int epoch, List<ApiMessageAndVersion> records) {
+        public long prepareAppend(int epoch, List<ApiMessageAndVersion> records) {
             return 0;
         }
 
         @Override
-        public void scheduleFlush() {
+        public void schedulePreparedAppend() {
             // nothing to do
         }
 

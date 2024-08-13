@@ -340,7 +340,7 @@ public class KafkaRaftClientTest {
         assertEquals(0L, context.log.endOffset().offset());
         context.assertElectedLeader(epoch, localId);
         context.client.poll();
-        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
+        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch, Arrays.asList("a", "b")));
 
         context.pollUntilRequest();
         RaftRequest.Outbound request = context.assertSentEndQuorumEpochRequest(epoch, remoteId);
@@ -370,7 +370,7 @@ public class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
+        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch, Arrays.asList("a", "b")));
     }
 
     @ParameterizedTest
@@ -385,7 +385,7 @@ public class KafkaRaftClientTest {
         // Return null when allocation error
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer) // Buffer for the leader message control record
-            .thenReturn(null); // Buffer for the scheduleAppend call
+            .thenReturn(null); // Buffer for the prepareAppend call
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withMemoryPool(memoryPool)
@@ -396,7 +396,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        assertThrows(BufferAllocationException.class, () -> context.client.scheduleAppend(epoch, singletonList("a")));
+        assertThrows(BufferAllocationException.class, () -> context.client.prepareAppend(epoch, singletonList("a")));
         Mockito.verify(memoryPool).release(buffer);
     }
 
@@ -416,9 +416,9 @@ public class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
 
         // Throws IllegalArgumentException on higher epoch
-        assertThrows(IllegalArgumentException.class, () -> context.client.scheduleAppend(epoch + 1, singletonList("a")));
+        assertThrows(IllegalArgumentException.class, () -> context.client.prepareAppend(epoch + 1, singletonList("a")));
         // Throws NotLeaderException on smaller epoch
-        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch - 1, singletonList("a")));
+        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch - 1, singletonList("a")));
     }
 
     @ParameterizedTest
@@ -443,7 +443,7 @@ public class KafkaRaftClientTest {
 
         assertThrows(
             RecordBatchTooLargeException.class,
-            () -> context.client.scheduleAppend(epoch, batchToLarge)
+            () -> context.client.prepareAppend(epoch, batchToLarge)
         );
     }
 
@@ -1102,8 +1102,8 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
-        context.client.scheduleFlush();
+        assertEquals(1L, context.client.prepareAppend(epoch, singletonList("a")));
+        context.client.schedulePreparedAppend();
         context.deliverRequest(context.beginEpochRequest(epoch + 1, otherNodeId));
         context.pollUntilResponse();
 
@@ -1135,8 +1135,8 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
-        context.client.scheduleFlush();
+        assertEquals(1L, context.client.prepareAppend(epoch, singletonList("a")));
+        context.client.schedulePreparedAppend();
         context.deliverRequest(
             context.voteRequest(epoch + 1, otherNodeKey, epoch, context.log.endOffset().offset())
         );
@@ -1169,8 +1169,8 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
 
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
-        context.client.scheduleFlush();
+        assertEquals(1L, context.client.prepareAppend(epoch, singletonList("a")));
+        context.client.schedulePreparedAppend();
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeKey, epoch, 0L));
         context.pollUntilResponse();
 
@@ -1199,8 +1199,8 @@ public class KafkaRaftClientTest {
         assertEquals(1L, context.log.endOffset().offset());
 
         int epoch = context.currentEpoch();
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
-        context.client.scheduleFlush();
+        assertEquals(1L, context.client.prepareAppend(epoch, singletonList("a")));
+        context.client.schedulePreparedAppend();
         assertTrue(context.messageQueue.wakeupRequested());
 
         context.client.poll();
@@ -1235,8 +1235,8 @@ public class KafkaRaftClientTest {
         assertEquals(1L, context.log.endOffset().offset());
 
         int epoch = context.currentEpoch();
-        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
-        context.client.scheduleFlush();
+        assertEquals(1L, context.client.prepareAppend(epoch, singletonList("a")));
+        context.client.schedulePreparedAppend();
         assertTrue(context.messageQueue.wakeupRequested());
 
         context.client.poll();
@@ -1244,8 +1244,8 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(lingerMs), context.messageQueue.lastPollTimeoutMs());
 
         context.time.sleep(lingerMs);
-        assertEquals(2L, context.client.scheduleAppend(epoch, singletonList("b")));
-        context.client.scheduleFlush();
+        assertEquals(2L, context.client.prepareAppend(epoch, singletonList("b")));
+        context.client.schedulePreparedAppend();
         assertTrue(context.messageQueue.wakeupRequested());
 
         context.client.poll();
@@ -1521,8 +1521,8 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
 
         List<String> records = Arrays.asList("a", "b", "c");
-        long offset = context.client.scheduleAppend(epoch, records);
-        context.client.scheduleFlush();
+        long offset = context.client.prepareAppend(epoch, records);
+        context.client.schedulePreparedAppend();
         context.client.poll();
         assertEquals(OptionalLong.of(0L), context.listener.lastCommitOffset());
 
@@ -2450,8 +2450,8 @@ public class KafkaRaftClientTest {
 
         // Append some records that can fulfill the Fetch request
         String[] appendRecords = new String[]{"a", "b", "c"};
-        context.client.scheduleAppend(epoch, Arrays.asList(appendRecords));
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, Arrays.asList(appendRecords));
+        context.client.schedulePreparedAppend();
         context.client.poll();
 
         MemoryRecords fetchedRecords = context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
@@ -2784,8 +2784,8 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(1L, epoch);
 
         // Append some records, so that the close follower will be able to advance further.
-        context.client.scheduleAppend(epoch, Arrays.asList("foo", "bar"));
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, Arrays.asList("foo", "bar"));
+        context.client.schedulePreparedAppend();
         context.client.poll();
 
         context.deliverRequest(context.fetchRequest(epoch, closeFollower, 3L, epoch, 0));
@@ -2946,8 +2946,8 @@ public class KafkaRaftClientTest {
 
         List<String> records = Arrays.asList("foo", "bar");
         long nextFetchOffset = fetchOffset + records.size();
-        context.client.scheduleAppend(epoch, records);
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, records);
+        context.client.schedulePreparedAppend();
         context.client.poll();
 
         context.time.sleep(100);
@@ -3087,8 +3087,8 @@ public class KafkaRaftClientTest {
         // Observer falls behind
         context.time.sleep(100);
         List<String> records = Arrays.asList("foo", "bar");
-        context.client.scheduleAppend(epoch, records);
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, records);
+        context.client.schedulePreparedAppend();
         context.client.poll();
 
         context.deliverRequest(context.describeQuorumRequest());
@@ -3163,8 +3163,8 @@ public class KafkaRaftClientTest {
         // Update HW to non-initial value
         context.time.sleep(100);
         List<String> batch = Arrays.asList("foo", "bar");
-        context.client.scheduleAppend(epoch, batch);
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, batch);
+        context.client.schedulePreparedAppend();
         context.client.poll();
         long fetchOffset = withBootstrapSnapshot ? 5L : 3L;
         long followerFetchTime = context.time.milliseconds();
@@ -3522,8 +3522,8 @@ public class KafkaRaftClientTest {
         context.client.poll();
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
 
-        context.client.scheduleAppend(context.currentEpoch(), Arrays.asList(appendRecords));
-        context.client.scheduleFlush();
+        context.client.prepareAppend(context.currentEpoch(), Arrays.asList(appendRecords));
+        context.client.schedulePreparedAppend();
 
         // Then poll the appended data with leader change record
         context.client.poll();
@@ -3647,8 +3647,8 @@ public class KafkaRaftClientTest {
         assertEquals((double) 1L, getMetric(context.metrics, "log-end-offset").metricValue());
         assertEquals((double) epoch, getMetric(context.metrics, "log-end-epoch").metricValue());
 
-        context.client.scheduleAppend(epoch, Arrays.asList("a", "b", "c"));
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, Arrays.asList("a", "b", "c"));
+        context.client.schedulePreparedAppend();
         context.client.poll();
 
         assertEquals((double) 4L, getMetric(context.metrics, "high-watermark").metricValue());
@@ -3964,8 +3964,8 @@ public class KafkaRaftClientTest {
         context.client.unregister(secondListener);
 
         // Write to the log and show that the default listener gets updated...
-        assertEquals(10L, context.client.scheduleAppend(epoch, singletonList("a")));
-        context.client.scheduleFlush();
+        assertEquals(10L, context.client.prepareAppend(epoch, singletonList("a")));
+        context.client.schedulePreparedAppend();
         context.client.poll();
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         context.pollUntil(() -> OptionalLong.of(10).equals(context.listener.lastCommitOffset()));

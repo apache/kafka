@@ -817,7 +817,7 @@ public final class QuorumController implements Controller {
                         // succeed; if it does not, that's a fatal error. It is important to do this before
                         // scheduling the record for Raft replication.
                         int recordIndex = 0;
-                        long lastOffset = raftClient.scheduleAppend(controllerEpoch, records);
+                        long lastOffset = raftClient.prepareAppend(controllerEpoch, records);
                         long baseOffset = lastOffset - records.size() + 1;
                         for (ApiMessageAndVersion message : records) {
                             long recordOffset = baseOffset + recordIndex;
@@ -833,8 +833,8 @@ public final class QuorumController implements Controller {
                             }
                             recordIndex++;
                         }
-                        raftClient.scheduleFlush();
-                        offsetControl.handleScheduleAtomicAppend(lastOffset);
+                        raftClient.schedulePreparedAppend();
+                        offsetControl.handleScheduleAppend(lastOffset);
                         return lastOffset;
                     }
                 );

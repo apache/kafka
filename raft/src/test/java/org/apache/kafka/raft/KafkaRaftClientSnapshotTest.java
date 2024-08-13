@@ -329,8 +329,8 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
 
         List<String> appendRecords = Arrays.asList("a", "b", "c");
-        context.client.scheduleAppend(epoch, appendRecords);
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, appendRecords);
+        context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
@@ -379,8 +379,8 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
 
         List<String> appendRecords = Arrays.asList("a", "b", "c");
-        context.client.scheduleAppend(epoch, appendRecords);
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, appendRecords);
+        context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
@@ -441,8 +441,8 @@ public final class KafkaRaftClientSnapshotTest {
         }
         context.client.poll();
 
-        context.client.scheduleAppend(epoch, Arrays.asList("g", "h", "i"));
-        context.client.scheduleFlush();
+        context.client.prepareAppend(epoch, Arrays.asList("g", "h", "i"));
+        context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
@@ -1925,8 +1925,8 @@ public final class KafkaRaftClientSnapshotTest {
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         // append some more records to make the LEO > high watermark
         List<String> newRecords = Arrays.asList("d", "e", "f");
-        context.client.scheduleAppend(currentEpoch, newRecords);
-        context.client.scheduleFlush();
+        context.client.prepareAppend(currentEpoch, newRecords);
+        context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
         assertEquals(context.log.endOffset().offset(), context.client.highWatermark().getAsLong() + newRecords.size());

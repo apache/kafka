@@ -3282,7 +3282,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public long scheduleAppend(int epoch, List<T> records) {
+    public long prepareAppend(int epoch, List<T> records) {
         return append(epoch, records);
     }
 
@@ -3312,7 +3312,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public void scheduleFlush() {
+    public void schedulePreparedAppend() {
         if (!isInitialized()) {
             throw new NotLeaderException("Flush failed because the replica is not the current leader");
         }
@@ -3618,7 +3618,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         /**
-         * This API is used for committed records originating from {@link #scheduleAppend(int, List)}
+         * This API is used for committed records originating from {@link #prepareAppend(int, List)}
          * on this instance. In this case, we are able to save the original record objects, which
          * saves the need to read them back from disk. This is a nice optimization for the leader
          * which is typically doing more work than all of the * followers.
