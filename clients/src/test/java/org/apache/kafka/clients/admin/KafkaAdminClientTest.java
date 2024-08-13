@@ -291,6 +291,7 @@ import static org.apache.kafka.common.message.AlterPartitionReassignmentsRespons
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -8211,7 +8212,23 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testCallFailWithUnsupportedVersionExceptionDoesNotHaveConcurrentModificationException() throws InterruptedException {
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+        Cluster cluster = mockCluster(1, 0);
+        try (MockClient mockClient = new MockClient(Time.SYSTEM, new MockClient.MockMetadataUpdater() {
+            @Override
+            public List<Node> fetchNodes() {
+                return cluster.nodes();
+            }
+
+            @Override
+            public boolean isUpdateNeeded() {
+                return false;
+            }
+
+            @Override
+            public void update(Time time, MockClient.MetadataUpdate update) {
+                throw new UnsupportedOperationException();
+            }
+        })) {
             AdminMetadataManager metadataManager = mock(AdminMetadataManager.class);
 
             // first false result make sure LeastLoadedBrokerOrActiveKController#provide can go to requestUpdate
@@ -8226,16 +8243,24 @@ public class KafkaAdminClientTest {
             // avoid sending fetchMetadata request
             doReturn(1L).when(metadataManager).metadataFetchDelayMs(anyLong());
 
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
 
             try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
-                    new AdminClientConfig(Collections.emptyMap()), metadataManager, env.kafkaClient(), env.time())) {
-                admin.describeCluster(new DescribeClusterOptions().timeoutMs(1000));
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, Time.SYSTEM)) {
+                DescribeClusterResult result = admin.describeCluster(new DescribeClusterOptions());
 
                 // make sure maybeDrainPendingCalls doesn't remove duplicate pending calls
                 // the listNodes call will be added again in call.fail and remove one in maybeDrainPendingCalls
-                TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() != 0,
+                TestUtils.waitForCondition(() -> mockClient.inFlightRequestCount() != 0,
                         "Timed out waiting for listNodes request");
+
+                // after handleUnsupportedVersionException, describe cluster use MetadataRequest
+                ClientRequest request = mockClient.requests().peek();
+                assertEquals(ApiKeys.METADATA, request.apiKey());
+
+                // clear active external request
+                mockClient.respondToRequest(request, prepareMetadataResponse(cluster, Errors.NONE));
+                assertEquals(cluster.clusterResource().clusterId(), assertDoesNotThrow(() -> result.clusterId().get()));
             }
         }
     }
