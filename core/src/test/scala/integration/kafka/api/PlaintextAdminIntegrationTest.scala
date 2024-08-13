@@ -300,6 +300,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
 
     var transactionId = "foo"
+    val stateAbnormalMsg = "The transaction state is abnormal"
 
     def describeTransactions(): TransactionDescription = {
       client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get()
@@ -331,7 +332,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "k1".getBytes, "v1".getBytes()))
       producer.flush()
-      assertEquals(TransactionState.ONGOING, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.ONGOING, stateAbnormalMsg)
 
       TestUtils.waitUntilTrue(() => describeTransactions().topicPartitions().size() == 1, "Describe transactions timeout")
       val transactionResult = describeTransactions()
@@ -341,13 +342,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(Collections.singleton(topicPartition), transactionResult.topicPartitions())
 
       producer.commitTransaction()
-      val state = transactionState()
-      // Either PREPARE_COMMIT or COMPLETE_COMMIT is expected
-      assertTrue(state == TransactionState.PREPARE_COMMIT || state == TransactionState.COMPLETE_COMMIT)
-      // producer commit transaction, but maybe transaction coordinator has not been submitted mark msg
-      // so we start up a consumer and consume the expected number of msg, to ensure transaction committed
-      consumeToExpectedNumber(1)
-      assertEquals(TransactionState.COMPLETE_COMMIT, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
     } finally producer.close()
 
     // abort case
@@ -376,14 +371,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(Collections.singleton(topicPartition), transactionSendMsgResult.topicPartitions())
       assertEquals(topicPartition, transactionSendMsgResult.topicPartitions().asScala.head)
 
-      assertEquals(TransactionState.ONGOING, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.ONGOING, stateAbnormalMsg)
+
       abortProducer.abortTransaction()
-      val state = transactionState()
-      assertTrue(state == TransactionState.PREPARE_ABORT || state == TransactionState.COMPLETE_ABORT)
-      // producer commit transaction, but maybe transaction coordinator has not been submitted mark msg
-      // so we start up a consumer and consume the expected number of msg, to ensure transaction committed
-      consumeToExpectedNumber(1)
-      assertEquals(TransactionState.COMPLETE_ABORT, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_ABORT, stateAbnormalMsg)
     } finally abortProducer.close()
   }
 
@@ -424,7 +415,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       client = createAdminClient
       client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
 
-      val producer = TestUtils.createTransactionalProducer("foo", brokers)
+      val stateAbnormalMsg = "The transaction state is abnormal"
+      def transactionState(transactionId: String): TransactionState = {
+        client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get().state()
+      }
+
+      val transactionId1 = "foo"
+      val producer = TestUtils.createTransactionalProducer(transactionId1, brokers)
       try {
         producer.initTransactions()
         producer.beginTransaction()
@@ -432,8 +429,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer.flush()
         producer.commitTransaction()
       } finally producer.close()
+      TestUtils.waitUntilTrue(() => transactionState(transactionId1) == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
 
-      val producer2 = TestUtils.createTransactionalProducer("foo2", brokers)
+      val transactionId2 = "foo2"
+      val producer2 = TestUtils.createTransactionalProducer(transactionId2, brokers)
       try {
         producer2.initTransactions()
         producer2.beginTransaction()
@@ -441,8 +440,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer2.flush()
         producer2.abortTransaction()
       } finally producer2.close()
+      TestUtils.waitUntilTrue(() => transactionState(transactionId2) == TransactionState.COMPLETE_ABORT, stateAbnormalMsg)
 
-      val producer3 = TestUtils.createTransactionalProducer("foo3", brokers)
+      val transactionId3 = "foo3"
+      val producer3 = TestUtils.createTransactionalProducer(transactionId3, brokers)
       try {
         producer3.initTransactions()
         producer3.beginTransaction()
@@ -450,8 +451,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer3.flush()
         producer3.commitTransaction()
       } finally producer3.close()
-
-      consumeToExpectedNumber(2)
+      TestUtils.waitUntilTrue(() => transactionState(transactionId3) == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
     }
 
     createTransactionList()
