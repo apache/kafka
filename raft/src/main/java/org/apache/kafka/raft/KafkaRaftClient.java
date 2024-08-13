@@ -2828,7 +2828,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             }
         }
-        return timeUntilDrain;
+
+        return state.accumulator().timeUntilDrain(currentTimeMs);
     }
 
     private long maybeSendBeginQuorumEpochRequests(
@@ -3305,7 +3306,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // the linger timeout so that it can schedule its own wakeup in case
         // there are no additional appends.
         if (isFirstAppend || accumulator.needsDrain(time.milliseconds())) {
-            // TODO: checking of needsDrain may not be enough anymore. There records may not be ready because of the drainOffset
             wakeup();
         }
         return offset;

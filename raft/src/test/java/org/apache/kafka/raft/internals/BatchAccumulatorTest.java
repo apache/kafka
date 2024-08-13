@@ -44,6 +44,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -101,102 +102,98 @@ class BatchAccumulatorTest {
 
     @Test
     public void testForceDrain() {
-        asList(APPEND_ATOMIC).forEach(appender -> {
-            int leaderEpoch = 17;
-            long baseOffset = 157;
-            int lingerMs = 50;
-            int maxBatchSize = 512;
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
 
-            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
-                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+            .thenReturn(ByteBuffer.allocate(maxBatchSize));
 
-            BatchAccumulator<String> acc = buildAccumulator(
-                leaderEpoch,
-                baseOffset,
-                lingerMs,
-                maxBatchSize
-            );
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
 
-            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
 
-            // Append records
-            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
-            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
-            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
-            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
-            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+        // Append records
+        assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), false));
+        assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3), false));
+        assertEquals(baseOffset + 5, acc.append(leaderEpoch, records.subList(3, 6), false));
+        assertEquals(baseOffset + 7, acc.append(leaderEpoch, records.subList(6, 8), false));
+        assertEquals(baseOffset + 8, acc.append(leaderEpoch, records.subList(8, 9), false));
 
-            assertFalse(acc.needsDrain(time.milliseconds()));
-            acc.forceDrain();
-            assertTrue(acc.needsDrain(time.milliseconds()));
-            assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+        assertFalse(acc.needsDrain(time.milliseconds()));
+        acc.forceDrain();
+        assertTrue(acc.needsDrain(time.milliseconds()));
+        assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
 
-            // Drain completed batches
-            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+        // Drain completed batches
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
 
-            assertEquals(1, batches.size());
-            assertFalse(acc.needsDrain(time.milliseconds()));
-            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+        assertEquals(1, batches.size());
+        assertFalse(acc.needsDrain(time.milliseconds()));
+        assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
 
-            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
-            assertEquals(records, batch.records.get());
-            assertEquals(baseOffset, batch.baseOffset);
-            assertEquals(time.milliseconds(), batch.appendTimestamp());
-        });
+        BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+        assertEquals(records, batch.records.get());
+        assertEquals(baseOffset, batch.baseOffset);
+        assertEquals(time.milliseconds(), batch.appendTimestamp());
     }
 
     @Test
     public void testForceDrainBeforeAppendLeaderChangeMessage() {
-        asList(APPEND_ATOMIC).forEach(appender -> {
-            int leaderEpoch = 17;
-            long baseOffset = 157;
-            int lingerMs = 50;
-            int maxBatchSize = 512;
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
 
-            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
-                .thenReturn(ByteBuffer.allocate(maxBatchSize));
-            Mockito.when(memoryPool.tryAllocate(256))
-                .thenReturn(ByteBuffer.allocate(256));
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+            .thenReturn(ByteBuffer.allocate(maxBatchSize));
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(ByteBuffer.allocate(256));
 
-            BatchAccumulator<String> acc = buildAccumulator(
-                leaderEpoch,
-                baseOffset,
-                lingerMs,
-                maxBatchSize
-            );
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
 
-            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
 
-            // Append records
-            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
-            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
-            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
-            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
-            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+        // Append records
+        assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), false));
+        assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3), false));
+        assertEquals(baseOffset + 5, acc.append(leaderEpoch, records.subList(3, 6), false));
+        assertEquals(baseOffset + 7, acc.append(leaderEpoch, records.subList(6, 8), false));
+        assertEquals(baseOffset + 8, acc.append(leaderEpoch, records.subList(8, 9), false));
 
-            assertFalse(acc.needsDrain(time.milliseconds()));
+        assertFalse(acc.needsDrain(time.milliseconds()));
 
-            // Append a leader change message
-            acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+        // Append a leader change message
+        acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
 
-            assertTrue(acc.needsDrain(time.milliseconds()));
+        assertTrue(acc.needsDrain(time.milliseconds()));
 
-            // Test that drain status is FINISHED
-            assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+        // Test that drain status is FINISHED
+        assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
 
-            // Drain completed batches
-            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+        // Drain completed batches
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
 
-            // Should have 2 batches, one consisting of `records` and one `leaderChangeMessage`
-            assertEquals(2, batches.size());
-            assertFalse(acc.needsDrain(time.milliseconds()));
-            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+        // Should have 2 batches, one consisting of `records` and one `leaderChangeMessage`
+        assertEquals(2, batches.size());
+        assertFalse(acc.needsDrain(time.milliseconds()));
+        assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
 
-            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
-            assertEquals(records, batch.records.get());
-            assertEquals(baseOffset, batch.baseOffset);
-            assertEquals(time.milliseconds(), batch.appendTimestamp());
-        });
+        BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+        assertEquals(records, batch.records.get());
+        assertEquals(baseOffset, batch.baseOffset);
+        assertEquals(time.milliseconds(), batch.appendTimestamp());
     }
 
     @Test
@@ -304,72 +301,68 @@ class BatchAccumulatorTest {
 
     @Test
     public void testSingleBatchAccumulation() {
-        asList(APPEND_ATOMIC).forEach(appender -> {
-            int leaderEpoch = 17;
-            long baseOffset = 157;
-            int lingerMs = 50;
-            int maxBatchSize = 512;
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
 
-            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
-                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+            .thenReturn(ByteBuffer.allocate(maxBatchSize));
 
-            BatchAccumulator<String> acc = buildAccumulator(
-                leaderEpoch,
-                baseOffset,
-                lingerMs,
-                maxBatchSize
-            );
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
 
-            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
-            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
-            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
-            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
-            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
-            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+        assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), false));
+        assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3), false));
+        assertEquals(baseOffset + 5, acc.append(leaderEpoch, records.subList(3, 6), false));
+        assertEquals(baseOffset + 7, acc.append(leaderEpoch, records.subList(6, 8), false));
+        assertEquals(baseOffset + 8, acc.append(leaderEpoch, records.subList(8, 9), false));
 
-            long expectedAppendTimestamp = time.milliseconds();
-            time.sleep(lingerMs);
-            assertTrue(acc.needsDrain(time.milliseconds()));
+        long expectedAppendTimestamp = time.milliseconds();
+        time.sleep(lingerMs);
+        assertTrue(acc.needsDrain(time.milliseconds()));
 
-            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
-            assertEquals(1, batches.size());
-            assertFalse(acc.needsDrain(time.milliseconds()));
-            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+        assertEquals(1, batches.size());
+        assertFalse(acc.needsDrain(time.milliseconds()));
+        assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
 
-            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
-            assertEquals(records, batch.records.get());
-            assertEquals(baseOffset, batch.baseOffset);
-            assertEquals(expectedAppendTimestamp, batch.appendTimestamp());
-        });
+        BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+        assertEquals(records, batch.records.get());
+        assertEquals(baseOffset, batch.baseOffset);
+        assertEquals(expectedAppendTimestamp, batch.appendTimestamp());
     }
 
     @Test
     public void testMultipleBatchAccumulation() {
-        asList(APPEND_ATOMIC).forEach(appender -> {
-            int leaderEpoch = 17;
-            long baseOffset = 157;
-            int lingerMs = 50;
-            int maxBatchSize = 256;
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 256;
 
-            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
-                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+            .thenReturn(ByteBuffer.allocate(maxBatchSize));
 
-            BatchAccumulator<String> acc = buildAccumulator(
-                leaderEpoch,
-                baseOffset,
-                lingerMs,
-                maxBatchSize
-            );
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
 
-            // Append enough records so that multiple batches get created
-            for (int records = 0; records < maxBatchSize; records++) {
-                appender.call(acc, leaderEpoch, singletonList("foo"));
-            }
+        // Append enough records so that multiple batches get created
+        for (int records = 0; records < maxBatchSize; records++) {
+            acc.append(leaderEpoch, singletonList("foo"), false);
+        }
 
-            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
-            assertTrue(batches.size() > 1, () -> String.format("number of batches is %s", batches.size()));
-            assertTrue(batches.stream().allMatch(batch -> batch.data.sizeInBytes() <= maxBatchSize));
-        });
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+        assertTrue(batches.size() > 1, () -> String.format("number of batches is %s", batches.size()));
+        assertTrue(batches.stream().allMatch(batch -> batch.data.sizeInBytes() <= maxBatchSize));
     }
 
     @Test
@@ -467,14 +460,6 @@ class BatchAccumulatorTest {
 
         return ByteUtils.sizeOfVarint(recordSizeInBytes) + recordSizeInBytes;
     }
-
-    interface Appender {
-        Long call(BatchAccumulator<String> acc, int epoch, List<String> records);
-    }
-
-    // TODO: maybe remove this. this is not need anymore I think
-    static final Appender APPEND_ATOMIC = (acc, epoch, records) ->
-            acc.append(epoch, records, false);
 
     @Test
     public void testMultipleControlRecords() {
@@ -655,6 +640,67 @@ class BatchAccumulatorTest {
         ) {
             assertThrows(IllegalArgumentException.class, () -> acc.appendControlMessages(creator));
         }
+    }
+
+    @Test
+    void testDelayedDrain() {
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 256;
+
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+            .thenReturn(ByteBuffer.allocate(maxBatchSize));
+
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
+
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g");
+        assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), true));
+        acc.forceDrain();
+        assertEquals(baseOffset + 2, acc.append(leaderEpoch, records.subList(1, 3), true));
+        acc.forceDrain();
+        assertEquals(baseOffset + 5, acc.append(leaderEpoch, records.subList(3, 6), true));
+        acc.forceDrain();
+
+        assertFalse(acc.needsDrain(time.milliseconds()));
+        assertNotEquals(0, acc.timeUntilDrain(time.milliseconds()));
+        assertEquals(0, acc.drain().size());
+
+        acc.allowDrain();
+        assertTrue(acc.needsDrain(time.milliseconds()));
+        assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+        assertEquals(3, acc.drain().size());
+    }
+
+    @Test
+    void testDelayedDrainAreReleased() {
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 256;
+
+        ByteBuffer buffer = ByteBuffer.allocate(maxBatchSize);
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+            .thenReturn(buffer);
+
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
+
+        List<String> records = asList("a", "b", "c", "d", "e", "f", "g");
+        assertEquals(baseOffset, acc.append(leaderEpoch, records.subList(0, 1), true));
+        acc.forceDrain();
+
+        acc.close();
+        Mockito.verify(memoryPool).release(buffer);
     }
 
     private static MemoryRecordsBuilder controlRecordsBuilder(

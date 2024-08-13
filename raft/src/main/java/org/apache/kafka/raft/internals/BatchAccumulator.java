@@ -135,7 +135,9 @@ public class BatchAccumulator<T> implements Closeable {
             }
 
             if (delayDrain) {
-                // TODO: explain this
+                // The user asked to not drain these records. If the drainOffset is not already set
+                // then record the current end offset (nextOffset) as maximum offset that can be
+                // drained.
                 drainOffset.compareAndSet(Long.MAX_VALUE, nextOffset);
             }
 
@@ -197,7 +199,9 @@ public class BatchAccumulator<T> implements Closeable {
         currentBatch = null;
     }
 
-    // TODO: document this
+    /**
+     * Allows draining of all batches.
+     */
     public void allowDrain() {
         drainOffset.set(Long.MAX_VALUE);
     }
@@ -437,7 +441,10 @@ public class BatchAccumulator<T> implements Closeable {
      * @return the delay in milliseconds before the next expected drain
      */
     public long timeUntilDrain(long currentTimeMs) {
-        if (drainStatus == DrainStatus.FINISHED) {
+        boolean drainableBatches = Optional.ofNullable(completed.peek())
+            .map(batch -> batch.drainable(drainOffset.get()))
+            .orElse(false);
+        if (drainableBatches) {
             return 0;
         } else {
             return lingerTimer.remainingMs(currentTimeMs);
@@ -472,6 +479,10 @@ public class BatchAccumulator<T> implements Closeable {
      * @return the list of completed batches
      */
     public List<CompletedBatch<T>> drain() {
+        return drain(drainOffset.get());
+    }
+
+    private List<CompletedBatch<T>> drain(long drainOffset) {
         // Start the drain if it has not been started already
         if (drainStatus == DrainStatus.NONE) {
             drainStatus = DrainStatus.STARTED;
@@ -489,17 +500,17 @@ public class BatchAccumulator<T> implements Closeable {
         // If the drain has finished, then all of the batches will be completed
         if (drainStatus == DrainStatus.FINISHED) {
             drainStatus = DrainStatus.NONE;
-            return drainCompleted();
+            return drainCompleted(drainOffset);
         } else {
             return Collections.emptyList();
         }
     }
 
-    private List<CompletedBatch<T>> drainCompleted() {
+    private List<CompletedBatch<T>> drainCompleted(long drainOffset) {
         List<CompletedBatch<T>> res = new ArrayList<>();
         while (true) {
             CompletedBatch<T> batch = completed.peek();
-            if (batch == null || batch.lastOffset() >= drainOffset.get()) {
+            if (batch == null || !batch.drainable(drainOffset)) {
                 return res;
             } else {
                 // The batch can be drained so remove the batch and add it to the result.
@@ -518,13 +529,19 @@ public class BatchAccumulator<T> implements Closeable {
 
     @Override
     public void close() {
-        List<CompletedBatch<T>> unwritten = drain();
+        // Acquire the lock that that drain is guaranteed to complete the current batch
+        appendLock.lock();
+        List<CompletedBatch<T>> unwritten;
+        try {
+            unwritten = drain(Long.MAX_VALUE);
+        } finally {
+            appendLock.unlock();
+        }
         unwritten.forEach(CompletedBatch::release);
     }
 
     public static class CompletedBatch<T> {
         public final long baseOffset;
-        // TODO assert that numRecords is greater than 0
         public final int numRecords;
         public final Optional<List<T>> records;
         public final MemoryRecords data;
@@ -540,14 +557,14 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
-            Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
-
             this.baseOffset = baseOffset;
             this.records = Optional.of(records);
             this.numRecords = records.size();
             this.data = data;
             this.pool = pool;
             this.initialBuffer = initialBuffer;
+
+            validateContruction();
         }
 
         private CompletedBatch(
@@ -557,14 +574,24 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
-            Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
-
             this.baseOffset = baseOffset;
             this.records = Optional.empty();
             this.numRecords = numRecords;
             this.data = data;
             this.pool = pool;
             this.initialBuffer = initialBuffer;
+
+            validateContruction();
+        }
+
+        private void validateContruction() {
+            Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
+
+            if (numRecords <= 0) {
+                throw new IllegalArgumentException(
+                    String.format("Completed batch must contain at least one record: %s", numRecords)
+                );
+            }
         }
 
         public int sizeInBytes() {
@@ -582,8 +609,8 @@ public class BatchAccumulator<T> implements Closeable {
             return data.firstBatch().maxTimestamp();
         }
 
-        public long lastOffset() {
-            return baseOffset + numRecords - 1;
+        public boolean drainable(long drainOffset) {
+            return baseOffset + numRecords - 1 < drainOffset;
         }
     }
 

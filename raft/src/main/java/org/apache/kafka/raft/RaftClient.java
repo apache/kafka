@@ -128,18 +128,18 @@ public interface RaftClient<T> extends AutoCloseable {
     OptionalInt nodeId();
 
     /**
-     * Append a list of records to the log. The write will be scheduled for some time
-     * in the future. There is no guarantee that appended records will be written to
-     * the log and eventually committed. However, it is guaranteed that if any of the
-     * records become committed, then all of them will be.
+     * Prepare a list of records to be appended to the log.
+     *
+     * This method will not write any records to the log. To have the KRaft implementation write
+     * records to the log, the {@code schedulePreparedAppend} method must be called. There is no
+     * guarantee that appended records will be written to the log and eventually committed. However,
+     * it is guaranteed that if any of the records become committed, then all of them will be.
      *
      * If the provided current leader epoch does not match the current epoch, which
      * is possible when the state machine has yet to observe the epoch change, then
      * this method will throw an {@link NotLeaderException} to indicate the leader
      * to resign its leadership. The state machine is expected to discard all
      * uncommitted entries after observing an epoch change.
-     *
-     * TODO: mentioned that the caller must call schedulePrepareAppend for KRaft to drain this records
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
@@ -152,7 +152,14 @@ public interface RaftClient<T> extends AutoCloseable {
      */
     long prepareAppend(int epoch, List<T> records);
 
-    // TODO: document this
+    /**
+     * Schedule for all of prepared batches to get appended to the log.
+     *
+     * Any batches previously prepared for append with {@code prepareAppend(int List)} will be
+     * scheduled to get appended to the log.
+     *
+     * @throws NotLeaderException if we are not the current leader
+     */
     void schedulePreparedAppend();
 
     /**
