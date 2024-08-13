@@ -116,7 +116,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         consumer.start()
         self.await_all_members(consumer)
-        self.await_all_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_including_session_timeout_sec=90)
+        self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=60)
 
         num_rebalances = consumer.num_rebalances()
         # TODO: make this test work with hard shutdowns, which probably requires
@@ -350,7 +350,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         if fencing_stage == "stable":
             consumer.start()
             self.await_members(consumer, len(consumer.nodes))
-            self.await_all_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_including_session_timeout_sec=120)
+            self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=120)
 
             num_rebalances = consumer.num_rebalances()
             conflict_consumer.start()
@@ -417,7 +417,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         consumer.start()
         self.await_all_members(consumer)
-        self.await_all_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_including_session_timeout_sec=60)
+        self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=60)
         partition_owner = consumer.owner(partition)
 
         # startup the producer and ensure that some records have been written
@@ -482,7 +482,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer.start()
         consumer.start()
         self.await_all_members(consumer)
-        self.await_all_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_including_session_timeout_sec=60)
+        self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=60)
 
         num_rebalances = consumer.num_rebalances()
 

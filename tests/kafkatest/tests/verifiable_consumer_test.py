@@ -20,8 +20,6 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.kafka import TopicPartition
 
-import time
-
 class VerifiableConsumerTest(KafkaTest):
     PRODUCER_REQUEST_TIMEOUT_SEC = 30
 
@@ -89,23 +87,11 @@ class VerifiableConsumerTest(KafkaTest):
     def await_all_members(self, consumer):
         self.await_members(consumer, self.num_consumers)
 
-    def await_valid_assignment(self, topic, num_partitions, consumer, timeout_sec):
-        # Wait until every partition has an owner.
+    def await_all_members_stabilized(self, topic, num_partitions, consumer, timeout_sec):
+        # Wait until the group is in STABLE state and the consumers reconcile to a valid assignment
+        wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="stable"),
+                   timeout_sec=timeout_sec,
+                   err_msg="Timed out waiting for group %s to transition to STABLE state." % self.group_id)
         wait_until(lambda: self.valid_assignment(topic, num_partitions, consumer.current_assignment()),
                    timeout_sec=timeout_sec,
                    err_msg="Timeout awaiting for the consumers to reconcile to a valid assignment.")
-        return consumer.current_assignment()
-
-    def stabilized(self, topic, num_partitions, consumer, timeout_sec):
-        # We see the consumer as stabilized if a valid assignment doesn't change after a session timeout.
-        assignment = self.await_valid_assignment(topic, num_partitions, consumer, timeout_sec)
-        time.sleep(consumer.session_timeout_sec)
-        return assignment == self.await_valid_assignment(topic, num_partitions, consumer, timeout_sec)
-
-    def await_all_stabilized(self, topic, num_partitions, consumer, timeout_including_session_timeout_sec):
-        # Wait until the consumer is fully stabilized.
-        assert timeout_including_session_timeout_sec > consumer.session_timeout_sec, \
-            "The stabilization timeout should be larger than the consumer session timeout %d." % consumer.session_timeout_sec
-        wait_until(lambda: self.stabilized(topic, num_partitions, consumer, timeout_including_session_timeout_sec),
-                   timeout_sec=timeout_including_session_timeout_sec,
-                    err_msg="Timeout awaiting for the consumers to stabilize.")
