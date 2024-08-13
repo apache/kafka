@@ -43,13 +43,6 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         super(inner);
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        throw new UnsupportedOperationException(ERROR_MESSAGE);
-    }
-
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {

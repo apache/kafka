@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -93,18 +92,6 @@ public class CachingKeyValueStore
         super(underlying);
         position = Position.emptyPosition();
         this.timestampedSchema = timestampedSchema;
-    }
-
-    @SuppressWarnings("deprecation") // This can be removed when it's removed from the interface.
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
-        // save the stream thread as we only ever want to trigger a flush
-        // when the stream thread is the current thread.
-        streamThread = Thread.currentThread();
     }
 
     @Override

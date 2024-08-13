@@ -108,13 +108,6 @@ class TimeOrderedCachingWindowStore
         return null;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
-    }
-
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         initInternal(asInternalProcessorContext(context));

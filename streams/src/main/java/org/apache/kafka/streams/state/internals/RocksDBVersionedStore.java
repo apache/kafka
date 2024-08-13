@@ -350,9 +350,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         return position;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    private void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);

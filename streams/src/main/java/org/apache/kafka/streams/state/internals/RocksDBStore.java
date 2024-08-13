@@ -155,19 +155,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         this.autoManagedIterators = autoManagedIterators;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        if (context instanceof StateStoreContext) {
-            init((StateStoreContext) context, root);
-        } else {
-            throw new UnsupportedOperationException(
-                "Use RocksDBStore#init(StateStoreContext, StateStore) instead."
-            );
-        }
-    }
-
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {

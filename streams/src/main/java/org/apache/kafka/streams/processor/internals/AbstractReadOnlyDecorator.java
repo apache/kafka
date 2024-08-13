@@ -49,13 +49,6 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        throw new UnsupportedOperationException(ERROR_MESSAGE);
-    }
-
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {

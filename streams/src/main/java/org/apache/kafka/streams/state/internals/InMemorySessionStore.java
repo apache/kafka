@@ -95,9 +95,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         return name;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    private void init(final ProcessorContext context, final StateStore root) {
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 
