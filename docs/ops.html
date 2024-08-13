@@ -1931,6 +1931,27 @@ NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   
         <td>Average idle percent of thread pool for copying data to remote storage</td>
         <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogManagerTasksAvgIdlePercent</td>
       </tr>
+      <tr>
+        <td>RemoteLogManager Avg Broker Fetch Throttle Time</td>
+        <td>The average time in millis remote fetches was throttled by a broker</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-avg	</td>
+      </tr>
+      <tr>
+        <td>RemoteLogManager Max Broker Fetch Throttle Time</td>
+        <td>The max time in millis remote fetches was throttled by a broker</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-max	</td>
+      </tr>
+      <tr>
+        <td>RemoteLogManager Avg Broker Copy Throttle Time</td>
+        <td>The average time in millis remote copies was throttled by a broker</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-copy-throttle-time-avg</td>
+      </tr>
+      <tr>
+        <td>RemoteLogManager Max Broker Copy Throttle Time</td>
+        <td>The max time in millis remote copies was throttled by a broker</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-copy-throttle-time-max</td>
+      </tr>
+
     </tbody>
   </table>
 
