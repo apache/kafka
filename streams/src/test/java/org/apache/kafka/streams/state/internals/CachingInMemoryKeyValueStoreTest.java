@@ -107,16 +107,6 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         return store;
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
-        when(inner.name()).thenReturn("store");
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);

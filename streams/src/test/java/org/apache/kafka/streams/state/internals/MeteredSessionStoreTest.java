@@ -139,21 +139,6 @@ public class MeteredSessionStoreTest {
         store.init((StateStoreContext) context, store);
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        setUp();
-        final MeteredSessionStore<String, String> outer = new MeteredSessionStore<>(
-            innerStore,
-            STORE_TYPE,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-        doNothing().when(innerStore).init((ProcessorContext) context, outer);
-        outer.init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         setUp();

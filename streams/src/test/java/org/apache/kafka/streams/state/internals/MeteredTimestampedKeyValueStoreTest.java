@@ -148,21 +148,6 @@ public class MeteredTimestampedKeyValueStoreTest {
         metered.init((StateStoreContext) context, metered);
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        setUp();
-        final MeteredTimestampedKeyValueStore<String, String> outer = new MeteredTimestampedKeyValueStore<>(
-            inner,
-            STORE_TYPE,
-            new MockTime(),
-            Serdes.String(),
-            new ValueAndTimestampSerde<>(Serdes.String())
-        );
-        doNothing().when(inner).init((ProcessorContext) context, outer);
-        outer.init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         setUp();

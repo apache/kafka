@@ -114,16 +114,6 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.close();
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final SessionStore<Bytes, byte[]> inner = mock(InMemorySessionStore.class);
-        final CachingSessionStore outer = new CachingSessionStore(inner, SEGMENT_INTERVAL);
-        when(inner.name()).thenReturn("store");
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         final SessionStore<Bytes, byte[]> inner = mock(InMemorySessionStore.class);

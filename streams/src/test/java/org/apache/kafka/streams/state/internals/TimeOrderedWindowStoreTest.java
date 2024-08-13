@@ -129,21 +129,6 @@ public class TimeOrderedWindowStoreTest {
         cachingStore.close();
     }
 
-    @SuppressWarnings("deprecation")
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldDelegateDeprecatedInit(final boolean hasIndex) {
-        setUp(hasIndex);
-        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
-        when(inner.hasIndex()).thenReturn(hasIndex);
-        final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
-
-        reset(inner);
-        when(inner.name()).thenReturn("store");
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
-    }
-
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldDelegateInit(final boolean hasIndex) {

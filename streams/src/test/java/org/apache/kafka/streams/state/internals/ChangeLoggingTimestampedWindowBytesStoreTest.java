@@ -67,14 +67,6 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         verify(inner).init((StateStoreContext) context, store);
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        store.init((ProcessorContext) context, store);
-
-        verify(inner).init((ProcessorContext) context, store);
-    }
-
     @Test
     public void shouldDelegateInit() {
         // testing the combination of setUp and tearDown

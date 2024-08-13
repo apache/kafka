@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -35,12 +36,12 @@ import java.util.TreeMap;
 
 /**
  * This class is a generic version of the in-memory key-value store that is useful for testing when you
- *  need a basic KeyValueStore for arbitrary types and don't have/want to write a serde
+ * need a basic KeyValueStore for arbitrary types and don't have/want to write a serde
  */
 @SuppressWarnings("deprecation")
 public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
-    extends WrappedStateStore<StateStore, K, ValueAndTimestamp<V>>
-    implements TimestampedKeyValueStore<K, V> {
+        extends WrappedStateStore<StateStore, K, ValueAndTimestamp<V>>
+        implements TimestampedKeyValueStore<K, V> {
 
     private final String name;
     private final NavigableMap<K, ValueAndTimestamp<V>> map;
@@ -60,15 +61,11 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
         return this.name;
     }
 
-    @Deprecated
     @Override
-    /* This is a "dummy" store used for testing;
-       it does not support restoring from changelog since we allow it to be serde-ignorant */
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(StateStoreContext context, StateStore root) {
         if (root != null) {
             context.register(root, null);
         }
-
         this.open = true;
     }
 
@@ -127,10 +124,10 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
 
     @Override
     public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> range(final K from,
-        final K to) {
+                                                                        final K to) {
         return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new GenericInMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
+                name,
+                new GenericInMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override

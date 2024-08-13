@@ -357,12 +357,6 @@ public class IQv2IntegrationTest {
                             return STORE_NAME;
                         }
 
-                        @Deprecated
-                        @Override
-                        public void init(final ProcessorContext context, final StateStore root) {
-                            throw new UnsupportedOperationException();
-                        }
-
                         @Override
                         public void init(final StateStoreContext context, final StateStore root) {
                             context.register(root, (key, value) -> put(Bytes.wrap(key), value));

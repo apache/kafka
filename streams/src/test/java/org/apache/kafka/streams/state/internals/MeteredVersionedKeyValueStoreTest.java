@@ -138,19 +138,6 @@ public class MeteredVersionedKeyValueStoreTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        // recreate store in order to re-init
-        store.close();
-        final VersionedBytesStore mockInner = mock(VersionedBytesStore.class);
-        store = newMeteredStore(mockInner);
-
-        store.init((ProcessorContext) context, store);
-
-        verify(mockInner).init((ProcessorContext) context, store);
-    }
-
     @Test
     public void shouldDelegateInit() {
         // init is already called in setUp()

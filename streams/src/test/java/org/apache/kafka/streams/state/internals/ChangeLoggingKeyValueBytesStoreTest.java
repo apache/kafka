@@ -112,16 +112,6 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         store.close();
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
-        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        outer.init((ProcessorContext) context, outer);
-        verify(innerMock).init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         final InternalMockProcessorContext context = mockContext();

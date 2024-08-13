@@ -45,17 +45,6 @@ public class WindowStoreFacadeTest {
         windowStoreFacade = new WindowStoreFacade<>(mockedWindowTimestampStore);
     }
 
-    @SuppressWarnings("deprecation") // test of deprecated method
-    @Test
-    public void shouldForwardDeprecatedInit() {
-        final ProcessorContext context = mock(ProcessorContext.class);
-        final StateStore store = mock(StateStore.class);
-
-        windowStoreFacade.init(context, store);
-        verify(mockedWindowTimestampStore)
-            .init(context, store);
-    }
-
     @Test
     public void shouldForwardInit() {
         final StateStoreContext context = mock(StateStoreContext.class);

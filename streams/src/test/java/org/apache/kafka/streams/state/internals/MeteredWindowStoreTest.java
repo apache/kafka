@@ -136,22 +136,6 @@ public class MeteredWindowStoreTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(
-            innerStoreMock,
-            WINDOW_SIZE_MS, // any size
-            STORE_TYPE,
-            new MockTime(),
-            Serdes.String(),
-            new SerdeThatDoesntHandleNull()
-        );
-        when(innerStoreMock.name()).thenReturn("store");
-        doNothing().when(innerStoreMock).init((ProcessorContext) context, outer);
-        outer.init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(

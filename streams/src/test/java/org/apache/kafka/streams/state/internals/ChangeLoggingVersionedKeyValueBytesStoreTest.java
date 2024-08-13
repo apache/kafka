@@ -97,19 +97,6 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
             () -> new ChangeLoggingVersionedKeyValueBytesStore(new InMemoryKeyValueStore("kv")));
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        // recreate store with mock inner
-        store.close();
-        final VersionedBytesStore mockInner = mock(VersionedBytesStore.class);
-        store = new ChangeLoggingVersionedKeyValueBytesStore(mockInner);
-
-        store.init((ProcessorContext) context, store);
-
-        verify(mockInner).init((ProcessorContext) context, store);
-    }
-
     @Test
     public void shouldDelegateInit() {
         // recreate store with mock inner
