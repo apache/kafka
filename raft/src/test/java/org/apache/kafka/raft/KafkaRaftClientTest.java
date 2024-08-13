@@ -1256,7 +1256,7 @@ public class KafkaRaftClientTest {
     @ValueSource(booleans = { true, false })
     public void testHandleEndQuorumRequest(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
-        int oldLeaderId = randomReplicaId() + 1;
+        int oldLeaderId = localId + 1;
         int leaderEpoch = 2;
         Set<Integer> voters = Utils.mkSet(localId, oldLeaderId);
 
