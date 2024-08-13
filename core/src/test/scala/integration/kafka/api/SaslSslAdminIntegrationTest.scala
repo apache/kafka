@@ -22,7 +22,7 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation.{ALL, ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, IDEMPOTENT_WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, TopicConfig}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, DelegationTokenExpiredException, DelegationTokenNotFoundException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
@@ -68,6 +68,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     }
 
     serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "123")
+    serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG, "5000")
 
     setUpSasl()
     super.setUp(testInfo)
@@ -527,8 +528,32 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   def testExpireDelegationToken(): Unit = {
     client = createAdminClient
     val createDelegationTokenOptions = new CreateDelegationTokenOptions()
-    val token = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
-    client.expireDelegationToken(token.hmac()).expiryTimestamp().get()
+
+    // Test expiration for non-exists token
+    TestUtils.assertFutureExceptionTypeEquals(
+      client.expireDelegationToken("".getBytes()).expiryTimestamp(),
+      classOf[DelegationTokenNotFoundException]
+    )
+
+    // Test expiring the token immediately
+    val token1 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    val expireTokeOptions = new ExpireDelegationTokenOptions()
+    val token1ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(token1.hmac(), expireTokeOptions.expiryTimePeriodMs(-1)).expiryTimestamp().get())
+    assertTrue(token1ExpireTime < System.currentTimeMillis())
+
+    // Test expiring the expired token
+    val token2 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    // Ensure current time > maxLifeTimeMs of token
+    Thread.sleep(5000)
+    TestUtils.assertFutureExceptionTypeEquals(
+      client.expireDelegationToken(token2.hmac(), expireTokeOptions.expiryTimePeriodMs(1)).expiryTimestamp(),
+      classOf[DelegationTokenExpiredException]
+    )
+
+    // Test shortening the expiryTimestamp
+    val token3 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    val token3ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(token3.hmac(), expireTokeOptions.expiryTimePeriodMs(1000)).expiryTimestamp().get())
+    assertTrue(token3ExpireTime < token3.tokenInfo().expiryTimestamp())
   }
 
   private def describeConfigs(topic: String): Iterable[ConfigEntry] = {
