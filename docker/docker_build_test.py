@@ -51,6 +51,7 @@ def build_docker_image(image, tag, kafka_url, image_type):
 def run_docker_tests(image, tag, kafka_url, image_type):
     temp_dir_path = tempfile.mkdtemp()
     try:
+        execute(["docker-compose", "--version"])
         current_dir = os.path.dirname(os.path.realpath(__file__))
         copy_tree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures")
         execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
