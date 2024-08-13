@@ -943,18 +943,20 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ).asJava)
 
     assertEquals(Set(groupResource).asJava, alterResult.values.keySet)
-    alterResult.all.get
+    alterResult.all.get(15, TimeUnit.SECONDS)
 
     ensureConsistentKRaftMetadata()
 
     // Describe group config, verify that group config was updated correctly
     var describeResult = client.describeConfigs(Seq(groupResource).asJava)
-    var configs = describeResult.all.get
+    var configs = describeResult.all.get(15, TimeUnit.SECONDS)
 
     assertEquals(1, configs.size)
 
     assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
     assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).value)
+    assertEquals(ConfigSource.DEFAULT_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).source)
 
     // Alter group with validateOnly=true
     groupAlterConfigs = Seq(
@@ -964,11 +966,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     alterResult = client.incrementalAlterConfigs(Map(
       groupResource -> groupAlterConfigs
     ).asJava, new AlterConfigsOptions().validateOnly(true))
-    alterResult.all.get
+    alterResult.all.get(15, TimeUnit.SECONDS)
 
     // Verify that group config was not updated due to validateOnly = true
     describeResult = client.describeConfigs(Seq(groupResource).asJava)
-    configs = describeResult.all.get
+    configs = describeResult.all.get(15, TimeUnit.SECONDS)
 
     assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
 
@@ -981,7 +983,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       groupResource -> groupAlterConfigs
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    assertFutureExceptionTypeEquals(alterResult.values().get(groupResource), classOf[InvalidConfigurationException],
+    assertFutureExceptionTypeEquals(alterResult.values.get(groupResource), classOf[InvalidConfigurationException],
       Some("consumer.session.timeout.ms must be greater than or equals to group.consumer.min.session.timeout.ms"))
   }
 

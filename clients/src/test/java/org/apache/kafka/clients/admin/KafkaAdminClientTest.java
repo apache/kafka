@@ -2089,28 +2089,28 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDescribeConsumerGroupConfigs() throws Exception {
-        ConfigResource resource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-        ConfigResource resource1 = new ConfigResource(ConfigResource.Type.GROUP, "group2");
+        ConfigResource resource1 = new ConfigResource(ConfigResource.Type.GROUP, "group1");
+        ConfigResource resource2 = new ConfigResource(ConfigResource.Type.GROUP, "group2");
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
                 new DescribeConfigsResponseData().setResults(asList(
                     new DescribeConfigsResponseData.DescribeConfigsResult()
-                        .setResourceName(resource.name())
-                        .setResourceType(resource.type().id())
-                        .setErrorCode(Errors.NONE.code())
-                        .setConfigs(emptyList()),
-                    new DescribeConfigsResponseData.DescribeConfigsResult()
                         .setResourceName(resource1.name())
                         .setResourceType(resource1.type().id())
                         .setErrorCode(Errors.NONE.code())
+                        .setConfigs(emptyList()),
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setResourceName(resource2.name())
+                        .setResourceType(resource2.type().id())
+                        .setErrorCode(Errors.NONE.code())
                         .setConfigs(emptyList())))));
             Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
-                resource,
-                resource1)).values();
-            assertEquals(new HashSet<>(asList(resource, resource1)), result.keySet());
-            assertNotNull(result.get(resource).get());
+                resource1,
+                resource2)).values();
+            assertEquals(new HashSet<>(asList(resource1, resource2)), result.keySet());
             assertNotNull(result.get(resource1).get());
+            assertNotNull(result.get(resource2).get());
         }
     }
 
