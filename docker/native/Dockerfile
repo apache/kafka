@@ -34,12 +34,15 @@ RUN mkdir $KAFKA_DIR; \
     microdnf install wget; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
     wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
-    export GNUPGHOME="$(mktemp -d)"; \
-    gpg --batch --keyserver hkp://keys.openpgp.org --recv-keys "$GPG_KEY" || \
-    gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$GPG_KEY" ; \
+    for server in ha.pool.sks-keyservers.net $(shuf -e \
+                          hkp://p80.pool.sks-keyservers.net:80 \
+                          keyserver.ubuntu.com \
+                          hkp://keyserver.ubuntu.com:80 \
+                          pgp.mit.edu \
+                          hkp://keys.openpgp.org) ; do \
+      gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
+    done && \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
-    gpgconf --kill all; \
-    rm -rf "$GNUPGHOME" kafka.tgz.asc; \
     tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
     rm kafka.tgz ; \
 # Build the native-binary of the apache kafka using graalVM native-image.
