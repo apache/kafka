@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -150,5 +151,24 @@ public class TopicMetadata {
             record.topicName(),
             record.numPartitions(),
             partitionRacks);
+    }
+
+    public static TopicMetadata fromRecord(
+            ShareGroupPartitionMetadataValue.TopicMetadata record
+    ) {
+        // Converting the data type from a list stored in the record to a map for the topic metadata.
+        Map<Integer, Set<String>> partitionRacks = new HashMap<>();
+        for (ShareGroupPartitionMetadataValue.PartitionMetadata partitionMetadata : record.partitionMetadata()) {
+            partitionRacks.put(
+                    partitionMetadata.partition(),
+                    Collections.unmodifiableSet(new HashSet<>(partitionMetadata.racks()))
+            );
+        }
+
+        return new TopicMetadata(
+                record.topicId(),
+                record.topicName(),
+                record.numPartitions(),
+                partitionRacks);
     }
 }

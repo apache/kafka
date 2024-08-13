@@ -35,6 +35,20 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.group.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.runtime.Serializer;
@@ -57,6 +71,7 @@ import java.nio.ByteBuffer;
  *     value_message   : The serialized message of the value {@link ApiMessageAndVersion} object.
  * </pre>
  */
+@SuppressWarnings({ "ClassDataAbstractionCoupling", "CyclomaticComplexity" })
 public class CoordinatorRecordSerde implements Serializer<CoordinatorRecord>, Deserializer<CoordinatorRecord> {
     @Override
     public byte[] serializeKey(CoordinatorRecord record) {
@@ -139,6 +154,20 @@ public class CoordinatorRecordSerde implements Serializer<CoordinatorRecord>, De
                 return new ConsumerGroupTargetAssignmentMemberKey();
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentKey();
+            case 9:
+                return new ShareGroupPartitionMetadataKey();
+            case 10:
+                return new ShareGroupMemberMetadataKey();
+            case 11:
+                return new ShareGroupMetadataKey();
+            case 12:
+                return new ShareGroupTargetAssignmentMetadataKey();
+            case 13:
+                return new ShareGroupTargetAssignmentMemberKey();
+            case 14:
+                return new ShareGroupCurrentMemberAssignmentKey();
+            case 15:
+                return new ShareGroupStatePartitionMetadataKey();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }
@@ -163,6 +192,20 @@ public class CoordinatorRecordSerde implements Serializer<CoordinatorRecord>, De
                 return new ConsumerGroupTargetAssignmentMemberValue();
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentValue();
+            case 9:
+                return new ShareGroupPartitionMetadataValue();
+            case 10:
+                return new ShareGroupMemberMetadataValue();
+            case 11:
+                return new ShareGroupMetadataValue();
+            case 12:
+                return new ShareGroupTargetAssignmentMetadataValue();
+            case 13:
+                return new ShareGroupTargetAssignmentMemberValue();
+            case 14:
+                return new ShareGroupCurrentMemberAssignmentValue();
+            case 15:
+                return new ShareGroupStatePartitionMetadataValue();
             default:
                 throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
         }

@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -82,6 +83,22 @@ public class Assignment implements MemberAssignment {
         return new Assignment(
             record.topicPartitions().stream().collect(Collectors.toMap(
                 ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId,
+                topicPartitions -> new HashSet<>(topicPartitions.partitions())))
+        );
+    }
+
+    /**
+     * Creates a {{@link Assignment}} from a {{@link ShareGroupTargetAssignmentMemberValue}}.
+     *
+     * @param record The record.
+     * @return A {{@link Assignment}}.
+     */
+    public static Assignment fromRecord(
+        ShareGroupTargetAssignmentMemberValue record
+    ) {
+        return new Assignment(
+            record.topicPartitions().stream().collect(Collectors.toMap(
+                ShareGroupTargetAssignmentMemberValue.TopicPartition::topicId,
                 topicPartitions -> new HashSet<>(topicPartitions.partitions())))
         );
     }
