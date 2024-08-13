@@ -33,6 +33,7 @@ import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.consumer.group.ShareGroupCommand.ShareGroupService;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
