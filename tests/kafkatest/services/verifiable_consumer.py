@@ -51,6 +51,18 @@ class ConsumerEventHandler(object):
         self.total_consumed = 0
         self.verify_offsets = verify_offsets
 
+    def populate_states(self, source_handler):
+        self.node = source_handler.node
+        self.idx = source_handler.idx
+        self.state = source_handler.state
+        self.revoked_count = source_handler.revoked_count
+        self.assigned_count = source_handler.assigned_count
+        self.assignment = source_handler.assignment
+        self.position = source_handler.position
+        self.committed = source_handler.committed
+        self.total_consumed = source_handler.total_consumed
+        self.verify_offsets = source_handler.verify_offsets
+
     def handle_shutdown_complete(self, node=None, logger=None):
         self.state = ConsumerState.Dead
         self.assignment = []
@@ -182,6 +194,9 @@ class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHan
         super().__init__(node, verify_offsets, idx)
 
     def handle_partitions_revoked(self, event, node, logger):
+        # The handler state is not transitioned to Rebalancing as the records can only be
+        # consumed in Joined state (see ConsumerEventHandler.handle_records_consumed).
+        # The consumer with consumer protocol should still be able to consume messages during rebalance.
         self.revoked_count += 1
         self.position = {}
         revoked = []
@@ -279,6 +294,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             else:
                 new_event_handler = self.create_event_handler(idx, node)
                 if self.event_handlers[node].__class__.__name__ != new_event_handler.__class__.__name__:
+                    new_event_handler.populate_states(self.event_handlers[node])
                     self.event_handlers[node] = new_event_handler
             handler = self.event_handlers[node]
 
