@@ -2088,6 +2088,33 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testDescribeConsumerGroupConfigs() throws Exception {
+        ConfigResource resource1 = new ConfigResource(ConfigResource.Type.GROUP, "group1");
+        ConfigResource resource2 = new ConfigResource(ConfigResource.Type.GROUP, "group2");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
+                new DescribeConfigsResponseData().setResults(asList(
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setResourceName(resource1.name())
+                        .setResourceType(resource1.type().id())
+                        .setErrorCode(Errors.NONE.code())
+                        .setConfigs(emptyList()),
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setResourceName(resource2.name())
+                        .setResourceType(resource2.type().id())
+                        .setErrorCode(Errors.NONE.code())
+                        .setConfigs(emptyList())))));
+            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
+                resource1,
+                resource2)).values();
+            assertEquals(new HashSet<>(asList(resource1, resource2)), result.keySet());
+            assertNotNull(result.get(resource1).get());
+            assertNotNull(result.get(resource2).get());
+        }
+    }
+
     private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag) {
         return prepareDescribeLogDirsResponse(error, logDir,
                 prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false));
@@ -7394,7 +7421,7 @@ public class KafkaAdminClientTest {
             assertNotNull(result.descriptions().get(1).get());
         }
     }
-    
+
     @Test
     public void testDescribeReplicaLogDirsWithNonExistReplica() throws Exception {
         int brokerId = 0;
@@ -7413,7 +7440,7 @@ public class KafkaAdminClientTest {
 
             DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(tpr1, tpr2));
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
-            
+
             assertEquals(logDir, values.get(tpr1).get().getCurrentReplicaLogDir());
             assertNull(values.get(tpr1).get().getFutureReplicaLogDir());
             assertEquals(offsetLag, values.get(tpr1).get().getCurrentReplicaOffsetLag());

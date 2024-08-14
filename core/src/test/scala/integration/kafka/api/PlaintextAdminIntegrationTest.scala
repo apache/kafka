@@ -47,7 +47,7 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
@@ -923,6 +923,68 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       configs.get(brokerResource2).get(CleanerConfig.LOG_CLEANER_THREADS_PROP).value)
 
     checkValidAlterConfigs(client, this, topicResource1, topicResource2)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testIncrementalAlterAndDescribeGroupConfigs(quorum: String): Unit = {
+    client = createAdminClient
+    val group = "describe-alter-configs-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, group)
+
+    // Alter group configs
+    var groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+
+    var alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava)
+
+    assertEquals(Set(groupResource).asJava, alterResult.values.keySet)
+    alterResult.all.get(15, TimeUnit.SECONDS)
+
+    ensureConsistentKRaftMetadata()
+
+    // Describe group config, verify that group config was updated correctly
+    var describeResult = client.describeConfigs(Seq(groupResource).asJava)
+    var configs = describeResult.all.get(15, TimeUnit.SECONDS)
+
+    assertEquals(1, configs.size)
+
+    assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).value)
+    assertEquals(ConfigSource.DEFAULT_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).source)
+
+    // Alter group with validateOnly=true
+    groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "60000"), AlterConfigOp.OpType.SET)
+    ).asJava
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+    alterResult.all.get(15, TimeUnit.SECONDS)
+
+    // Verify that group config was not updated due to validateOnly = true
+    describeResult = client.describeConfigs(Seq(groupResource).asJava)
+    configs = describeResult.all.get(15, TimeUnit.SECONDS)
+
+    assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+
+    // Alter group with validateOnly=true with invalid configs
+    groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "5"), AlterConfigOp.OpType.SET)
+    ).asJava
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+
+    assertFutureExceptionTypeEquals(alterResult.values.get(groupResource), classOf[InvalidConfigurationException],
+      Some("consumer.session.timeout.ms must be greater than or equals to group.consumer.min.session.timeout.ms"))
   }
 
   @ParameterizedTest

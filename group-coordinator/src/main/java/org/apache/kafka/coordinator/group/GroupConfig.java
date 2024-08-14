@@ -19,9 +19,11 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
@@ -62,6 +64,10 @@ public class GroupConfig extends AbstractConfig {
         super(CONFIG, props, false);
         this.consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
+
+    public static Optional<Type> configType(String configName) {
+        return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
     }
 
     public static Set<String> configNames() {

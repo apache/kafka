@@ -152,7 +152,7 @@ public class AclEntry extends AccessControlEntry {
             case TOPIC:
                 return new HashSet<>(Arrays.asList(READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS));
             case GROUP:
-                return new HashSet<>(Arrays.asList(READ, DESCRIBE, DELETE));
+                return new HashSet<>(Arrays.asList(READ, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS));
             case CLUSTER:
                 return new HashSet<>(Arrays.asList(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE));
             case TRANSACTIONAL_ID:

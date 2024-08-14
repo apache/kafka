@@ -47,7 +47,6 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.Describ
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
-import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterConfigsResourceCollection => IAlterConfigsResourceCollection, AlterableConfig => IAlterableConfig, AlterableConfigCollection => IAlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -76,6 +75,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAndEpoch, SecurityUtils, Utils}
+import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.raft.QuorumConfig
@@ -280,16 +280,16 @@ class KafkaApisTest extends Logging {
 
     verify(authorizer).authorize(any(), ArgumentMatchers.eq(expectedActions.asJava))
     val response = verifyNoThrottling[DescribeConfigsResponse](request)
-    val results = response.data().results()
-    assertEquals(1, results.size())
-    val describeConfigsResult: DescribeConfigsResult = results.get(0)
-    assertEquals(ConfigResource.Type.TOPIC.id, describeConfigsResult.resourceType())
-    assertEquals(resourceName, describeConfigsResult.resourceName())
-    val configs = describeConfigsResult.configs().asScala.filter(_.name() == propName)
+    val results = response.data.results
+    assertEquals(1, results.size)
+    val describeConfigsResult = results.get(0)
+    assertEquals(ConfigResource.Type.TOPIC.id, describeConfigsResult.resourceType)
+    assertEquals(resourceName, describeConfigsResult.resourceName)
+    val configs = describeConfigsResult.configs.asScala.filter(_.name == propName)
     assertEquals(1, configs.length)
     val describeConfigsResponseData = configs.head
-    assertEquals(propName, describeConfigsResponseData.name())
-    assertEquals(propValue, describeConfigsResponseData.value())
+    assertEquals(propName, describeConfigsResponseData.name)
+    assertEquals(propValue, describeConfigsResponseData.value)
   }
 
   @Test
@@ -356,7 +356,7 @@ class KafkaApisTest extends Logging {
     assertEquals(request.requestDequeueTimeNanos, capturedRequest.getValue.requestDequeueTimeNanos)
     val innerResponse = capturedResponse.getValue
     val responseMap = innerResponse.data.responses().asScala.map { resourceResponse =>
-      resourceResponse.resourceName() -> Errors.forCode(resourceResponse.errorCode)
+      resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
     }.toMap
 
     assertEquals(Map(resourceName -> expectedError), responseMap)
@@ -529,6 +529,55 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testDescribeConfigsConsumerGroup(): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val operation = AclOperation.DESCRIBE_CONFIGS
+    val resourceType = ResourceType.GROUP
+    val consumerGroupId = "consumer_group_1"
+    val requestHeader =
+      new RequestHeader(ApiKeys.DESCRIBE_CONFIGS, ApiKeys.DESCRIBE_CONFIGS.latestVersion, clientId, 0)
+    val expectedActions = Seq(
+      new Action(operation, new ResourcePattern(resourceType, consumerGroupId, PatternType.LITERAL),
+        1, true, true)
+    )
+
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(expectedActions.asJava)))
+      .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+
+    val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
+    val cgConfigs = new Properties()
+    cgConfigs.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
+    cgConfigs.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
+    when(configRepository.groupConfig(consumerGroupId)).thenReturn(cgConfigs)
+
+    val describeConfigsRequest = new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+      .setIncludeSynonyms(true)
+      .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
+        .setResourceName(consumerGroupId)
+        .setResourceType(ConfigResource.Type.GROUP.id)).asJava))
+      .build(requestHeader.apiVersion)
+    val request = buildRequest(describeConfigsRequest,
+      requestHeader = Option(requestHeader))
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+
+    createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
+      .handleDescribeConfigsRequest(request)
+
+    val response = verifyNoThrottling[DescribeConfigsResponse](request)
+    // Verify that authorize is only called once
+    verify(authorizer, times(1)).authorize(any(), any())
+    val results = response.data.results
+    assertEquals(1, results.size)
+    val describeConfigsResult = results.get(0)
+
+    assertEquals(ConfigResource.Type.GROUP.id, describeConfigsResult.resourceType)
+    assertEquals(consumerGroupId, describeConfigsResult.resourceName)
+    val configs = describeConfigsResult.configs
+    assertEquals(cgConfigs.size, configs.size)
+  }
+
+  @Test
   def testAlterConfigsClientMetrics(): Unit = {
     val subscriptionName = "client_metric_subscription_1"
     val authorizedResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
@@ -642,14 +691,14 @@ class KafkaApisTest extends Logging {
     val response = verifyNoThrottling[DescribeConfigsResponse](request)
     // Verify that authorize is only called once
     verify(authorizer, times(1)).authorize(any(), any())
-    val results = response.data().results()
-    assertEquals(1, results.size())
-    val describeConfigsResult: DescribeConfigsResult = results.get(0)
+    val results = response.data.results
+    assertEquals(1, results.size)
+    val describeConfigsResult = results.get(0)
 
-    assertEquals(ConfigResource.Type.CLIENT_METRICS.id, describeConfigsResult.resourceType())
-    assertEquals(subscriptionName, describeConfigsResult.resourceName())
-    val configs = describeConfigsResult.configs()
-    assertEquals(cmConfigs.size(), configs.size())
+    assertEquals(ConfigResource.Type.CLIENT_METRICS.id, describeConfigsResult.resourceType)
+    assertEquals(subscriptionName, describeConfigsResult.resourceName)
+    val configs = describeConfigsResult.configs
+    assertEquals(cmConfigs.size, configs.size)
   }
 
   @Test
@@ -764,7 +813,7 @@ class KafkaApisTest extends Logging {
   private def verifyAlterConfigResult(response: AlterConfigsResponse,
                                       expectedResults: Map[String, Errors]): Unit = {
     val responseMap = response.data.responses().asScala.map { resourceResponse =>
-      resourceResponse.resourceName() -> Errors.forCode(resourceResponse.errorCode)
+      resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
     }.toMap
 
     assertEquals(expectedResults, responseMap)
@@ -827,8 +876,8 @@ class KafkaApisTest extends Logging {
 
   private def verifyIncrementalAlterConfigResult(response: IncrementalAlterConfigsResponse,
                                                  expectedResults: Map[String, Errors]): Unit = {
-    val responseMap = response.data.responses().asScala.map { resourceResponse =>
-      resourceResponse.resourceName() -> Errors.forCode(resourceResponse.errorCode)
+    val responseMap = response.data.responses.asScala.map { resourceResponse =>
+      resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
     }.toMap
     assertEquals(expectedResults, responseMap)
   }
