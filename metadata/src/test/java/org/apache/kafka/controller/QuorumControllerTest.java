@@ -107,6 +107,7 @@ import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
@@ -693,10 +694,10 @@ public class QuorumControllerTest {
 
     @ParameterizedTest
     @CsvSource(value = {"0, 0", "0, 1", "1, 0", "1, 1"})
-    public void testRegisterBrokerKRaftVersions(short controllerKraftVersion, short brokerKraftVersion) throws Throwable {
+    public void testRegisterBrokerKRaftVersions(short finalizedKraftVersion, short brokerMaxSupportedKraftVersion) throws Throwable {
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
-                setLastKRaftVersion(controllerKraftVersion).
+                setLastKRaftVersion(KRaftVersion.fromFeatureLevel(finalizedKraftVersion)).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder ->
@@ -714,11 +715,11 @@ public class QuorumControllerTest {
                 .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
                 .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()));
             // broker registration requests do not include initial versions of features
-            if (brokerKraftVersion != 0) {
+            if (brokerMaxSupportedKraftVersion != 0) {
                 brokerFeatures.add(new BrokerRegistrationRequestData.Feature()
                     .setName(KRaftVersion.FEATURE_NAME)
-                    .setMinSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel())
-                    .setMaxSupportedVersion(brokerKraftVersion));
+                    .setMinSupportedVersion(Features.KRAFT_VERSION.minimumProduction())
+                    .setMaxSupportedVersion(brokerMaxSupportedKraftVersion));
             }
             BrokerRegistrationRequestData request = new BrokerRegistrationRequestData().
                 setBrokerId(0).
@@ -728,14 +729,14 @@ public class QuorumControllerTest {
                 setLogDirs(Collections.singletonList(Uuid.fromString("vBpaRsZVSaGsQT53wtYGtg"))).
                 setListeners(listeners);
 
-            if (brokerKraftVersion < controllerKraftVersion) {
+            if (brokerMaxSupportedKraftVersion < finalizedKraftVersion) {
                 Throwable exception = assertThrows(ExecutionException.class, () -> active.registerBroker(
                     ANONYMOUS_CONTEXT,
                     request).get());
                 assertEquals(UnsupportedVersionException.class, exception.getCause().getClass());
-                assertEquals("Unable to register because the broker does not support version " +
-                        controllerKraftVersion + " of kraft.version. It wants a version between 0 and " +
-                        brokerKraftVersion + ", inclusive.",
+                assertEquals("Unable to register because the broker does not support finalized version " +
+                        finalizedKraftVersion + " of kraft.version. The broker wants a version between 0 and " +
+                        brokerMaxSupportedKraftVersion + ", inclusive.",
                     exception.getCause().getMessage());
             } else {
                 BrokerRegistrationReply reply = active.registerBroker(

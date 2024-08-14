@@ -407,9 +407,19 @@ public class ClusterControlManager {
             setRack(request.rack()).
             setEndPoints(listenerInfo.toBrokerRegistrationRecord());
 
+        // Check every broker feature version range includes the finalized version.
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
         }
+        // We also need to check every controller feature is supported by the broker.
+        // Right now the list of features is small, later we should avoid re-iterating over the features we've already checked.
+        finalizedFeatures.featureMap().forEach((featureName, finalizedVersion) -> {
+            if (finalizedVersion != 0 && request.features().findAll(featureName).isEmpty()) {
+                throw new UnsupportedVersionException("Unable to register because the broker " +
+                    "does not support finalized version " + finalizedVersion + " of " + featureName +
+                    ". The broker wants version 0.");
+            }
+        });
         if (request.features().find(KRaftVersion.FEATURE_NAME) == null) {
             // Brokers that don't send a supported kraft.version are assumed to only
             // support the initial kraft.version.
@@ -500,8 +510,8 @@ public class ClusterControlManager {
         short finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) defaultVersion);
         if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized)) {
             throw new UnsupportedVersionException("Unable to register because the broker " +
-                "does not support version " + finalized + " of " + feature.name() +
-                    ". It wants a version between " + feature.minSupportedVersion() + " and " +
+                "does not support finalized version " + finalized + " of " + feature.name() +
+                    ". The broker wants a version between " + feature.minSupportedVersion() + " and " +
                     feature.maxSupportedVersion() + ", inclusive.");
         }
         // A feature is not found in the finalizedFeature map if it is unknown to the controller or set to 0 (feature not enabled).

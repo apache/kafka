@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
@@ -51,6 +52,7 @@ import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.TestFeatureVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -535,6 +537,54 @@ public class ClusterControlManagerTest {
     }
 
     @Test
+    public void testRegistrationWithUnsupportedFeature() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        Map<String, VersionRange> supportedFeatures = new HashMap<>();
+        supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.IBP_3_1_IV0.featureLevel(),
+            MetadataVersion.IBP_3_7_IV0.featureLevel()));
+        supportedFeatures.put(TestFeatureVersion.FEATURE_NAME, VersionRange.of(
+            TestFeatureVersion.TEST_0.featureLevel(),
+            TestFeatureVersion.TEST_1.featureLevel()));
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, Collections.singletonList(0))).
+            setMetadataVersion(MetadataVersion.IBP_3_7_IV0).
+            build();
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setTime(new MockTime(0, 0, 0)).
+            setSnapshotRegistry(snapshotRegistry).
+            setFeatureControlManager(featureControl).
+            setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
+            build();
+        clusterControl.activate();
+        FeatureLevelRecord testFeatureRecord = new FeatureLevelRecord().
+            setName(TestFeatureVersion.FEATURE_NAME).setFeatureLevel((short) 1);
+        featureControl.replay(testFeatureRecord);
+
+        List<Uuid> logDirs = asList(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"));
+        BrokerRegistrationRequestData baseRequest = new BrokerRegistrationRequestData().
+            setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+            setBrokerId(0).
+            setRack(null).
+            setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
+            setLogDirs(logDirs);
+
+        assertEquals("Unable to register because the broker does not support finalized version 1 of " +
+                "test.feature.version. The broker wants version 0.",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.registerBroker(
+                    baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                        Collections.singleton(new BrokerRegistrationRequestData.Feature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.IBP_3_1_IV0.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                    123L,
+                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
+    }
+
+    @Test
     public void testRegistrationWithUnsupportedKraftVersion() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         Map<String, VersionRange> supportedFeatures = new HashMap<>();
@@ -571,8 +621,8 @@ public class ClusterControlManagerTest {
         updatedFeaturesMap.put(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel());
         FinalizedControllerFeatures updatedFinalizedFeatures = new FinalizedControllerFeatures(updatedFeaturesMap, Long.MAX_VALUE);
 
-        assertEquals("Unable to register because the broker does not support version 1 of " +
-                "kraft.version. It wants a version between 0 and 0, inclusive.",
+        assertEquals("Unable to register because the broker does not support finalized version 1 of " +
+                "kraft.version. The broker wants a version between 0 and 0, inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
@@ -583,8 +633,8 @@ public class ClusterControlManagerTest {
                     123L,
                     updatedFinalizedFeatures)).getMessage());
 
-        assertEquals("Unable to register because the broker does not support version 1 of " +
-                "kraft.version. It wants a version between 0 and 0, inclusive.",
+        assertEquals("Unable to register because the broker does not support finalized version 1 of " +
+                "kraft.version. The broker wants a version between 0 and 0, inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
@@ -636,8 +686,8 @@ public class ClusterControlManagerTest {
                 build();
         clusterControl.activate();
 
-        assertEquals("Unable to register because the broker does not support version 4 of " +
-            "metadata.version. It wants a version between 1 and 1, inclusive.",
+        assertEquals("Unable to register because the broker does not support finalized version 4 of " +
+            "metadata.version. The broker wants a version between 1 and 1, inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     new BrokerRegistrationRequestData().
@@ -648,8 +698,8 @@ public class ClusterControlManagerTest {
                     123L,
                     featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
 
-        assertEquals("Unable to register because the broker does not support version 4 of " +
-            "metadata.version. It wants a version between 7 and 7, inclusive.",
+        assertEquals("Unable to register because the broker does not support finalized version 4 of " +
+            "metadata.version. The broker wants a version between 7 and 7, inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     new BrokerRegistrationRequestData().

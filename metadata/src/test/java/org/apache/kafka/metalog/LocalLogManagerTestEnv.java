@@ -92,8 +92,8 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         /**
          * Used to mock the latest KRaft version that would be returned from RaftClient.kraftVersion()
          */
-        public Builder setLastKRaftVersion(short kraftVersion) {
-            this.lastKRaftVersion = KRaftVersion.fromFeatureLevel(kraftVersion);
+        public Builder setLastKRaftVersion(KRaftVersion kraftVersion) {
+            this.lastKRaftVersion = kraftVersion;
             return this;
         }
 

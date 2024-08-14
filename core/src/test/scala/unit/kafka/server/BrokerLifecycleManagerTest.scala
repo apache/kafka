@@ -27,7 +27,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
+import org.apache.kafka.server.common.{Features, KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_3_8_IV0, IBP_3_9_IV0}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions._
@@ -115,8 +115,8 @@ class BrokerLifecycleManagerTest {
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
-  def testSuccessfulRegistrationDuringMigration(kraftVersionV1Supported: Boolean): Unit = {
-    val ibp = if (kraftVersionV1Supported) IBP_3_9_IV0 else IBP_3_8_IV0
+  def testSuccessfulRegistrationDuringMigration(nonInitialKraftVersion: Boolean): Unit = {
+    val ibp = if (nonInitialKraftVersion) IBP_3_9_IV0 else IBP_3_8_IV0
     val context = new RegistrationTestContext(migrationConfigProperties(ibp))
     manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
     val controllerNode = new Node(3000, "localhost", 8021)
@@ -136,8 +136,10 @@ class BrokerLifecycleManagerTest {
       val sentBrokerRegistrationData = context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data()
       assertEquals(10L, sentBrokerRegistrationData.previousBrokerEpoch())
       assertEquals(ibp.featureLevel(), sentBrokerRegistrationData.features().find(MetadataVersion.FEATURE_NAME).maxSupportedVersion())
-      if (kraftVersionV1Supported) {
-        assertEquals(1, sentBrokerRegistrationData.features().find(KRaftVersion.FEATURE_NAME).maxSupportedVersion())
+      if (nonInitialKraftVersion) {
+        val sentKraftVersion = sentBrokerRegistrationData.features().find(KRaftVersion.FEATURE_NAME)
+        assertEquals(Features.KRAFT_VERSION.minimumProduction(), sentKraftVersion.minSupportedVersion())
+        assertEquals(Features.KRAFT_VERSION.latestTesting(), sentKraftVersion.maxSupportedVersion())
       }
     }
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
