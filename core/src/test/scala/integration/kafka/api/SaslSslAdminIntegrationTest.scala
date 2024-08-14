@@ -199,7 +199,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       (createResult, expireResult)
     }
 
-    // Note that maxTimestamp = token created time + maxlifeTimeMs
+    // Note that maxTimestamp = token created time + maxLifeTimeMs
     val (createResult1, expireResult1) = generateTokenResult(10000, -1)
     // if expiryTimePeriodMs < 0, token will be expired immediately.
     assertTrue(createResult1.delegationToken().get().tokenInfo().maxTimestamp() > expireResult1.expiryTimestamp().get())
