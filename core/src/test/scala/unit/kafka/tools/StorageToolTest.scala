@@ -321,7 +321,7 @@ Found problem:
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq("--feature", "metadata.version=20")))
-    assertTrue(stream.toString().contains("3.8-IV0"),
+    assertTrue(stream.toString().contains("3.9-IV0"),
       "Failed to find content in output: " + stream.toString())
   }
 

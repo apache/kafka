@@ -68,7 +68,7 @@ public class FeatureCommandTest {
         assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 4.0-IV1\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(1)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
     }
@@ -86,7 +86,7 @@ public class FeatureCommandTest {
         assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 4.0-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(1)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
     }
