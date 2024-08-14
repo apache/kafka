@@ -39,17 +39,19 @@ def _create_partition_from_dict(d):
 
 class ConsumerEventHandler(object):
 
-    def __init__(self, node, verify_offsets, idx):
+    def __init__(self, node, verify_offsets, idx, state=ConsumerState.Dead,
+                 revoked_count=0, assigned_count=0, assignment=None,
+                 position=None, committed=None, total_consumed=0):
         self.node = node
-        self.idx = idx
-        self.state = ConsumerState.Dead
-        self.revoked_count = 0
-        self.assigned_count = 0
-        self.assignment = []
-        self.position = {}
-        self.committed = {}
-        self.total_consumed = 0
         self.verify_offsets = verify_offsets
+        self.idx = idx
+        self.state = state
+        self.revoked_count = revoked_count
+        self.assigned_count = assigned_count
+        self.assignment = assignment if assignment is not None else []
+        self.position = position if position is not None else {}
+        self.committed = committed if committed is not None else {}
+        self.total_consumed = total_consumed
 
     def handle_shutdown_complete(self, node=None, logger=None):
         self.state = ConsumerState.Dead
@@ -147,8 +149,8 @@ class ConsumerEventHandler(object):
 
 # This needs to be used for cooperative protocol.
 class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
-    def __init__(self, node, verify_offsets, idx):
-        super().__init__(node, verify_offsets, idx)
+    def __init__(self, node, verify_offsets, idx, **kwargs):
+        super().__init__(node, verify_offsets, idx, **kwargs)
         
     def handle_partitions_revoked(self, event, node, logger):
         self.revoked_count += 1
@@ -178,10 +180,13 @@ class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
 
 # This needs to be used for consumer protocol.
 class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHandler):
-    def __init__(self, node, verify_offsets, idx):
-        super().__init__(node, verify_offsets, idx)
+    def __init__(self, node, verify_offsets, idx, **kwargs):
+        super().__init__(node, verify_offsets, idx, **kwargs)
 
     def handle_partitions_revoked(self, event, node, logger):
+        # The handler state is not transitioned to Rebalancing as the records can only be
+        # consumed in Joined state (see ConsumerEventHandler.handle_records_consumed).
+        # The consumer with consumer protocol should still be able to consume messages during rebalance.
         self.revoked_count += 1
         self.position = {}
         revoked = []
@@ -265,21 +270,29 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         return "VerifiableConsumer"
 
     def create_event_handler(self, idx, node):
+        def create_handler_helper(handler_class, node, idx, existing_handler=None):
+            if existing_handler is not None:
+                return handler_class(node, self.verify_offsets, idx,
+                                     state=existing_handler.state,
+                                     revoked_count=existing_handler.revoked_count,
+                                     assigned_count=existing_handler.assigned_count,
+                                     assignment=existing_handler.assignment,
+                                     position=existing_handler.position,
+                                     committed=existing_handler.committed,
+                                     total_consumed=existing_handler.total_consumed)
+            else:
+                return handler_class(node, self.verify_offsets, idx)
+        existing_handler = self.event_handlers[node] if node in self.event_handlers else None
         if self.is_consumer_group_protocol_enabled():
-            return ConsumerProtocolConsumerEventHandler(node, self.verify_offsets, idx)
+            return create_handler_helper(ConsumerProtocolConsumerEventHandler, node, idx, existing_handler)
         elif self.is_eager():
-            return ConsumerEventHandler(node, self.verify_offsets, idx)
+            return create_handler_helper(ConsumerEventHandler, node, idx, existing_handler)
         else:
-            return IncrementalAssignmentConsumerEventHandler(node, self.verify_offsets, idx)
+            return create_handler_helper(IncrementalAssignmentConsumerEventHandler, node, idx, existing_handler)
 
     def _worker(self, idx, node):
         with self.lock:
-            if node not in self.event_handlers:
-                self.event_handlers[node] = self.create_event_handler(idx, node)
-            else:
-                new_event_handler = self.create_event_handler(idx, node)
-                if self.event_handlers[node].__class__.__name__ != new_event_handler.__class__.__name__:
-                    self.event_handlers[node] = new_event_handler
+            self.event_handlers[node] = self.create_event_handler(idx, node)
             handler = self.event_handlers[node]
 
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
