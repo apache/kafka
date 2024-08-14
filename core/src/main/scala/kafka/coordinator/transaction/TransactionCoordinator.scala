@@ -515,6 +515,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
     else {
+      var producerIdCopy = RecordBatch.NO_PRODUCER_ID
+      var producerEpochCopy = RecordBatch.NO_PRODUCER_EPOCH
       val preAppendResult: ApiResult[(Int, TxnTransitMetadata)] = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
           Left(Errors.INVALID_PRODUCER_ID_MAPPING)
@@ -524,6 +526,8 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
           txnMetadata.inLock {
+            producerIdCopy = txnMetadata.producerId
+            producerEpochCopy = txnMetadata.producerEpoch
             val currentTxnMetadataIsAtLeastTransactionsV2 = txnMetadata.clientTransactionVersion >= 2
             if (txnMetadata.producerId != producerId && !(txnMetadata.previousProducerId == producerId && txnMetadata.producerEpoch == 0 && currentTxnMetadataIsAtLeastTransactionsV2))
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
@@ -608,8 +612,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
       preAppendResult match {
         case Left(err) =>
+          if (err == Errors.NONE) {
+            responseCallback(err, producerIdCopy, producerEpochCopy)
+          } else {
           debug(s"Aborting append of $txnMarkerResult to transaction log with coordinator and returning $err error to client for $transactionalId's EndTransaction request")
           responseCallback(err, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH)
+          }
 
         case Right((coordinatorEpoch, newMetadata)) =>
           def sendTxnMarkersCallback(error: Errors): Unit = {
@@ -638,12 +646,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                           if (txnMarkerResult != TransactionResult.COMMIT)
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
-                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), clientTransactionVersion))
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                         case PrepareAbort =>
                           if (txnMarkerResult != TransactionResult.ABORT)
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
-                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds(), clientTransactionVersion))
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                         case Dead | PrepareEpochFence =>
                           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                             s"This is illegal as we should never have transitioned to this state."

@@ -220,7 +220,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
                                                val topicPartitions: mutable.Set[TopicPartition],
                                                @volatile var txnStartTimestamp: Long = -1,
                                                @volatile var txnLastUpdateTimestamp: Long,
-                                               val clientTransactionVersion: Short) extends Logging {
+                                               var clientTransactionVersion: Short) extends Logging {
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;
@@ -342,7 +342,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       txnStartTimestamp, updateTimestamp, clientTransactionVersion)
   }
 
-  def prepareComplete(updateTimestamp: Long, clientTransactionVersion: Short): TxnTransitMetadata = {
+  def prepareComplete(updateTimestamp: Long): TxnTransitMetadata = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
 
     // Since the state change was successfully written to the log, unset the flag for a failed epoch fence
@@ -478,6 +478,10 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             txnStartTimestamp != transitMetadata.txnStartTimestamp) {
 
             throwStateTransitionFailure(transitMetadata)
+          } else if (transitMetadata.clientTransactionVersion >= 2) {
+            producerEpoch = transitMetadata.producerEpoch
+            lastProducerEpoch = transitMetadata.lastProducerEpoch
+            nextProducerId = transitMetadata.nextProducerId
           }
 
         case CompleteAbort | CompleteCommit => // from write markers
@@ -489,6 +493,13 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           } else {
             txnStartTimestamp = transitMetadata.txnStartTimestamp
             topicPartitions.clear()
+            if (transitMetadata.clientTransactionVersion >= 2) {
+              producerEpoch = transitMetadata.producerEpoch
+              lastProducerEpoch = transitMetadata.lastProducerEpoch
+              previousProducerId = transitMetadata.prevProducerId
+              producerId = transitMetadata.producerId
+              nextProducerId = transitMetadata.nextProducerId
+            }
           }
 
         case PrepareEpochFence =>
@@ -508,6 +519,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       }
 
       debug(s"TransactionalId $transactionalId complete transition from $state to $transitMetadata")
+      clientTransactionVersion = transitMetadata.clientTransactionVersion
       txnLastUpdateTimestamp = transitMetadata.txnLastUpdateTimestamp
       pendingState = None
       state = toState
@@ -515,12 +527,14 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   }
 
   private def validProducerEpoch(transitMetadata: TxnTransitMetadata): Boolean = {
+    val isAtLeastTransactionsV2 = transitMetadata.clientTransactionVersion >= 2
+    val isOverflowComplete = isAtLeastTransactionsV2 && (transitMetadata.txnState == CompleteCommit || transitMetadata.txnState == CompleteAbort) && transitMetadata.producerEpoch == 0
     val transitEpoch =
-      if (transitMetadata.clientTransactionVersion >= 2 && (transitMetadata.txnState == PrepareCommit || transitMetadata.txnState == PrepareAbort))
+      if (isOverflowComplete || (isAtLeastTransactionsV2 && (transitMetadata.txnState == PrepareCommit || transitMetadata.txnState == PrepareAbort)))
         transitMetadata.lastProducerEpoch
       else
         transitMetadata.producerEpoch
-    val transitProducerId = if (transitMetadata.nextProducerId != -1) transitMetadata.nextProducerId else transitMetadata.producerId
+    val transitProducerId = if (isOverflowComplete) transitMetadata.prevProducerId else transitMetadata.producerId
     transitEpoch == producerEpoch && transitProducerId == producerId
   }
 

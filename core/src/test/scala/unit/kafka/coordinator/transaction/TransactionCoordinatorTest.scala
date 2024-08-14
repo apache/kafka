@@ -69,6 +69,8 @@ class TransactionCoordinatorTest {
   val transactionStatePartitionCount = 1
   var result: InitProducerIdResult = _
   var error: Errors = Errors.NONE
+  var newProducerId: Long = RecordBatch.NO_PRODUCER_ID
+  var newEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH
 
   private def mockPidGenerator(): Unit = {
     when(pidGenerator.generateProducerId()).thenAnswer(_ => {
@@ -544,6 +546,8 @@ class TransactionCoordinatorTest {
     // Return since the retry is recognized
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, 1, endTxnCallback)
     assertEquals(Errors.NONE, error)
+    assertEquals(producerId, newProducerId)
+    assertEquals((producerEpoch + 1).toShort, newEpoch)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
 
     // Same behavior for CompleteCommit
@@ -552,6 +556,8 @@ class TransactionCoordinatorTest {
         RecordBatch.NO_PRODUCER_ID, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 2)))))
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, 1, endTxnCallback)
     assertEquals(Errors.NONE, error)
+    assertEquals(producerId, newProducerId)
+    assertEquals((producerEpoch + 1).toShort, newEpoch) // epoch is bumped since we started as V2
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -573,6 +579,8 @@ class TransactionCoordinatorTest {
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 1)))))
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, 2, endTxnCallback)
     assertEquals(Errors.NONE, error)
+    assertEquals(producerId, newProducerId)
+    assertEquals(producerEpoch, newEpoch) // epoch is not bumped since this started as V1
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -598,7 +606,7 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldReturnOkOnEndTxnV2IfNotEndTxnV2RetryEpochOverflow(): Unit = {
+  def shouldReturnOkOnEndTxnV2IfEndTxnV2RetryEpochOverflow(): Unit = {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         producerId2, Short.MaxValue, (Short.MaxValue - 1).toShort, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 2)))))
@@ -613,6 +621,9 @@ class TransactionCoordinatorTest {
 
     coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort, TransactionResult.COMMIT, 2, endTxnCallback)
     assertEquals(Errors.NONE, error)
+    assertNotEquals(RecordBatch.NO_PRODUCER_ID, newProducerId)
+    assertNotEquals(producerId, newProducerId)
+    assertEquals(0, newEpoch)
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -832,7 +843,7 @@ class TransactionCoordinatorTest {
 
       // For the successful call, execute the state transitions that would happen in appendTransactionToLog()
       txnMetadata.completeTransitionTo(txnTransitMetadata)
-      txnMetadata.prepareComplete(time.milliseconds(), 2)
+      txnMetadata.prepareComplete(time.milliseconds())
     })
 
     // For the first two calls, verify that the epoch was only bumped once
@@ -1418,6 +1429,8 @@ class TransactionCoordinatorTest {
 
   def endTxnCallback(ret: Errors, producerId: Long, epoch: Short): Unit = {
     error = ret
+    newProducerId = producerId
+    newEpoch = epoch
   }
 
   def requestEpoch(clientTransactionVersion: Short): Short = {

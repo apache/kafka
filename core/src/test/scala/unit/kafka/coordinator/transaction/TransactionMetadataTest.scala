@@ -252,8 +252,9 @@ class TransactionMetadataTest {
     assertEquals(time.milliseconds() - 1, txnMetadata.txnLastUpdateTimestamp)
   }
 
-  @Test
-  def testTolerateTimeShiftDuringCompleteCommit(): Unit = {
+  @ParameterizedTest
+  @ValueSource(shorts = Array(0, 2))
+  def testTolerateTimeShiftDuringCompleteCommit(clientTransactionVersion: Short): Unit = {
     val producerEpoch: Short = 1
     val txnMetadata = new TransactionMetadata(
       transactionalId = transactionalId,
@@ -267,21 +268,24 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnStartTimestamp = 1L,
       txnLastUpdateTimestamp = time.milliseconds(),
-      clientTransactionVersion = 0)
+      clientTransactionVersion = clientTransactionVersion)
 
     // let new time be smaller
-    val transitMetadata = txnMetadata.prepareComplete(time.milliseconds() - 1, 2)
+    val transitMetadata = txnMetadata.prepareComplete(time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
+
+    val lastEpoch = if (clientTransactionVersion >= 2) producerEpoch else RecordBatch.NO_PRODUCER_EPOCH
     assertEquals(CompleteCommit, txnMetadata.state)
     assertEquals(producerId, txnMetadata.producerId)
-    assertEquals(RecordBatch.NO_PRODUCER_EPOCH, txnMetadata.lastProducerEpoch)
+    assertEquals(lastEpoch, txnMetadata.lastProducerEpoch)
     assertEquals(producerEpoch, txnMetadata.producerEpoch)
     assertEquals(1L, txnMetadata.txnStartTimestamp)
     assertEquals(time.milliseconds() - 1, txnMetadata.txnLastUpdateTimestamp)
   }
 
-  @Test
-  def testTolerateTimeShiftDuringCompleteAbort(): Unit = {
+  @ParameterizedTest
+  @ValueSource(shorts = Array(0, 2))
+  def testTolerateTimeShiftDuringCompleteAbort(clientTransactionVersion: Short): Unit = {
     val producerEpoch: Short = 1
     val txnMetadata = new TransactionMetadata(
       transactionalId = transactionalId,
@@ -295,20 +299,22 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnStartTimestamp = 1L,
       txnLastUpdateTimestamp = time.milliseconds(),
-      clientTransactionVersion = 0)
+      clientTransactionVersion = clientTransactionVersion)
 
     // let new time be smaller
-    val transitMetadata = txnMetadata.prepareComplete(time.milliseconds() - 1, 2)
+    val transitMetadata = txnMetadata.prepareComplete(time.milliseconds() - 1)
     txnMetadata.completeTransitionTo(transitMetadata)
+
+    val lastEpoch = if (clientTransactionVersion >= 2) producerEpoch else RecordBatch.NO_PRODUCER_EPOCH
     assertEquals(CompleteAbort, txnMetadata.state)
     assertEquals(producerId, txnMetadata.producerId)
-    assertEquals(RecordBatch.NO_PRODUCER_EPOCH, txnMetadata.lastProducerEpoch)
+    assertEquals(lastEpoch, txnMetadata.lastProducerEpoch)
     assertEquals(producerEpoch, txnMetadata.producerEpoch)
     assertEquals(1L, txnMetadata.txnStartTimestamp)
     assertEquals(time.milliseconds() - 1, txnMetadata.txnLastUpdateTimestamp)
   }
 
-  @Test // TODO: do this test for V2
+  @Test
   def testFenceProducerAfterEpochsExhausted(): Unit = {
     val producerEpoch = (Short.MaxValue - 1).toShort
 
@@ -383,6 +389,72 @@ class TransactionMetadataTest {
     assertEquals(producerId, txnMetadata.previousProducerId)
     assertEquals(0, txnMetadata.producerEpoch)
     assertEquals(producerEpoch, txnMetadata.lastProducerEpoch)
+  }
+
+  @Test
+  def testEpochBumpOnEndTxn(): Unit = {
+    time.sleep(100)
+    val producerEpoch = 10.toShort
+
+    val txnMetadata = new TransactionMetadata(
+      transactionalId = transactionalId,
+      producerId = producerId,
+      previousProducerId = RecordBatch.NO_PRODUCER_ID,
+      nextProducerId = RecordBatch.NO_PRODUCER_ID,
+      producerEpoch = producerEpoch,
+      lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs = 30000,
+      state = Ongoing,
+      topicPartitions = mutable.Set.empty,
+      txnStartTimestamp = time.milliseconds(),
+      txnLastUpdateTimestamp = time.milliseconds(),
+      clientTransactionVersion = 0)
+
+    var transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareCommit, 2, RecordBatch.NO_PRODUCER_ID, time.milliseconds() - 1)
+    txnMetadata.completeTransitionTo(transitMetadata)
+    assertEquals(producerId, txnMetadata.producerId)
+    assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
+    assertEquals(2, txnMetadata.clientTransactionVersion)
+
+    transitMetadata = txnMetadata.prepareComplete(time.milliseconds())
+    txnMetadata.completeTransitionTo(transitMetadata)
+    assertEquals(producerId, txnMetadata.producerId)
+    assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
+    assertEquals(2, txnMetadata.clientTransactionVersion)
+  }
+
+  @Test
+  def testEpochBumpOnEndTxnOverflow(): Unit = {
+    time.sleep(100)
+    val producerEpoch = (Short.MaxValue - 1).toShort
+
+    val txnMetadata = new TransactionMetadata(
+      transactionalId = transactionalId,
+      producerId = producerId,
+      previousProducerId = RecordBatch.NO_PRODUCER_ID,
+      nextProducerId = RecordBatch.NO_PRODUCER_ID,
+      producerEpoch = producerEpoch,
+      lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs = 30000,
+      state = Ongoing,
+      topicPartitions = mutable.Set.empty,
+      txnStartTimestamp = time.milliseconds(),
+      txnLastUpdateTimestamp = time.milliseconds(),
+      clientTransactionVersion = 0)
+    assertTrue(txnMetadata.isProducerEpochExhausted)
+
+    val newProducerId = 9893L
+    var transitMetadata = txnMetadata.prepareAbortOrCommit(PrepareCommit, 2, newProducerId, time.milliseconds() - 1)
+    txnMetadata.completeTransitionTo(transitMetadata)
+    assertEquals(producerId, txnMetadata.producerId)
+    assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
+    assertEquals(2, txnMetadata.clientTransactionVersion)
+
+    transitMetadata = txnMetadata.prepareComplete(time.milliseconds())
+    txnMetadata.completeTransitionTo(transitMetadata)
+    assertEquals(newProducerId, txnMetadata.producerId)
+    assertEquals(0, txnMetadata.producerEpoch)
+    assertEquals(2, txnMetadata.clientTransactionVersion)
   }
 
   @Test

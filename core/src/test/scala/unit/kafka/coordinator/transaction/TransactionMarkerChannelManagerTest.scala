@@ -113,7 +113,7 @@ class TransactionMarkerChannelManagerTest {
   def shouldOnlyWriteTxnCompletionOnce(): Unit = {
     mockCache()
 
-    val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds(), 2)
+    val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds())
 
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition1.topic),
@@ -182,7 +182,7 @@ class TransactionMarkerChannelManagerTest {
   def shouldNotLoseTxnCompletionAfterLoad(): Unit = {
     mockCache()
 
-    val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds(), 2)
+    val expectedTransition = txnMetadata2.prepareComplete(time.milliseconds())
 
     when(metadataCache.getPartitionLeaderEndpoint(
       ArgumentMatchers.eq(partition1.topic),
@@ -278,8 +278,8 @@ class TransactionMarkerChannelManagerTest {
       any())
     ).thenReturn(Some(broker2))
 
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds(), 2))
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds(), 2))
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
 
     assertEquals(2, channelManager.numTxnsWithPendingMarkers)
     assertEquals(2, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
@@ -318,7 +318,7 @@ class TransactionMarkerChannelManagerTest {
       any())
     ).thenReturn(Some(broker2))
 
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds(), 2))
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
 
     assertEquals(1, channelManager.numTxnsWithPendingMarkers)
     assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers)
@@ -347,8 +347,8 @@ class TransactionMarkerChannelManagerTest {
       any())
     ).thenReturn(Some(broker2))
 
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds(), 2))
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds(), 2))
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
 
     assertEquals(2, channelManager.numTxnsWithPendingMarkers)
     assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers)
@@ -393,8 +393,8 @@ class TransactionMarkerChannelManagerTest {
       any())
     ).thenReturn(Some(broker2))
 
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds(), 2))
-    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds(), 2))
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
+    channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
 
     assertEquals(2, channelManager.numTxnsWithPendingMarkers)
     assertEquals(2, channelManager.queueForBroker(broker1.id).get.totalNumMarkers)
@@ -430,7 +430,7 @@ class TransactionMarkerChannelManagerTest {
       any())
     ).thenReturn(Some(broker2))
 
-    val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds(), 2)
+    val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds())
 
     when(txnStateManager.appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId2),
@@ -483,7 +483,7 @@ class TransactionMarkerChannelManagerTest {
       any())
     ).thenReturn(Some(broker2))
 
-    val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds(), 2)
+    val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds())
 
     when(txnStateManager.appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId2),
@@ -536,7 +536,7 @@ class TransactionMarkerChannelManagerTest {
       any())
     ).thenReturn(Some(broker2))
 
-    val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds(), 2)
+    val txnTransitionMetadata2 = txnMetadata2.prepareComplete(time.milliseconds())
 
     when(txnStateManager.appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId2),
