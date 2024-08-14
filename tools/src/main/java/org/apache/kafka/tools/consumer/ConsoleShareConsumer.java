@@ -115,7 +115,7 @@ public class ConsoleShareConsumer {
                 consumer.acknowledge(msg, acknowledgeType);
             } catch (Throwable t) {
                 if (rejectMessageOnError) {
-                    LOG.error("Error processing message, skipping this message: ", t);
+                    LOG.error("Error processing message, rejecting this message: ", t);
                     consumer.acknowledge(msg, AcknowledgeType.REJECT);
                 } else {
                     // Consumer will be closed
