@@ -3017,8 +3017,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
     client.incrementalAlterConfigs(Collections.singletonMap(configResource, Collections.singletonList(configOp))).all().get()
     def result = client.listClientMetricsResources().all().get()
-    TestUtils.waitUntilTrue(() => result != null,
-      "metadata time out")
+    TestUtils.waitUntilTrue(() => result != null, "metadata time out")
     def expected = Collections.singletonList(new ClientMetricsResourceListing(name))
     assertEquals(new util.HashSet(expected), new util.HashSet(result))
   }
