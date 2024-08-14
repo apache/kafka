@@ -21,14 +21,19 @@ import java.util.{Collections, OptionalLong, Properties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegistrationResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
-import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_3_8_IV0, IBP_3_9_IV0}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.concurrent.{CompletableFuture, Future}
 import scala.jdk.CollectionConverters._
@@ -54,6 +59,15 @@ class BrokerLifecycleManagerTest {
     properties.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "300000")
     properties.setProperty(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "100")
     properties
+  }
+
+  def migrationConfigProperties(ibp: MetadataVersion) = {
+    val migrationConfigProperties = configProperties
+    migrationConfigProperties.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
+    migrationConfigProperties.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
+    migrationConfigProperties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "")
+    migrationConfigProperties.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp.toString)
+    migrationConfigProperties
   }
 
   @Test
@@ -90,6 +104,41 @@ class BrokerLifecycleManagerTest {
     TestUtils.retry(60000) {
       assertEquals(1, context.mockChannelManager.unsentQueue.size)
       assertEquals(10L, context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data().previousBrokerEpoch())
+    }
+    context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
+      new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
+    TestUtils.retry(10000) {
+      context.poll()
+      assertEquals(1000L, manager.brokerEpoch)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testSuccessfulRegistrationDuringMigration(kraftVersionV1Supported: Boolean): Unit = {
+    val ibp = if (kraftVersionV1Supported) IBP_3_9_IV0 else IBP_3_8_IV0
+    val context = new RegistrationTestContext(migrationConfigProperties(ibp))
+    manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
+    val controllerNode = new Node(3000, "localhost", 8021)
+    context.controllerNodeProvider.node.set(controllerNode)
+    val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(true)).asJava
+
+    // Even though ZK brokers don't use "metadata.version" feature, we need to overwrite it with our IBP as part of registration
+    // so the KRaft controller can verify that all brokers are on the same IBP before starting the migration.
+    featuresRemapped.put(MetadataVersion.FEATURE_NAME,
+      VersionRange.of(ibp.featureLevel(), ibp.featureLevel()))
+
+    manager.start(() => context.highestMetadataOffset.get(),
+      context.mockChannelManager, context.clusterId, context.advertisedListeners,
+      featuresRemapped, OptionalLong.of(10L))
+    TestUtils.retry(60000) {
+      assertEquals(1, context.mockChannelManager.unsentQueue.size)
+      val sentBrokerRegistrationData = context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data()
+      assertEquals(10L, sentBrokerRegistrationData.previousBrokerEpoch())
+      assertEquals(ibp.featureLevel(), sentBrokerRegistrationData.features().find(MetadataVersion.FEATURE_NAME).maxSupportedVersion())
+      if (kraftVersionV1Supported) {
+        assertEquals(1, sentBrokerRegistrationData.features().find(KRaftVersion.FEATURE_NAME).maxSupportedVersion())
+      }
     }
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
       new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
