@@ -3324,7 +3324,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         leaderState.accumulator().allowDrain();
-        wakeup();
+
+        // Wakeup the network channel if the accumulator is ready to drain now.
+        if (leaderState.accumulator().needsDrain(time.milliseconds())) {
+            wakeup();
+        }
     }
 
     @Override

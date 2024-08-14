@@ -149,9 +149,9 @@ public class BatchAccumulator<T> implements Closeable {
             }
 
             if (delayDrain) {
-                // The user asked to not drain these records. If the drainOffset is not already set
-                // then record the current end offset (nextOffset) as maximum offset that can be
-                // drained.
+                // The user asked to not drain these records. If the drainOffset is not already set,
+                // then set the record at the current end offset (nextOffset) as maximum offset
+                // that can be drained.
                 drainOffset.compareAndSet(Long.MAX_VALUE, nextOffset);
             }
 
@@ -543,7 +543,7 @@ public class BatchAccumulator<T> implements Closeable {
 
     @Override
     public void close() {
-        // Acquire the lock that that drain is guaranteed to complete the current batch
+        // Acquire the lock so that drain is guaranteed to complete the current batch
         appendLock.lock();
         List<CompletedBatch<T>> unwritten;
         try {
