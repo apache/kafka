@@ -57,6 +57,7 @@ include 'clients',
     'connect:runtime',
     'connect:test-plugins',
     'connect:transforms',
+    'coordinator-common',
     'core',
     'examples',
     'generator',
@@ -106,3 +107,4 @@ include 'clients',
 
 project(":storage:api").name = "storage-api"
 rootProject.name = 'kafka'
+

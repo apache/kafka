@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;

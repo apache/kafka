@@ -19,6 +19,10 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.coordinator.common.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.Deserializer;
+import org.apache.kafka.coordinator.common.runtime.Serializer;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -49,9 +53,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
-import org.apache.kafka.coordinator.group.runtime.Deserializer;
-import org.apache.kafka.coordinator.group.runtime.Serializer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.nio.BufferUnderflowException;
