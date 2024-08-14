@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
@@ -95,12 +96,25 @@ public class ListOffsetsRequest extends AbstractRequest {
 
         @Override
         public ListOffsetsRequest build(short version) {
+            data.topics()
+                    .stream()
+                    .flatMap(topic -> topic.partitions().stream())
+                    .forEach(partition -> checkVersion(version, partition));
+
             return new ListOffsetsRequest(data, version);
         }
 
         @Override
         public String toString() {
             return data.toString();
+        }
+
+        private void checkVersion(short version, ListOffsetsPartition partition) {
+            long timestamp = partition.timestamp();
+            if (timestamp == EARLIEST_LOCAL_TIMESTAMP && version < 8)
+                throw new UnsupportedVersionException("apiVersion must be >= 8 for EARLIEST_LOCAL_TIMESTAMP");
+            if (timestamp == LATEST_TIERED_TIMESTAMP && version < 9)
+                throw new UnsupportedVersionException("apiVersion must be >= 9 for LATEST_TIERED_TIMESTAMP");
         }
     }
 

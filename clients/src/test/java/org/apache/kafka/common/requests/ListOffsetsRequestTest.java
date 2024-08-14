@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
@@ -36,7 +37,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.requests.ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
+import static org.apache.kafka.common.requests.ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ListOffsetsRequestTest {
@@ -146,4 +150,30 @@ public class ListOffsetsRequestTest {
         assertTrue(topic.partitions().contains(lop1));
     }
 
+    @Test
+    public void testCheckVersion() {
+        testUnsupportedVersion(EARLIEST_LOCAL_TIMESTAMP, (short) 7);
+        testUnsupportedVersion(LATEST_TIERED_TIMESTAMP, (short) 8);
+    }
+
+    private void testUnsupportedVersion(long timestamp, short version) {
+        List<ListOffsetsPartition> partitions = Collections.singletonList(
+                new ListOffsetsPartition().setPartitionIndex(0).setTimestamp(timestamp)
+        );
+
+        List<ListOffsetsTopic> topics = Collections.singletonList(
+                new ListOffsetsTopic()
+                .setName("topic")
+                .setPartitions(partitions)
+        );
+
+        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
+                .forConsumer(true,
+                        IsolationLevel.READ_COMMITTED,
+                        false,
+                        false)
+                .setTargetTimes(topics);
+
+        assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
+    }
 }
