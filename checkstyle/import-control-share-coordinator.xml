@@ -37,6 +37,7 @@
                 <allow pkg="org.apache.kafka.coordinator.share.generated" />
                 <allow pkg="org.apache.kafka.common.utils" />
                 <allow pkg="com.fasterxml.jackson" />
+                <allow class="org.apache.kafka.common.Uuid" />
             </subpackage>
         </subpackage>
     </subpackage>
