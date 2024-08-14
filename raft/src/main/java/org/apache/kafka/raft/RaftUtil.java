@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -67,6 +68,10 @@ public class RaftUtil {
                 return new FetchResponseData().setErrorCode(error.code());
             case FETCH_SNAPSHOT:
                 return new FetchSnapshotResponseData().setErrorCode(error.code());
+            case API_VERSIONS:
+                return new ApiVersionsResponseData().setErrorCode(error.code());
+            case UPDATE_RAFT_VOTER:
+                return new UpdateRaftVoterResponseData().setErrorCode(error.code());
             default:
                 throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
         }

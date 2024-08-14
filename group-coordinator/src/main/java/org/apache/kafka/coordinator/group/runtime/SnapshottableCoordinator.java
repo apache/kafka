@@ -74,7 +74,7 @@ class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implements Coor
         this.tp = tp;
         this.lastWrittenOffset = 0;
         this.lastCommittedOffset = 0;
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
     }
 
     /**
@@ -145,7 +145,7 @@ class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implements Coor
         }
 
         lastWrittenOffset = offset;
-        snapshotRegistry.getOrCreateSnapshot(offset);
+        snapshotRegistry.idempotentCreateSnapshot(offset);
         log.debug("Updated last written offset of {} to {}.", tp, offset);
     }
 

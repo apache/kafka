@@ -1166,6 +1166,30 @@ public final class RaftClientTestContext {
         return removeVoterResponse;
     }
 
+    RaftRequest.Outbound assertSentUpdateVoterRequest(
+        ReplicaKey replicaKey,
+        int epoch,
+        SupportedVersionRange supportedVersions,
+        Endpoints endpoints
+    ) {
+        List<RaftRequest.Outbound> sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.UPDATE_RAFT_VOTER));
+        assertEquals(1, sentRequests.size());
+
+        RaftRequest.Outbound request = sentRequests.get(0);
+        assertInstanceOf(UpdateRaftVoterRequestData.class, request.data());
+
+        UpdateRaftVoterRequestData updateVoterRequest = (UpdateRaftVoterRequestData) request.data();
+        assertEquals(clusterId, updateVoterRequest.clusterId());
+        assertEquals(epoch, updateVoterRequest.currentLeaderEpoch());
+        assertEquals(replicaKey.id(), updateVoterRequest.voterId());
+        assertEquals(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID), updateVoterRequest.voterDirectoryId());
+        assertEquals(endpoints, Endpoints.fromUpdateVoterRequest(updateVoterRequest.listeners()));
+        assertEquals(supportedVersions.min(), updateVoterRequest.kRaftVersionFeature().minSupportedVersion());
+        assertEquals(supportedVersions.max(), updateVoterRequest.kRaftVersionFeature().maxSupportedVersion());
+
+        return request;
+    }
+
     UpdateRaftVoterResponseData assertSentUpdateVoterResponse(
         Errors error,
         OptionalInt leaderId,
@@ -1724,6 +1748,20 @@ public final class RaftClientTestContext {
         Endpoints endpoints
     ) {
         return RaftUtil.updateVoterRequest(clusterId, voter, epoch, supportedVersions, endpoints);
+    }
+
+    UpdateRaftVoterResponseData updateVoterResponse(
+        Errors error,
+        LeaderAndEpoch leaderAndEpoch
+    ) {
+        return RaftUtil.updateVoterResponse(
+            error,
+            channel.listenerName(),
+            leaderAndEpoch,
+            leaderAndEpoch.leaderId().isPresent() ?
+                startingVoters.listeners(leaderAndEpoch.leaderId().getAsInt()) :
+                Endpoints.empty()
+        );
     }
 
     private short fetchRpcVersion() {

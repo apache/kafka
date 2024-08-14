@@ -15,12 +15,27 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata;
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Collection;
 
 /**
- * A callback for changes to feature levels. Currently, this is only used by the controller to receive a callback
- * when committed FeatureLevelRecords are being replayed.
+ * Options for {@link Admin#describeShareGroups(Collection, DescribeShareGroupsOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-public interface FeatureLevelListener {
-    void handle(String featureName, short finalizedVersion);
+@InterfaceStability.Evolving
+public class DescribeShareGroupsOptions extends AbstractOptions<DescribeShareGroupsOptions> {
+    private boolean includeAuthorizedOperations;
+
+    public DescribeShareGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
+        return this;
+    }
+
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
+    }
 }

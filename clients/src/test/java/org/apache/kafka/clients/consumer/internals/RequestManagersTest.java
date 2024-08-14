@@ -64,8 +64,8 @@ public class RequestManagersTest {
             mock(OffsetCommitCallbackInvoker.class),
             listener
         ).get();
-        requestManagers.membershipManager.ifPresent(
-            membershipManager -> assertTrue(((MembershipManagerImpl) membershipManager).stateListeners().contains(listener))
+        requestManagers.consumerMembershipManager.ifPresent(
+            membershipManager -> assertTrue(membershipManager.stateListeners().contains(listener))
         );
     }
 }

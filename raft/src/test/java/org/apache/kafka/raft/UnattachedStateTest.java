@@ -48,6 +48,7 @@ public class UnattachedStateTest {
             time,
             epoch,
             leaderId,
+            Optional.empty(),
             voters,
             Optional.empty(),
             electionTimeoutMs,

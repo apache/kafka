@@ -119,7 +119,7 @@ public class SnapshotRegistry {
      * Returns a snapshot iterator that iterates from the snapshots with the
      * lowest epoch to those with the highest.
      */
-    public Iterator<Snapshot> iterator() {
+    Iterator<Snapshot> iterator() {
         return new SnapshotIterator(head.next());
     }
 
@@ -128,7 +128,7 @@ public class SnapshotRegistry {
      * lowest epoch to those with the highest, starting at the snapshot with the
      * given epoch.
      */
-    public Iterator<Snapshot> iterator(long epoch) {
+    Iterator<Snapshot> iterator(long epoch) {
         return iterator(getSnapshot(epoch));
     }
 
@@ -136,7 +136,7 @@ public class SnapshotRegistry {
      * Returns a snapshot iterator that iterates from the snapshots with the
      * lowest epoch to those with the highest, starting at the given snapshot.
      */
-    public Iterator<Snapshot> iterator(Snapshot snapshot) {
+    Iterator<Snapshot> iterator(Snapshot snapshot) {
         return new SnapshotIterator(snapshot);
     }
 
@@ -144,7 +144,7 @@ public class SnapshotRegistry {
      * Returns a reverse snapshot iterator that iterates from the snapshots with the
      * highest epoch to those with the lowest.
      */
-    public Iterator<Snapshot> reverseIterator() {
+    Iterator<Snapshot> reverseIterator() {
         return new ReverseSnapshotIterator();
     }
 
@@ -172,7 +172,7 @@ public class SnapshotRegistry {
     /**
      * Gets the snapshot for a specific epoch.
      */
-    public Snapshot getSnapshot(long epoch) {
+    Snapshot getSnapshot(long epoch) {
         Snapshot snapshot = snapshots.get(epoch);
         if (snapshot == null) {
             throw new RuntimeException("No in-memory snapshot for epoch " + epoch + ". Snapshot " +
@@ -183,13 +183,13 @@ public class SnapshotRegistry {
 
     /**
      * Creates a new snapshot at the given epoch.
-     * <br>
-     * If {@code epoch} already exists and it is the last snapshot then just return that snapshot.
+     * <p>
+     * If {@code epoch} already exists, and it is the last snapshot then just return that snapshot.
      *
-     * @param epoch             The epoch to create the snapshot at.  The current epoch
+     * @param epoch             The epoch to create the snapshot at. The current epoch
      *                          will be advanced to one past this epoch.
      */
-    public Snapshot getOrCreateSnapshot(long epoch) {
+    Snapshot getOrCreateSnapshot(long epoch) {
         Snapshot last = head.prev();
         if (last.epoch() > epoch) {
             throw new RuntimeException("Can't create a new in-memory snapshot at epoch " + epoch +
@@ -203,6 +203,18 @@ public class SnapshotRegistry {
         snapshots.put(epoch, snapshot);
         log.debug("Creating in-memory snapshot {}", epoch);
         return snapshot;
+    }
+
+    /**
+     * Creates a new snapshot at the given epoch.
+     * <p>
+     * If {@code epoch} already exists, and it is the last snapshot then this operation will do nothing.
+     *
+     * @param epoch             The epoch to create the snapshot at. The current epoch
+     *                          will be advanced to one past this epoch.
+     */
+    public void idempotentCreateSnapshot(long epoch) {
+        getOrCreateSnapshot(epoch);
     }
 
     /**
@@ -238,7 +250,7 @@ public class SnapshotRegistry {
      *
      * @param snapshot          The snapshot to delete.
      */
-    public void deleteSnapshot(Snapshot snapshot) {
+    void deleteSnapshot(Snapshot snapshot) {
         Snapshot prev = snapshot.prev();
         if (prev != head) {
             prev.mergeFrom(snapshot);
@@ -274,7 +286,7 @@ public class SnapshotRegistry {
     /**
      * Associate a revertable with this registry.
      */
-    public void register(Revertable revertable) {
+    void register(Revertable revertable) {
         revertables.add(revertable);
     }
 

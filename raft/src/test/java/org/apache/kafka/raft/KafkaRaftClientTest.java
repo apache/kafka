@@ -210,7 +210,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         // We will first transition to unattached and then grant vote and then transition to voted
-        assertTrue(context.client.quorum().isVoted());
+        assertTrue(context.client.quorum().isUnattachedAndVoted());
         context.assertVotedCandidate(epoch + 1, remoteKey.id());
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
     }
@@ -247,7 +247,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         // We will first transition to unattached and then grant vote and then transition to voted
-        assertTrue(context.client.quorum().isVoted());
+        assertTrue(context.client.quorum().isUnattachedAndVoted());
         context.assertVotedCandidate(epoch + 1, remoteKey.id());
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
     }
@@ -284,7 +284,7 @@ public class KafkaRaftClientTest {
 
         // We will first transition to unattached and then grant vote and then transition to voted
         assertTrue(
-            context.client.quorum().isVoted(),
+            context.client.quorum().isUnattachedAndVoted(),
             "Local Id: " + localId +
             " Remote Id: " + remoteId +
             " Quorum local Id: " + context.client.quorum().localIdOrSentinel() +
@@ -1249,7 +1249,7 @@ public class KafkaRaftClientTest {
     @ValueSource(booleans = { true, false })
     public void testHandleEndQuorumRequest(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
-        int oldLeaderId = randomReplicaId() + 1;
+        int oldLeaderId = localId + 1;
         int leaderEpoch = 2;
         Set<Integer> voters = Utils.mkSet(localId, oldLeaderId);
 
@@ -1692,11 +1692,76 @@ public class KafkaRaftClientTest {
         context.assertSentFetchRequest(epoch, 1L, lastEpoch);
 
         context.time.sleep(context.fetchTimeoutMs);
-
         context.pollUntilRequest();
-
         context.assertSentVoteRequest(epoch + 1, lastEpoch, 1L, 1);
         context.assertVotedCandidate(epoch + 1, localId);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFollowerAsObserverDoesNotBecomeCandidateAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int otherNodeId = localId + 1;
+        int epoch = 5;
+        int lastEpoch = 3;
+        Set<Integer> voters = Utils.mkSet(otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .appendToLog(lastEpoch, singletonList("foo"))
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+        context.assertElectedLeader(epoch, otherNodeId);
+
+        context.pollUntilRequest();
+        context.assertSentFetchRequest(epoch, 1L, lastEpoch);
+
+        context.time.sleep(context.fetchTimeoutMs);
+        context.pollUntilRequest();
+        assertTrue(context.client.quorum().isFollower());
+
+        // transitions to unattached
+        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, withKip853Rpc), epoch, 1));
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+        assertTrue(context.client.quorum().isUnattached());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testUnattachedAsObserverDoesNotBecomeCandidateAfterElectionTimeout(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int otherNodeId = localId + 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.pollUntilRequest();
+        context.assertSentFetchRequest(epoch, 0L, 0);
+        assertTrue(context.client.quorum().isUnattached());
+
+        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.pollUntilRequest();
+        assertTrue(context.client.quorum().isUnattached());
+        context.assertSentFetchRequest(epoch, 0L, 0);
+        // confirm no vote request was sent
+        assertEquals(0, context.channel.drainSendQueue().size());
+
+        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, withKip853Rpc), epoch, 0));
+        context.pollUntilResponse();
+        // observer can vote
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+
+        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.pollUntilRequest();
+        // observer cannot transition to candidate though
+        assertTrue(context.client.quorum().isUnattached());
+        context.assertSentFetchRequest(epoch + 1, 0L, 0);
+        assertEquals(0, context.channel.drainSendQueue().size());
     }
 
     @ParameterizedTest
@@ -2259,7 +2324,7 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    public void testLeaderAcceptVoteFromNonVoter(boolean withKip853Rpc) throws Exception {
+    public void testLeaderAcceptVoteFromObserver(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
@@ -2272,12 +2337,12 @@ public class KafkaRaftClientTest {
         context.becomeLeader();
         int epoch = context.currentEpoch();
 
-        ReplicaKey nonVoterKey = replicaKey(localId + 2, withKip853Rpc);
-        context.deliverRequest(context.voteRequest(epoch - 1, nonVoterKey, 0, 0));
+        ReplicaKey observerKey = replicaKey(localId + 2, withKip853Rpc);
+        context.deliverRequest(context.voteRequest(epoch - 1, observerKey, 0, 0));
         context.client.poll();
         context.assertSentVoteResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.of(localId), false);
 
-        context.deliverRequest(context.voteRequest(epoch, nonVoterKey, 0, 0));
+        context.deliverRequest(context.voteRequest(epoch, observerKey, 0, 0));
         context.client.poll();
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
     }
