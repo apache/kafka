@@ -622,7 +622,7 @@ public class ClusterControlManagerTest {
         FinalizedControllerFeatures updatedFinalizedFeatures = new FinalizedControllerFeatures(updatedFeaturesMap, Long.MAX_VALUE);
 
         assertEquals("Unable to register because the broker does not support finalized version 1 of " +
-                "kraft.version. The broker wants a version between 0 and 0, inclusive.",
+                "kraft.version. The broker wants version 0.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
