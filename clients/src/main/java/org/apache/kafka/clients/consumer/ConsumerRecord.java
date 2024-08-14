@@ -224,7 +224,8 @@ public class ConsumerRecord<K, V> {
     }
 
     /**
-     * Get the delivery count for the record if available
+     * Get the delivery count for the record if available. Deliveries
+     * are counted for records delivered by share groups.
      *
      * @return the delivery count or empty when deliveries not counted
      */

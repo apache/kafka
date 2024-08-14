@@ -282,7 +282,6 @@ public class ShareCompletedFetch {
     /**
      * Parse the record entry, deserializing the key / value fields if necessary
      */
-    @SuppressWarnings("UnusedParameters")
     <K, V> ConsumerRecord<K, V> parseRecord(final Deserializers<K, V> deserializers,
                                             final TopicIdPartition partition,
                                             final Optional<Integer> leaderEpoch,
