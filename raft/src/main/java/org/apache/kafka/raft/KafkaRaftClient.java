@@ -162,6 +162,7 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  */
 public final class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
+    private static final int MAX_NUMBER_OF_BATCHES = 10;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
@@ -608,6 +609,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             endOffset,
             quorumConfig.appendLingerMs(),
             MAX_BATCH_SIZE_BYTES,
+            MAX_NUMBER_OF_BATCHES,
             memoryPool,
             time,
             Compression.NONE,
@@ -2828,7 +2830,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             }
         }
-        return timeUntilDrain;
+
+        return state.accumulator().timeUntilDrain(currentTimeMs);
     }
 
     private long maybeSendBeginQuorumEpochRequests(
@@ -3282,16 +3285,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public long scheduleAppend(int epoch, List<T> records) {
-        return append(epoch, records, OptionalLong.empty(), false);
+    public long prepareAppend(int epoch, List<T> records) {
+        return append(epoch, records);
     }
 
-    @Override
-    public long scheduleAtomicAppend(int epoch, OptionalLong requiredBaseOffset, List<T> records) {
-        return append(epoch, records, requiredBaseOffset, true);
-    }
-
-    private long append(int epoch, List<T> records, OptionalLong requiredBaseOffset, boolean isAtomic) {
+    private long append(int epoch, List<T> records) {
         if (!isInitialized()) {
             throw new NotLeaderException("Append failed because the replica is not the current leader");
         }
@@ -3302,7 +3300,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         BatchAccumulator<T> accumulator = leaderState.accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
-        final long offset = accumulator.append(epoch, records, requiredBaseOffset, isAtomic);
+        final long offset = accumulator.append(epoch, records, true);
 
         // Wakeup the network channel if either this is the first append
         // or the accumulator is ready to drain now. Checking for the first
@@ -3313,6 +3311,24 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             wakeup();
         }
         return offset;
+    }
+
+    @Override
+    public void schedulePreparedAppend() {
+        if (!isInitialized()) {
+            throw new NotLeaderException("Flush failed because the replica is not the current leader");
+        }
+
+        LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
+            () -> new NotLeaderException("Flush failed because the replica is not the current leader")
+        );
+
+        leaderState.accumulator().allowDrain();
+
+        // Wakeup the network channel if the accumulator is ready to drain now.
+        if (leaderState.accumulator().needsDrain(time.milliseconds())) {
+            wakeup();
+        }
     }
 
     @Override
@@ -3608,11 +3624,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         /**
-         * This API is used for committed records originating from {@link #scheduleAppend(int, List)}
-         * or {@link #scheduleAtomicAppend(int, OptionalLong, List)} on this instance. In this case,
-         * we are able to save the original record objects, which saves the need to read them back
-         * from disk. This is a nice optimization for the leader which is typically doing more work
-         * than all of the * followers.
+         * This API is used for committed records originating from {@link #prepareAppend(int, List)}
+         * on this instance. In this case, we are able to save the original record objects, which
+         * saves the need to read them back from disk. This is a nice optimization for the leader
+         * which is typically doing more work than all of the * followers.
          */
         private void fireHandleCommit(
             long baseOffset,
