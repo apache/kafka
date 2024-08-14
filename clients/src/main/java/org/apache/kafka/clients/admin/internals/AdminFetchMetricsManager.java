@@ -14,13 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.admin.internals;
 
-package org.apache.kafka.metadata;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 
-/**
- * A callback for changes to feature levels. Currently, this is only used by the controller to receive a callback
- * when committed FeatureLevelRecords are being replayed.
- */
-public interface FeatureLevelListener {
-    void handle(String featureName, short finalizedVersion);
+public class AdminFetchMetricsManager {
+    private final Metrics metrics;
+
+    public AdminFetchMetricsManager(Metrics metrics) {
+        this.metrics = metrics;
+    }
+
+    public void recordLatency(String node, long requestLatencyMs) {
+        if (!node.isEmpty()) {
+            String nodeTimeName = "node-" + node + ".latency";
+            Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
+            if (nodeRequestTime != null)
+                nodeRequestTime.record(requestLatencyMs);
+        }
+    }
 }

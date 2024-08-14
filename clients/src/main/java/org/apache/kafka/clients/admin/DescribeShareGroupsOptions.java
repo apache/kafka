@@ -14,16 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft.errors;
+
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Collection;
 
 /**
- * Indicates that an append operation cannot be completed because it would have resulted in an
- * unexpected base offset.
+ * Options for {@link Admin#describeShareGroups(Collection, DescribeShareGroupsOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-public class UnexpectedBaseOffsetException extends RaftException {
-    private static final long serialVersionUID = 1L;
+@InterfaceStability.Evolving
+public class DescribeShareGroupsOptions extends AbstractOptions<DescribeShareGroupsOptions> {
+    private boolean includeAuthorizedOperations;
 
-    public UnexpectedBaseOffsetException(String s) {
-        super(s);
+    public DescribeShareGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
+        return this;
+    }
+
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
     }
 }

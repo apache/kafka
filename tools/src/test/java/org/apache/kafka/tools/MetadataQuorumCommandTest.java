@@ -118,7 +118,8 @@ class MetadataQuorumCommandTest {
         assertTrue(outputs[4].matches("MaxFollowerLag:\\s+\\d+"), describeOutput);
         assertTrue(outputs[5].matches("MaxFollowerLagTimeMs:\\s+-?\\d+"), describeOutput);
         assertTrue(
-            outputs[6].matches("CurrentVoters:\\s+\\[\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+,\\s+\"endpoints\":\\s+.*}]"),
+            outputs[6].matches("CurrentVoters:\\s+\\[\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+,\\s+" +
+                "\"endpoints\":\\s+\\[\"\\S+://\\[?\\S+]?:\\d+\",?.*]"),
             describeOutput
         );
 

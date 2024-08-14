@@ -12,6 +12,7 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
@@ -23,7 +24,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
@@ -54,18 +55,18 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     super.configureSecurityBeforeServersStart(testInfo)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker credentials before starting brokers
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+    createScramCredentials(zkConnect, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   override def createPrivilegedAdminClient() = {
     createAdminClient(bootstrapServers(), securityProtocol, trustStoreFile, clientSaslProperties,
-      kafkaClientSaslMechanism, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+      kafkaClientSaslMechanism, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
-      JaasTestUtils.KafkaServerContextName))
+      JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
     createTopic(topic, numPartitions, brokerCount)
   }
@@ -148,7 +149,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
       try {
         val response = adminClient.describeTopics(Collections.singleton(topic)).allTopicNames.get
         assertEquals(1, response.size)
-        response.forEach { (topic, description) =>
+        response.forEach { (_, description) =>
           assertEquals(numPartitions, description.partitions.size)
         }
       } catch {
@@ -167,7 +168,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   }
 
   private def createClientCredential(): Unit = {
-    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2)
   }
 
   private def sendOneRecord(producer: KafkaProducer[Array[Byte], Array[Byte]], maxWaitMs: Long = 15000): Unit = {

@@ -26,7 +26,9 @@ import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -74,7 +76,8 @@ public class GroupCoordinatorConfig {
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " +
             Arrays.stream(Group.GroupType.values()).map(Group.GroupType::toString).collect(Collectors.joining(",")) + ". " +
-            "The " + Group.GroupType.CONSUMER + " rebalance protocol is in early access and therefore must not be used in production.";
+            "The " + Group.GroupType.CONSUMER + " rebalance protocol is in preview and therefore must not be used in production. " +
+            "The " + Group.GroupType.SHARE + " rebalance protocol is in early access and therefore must not be used in production.";
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(Group.GroupType.CLASSIC.toString());
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
@@ -365,6 +368,16 @@ public class GroupCoordinatorConfig {
         require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
             String.format("%s must be less than or equals to %s",
                 SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to consumer group.
+     */
+    public Map<String, Integer> extractGroupConfigMap() {
+        Map<String, Integer> groupProps = new HashMap<>();
+        groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs());
+        groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
+        return groupProps;
     }
 
     /**

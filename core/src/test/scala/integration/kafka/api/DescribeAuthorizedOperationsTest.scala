@@ -12,10 +12,11 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import java.util
 import java.util.Properties
 import kafka.security.authorizer.AclAuthorizer
-import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.AclOperation.{ALL, ALTER, CLUSTER_ACTION, DELETE, DESCRIBE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
@@ -40,27 +41,27 @@ object DescribeAuthorizedOperationsTest {
 
   val Group1Acl = new AclBinding(
     new ResourcePattern(ResourceType.GROUP, Group1, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL))
+    accessControlEntry(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2, ALL))
 
   val Group2Acl = new AclBinding(
     new ResourcePattern(ResourceType.GROUP, Group2, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DESCRIBE))
+    accessControlEntry(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2, DESCRIBE))
 
   val Group3Acl = new AclBinding(
     new ResourcePattern(ResourceType.GROUP, Group3, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DELETE))
+    accessControlEntry(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2, DELETE))
 
   val ClusterAllAcl = new AclBinding(
     new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL))
+    accessControlEntry(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2, ALL))
 
   val Topic1Acl = new AclBinding(
     new ResourcePattern(ResourceType.TOPIC, Topic1, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALL))
+    accessControlEntry(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2, ALL))
 
   val Topic2All = new AclBinding(
     new ResourcePattern(ResourceType.TOPIC, Topic2, PatternType.LITERAL),
-    accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DELETE))
+    accessControlEntry(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2, DELETE))
 
   private def accessControlEntry(
     userName: String,
@@ -93,11 +94,11 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
       authorizer.configure(this.configs.head.originals())
       val result = authorizer.createAcls(null, List(
         new AclBinding(clusterResource, accessControlEntry(
-          JaasTestUtils.KafkaServerPrincipalUnqualifiedName, CLUSTER_ACTION)),
+          JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME, CLUSTER_ACTION)),
         new AclBinding(clusterResource, accessControlEntry(
-          JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, ALTER)),
+          JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2, ALTER)),
         new AclBinding(topicResource, accessControlEntry(
-          JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, DESCRIBE))
+          JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2, DESCRIBE))
       ).asJava)
       result.asScala.map(_.toCompletableFuture.get).foreach(result => assertFalse(result.exception.isPresent))
     } finally {
@@ -107,7 +108,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
+    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     client = Admin.create(createConfig())

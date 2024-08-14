@@ -25,11 +25,10 @@ import java.util.{Properties, Random}
 import joptsimple._
 import kafka.log._
 import kafka.server.BrokerTopicStats
-import kafka.utils._
 import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression, ZstdCompression}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
 import org.apache.kafka.server.util.CommandLineUtils
