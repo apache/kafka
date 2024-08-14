@@ -401,8 +401,6 @@ public class MockClient implements KafkaClient {
                 return;
             }
         }
-
-        throw new IllegalStateException("No requests for inbound response " + response);
     }
 
     public void respondFrom(AbstractResponse response, Node node) {
