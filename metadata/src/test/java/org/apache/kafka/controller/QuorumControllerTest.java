@@ -713,10 +713,13 @@ public class QuorumControllerTest {
                 .setName(MetadataVersion.FEATURE_NAME)
                 .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
                 .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()));
-            brokerFeatures.add(new BrokerRegistrationRequestData.Feature()
-                .setName(KRaftVersion.FEATURE_NAME)
-                .setMinSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel())
-                .setMaxSupportedVersion(brokerKraftVersion));
+            // broker registration requests do not include initial versions of features
+            if (brokerKraftVersion != 0) {
+                brokerFeatures.add(new BrokerRegistrationRequestData.Feature()
+                    .setName(KRaftVersion.FEATURE_NAME)
+                    .setMinSupportedVersion(KRaftVersion.KRAFT_VERSION_0.featureLevel())
+                    .setMaxSupportedVersion(brokerKraftVersion));
+            }
             BrokerRegistrationRequestData request = new BrokerRegistrationRequestData().
                 setBrokerId(0).
                 setClusterId(active.clusterId()).
