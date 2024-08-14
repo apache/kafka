@@ -211,7 +211,8 @@ class TestRaftServer(
     ): Unit = {
       recordCount.incrementAndGet()
       try {
-        val offset = raftManager.client.scheduleAppend(leaderEpoch, List(payload).asJava)
+        val offset = raftManager.client.prepareAppend(leaderEpoch, List(payload).asJava)
+        raftManager.client.schedulePreparedAppend()
         pendingAppends.offer(PendingAppend(offset, currentTimeMs))
       } catch {
         case e: NotLeaderException =>
