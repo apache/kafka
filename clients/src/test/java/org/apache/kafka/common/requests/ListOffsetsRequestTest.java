@@ -151,19 +151,25 @@ public class ListOffsetsRequestTest {
     }
 
     @Test
-    public void testCheckVersion() {
+    public void testCheckEarliestLocalTimestampVersion() {
         testUnsupportedVersion(EARLIEST_LOCAL_TIMESTAMP, (short) 7);
+    }
+
+    @Test
+    public void testCheckLatestTieredTimestampVersion() {
         testUnsupportedVersion(LATEST_TIERED_TIMESTAMP, (short) 8);
     }
 
     private void testUnsupportedVersion(long timestamp, short version) {
+        String topicName = "topic";
+        int partitionIndex = 0;
         List<ListOffsetsPartition> partitions = Collections.singletonList(
-                new ListOffsetsPartition().setPartitionIndex(0).setTimestamp(timestamp)
+                new ListOffsetsPartition().setPartitionIndex(partitionIndex).setTimestamp(timestamp)
         );
 
         List<ListOffsetsTopic> topics = Collections.singletonList(
                 new ListOffsetsTopic()
-                .setName("topic")
+                .setName(topicName)
                 .setPartitions(partitions)
         );
 
@@ -174,6 +180,11 @@ public class ListOffsetsRequestTest {
                         false)
                 .setTargetTimes(topics);
 
-        assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
+        UnsupportedVersionException exception = assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
+        if (timestamp == EARLIEST_LOCAL_TIMESTAMP) {
+            assertEquals("apiVersion must be >= 8 for EARLIEST_LOCAL_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex, exception.getMessage());
+        } else if (timestamp == LATEST_TIERED_TIMESTAMP) {
+            assertEquals("apiVersion must be >= 9 for LATEST_TIERED_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex, exception.getMessage(), exception.getMessage());
+        }
     }
 }

@@ -96,10 +96,11 @@ public class ListOffsetsRequest extends AbstractRequest {
 
         @Override
         public ListOffsetsRequest build(short version) {
-            data.topics()
-                    .stream()
-                    .flatMap(topic -> topic.partitions().stream())
-                    .forEach(partition -> checkVersion(version, partition));
+            for (ListOffsetsTopic topic : data.topics()) {
+                for (ListOffsetsPartition partition : topic.partitions()) {
+                    checkVersion(version, topic.name(), partition);
+                }
+            }
 
             return new ListOffsetsRequest(data, version);
         }
@@ -109,12 +110,18 @@ public class ListOffsetsRequest extends AbstractRequest {
             return data.toString();
         }
 
-        private void checkVersion(short version, ListOffsetsPartition partition) {
+        private void checkVersion(short version, String topicName, ListOffsetsPartition partition) {
             long timestamp = partition.timestamp();
-            if (timestamp == EARLIEST_LOCAL_TIMESTAMP && version < 8)
-                throw new UnsupportedVersionException("apiVersion must be >= 8 for EARLIEST_LOCAL_TIMESTAMP");
-            if (timestamp == LATEST_TIERED_TIMESTAMP && version < 9)
-                throw new UnsupportedVersionException("apiVersion must be >= 9 for LATEST_TIERED_TIMESTAMP");
+            int partitionIndex = partition.partitionIndex();
+
+            if (timestamp == EARLIEST_LOCAL_TIMESTAMP && version < 8) {
+                throw new UnsupportedVersionException(
+                        "apiVersion must be >= 8 for EARLIEST_LOCAL_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex);
+            }
+            if (timestamp == LATEST_TIERED_TIMESTAMP && version < 9) {
+                throw new UnsupportedVersionException(
+                        "apiVersion must be >= 9 for LATEST_TIERED_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex);
+            }
         }
     }
 
