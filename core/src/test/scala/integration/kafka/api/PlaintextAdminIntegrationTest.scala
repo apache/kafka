@@ -3009,15 +3009,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("quorum=kraft"))
   def testListClientMetricsResources(ignored: String): Unit = {
     client = createAdminClient
-    def newTopic = new NewTopic(topic, partition, 0.toShort)
-    client.createTopics(Collections.singleton(newTopic))
+    client.createTopics(Collections.singleton(new NewTopic(topic, partition, 0.toShort)))
     assertTrue(client.listClientMetricsResources().all().get().isEmpty)
-    def name = "name"
-    def configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name)
+    val name = "name"
+    val configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name)
     val configEntry = new ConfigEntry("interval.ms", "111")
-    def configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
+    val configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
     client.incrementalAlterConfigs(Collections.singletonMap(configResource, Collections.singletonList(configOp))).all().get()
     def result = client.listClientMetricsResources().all().get()
+    TestUtils.waitUntilTrue(() => result != null,
+      "metadata time out")
     def expected = Collections.singletonList(new ClientMetricsResourceListing(name))
     assertEquals(new util.HashSet(expected), new util.HashSet(result))
   }
@@ -3028,7 +3029,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testListClientMetricsResourcesTimeoutMs(ignored: String): Unit = {
     client = createInvalidAdminClient()
     try {
-      def timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
+      val timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
       val exception = assertThrows(classOf[ExecutionException], () =>
         client.listClientMetricsResources(timeoutOption).all().get())
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
@@ -3287,4 +3288,3 @@ object PlaintextAdminIntegrationTest {
     assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
   }
 }
-

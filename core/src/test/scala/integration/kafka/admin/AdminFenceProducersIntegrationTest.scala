@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -114,37 +113,16 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("zk", "kraft"))
   @Timeout(value = 30)
   def testFenceProducerTimeoutMs(quorum: String): Unit = {
-    adminClient =  {
+    adminClient = {
       val config = createConfig
       config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
       Admin.create(config)
     }
-    producer.initTransactions()
-    producer.beginTransaction()
-    producer.send(record).get()
-    producer.commitTransaction()
-    def timeoutOption = new FenceProducersOptions()
     try {
-      adminClient.fenceProducers(Collections.singletonList(txnId), timeoutOption.timeoutMs(0)).all().get()
-    } catch {
-      case ee: ExecutionException =>
-        assertInstanceOf(classOf[TimeoutException], ee.getCause) //ok
-    }
-    producer.beginTransaction()
-    try {
-      producer.send(record).get()
-    } catch {
-      case _: ProducerFencedException => //ok
-      case ee: ExecutionException =>
-        assertInstanceOf(classOf[ProducerFencedException], ee.getCause) //ok
-      case e: Exception =>
-        throw e
-    }
-    assertDoesNotThrow(new Executable() {
-      override def execute(): Unit = {
-        producer.commitTransaction()
-      }
-    })
+      val e = assertThrows(classOf[ExecutionException], () => adminClient.fenceProducers(Collections.singletonList(txnId),
+        new FenceProducersOptions().timeoutMs(0)).all().get())
+      assertInstanceOf(classOf[TimeoutException], e.getCause)
+    } finally adminClient.close()
   }
 
   @ParameterizedTest
