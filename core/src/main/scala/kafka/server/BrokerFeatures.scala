@@ -84,7 +84,7 @@ object BrokerFeatures extends Logging {
   def createDefaultFeatureMap(features: BrokerFeatures): Map[String, VersionRange] = {
     features.supportedFeatures.features.asScala.map {
       case (name, versionRange) =>
-        (name, new VersionRange(versionRange.min, versionRange.max))
+        (name, VersionRange.of(versionRange.min, versionRange.max))
     }.toMap
   }
 

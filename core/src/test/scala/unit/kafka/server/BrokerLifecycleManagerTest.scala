@@ -21,7 +21,6 @@ import java.util.{Collections, OptionalLong, Properties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegistrationResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
@@ -121,16 +120,15 @@ class BrokerLifecycleManagerTest {
     manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
-    val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(true)).asJava
+    val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(true))
 
     // Even though ZK brokers don't use "metadata.version" feature, we need to overwrite it with our IBP as part of registration
     // so the KRaft controller can verify that all brokers are on the same IBP before starting the migration.
-    featuresRemapped.put(MetadataVersion.FEATURE_NAME,
-      VersionRange.of(ibp.featureLevel(), ibp.featureLevel()))
+    val featuresRemapped = features + (MetadataVersion.FEATURE_NAME -> VersionRange.of(ibp.featureLevel(), ibp.featureLevel()))
 
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      featuresRemapped, OptionalLong.of(10L))
+      featuresRemapped.asJava, OptionalLong.of(10L))
     TestUtils.retry(60000) {
       assertEquals(1, context.mockChannelManager.unsentQueue.size)
       val sentBrokerRegistrationData = context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data()
