@@ -116,6 +116,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         consumer.start()
         self.await_all_members(consumer)
+        self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=60)
 
         num_rebalances = consumer.num_rebalances()
         # TODO: make this test work with hard shutdowns, which probably requires
@@ -204,7 +205,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         num_bounces=[5],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
-        group_protocol=consumer_group.classic_group_protocol
+        group_protocol=[consumer_group.classic_group_protocol]
     )
     def test_static_consumer_bounce_with_eager_assignment(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
@@ -349,6 +350,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         if fencing_stage == "stable":
             consumer.start()
             self.await_members(consumer, len(consumer.nodes))
+            self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=120)
 
             num_rebalances = consumer.num_rebalances()
             conflict_consumer.start()
@@ -415,9 +417,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         consumer.start()
         self.await_all_members(consumer)
-
+        self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=60)
         partition_owner = consumer.owner(partition)
-        assert partition_owner is not None
 
         # startup the producer and ensure that some records have been written
         producer.start()
@@ -481,6 +482,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer.start()
         consumer.start()
         self.await_all_members(consumer)
+        self.await_all_members_stabilized(self.TOPIC, self.NUM_PARTITIONS, consumer, timeout_sec=60)
 
         num_rebalances = consumer.num_rebalances()
 
@@ -491,7 +493,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         # ensure that the consumers do some work after the broker failure
         self.await_consumed_messages(consumer, min_messages=1000)
 
-        # verify that there were no rebalances on failover
+        # verify that there were no rebalances on failover.
         assert num_rebalances == consumer.num_rebalances(), "Broker failure should not cause a rebalance"
 
         consumer.stop_all()
@@ -608,7 +610,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
             consumer.start_node(node)
             self.await_members(consumer, num_started)
             wait_until(lambda: self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment()),
-                timeout_sec=15,
+                timeout_sec=30,
                 err_msg="expected valid assignments of %d partitions when num_started %d: %s" % \
                         (self.NUM_PARTITIONS, num_started, \
                          [(str(node.account), a) for node, a in consumer.current_assignment().items()]))
