@@ -16,14 +16,12 @@
   */
 package kafka.server
 
-import java.net.Socket
-import java.util.Collections
 import kafka.api.{KafkaSasl, SaslSetup}
+import kafka.security.JaasTestUtils
 import kafka.server.SaslApiVersionsRequestTest.{kafkaClientSaslMechanism, kafkaServerSaslMechanisms}
 import kafka.test.annotation.{ClusterTemplate, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.{ClusterConfig, ClusterInstance}
-import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.message.SaslHandshakeRequestData
@@ -35,6 +33,8 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
+import java.net.Socket
+import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 object SaslApiVersionsRequestTest {
@@ -75,7 +75,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
   @BeforeEach
   def setupSasl(): Unit = {
     sasl = new SaslSetup() {}
-    sasl.startSasl(sasl.jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
+    sasl.startSasl(sasl.jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
   }
 
   @ClusterTemplate("saslApiVersionsRequestClusterConfig")
