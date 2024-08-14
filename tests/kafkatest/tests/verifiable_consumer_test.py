@@ -86,3 +86,12 @@ class VerifiableConsumerTest(KafkaTest):
         
     def await_all_members(self, consumer):
         self.await_members(consumer, self.num_consumers)
+
+    def await_all_members_stabilized(self, topic, num_partitions, consumer, timeout_sec):
+        # Wait until the group is in STABLE state and the consumers reconcile to a valid assignment
+        wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="stable"),
+                   timeout_sec=timeout_sec,
+                   err_msg="Timed out waiting for group %s to transition to STABLE state." % self.group_id)
+        wait_until(lambda: self.valid_assignment(topic, num_partitions, consumer.current_assignment()),
+                   timeout_sec=timeout_sec,
+                   err_msg="Timeout awaiting for the consumers to reconcile to a valid assignment.")
