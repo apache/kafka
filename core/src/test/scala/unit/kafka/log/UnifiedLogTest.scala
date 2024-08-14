@@ -40,6 +40,7 @@ import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile,
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1859,8 +1860,8 @@ class UnifiedLogTest {
     assertTrue(e.recordErrors.get(0).message.startsWith(errorMsgPrefix))
 
     // check if metric for NoKeyCompactedTopicRecordsPerSec is logged
-    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec}")), 1)
-    assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec}") > 0)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicMetrics.NO_KEY_COMPACTED_TOPIC_RECORDS_PER_SEC}")), 1)
+    assertTrue(TestUtils.meterCount(s"${BrokerTopicMetrics.NO_KEY_COMPACTED_TOPIC_RECORDS_PER_SEC}") > 0)
 
     // the following should succeed without any InvalidMessageException
     log.appendAsLeader(messageSetWithKeyedMessage, leaderEpoch = 0)
@@ -4185,6 +4186,88 @@ class UnifiedLogTest {
     log.deleteOldSegments()
     mockTime.sleep(1)
     assertEquals(1, log.logSegments.size)
+  }
+
+  @Test
+  def testRetentionOnLocalLogDeletionWhenRemoteLogCopyDisabled(): Unit = {
+    def createRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)))
+    val segmentBytes = createRecords.sizeInBytes()
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
+          fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    // Given 6 segments of 1 message each
+    for (_ <- 0 until 6) {
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
+    }
+    assertEquals(6, log.logSegments.size)
+
+    log.updateHighWatermark(log.logEndOffset)
+
+    // Should not delete local log because highest remote storage offset is -1 (default value)
+    log.deleteOldSegments()
+    assertEquals(6, log.logSegments.size())
+    assertEquals(0, log.logStartOffset)
+    assertEquals(0, log.localLogStartOffset())
+
+    // simulate calls to upload 2 segments to remote storage
+    log.updateHighestOffsetInRemoteStorage(1)
+
+    log.deleteOldSegments()
+    assertEquals(4, log.logSegments.size())
+    assertEquals(0, log.logStartOffset)
+    assertEquals(2, log.localLogStartOffset())
+
+    // add remoteCopyDisabled = true
+    val copyDisabledLogConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
+      fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteLogCopyDisable = true)
+    log.updateConfig(copyDisabledLogConfig)
+
+    // No local logs will be deleted even though local retention bytes is 1 because we'll adopt retention.ms/bytes
+    // when remote.log.copy.disable = true
+    log.deleteOldSegments()
+    assertEquals(4, log.logSegments.size())
+    assertEquals(0, log.logStartOffset)
+    assertEquals(2, log.localLogStartOffset())
+
+    // simulate the remote logs are all deleted due to retention policy
+    log.updateLogStartOffsetFromRemoteTier(2)
+    assertEquals(4, log.logSegments.size())
+    assertEquals(2, log.logStartOffset)
+    assertEquals(2, log.localLogStartOffset())
+
+    // produce 3 more segments
+    for (_ <- 0 until 3) {
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
+    }
+    assertEquals(7, log.logSegments.size)
+    log.updateHighWatermark(log.logEndOffset)
+
+    // try to delete local logs again, 2 segments will be deleted this time because we'll adopt retention.ms/bytes (retention.bytes = 5)
+    // when remote.log.copy.disable = true
+    log.deleteOldSegments()
+    assertEquals(5, log.logSegments.size())
+    assertEquals(4, log.logStartOffset)
+    assertEquals(4, log.localLogStartOffset())
+
+    // add localRetentionMs = 1, retentionMs = 1000
+    val retentionMsConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionMs = 1, retentionMs = 1000,
+      fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteLogCopyDisable = true)
+    log.updateConfig(retentionMsConfig)
+
+    // Should not delete any logs because no local logs expired using retention.ms = 1000
+    mockTime.sleep(10)
+    log.deleteOldSegments()
+    assertEquals(5, log.logSegments.size())
+    assertEquals(4, log.logStartOffset)
+    assertEquals(4, log.localLogStartOffset())
+
+    // Should delete all logs because all of them are expired based on retentionMs = 1000
+    mockTime.sleep(1000)
+    log.deleteOldSegments()
+    assertEquals(1, log.logSegments.size())
+    assertEquals(9, log.logStartOffset)
+    assertEquals(9, log.localLogStartOffset())
   }
 
   @Test

@@ -47,6 +47,10 @@ public class ExponentialBackoff {
                 Math.log(maxInterval / (double) Math.max(initialInterval, 1)) / Math.log(multiplier) : 0;
     }
 
+    public long initialInterval() {
+        return initialInterval;
+    }
+
     public long backoff(long attempts) {
         if (expMax == 0) {
             return initialInterval;

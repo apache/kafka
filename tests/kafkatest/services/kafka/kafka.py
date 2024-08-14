@@ -409,6 +409,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.interbroker_sasl_mechanism = interbroker_sasl_mechanism
         self._security_config = None
 
+        # When the new group coordinator is enabled, the new consumer rebalance
+        # protocol is enabled too.
+        rebalance_protocols = "classic"
+        if self.use_new_coordinator:
+            rebalance_protocols = "classic,consumer"
+
         for node in self.nodes:
             node_quorum_info = quorum.NodeQuorumInfo(self.quorum_info, node)
 
@@ -422,7 +428,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             kraft_broker_configs = {
                 config_property.PORT: config_property.FIRST_BROKER_PORT,
                 config_property.NODE_ID: self.idx(node),
-                config_property.NEW_GROUP_COORDINATOR_ENABLE: use_new_coordinator
+                config_property.NEW_GROUP_COORDINATOR_ENABLE: use_new_coordinator,
+                config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS: rebalance_protocols
             }
             kraft_broker_plus_zk_configs = kraft_broker_configs.copy()
             kraft_broker_plus_zk_configs.update(zk_broker_configs)
@@ -782,7 +789,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if self.use_new_coordinator:
             override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = 'true'
-    
+            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer'
+
         for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
 
@@ -1702,7 +1710,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
-    def list_consumer_groups(self, node=None, command_config=None):
+    def list_consumer_groups(self, node=None, command_config=None, state=None, type=None):
         """ Get list of consumer groups.
         """
         if node is None:
@@ -1719,6 +1727,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
                command_config)
+        if state is not None:
+            cmd += " --state %s" % state
+        if type is not None:
+            cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
 
     def describe_consumer_group(self, group, node=None, command_config=None):

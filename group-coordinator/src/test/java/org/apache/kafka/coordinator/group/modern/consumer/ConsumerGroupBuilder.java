@@ -70,7 +70,7 @@ public class ConsumerGroupBuilder {
 
         // Add subscription records for members.
         members.forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, member))
+            records.add(CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member))
         );
 
         // Add subscription metadata.
@@ -92,23 +92,23 @@ public class ConsumerGroupBuilder {
         }
 
         if (!subscriptionMetadata.isEmpty()) {
-            records.add(CoordinatorRecordHelpers.newGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            records.add(CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
         }
 
         // Add group epoch record.
-        records.add(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, groupEpoch));
+        records.add(CoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->
-            records.add(CoordinatorRecordHelpers.newTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
+            records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
         );
 
         // Add target assignment epoch.
-        records.add(CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId, member))
+            records.add(CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member))
         );
 
         return records;

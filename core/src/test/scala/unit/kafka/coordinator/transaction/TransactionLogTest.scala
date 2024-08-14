@@ -17,8 +17,6 @@
 package kafka.coordinator.transaction
 
 
-import kafka.internals.generated.TransactionLogKey
-import kafka.internals.generated.TransactionLogValue
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -26,6 +24,7 @@ import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
 import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -52,7 +51,7 @@ class TransactionLogTest {
     val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs, 0)
     txnMetadata.addPartitions(topicPartitions)
 
-    assertThrows(classOf[IllegalStateException], () => TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
+    assertThrows(classOf[IllegalStateException], () => TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true))
   }
 
   @Test
@@ -80,7 +79,7 @@ class TransactionLogTest {
         txnMetadata.addPartitions(topicPartitions)
 
       val keyBytes = TransactionLog.keyToBytes(transactionalId)
-      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
+      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true)
 
       new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
@@ -120,7 +119,7 @@ class TransactionLogTest {
     txnMetadata.addPartitions(Set(topicPartition))
 
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
+    val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), true)
     val transactionMetadataRecord = TestUtils.records(Seq(
       new SimpleRecord(keyBytes, valueBytes)
     )).records.asScala.head
@@ -146,8 +145,15 @@ class TransactionLogTest {
   @Test
   def testSerializeTransactionLogValueToHighestNonFlexibleVersion(): Unit = {
     val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500)
-    val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata))
+    val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, false))
     assertEquals(0, txnLogValueBuffer.getShort)
+  }
+
+  @Test
+  def testSerializeTransactionLogValueToFlexibleVersion(): Unit = {
+    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500)
+    val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, true))
+    assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_VERSION, txnLogValueBuffer.getShort)
   }
 
   @Test

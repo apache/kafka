@@ -69,7 +69,7 @@ Field Types
 -----------
 There are several primitive field types available.
 
-* "boolean": either true or false.
+* "bool": either true or false.
 
 * "int8": an 8-bit integer.
 
