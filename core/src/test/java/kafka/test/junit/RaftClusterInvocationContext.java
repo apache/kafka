@@ -27,7 +27,6 @@ import kafka.test.annotation.Type;
 import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
 import kafka.zk.EmbeddedZookeeper;
-import org.apache.kafka.test.TestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
@@ -37,6 +36,7 @@ import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
@@ -241,14 +241,19 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public void consistentMetadata() throws InterruptedException {
-            long controllerOffset = controllers().values().stream().findAny().get()
-                    .raftManager().replicatedLog().endOffset().offset();
+        public long waitForMeatdataSync() throws InterruptedException {
+            if (controllers().isEmpty()) {
+                return -1;
+            }
+
+            long controllerOffset = controllers().values().stream().mapToLong(s ->
+                            s.raftManager().replicatedLog().endOffset().offset()).max().getAsLong();
 
             TestUtils.waitForCondition(() ->
                     brokers().values().stream().allMatch(broker ->
                             ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset
                     ), "Timeout waiting for controller metadata propagating to brokers");
+            return controllerOffset;
         }
 
         @Override

@@ -188,7 +188,14 @@ public interface ClusterInstance {
         waitForTopic(topic, 0);
     }
 
-    default void consistentMetadata() throws InterruptedException {}
+    default long waitForMeatdataSync() throws InterruptedException {
+        if (controllers().isEmpty()) {
+            return -1;
+        }
+
+        return controllers().values().stream().mapToLong(s ->
+                s.raftManager().replicatedLog().endOffset().offset()).max().getAsLong();
+    }
 
     default void createTopic(String topicName, int partitions, short replicas) {
         try (Admin admin = createAdminClient()) {
