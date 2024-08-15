@@ -50,7 +50,6 @@ import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -506,7 +505,7 @@ public class ClusterControlManager {
         }
         // A feature is not found in the finalizedFeature map if it is unknown to the controller or set to 0 (feature not enabled).
         // Only log if the feature name is not known by the controller.
-        if (!Features.PRODUCTION_FEATURE_NAMES.contains(feature.name()))
+        if (!finalizedFeatures.featureNames().contains(feature.name()))
             log.warn("Broker {} registered with feature {} that is unknown to the controller",
                     brokerId, feature.name());
         return new BrokerFeature().

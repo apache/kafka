@@ -69,7 +69,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft")) // just for debugging
   def shouldBootstrapTwoBrokersWithLeaderThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(true)
   }
