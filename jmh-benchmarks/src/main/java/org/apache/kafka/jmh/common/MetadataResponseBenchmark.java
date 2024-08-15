@@ -85,4 +85,3 @@ public class MetadataResponseBenchmark {
         new Runner(new OptionsBuilder().include(MetadataResponseBenchmark.class.getSimpleName()).build()).run();
     }
 }
-
