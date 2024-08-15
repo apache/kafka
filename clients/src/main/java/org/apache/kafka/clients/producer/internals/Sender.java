@@ -45,6 +45,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -397,7 +398,7 @@ public class Sender implements Runnable {
                 // Update both readyTimeMs and drainTimeMs, this would "reset" the node
                 // latency.
                 this.accumulator.updateNodeLatencyStats(node.id(), now, true);
-                if (transactionManager != null) this.transactionManager.handleCoordinatorReadyAndMaybeUpdateApiVersions();
+                if (transactionManager != null) this.transactionManager.handleCoordinatorReady();
             }
         }
 
@@ -572,7 +573,7 @@ public class Sender implements Runnable {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
                 // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
                 // the time when the abortable error is handled
-                transactionManager.handleCoordinatorReadyAndMaybeUpdateApiVersions();
+                transactionManager.handleCoordinatorReady();
             }
             return true;
         }
@@ -905,16 +906,21 @@ public class Sender implements Runnable {
         }
 
         String transactionalId = null;
+        short maxProduceRequestVersion = ApiKeys.PRODUCE.latestVersion();
         if (transactionManager != null && transactionManager.isTransactional()) {
             transactionalId = transactionManager.transactionalId();
+            if (!transactionManager.isTransactionV2Enabled()) {
+                maxProduceRequestVersion = ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION;
+            }
         }
 
         ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(minUsedMagic,
-                new ProduceRequestData()
-                        .setAcks(acks)
-                        .setTimeoutMs(timeout)
-                        .setTransactionalId(transactionalId)
-                        .setTopicData(tpd));
+            new ProduceRequestData()
+                .setAcks(acks)
+                .setTimeoutMs(timeout)
+                .setTransactionalId(transactionalId)
+                .setTopicData(tpd),
+            maxProduceRequestVersion);
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
 
         String nodeId = Integer.toString(destination);

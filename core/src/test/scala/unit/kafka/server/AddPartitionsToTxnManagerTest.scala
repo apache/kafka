@@ -108,6 +108,7 @@ class AddPartitionsToTxnManagerTest {
     val transaction1Errors = mutable.Map[TopicPartition, Errors]()
     val transaction2Errors = mutable.Map[TopicPartition, Errors]()
     val transaction3Errors = mutable.Map[TopicPartition, Errors]()
+    val transactionSupportedOperation = addPartition
 
     addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1Errors), transactionSupportedOperation)
     addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), transactionSupportedOperation)
@@ -139,8 +140,8 @@ class AddPartitionsToTxnManagerTest {
         assertEquals(
           AddPartitionsToTxnRequest.Builder.forBroker(
             new AddPartitionsToTxnTransactionCollection(Seq(
-              transactionData(transactionalId3, producerId3),
-              transactionData(transactionalId1, producerId1, producerEpoch = 1)
+              transactionData(transactionalId3, producerId3, verifyOnly = false),
+              transactionData(transactionalId1, producerId1, producerEpoch = 1, verifyOnly = false)
             ).iterator.asJava)
           ).data,
           requestAndHandler.request.asInstanceOf[AddPartitionsToTxnRequest.Builder].data // insertion order
@@ -160,6 +161,7 @@ class AddPartitionsToTxnManagerTest {
     mockTransactionStateMetadata(0, 0, Some(node0))
     mockTransactionStateMetadata(1, 1, Some(node1))
     mockTransactionStateMetadata(2, 2, Some(node2))
+    val transactionSupportedOperation = if (shouldAddPartition) addPartition else genericError
 
     val transactionErrors = mutable.Map[TopicPartition, Errors]()
 
@@ -427,7 +429,7 @@ class AddPartitionsToTxnManagerTest {
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short = 0,
-    verifyOnly: Boolean = true
+    verifyOnly: Boolean,
   ): AddPartitionsToTxnTransaction = {
     new AddPartitionsToTxnTransaction()
       .setTransactionalId(transactionalId)

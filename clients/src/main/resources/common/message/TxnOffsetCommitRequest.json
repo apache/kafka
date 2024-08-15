@@ -26,7 +26,9 @@
   //
   // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   //
-  // Version 5 is the same with version 3 (KIP-890).
+  // Version 5 is the same as version 4 (KIP-890). Note when TxnOffsetCommit requests are used in transaction, if
+  // transaction V2 (KIP_890 part 2) is enabled, the TxnOffsetCommit request will also include the function for a
+  // AddOffsetsToTxn call. If V2 is disabled, the client can't use TxnOffsetCommit request version higher than 4.
   "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [

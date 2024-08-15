@@ -178,7 +178,12 @@ public class TransactionManagerTest {
                     .setName("transaction.version")
                     .setMaxVersion(transactionV2Enabled ? (short) 2 : (short) 1)
                     .setMinVersion((short) 0)),
-                false));
+                false,
+                Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
+                    .setName("transaction.version")
+                    .setMaxVersionLevel((short) 2)
+                    .setMinVersionLevel((short) 2)),
+                0));
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
                 transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
@@ -945,7 +950,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransactionManagerUpdateApiVersionForV2() {
+    public void testTransactionManagerDisablesV2() {
         Metrics metrics = new Metrics(time);
 
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
@@ -965,7 +970,12 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 1)
                 .setMinVersion((short) 0)),
-            false));
+            false,
+            Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersionLevel((short) 1)
+                .setMinVersionLevel((short) 1)),
+            0));
         this.transactionManager = new TransactionManager(logContext, transactionalId,
             transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
@@ -983,13 +993,8 @@ public class TransactionManagerTest {
             MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
             50, transactionManager, apiVersions);
 
-        // The Produce and TxnOffsetCommit max version should be updated.
         doInitTransactions();
-        NodeApiVersions nodeApiVersions = apiVersions.get("0");
-        assertEquals(TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION, nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT).maxVersion());
-        assertEquals(1, nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT).minVersion());
-        assertEquals(ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION, nodeApiVersions.apiVersion(ApiKeys.PRODUCE).maxVersion());
-        assertEquals(5, nodeApiVersions.apiVersion(ApiKeys.PRODUCE).minVersion());
+        assertFalse(transactionManager.isTransactionV2Enabled());
     }
 
     @Test

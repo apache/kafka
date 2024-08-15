@@ -37,7 +37,9 @@
   //
   // Version 11 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   //
-  // Version 12 is the same as version 10 (KIP-890).
+  // Version 12 is the same as version 11 (KIP-890). Note when produce requests are used in transaction, if
+  // transaction V2 (KIP_890 part 2) is enabled, the produce request will also include the function for a
+  // AddPartitionsToTxn call. If V2 is disabled, the client can't use produce request version higher than 11.
   "validVersions": "0-12",
   "flexibleVersions": "9+",
   "fields": [

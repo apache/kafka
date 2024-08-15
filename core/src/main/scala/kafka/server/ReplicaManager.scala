@@ -1086,7 +1086,17 @@ class ReplicaManager(val config: KafkaConfig,
     def invokeCallback(
       verificationErrors: Map[TopicPartition, Errors]
     ): Unit = {
-      callback((errors ++ verificationErrors, verificationGuards.toMap))
+      // Convert the errors from the AddPartitionsToTxn response.
+      verificationErrors.foreach(verificationError => {
+        verificationError._2 match {
+          case Errors.COORDINATOR_NOT_AVAILABLE | Errors.NOT_COORDINATOR | Errors.CONCURRENT_TRANSACTIONS =>
+            errors.put(verificationError._1, Errors.NOT_ENOUGH_REPLICAS)
+          case Errors.UNKNOWN_PRODUCER_ID =>
+            errors.put(verificationError._1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER)
+          case _ => errors + verificationError
+        }
+      })
+      callback((errors, verificationGuards.toMap))
     }
 
     addPartitionsToTxnManager.foreach(_.addOrVerifyTransaction(
