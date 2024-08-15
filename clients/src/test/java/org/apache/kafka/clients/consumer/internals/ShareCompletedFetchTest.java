@@ -52,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -84,6 +85,7 @@ public class ShareCompletedFetchTest {
         assertEquals(10, records.size());
         ConsumerRecord<String, String> record = records.get(0);
         assertEquals(10L, record.offset());
+        assertEquals(Optional.of((short) 1), record.deliveryCount());
         Acknowledgements acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
 
@@ -92,6 +94,7 @@ public class ShareCompletedFetchTest {
         assertEquals(1, records.size());
         record = records.get(0);
         assertEquals(20L, record.offset());
+        assertEquals(Optional.of((short) 1), record.deliveryCount());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
 
@@ -120,6 +123,7 @@ public class ShareCompletedFetchTest {
         assertEquals(10, records.size());
         ConsumerRecord<String, String> record = records.get(0);
         assertEquals(510L, record.offset());
+        assertEquals(Optional.of((short) 1), record.deliveryCount());
         Acknowledgements acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
 
@@ -283,9 +287,11 @@ public class ShareCompletedFetchTest {
         // The first offset should be 0
         ConsumerRecord<String, String> record = records.get(0);
         assertEquals(0L, record.offset());
+        assertEquals(Optional.of((short) 1), record.deliveryCount());
         // The third offset should be 6
         record = records.get(3);
         assertEquals(6L, record.offset());
+        assertEquals(Optional.of((short) 1), record.deliveryCount());
 
         records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
         assertEquals(0, records.size());
@@ -316,9 +322,11 @@ public class ShareCompletedFetchTest {
         // The first offset should be 1
         ConsumerRecord<String, String> record = records.get(0);
         assertEquals(1L, record.offset());
+        assertEquals(Optional.of((short) 1), record.deliveryCount());
         // The second offset should be 3
         record = records.get(1);
         assertEquals(3L, record.offset());
+        assertEquals(Optional.of((short) 1), record.deliveryCount());
 
         records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
         assertEquals(0, records.size());
