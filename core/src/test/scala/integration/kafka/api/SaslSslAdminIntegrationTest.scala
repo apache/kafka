@@ -526,7 +526,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testExpireDelegationToken(): Unit = {
+  def testExpireDelegationToken(quorum: String): Unit = {
     client = createAdminClient
     val createDelegationTokenOptions = new CreateDelegationTokenOptions()
 
@@ -539,6 +539,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Test expiring the token immediately
     val token1 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
     val expireTokeOptions = new ExpireDelegationTokenOptions()
+    // wait for broker sync
+    Thread.sleep(500)
     val token1ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(
       token1.hmac(),
       expireTokeOptions.expiryTimePeriodMs(-1)).expiryTimestamp().get()
@@ -556,6 +558,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     // Test shortening the expiryTimestamp
     val token3 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    // wait for broker sync
+    Thread.sleep(500)
     val token3ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(
       token3.hmac(),
       expireTokeOptions.expiryTimePeriodMs(1000)).expiryTimestamp().get()
