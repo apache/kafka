@@ -1918,6 +1918,148 @@ public class ConfigCommandTest {
         assertEquals("client-metrics is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage());
     }
 
+    @Test
+    public void shouldAlterGroupConfig() {
+        Node node = new Node(1, "localhost", 9092);
+        verifyAlterGroupConfig(node, "group", Arrays.asList("--entity-name", "group"));
+    }
+
+    private void verifyAlterGroupConfig(Node node, String resourceName, List<String> resourceOpts) {
+        List<String> optsList = concat(Arrays.asList("--bootstrap-server", "localhost:9092",
+            "--entity-type", "groups",
+            "--alter",
+            "--delete-config", "consumer.session.timeout.ms",
+            "--add-config", "consumer.heartbeat.interval.ms=6000"), resourceOpts);
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray(optsList));
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.GROUP, resourceName);
+        List<ConfigEntry> configEntries = Collections.singletonList(new ConfigEntry("consumer.session.timeout.ms", "45000",
+            ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG, false, false, Collections.emptyList(),
+            ConfigEntry.ConfigType.UNKNOWN, null));
+        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        future.complete(Collections.singletonMap(resource, new Config(configEntries)));
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        when(describeResult.all()).thenReturn(future);
+
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.complete(null);
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
+
+        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
+                assertEquals(1, resources.size());
+                ConfigResource res = resources.iterator().next();
+                assertEquals(ConfigResource.Type.GROUP, res.type());
+                assertEquals(resourceName, res.name());
+                return describeResult;
+            }
+
+            @Override
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+                assertEquals(1, configs.size());
+                Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry = configs.entrySet().iterator().next();
+                ConfigResource res = entry.getKey();
+                Collection<AlterConfigOp> alterConfigOps = entry.getValue();
+                assertEquals(ConfigResource.Type.GROUP, res.type());
+                assertEquals(2, alterConfigOps.size());
+
+                List<AlterConfigOp> expectedConfigOps = Arrays.asList(
+                    new AlterConfigOp(new ConfigEntry("consumer.heartbeat.interval.ms", "6000"), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(new ConfigEntry("consumer.session.timeout.ms", ""), AlterConfigOp.OpType.DELETE)
+                );
+                assertEquals(expectedConfigOps.size(), alterConfigOps.size());
+                Iterator<AlterConfigOp> alterConfigOpsIter = alterConfigOps.iterator();
+                for (AlterConfigOp expectedConfigOp : expectedConfigOps) {
+                    assertEquals(expectedConfigOp, alterConfigOpsIter.next());
+                }
+                return alterResult;
+            }
+        };
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        verify(describeResult).all();
+        verify(alterResult).all();
+    }
+
+    @Test
+    public void shouldDescribeGroupConfigWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "groups",
+            "--describe"));
+
+        ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.GROUP, "group");
+        ConfigEntry configEntry = new ConfigEntry("consumer.heartbeat.interval.ms", "6000");
+        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        when(describeResult.all()).thenReturn(future);
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertTrue(options.includeSynonyms());
+                assertEquals(1, resources.size());
+                ConfigResource resource = resources.iterator().next();
+                assertEquals(ConfigResource.Type.GROUP, resource.type());
+                assertEquals(resourceCustom.name(), resource.name());
+                future.complete(Collections.singletonMap(resourceCustom, new Config(Collections.singletonList(configEntry))));
+                return describeResult;
+            }
+        };
+        mockAdminClient.incrementalAlterConfigs(Collections.singletonMap(resourceCustom,
+            Collections.singletonList(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
+        ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+        verify(describeResult).all();
+    }
+
+    @Test
+    public void shouldNotAlterGroupConfigWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "groups",
+            "--alter",
+            "--add-config", "consumer.heartbeat.interval.ms=6000"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("an entity name must be specified with --alter of groups", exception.getMessage());
+    }
+
+    @Test
+    public void shouldNotSupportAlterGroupConfigWithZookeeperArg() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "group",
+            "--entity-type", "groups",
+            "--alter",
+            "--add-config", "consumer.heartbeat.interval.ms=6000"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+    }
+
+    @Test
+    public void shouldNotSupportDescribeGroupConfigWithZookeeperArg() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "group",
+            "--entity-type", "groups",
+            "--describe"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
+        assertEquals("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+    }
+
+    @Test
+    public void shouldNotSupportAlterGroupConfigWithZookeeper() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "group",
+            "--entity-type", "groups",
+            "--alter",
+            "--add-config", "consumer.heartbeat.interval.ms=6000"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, alterOpts, DUMMY_ADMIN_ZK_CLIENT));
+        assertEquals("groups is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage());
+    }
+
     public static String[] toArray(String... first) {
         return first;
     }

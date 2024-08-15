@@ -91,6 +91,7 @@ public class MockAdminClient extends AdminClient {
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
     private final Map<String, Map<String, String>> clientMetricsConfigs;
+    private final Map<String, Map<String, String>> groupConfigs;
 
     private Node controller;
     private int timeoutNextRequests = 0;
@@ -243,6 +244,7 @@ public class MockAdminClient extends AdminClient {
         this.brokerLogDirs = brokerLogDirs;
         this.brokerConfigs = new ArrayList<>();
         this.clientMetricsConfigs = new HashMap<>();
+        this.groupConfigs = new HashMap<>();
         for (int i = 0; i < brokers.size(); i++) {
             final Map<String, String> config = new HashMap<>();
             config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
@@ -713,7 +715,9 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
+        future.complete(groupConfigs.keySet().stream().map(g -> new ConsumerGroupListing(g, false)).collect(Collectors.toList()));
+        return new ListConsumerGroupsResult(future);
     }
 
     @Override
@@ -823,6 +827,13 @@ public class MockAdminClient extends AdminClient {
                     throw new InvalidRequestException("Empty resource name");
                 }
                 return toConfigObject(clientMetricsConfigs.get(resourceName));
+            }
+            case GROUP: {
+                String resourceName = resource.name();
+                if (resourceName.isEmpty()) {
+                    throw new InvalidRequestException("Empty resource name");
+                }
+                return toConfigObject(groupConfigs.get(resourceName));
             }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
@@ -943,6 +954,33 @@ public class MockAdminClient extends AdminClient {
                     }
                 }
                 clientMetricsConfigs.put(resourceName, newMap);
+                return null;
+            }
+            case GROUP: {
+                String resourceName = resource.name();
+                if (resourceName.isEmpty()) {
+                    return new InvalidRequestException("Empty resource name");
+                }
+
+                if (!groupConfigs.containsKey(resourceName)) {
+                    groupConfigs.put(resourceName, new HashMap<>());
+                }
+
+                HashMap<String, String> newMap = new HashMap<>(groupConfigs.get(resourceName));
+                for (AlterConfigOp op : ops) {
+                    switch (op.opType()) {
+                        case SET:
+                            newMap.put(op.configEntry().name(), op.configEntry().value());
+                            break;
+                        case DELETE:
+                            newMap.remove(op.configEntry().name());
+                            break;
+                        default:
+                            return new InvalidRequestException(
+                                "Unsupported op type " + op.opType());
+                    }
+                }
+                groupConfigs.put(resourceName, newMap);
                 return null;
             }
             default:
