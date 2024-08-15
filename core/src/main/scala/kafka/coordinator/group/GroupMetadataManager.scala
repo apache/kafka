@@ -209,14 +209,6 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  // visible for testing
-  private[group] def isGroupOpenForProducer(producerId: Long, groupId: String) = openGroupsForProducer.get(producerId) match {
-    case Some(groups) =>
-      groups.contains(groupId)
-    case None =>
-      false
-  }
-
   /**
    * Get the group associated with the given groupId or null if not found
    */
@@ -1265,6 +1257,7 @@ object GroupMetadataManager {
   }
 
   // Formatter for use with tools to read group metadata history
+  @Deprecated
   class GroupMetadataMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {

@@ -22,8 +22,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
@@ -111,14 +109,15 @@ public abstract class AbstractStream<K, V> {
         return (readOnlyKey, value) -> valueMapper.apply(value);
     }
 
+    @SuppressWarnings("deprecation")
     static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(
-        final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
+        final org.apache.kafka.streams.kstream.ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
         ApiUtils.checkSupplier(valueTransformerSupplier);
         return new ValueTransformerWithKeySupplier<K, V, VR>() {
             @Override
             public ValueTransformerWithKey<K, V, VR> get() {
-                final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
+                final org.apache.kafka.streams.kstream.ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
                 return new ValueTransformerWithKey<K, V, VR>() {
                     @Override
                     public void init(final ProcessorContext context) {

@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
@@ -149,6 +149,7 @@ object KafkaConfig {
     val maybeSensitive = resourceType match {
       case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
       case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).asScala)
+      case ConfigResource.Type.GROUP => KafkaConfig.maybeSensitive(GroupConfig.configType(name).asScala)
       case ConfigResource.Type.BROKER_LOGGER => false
       case ConfigResource.Type.CLIENT_METRICS => false
       case _ => true
@@ -578,6 +579,14 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       }
       warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is enabled along with the new group coordinator. " +
         "This is part of the preview of KIP-848 and MUST NOT be used in production.")
+    }
+    if (protocols.contains(GroupType.SHARE)) {
+      // The CONSUMER protocol enables the new group coordinator, and that's a prerequisite for share groups.
+      if (!protocols.contains(GroupType.CONSUMER)) {
+        throw new ConfigException(s"Enabling the new '${GroupType.SHARE}' rebalance protocol requires '${GroupType.CONSUMER}' to be enabled also.")
+      }
+      warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
+        "This is part of the early access of KIP-932 and MUST NOT be used in production.")
     }
     protocols
   }

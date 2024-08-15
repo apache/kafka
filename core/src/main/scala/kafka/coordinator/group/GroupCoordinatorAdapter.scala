@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.coordinator.group
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.util.FutureUtils
 
@@ -618,6 +619,17 @@ private[group] class GroupCoordinatorAdapter(
 
   override def groupMetadataTopicConfigs(): Properties = {
     coordinator.offsetsTopicConfigs
+  }
+
+  override def groupConfig(groupId: String): Optional[group.GroupConfig] = {
+    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support get group config.")
+  }
+
+  override def updateGroupConfig(
+    groupId: String,
+    newGroupConfig: Properties
+  ): Unit = {
+    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support update group config.")
   }
 
   override def startup(groupMetadataTopicPartitionCount: IntSupplier): Unit = {

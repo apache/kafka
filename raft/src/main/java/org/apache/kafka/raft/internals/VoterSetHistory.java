@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.raft.VoterSet;
+
 import java.util.Optional;
 import java.util.OptionalLong;
 
