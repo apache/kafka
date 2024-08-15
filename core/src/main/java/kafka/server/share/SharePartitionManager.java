@@ -696,6 +696,7 @@ public class SharePartitionManager implements AutoCloseable {
      */
     // Visible for testing.
     long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
+        // Isolation level is required when reading from the latest offset hence use Option.empty() for now.
         Option<TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
             Optional.empty(), true);
