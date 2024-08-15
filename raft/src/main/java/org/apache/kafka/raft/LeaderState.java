@@ -692,7 +692,7 @@ public class LeaderState<T> implements EpochState {
         }
     }
 
-    static class ReplicaState implements Comparable<ReplicaState> {
+    public static class ReplicaState implements Comparable<ReplicaState> {
         private ReplicaKey replicaKey;
         private Endpoints listeners;
         private Optional<LogOffsetMetadata> endOffset;
