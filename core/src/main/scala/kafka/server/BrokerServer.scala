@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{CoordinatorRecord, CoordinatorRecordSerde, GroupCoordinator, GroupCoordinatorService}
+import org.apache.kafka.coordinator.group.{GroupConfigManager, CoordinatorRecord, CoordinatorRecordSerde, GroupCoordinator, GroupCoordinatorService}
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
 import org.apache.kafka.security.CredentialProvider
@@ -302,9 +302,9 @@ class BrokerServer(
         time,
         assignmentsChannelManager,
         config.brokerId,
-        () => lifecycleManager.brokerEpoch,
-        (directoryId: Uuid) => logManager.directoryPath(directoryId).asJava,
-        (topicId: Uuid) => Optional.ofNullable(metadataCache.topicIdsToNames().get(topicId))
+        () => metadataCache.getImage(),
+        (directoryId: Uuid) => logManager.directoryPath(directoryId).
+          getOrElse("[unknown directory path]")
       )
       val directoryEventHandler = new DirectoryEventHandler {
         override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
@@ -361,7 +361,8 @@ class BrokerServer(
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
         ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager))
+        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
+        ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
 
       val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures).asJava
 
@@ -602,6 +603,7 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
+      val groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap())
       new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)
@@ -609,6 +611,7 @@ class BrokerServer(
         .withWriter(writer)
         .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
         .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
+        .withGroupConfigManager(groupConfigManager)
         .build()
     } else {
       GroupCoordinatorAdapter(

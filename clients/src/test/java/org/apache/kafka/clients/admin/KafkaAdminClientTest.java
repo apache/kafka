@@ -55,6 +55,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
@@ -290,6 +291,7 @@ import static org.apache.kafka.common.message.AlterPartitionReassignmentsRespons
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -2083,6 +2085,33 @@ public class KafkaAdminClientTest {
             assertEquals(new HashSet<>(asList(resource, resource1)), result.keySet());
             assertNotNull(result.get(resource).get());
             assertNotNull(result.get(resource1).get());
+        }
+    }
+
+    @Test
+    public void testDescribeConsumerGroupConfigs() throws Exception {
+        ConfigResource resource1 = new ConfigResource(ConfigResource.Type.GROUP, "group1");
+        ConfigResource resource2 = new ConfigResource(ConfigResource.Type.GROUP, "group2");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
+                new DescribeConfigsResponseData().setResults(asList(
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setResourceName(resource1.name())
+                        .setResourceType(resource1.type().id())
+                        .setErrorCode(Errors.NONE.code())
+                        .setConfigs(emptyList()),
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                        .setResourceName(resource2.name())
+                        .setResourceType(resource2.type().id())
+                        .setErrorCode(Errors.NONE.code())
+                        .setConfigs(emptyList())))));
+            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
+                resource1,
+                resource2)).values();
+            assertEquals(new HashSet<>(asList(resource1, resource2)), result.keySet());
+            assertNotNull(result.get(resource1).get());
+            assertNotNull(result.get(resource2).get());
         }
     }
 
@@ -5023,11 +5052,18 @@ public class KafkaAdminClientTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Config value append is not allowed for config"));
 
+            responseData.responses().add(new AlterConfigsResourceResponse()
+                    .setResourceName("group1")
+                    .setResourceType(ConfigResource.Type.GROUP.id())
+                    .setErrorCode(Errors.INVALID_CONFIG.code())
+                    .setErrorMessage("Unknown group config name: group.initial.rebalance.delay.ms"));
+
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
 
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "");
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "topic1");
             ConfigResource metricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "metric1");
+            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
 
             AlterConfigOp alterConfigOp1 = new AlterConfigOp(
                     new ConfigEntry("log.segment.bytes", "1073741"),
@@ -5041,15 +5077,21 @@ public class KafkaAdminClientTest {
                     new ConfigEntry("interval.ms", "1000"),
                     AlterConfigOp.OpType.APPEND);
 
+            AlterConfigOp alterConfigOp4 = new AlterConfigOp(
+                    new ConfigEntry("group.initial.rebalance.delay.ms", "1000"),
+                    AlterConfigOp.OpType.SET);
+
             final Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             configs.put(brokerResource, singletonList(alterConfigOp1));
             configs.put(topicResource, singletonList(alterConfigOp2));
             configs.put(metricResource, singletonList(alterConfigOp3));
+            configs.put(groupResource, singletonList(alterConfigOp4));
 
             AlterConfigsResult result = env.adminClient().incrementalAlterConfigs(configs);
             TestUtils.assertFutureError(result.values().get(brokerResource), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(topicResource), InvalidRequestException.class);
             TestUtils.assertFutureError(result.values().get(metricResource), InvalidRequestException.class);
+            TestUtils.assertFutureError(result.values().get(groupResource), InvalidConfigurationException.class);
 
             // Test a call where there are no errors.
             responseData =  new IncrementalAlterConfigsResponseData();
@@ -5063,10 +5105,16 @@ public class KafkaAdminClientTest {
                     .setResourceType(ConfigResource.Type.CLIENT_METRICS.id())
                     .setErrorCode(Errors.NONE.code())
                     .setErrorMessage(ApiError.NONE.message()));
+            responseData.responses().add(new AlterConfigsResourceResponse()
+                    .setResourceName("group1")
+                    .setResourceType(ConfigResource.Type.GROUP.id())
+                    .setErrorCode(Errors.NONE.code())
+                    .setErrorMessage(ApiError.NONE.message()));
 
             final Map<ConfigResource, Collection<AlterConfigOp>> successConfig = new HashMap<>();
             successConfig.put(brokerResource, singletonList(alterConfigOp1));
             successConfig.put(metricResource, singletonList(alterConfigOp3));
+            successConfig.put(groupResource, singletonList(alterConfigOp4));
 
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
             env.adminClient().incrementalAlterConfigs(successConfig).all().get();
@@ -7373,7 +7421,7 @@ public class KafkaAdminClientTest {
             assertNotNull(result.descriptions().get(1).get());
         }
     }
-    
+
     @Test
     public void testDescribeReplicaLogDirsWithNonExistReplica() throws Exception {
         int brokerId = 0;
@@ -7392,7 +7440,7 @@ public class KafkaAdminClientTest {
 
             DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(tpr1, tpr2));
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
-            
+
             assertEquals(logDir, values.get(tpr1).get().getCurrentReplicaLogDir());
             assertNull(values.get(tpr1).get().getFutureReplicaLogDir());
             assertEquals(offsetLag, values.get(tpr1).get().getCurrentReplicaOffsetLag());
@@ -8191,7 +8239,23 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testCallFailWithUnsupportedVersionExceptionDoesNotHaveConcurrentModificationException() throws InterruptedException {
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+        Cluster cluster = mockCluster(1, 0);
+        try (MockClient mockClient = new MockClient(Time.SYSTEM, new MockClient.MockMetadataUpdater() {
+            @Override
+            public List<Node> fetchNodes() {
+                return cluster.nodes();
+            }
+
+            @Override
+            public boolean isUpdateNeeded() {
+                return false;
+            }
+
+            @Override
+            public void update(Time time, MockClient.MetadataUpdate update) {
+                throw new UnsupportedOperationException();
+            }
+        })) {
             AdminMetadataManager metadataManager = mock(AdminMetadataManager.class);
 
             // first false result make sure LeastLoadedBrokerOrActiveKController#provide can go to requestUpdate
@@ -8206,16 +8270,24 @@ public class KafkaAdminClientTest {
             // avoid sending fetchMetadata request
             doReturn(1L).when(metadataManager).metadataFetchDelayMs(anyLong());
 
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            mockClient.setNodeApiVersions(NodeApiVersions.create());
 
             try (KafkaAdminClient admin = KafkaAdminClient.createInternal(
-                    new AdminClientConfig(Collections.emptyMap()), metadataManager, env.kafkaClient(), env.time())) {
-                admin.describeCluster(new DescribeClusterOptions().timeoutMs(1000));
+                    new AdminClientConfig(Collections.emptyMap()), metadataManager, mockClient, Time.SYSTEM)) {
+                DescribeClusterResult result = admin.describeCluster(new DescribeClusterOptions());
 
                 // make sure maybeDrainPendingCalls doesn't remove duplicate pending calls
                 // the listNodes call will be added again in call.fail and remove one in maybeDrainPendingCalls
-                TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() != 0,
+                TestUtils.waitForCondition(() -> mockClient.inFlightRequestCount() != 0,
                         "Timed out waiting for listNodes request");
+
+                // after handleUnsupportedVersionException, describe cluster use MetadataRequest
+                ClientRequest request = mockClient.requests().peek();
+                assertEquals(ApiKeys.METADATA, request.apiKey());
+
+                // clear active external request
+                mockClient.respondToRequest(request, prepareMetadataResponse(cluster, Errors.NONE));
+                assertEquals(cluster.clusterResource().clusterId(), assertDoesNotThrow(() -> result.clusterId().get()));
             }
         }
     }

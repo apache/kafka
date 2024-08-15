@@ -14,16 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft.errors;
+package org.apache.kafka.clients.admin.internals;
 
-/**
- * Indicates that an append operation cannot be completed because it would have resulted in an
- * unexpected base offset.
- */
-public class UnexpectedBaseOffsetException extends RaftException {
-    private static final long serialVersionUID = 1L;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 
-    public UnexpectedBaseOffsetException(String s) {
-        super(s);
+public class AdminFetchMetricsManager {
+    private final Metrics metrics;
+
+    public AdminFetchMetricsManager(Metrics metrics) {
+        this.metrics = metrics;
+    }
+
+    public void recordLatency(String node, long requestLatencyMs) {
+        if (!node.isEmpty()) {
+            String nodeTimeName = "node-" + node + ".latency";
+            Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
+            if (nodeRequestTime != null)
+                nodeRequestTime.record(requestLatencyMs);
+        }
     }
 }

@@ -14,7 +14,6 @@
 // limitations under the License.
 
 // KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
-
 {
   "type": "data",
   "name": "ShareGroupPartitionMetadataKey",
