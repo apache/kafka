@@ -32,15 +32,23 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
+
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.maybeWrapAsKafkaException;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 
 /**
  * An {@link EventProcessor} that is created and executes in the {@link ConsumerNetworkThread network thread}
@@ -52,15 +60,27 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
+    private final Time time;
+
+    /**
+     * OffsetFetch request triggered to update fetch positions. The request is kept. It will be
+     * cleared every time a response with the committed offsets is received and used to update
+     * fetch positions. If the response cannot be used because the UpdateFetchPositions expired,
+     * it will be kept to be used on the next attempt to update fetch positions if partitions
+     * remain the same.
+     */
+    private FetchCommittedOffsetsEvent pendingOffsetFetchEvent;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
-                                     final SubscriptionState subscriptions) {
+                                     final SubscriptionState subscriptions,
+                                     final Time time) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
+        this.time = time;
     }
 
     @SuppressWarnings({"CyclomaticComplexity"})
@@ -103,12 +123,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((ListOffsetsEvent) event);
                 return;
 
-            case RESET_POSITIONS:
-                process((ResetPositionsEvent) event);
-                return;
-
-            case VALIDATE_POSITIONS:
-                process((ValidatePositionsEvent) event);
+            case UPDATE_FETCH_POSITIONS:
+                process((UpdateFetchPositionsEvent) event);
                 return;
 
             case SUBSCRIPTION_CHANGE:
@@ -256,14 +272,195 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
     }
 
-    private void process(final ResetPositionsEvent event) {
-        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
-        future.whenComplete(complete(event.future()));
+    /**
+     *
+     * Fetch committed offsets and use them to update positions in the subscription state. If no
+     * committed offsets available, fetch offsets from the leader.
+     */
+    private void process(final UpdateFetchPositionsEvent updateFetchPositionsEvent) {
+        try {
+            // The event could be completed in the app thread before it got to be
+            // processed in the background (ex. interrupted)
+            if (updateFetchPositionsEvent.future().isCompletedExceptionally()) {
+                log.debug("UpdateFetchPositions event {} was completed exceptionally before it " +
+                    "got time to be processed.", updateFetchPositionsEvent);
+                return;
+            }
+
+            // Validate positions using the partition leader end offsets, to detect if any partition
+            // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
+            // request, retrieve the partition end offsets, and validate the current position
+            // against it. It will throw an exception if log truncation is detected.
+            requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+
+            boolean hasAllFetchPositions = subscriptions.hasAllFetchPositions();
+            if (hasAllFetchPositions) {
+                updateFetchPositionsEvent.future().complete(true);
+                return;
+            }
+
+            // Reset positions using committed offsets retrieved from the group coordinator, for any
+            // partitions which do not have a valid position and are not awaiting reset. This will
+            // trigger an OffsetFetch request and update positions with the offsets retrieved. This
+            // will only do a coordinator lookup if there are partitions which have missing
+            // positions, so a consumer with manually assigned partitions can avoid a coordinator
+            // dependence by always ensuring that assigned partitions have an initial position.
+            if (requestManagers.commitRequestManager.isPresent()) {
+
+                CompletableFuture<Void> initWithCommittedOffsetsResult = initWithCommittedOffsetsIfNeeded(updateFetchPositionsEvent);
+                initWithCommittedOffsetsResult.whenComplete((__, error) -> {
+                    if (error == null) {
+                        // Retrieve partition offsets to init positions for partitions that still
+                        // don't have a valid position
+                        initWithPartitionOffsetsIfNeeded(updateFetchPositionsEvent);
+                    } else {
+                        updateFetchPositionsEvent.future().completeExceptionally(error);
+                    }
+                });
+            } else {
+                initWithPartitionOffsetsIfNeeded(updateFetchPositionsEvent);
+            }
+
+        } catch (Exception e) {
+            updateFetchPositionsEvent.future().completeExceptionally(maybeWrapAsKafkaException(e));
+        }
     }
 
-    private void process(final ValidatePositionsEvent event) {
-        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
-        future.whenComplete(complete(event.future()));
+    private void maybeWakeupPendingOffsetFetch(Throwable error) {
+        if (error instanceof WakeupException) {
+            log.warn("Application event to update fetch positions was completed" +
+                "Clearing background offsetFetchEvent", error);
+            if (pendingOffsetFetchEvent != null) {
+                log.warn("UpdateFetchPosition event got wakeup exception. Passing wake up" +
+                    " to the long-running pendingOffsetFetchEvent to abort it");
+                pendingOffsetFetchEvent.future().completeExceptionally(error);
+            }
+        }
+    }
+
+    private void initWithPartitionOffsetsIfNeeded(final UpdateFetchPositionsEvent updateFetchPositionsEvent) {
+        try {
+            // If there are partitions still needing a position and a reset policy is defined,
+            // request reset using the default policy. If no reset strategy is defined and there
+            // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
+            subscriptions.resetInitializingPositions();
+
+            // Reset positions using partition offsets retrieved from the leader, for any partitions
+            // which are awaiting reset. This will trigger a ListOffset request, retrieve the
+            // partition offsets according to the strategy (ex. earliest, latest), and update the
+            // positions.
+            CompletableFuture<Void> resetPositionsFuture = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+
+            resetPositionsFuture.whenComplete((result, error) -> {
+                if (updateFetchPositionsEvent.future().isDone()) {
+                    log.debug("UpdateFetchPositions event {} had already expired when reset " +
+                        "positions completed.", updateFetchPositionsEvent);
+                    return;
+                }
+                if (error == null) {
+                    updateFetchPositionsEvent.future().complete(false);
+                } else {
+                    updateFetchPositionsEvent.future().completeExceptionally(error);
+                }
+            });
+        } catch (Exception e) {
+            updateFetchPositionsEvent.future().completeExceptionally(e);
+        }
+    }
+
+    /**
+     * Fetch the committed offsets for partitions that require initialization. Use them to set
+     * the fetch positions in the subscription state.
+     *
+     * @throws TimeoutException If offsets could not be retrieved within the timeout
+     */
+    private CompletableFuture<Void> initWithCommittedOffsetsIfNeeded(UpdateFetchPositionsEvent updateFetchPositionsEvent) {
+        final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
+
+        if (initializingPartitions.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        updateFetchPositionsEvent.future().whenComplete((__, error) -> maybeWakeupPendingOffsetFetch(error));
+
+        log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+        CompletableFuture<Void> result = new CompletableFuture<>();
+
+        // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
+        // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
+        // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
+        // case it times out, subsequent attempts will also use the event in order to wait for the results.
+        if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
+            final long deadlineMs = Math.max(updateFetchPositionsEvent.deadlineMs(), updateFetchPositionsEvent.fetchOffsetsDeadlineMs());
+            pendingOffsetFetchEvent = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
+            process(pendingOffsetFetchEvent);
+        }
+
+        if (pendingOffsetFetchEvent.future().isDone()) {
+            Map<TopicPartition, OffsetAndMetadata> offsets = null;
+            Throwable error = null;
+            try {
+                offsets = pendingOffsetFetchEvent.future().get();
+            } catch (ExecutionException e) {
+                error = e.getCause();
+            } catch (Exception e) {
+                error = e;
+            }
+            updatePositionsAndClearPendingOffsetsFetch(offsets, error, result, updateFetchPositionsEvent);
+        } else {
+            pendingOffsetFetchEvent.future().whenComplete((offsets, error) ->
+                updatePositionsAndClearPendingOffsetsFetch(offsets, error, result, updateFetchPositionsEvent)
+            );
+        }
+
+        return result;
+    }
+
+    // Visible for testing
+    boolean hasPendingOffsetFetchEvent() {
+        return pendingOffsetFetchEvent != null;
+    }
+
+    private void updatePositionsAndClearPendingOffsetsFetch(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                            Throwable error,
+                                                            CompletableFuture<Void> result,
+                                                            UpdateFetchPositionsEvent updateFetchPositionsEvent) {
+        if (!updateFetchPositionsEvent.future().isDone()) {
+            pendingOffsetFetchEvent = null;
+            if (error == null) {
+                // The event is still valid, so complete it with the received offsets. This
+                // will be the case of UpdateFetchPositionsEvent triggered with non-zero
+                // timeout, where we expect to complete them without a subsequent call. ex.
+                // get positions with default api timeout
+                refreshCommittedOffsets(offsets, metadata, subscriptions);
+                result.complete(null);
+            } else {
+                log.error("Error fetching committed offsets to update positions", error);
+                result.completeExceptionally(error);
+            }
+        }
+    }
+
+    /**
+     * This determines if the {@link #pendingOffsetFetchEvent pending offset fetch event} can be reused. Reuse
+     * is only possible if all the following conditions are true:
+     *
+     * <ul>
+     *     <li>A pending offset fetch event exists</li>
+     *     <li>The partition set of the pending offset fetch event is the same as the given partition set</li>
+     *     <li>The pending offset fetch event has not expired</li>
+     * </ul>
+     */
+    private boolean canReusePendingOffsetFetchEvent(Set<TopicPartition> partitions) {
+        if (pendingOffsetFetchEvent == null) {
+            return false;
+        }
+
+        if (!pendingOffsetFetchEvent.partitions().equals(partitions)) {
+            return false;
+        }
+
+        return pendingOffsetFetchEvent.deadlineMs() > time.milliseconds();
     }
 
     private void process(final TopicMetadataEvent event) {
@@ -399,7 +596,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final ConsumerMetadata metadata,
                                                                final SubscriptionState subscriptions,
-                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+                                                               final Supplier<RequestManagers> requestManagersSupplier,
+                                                               final Time time) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
             protected ApplicationEventProcessor create() {
@@ -408,7 +606,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                         logContext,
                         requestManagers,
                         metadata,
-                        subscriptions
+                        subscriptions,
+                        time
                 );
             }
         };

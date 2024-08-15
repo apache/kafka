@@ -56,12 +56,11 @@ import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsE
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
-import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
-import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
+import org.apache.kafka.clients.consumer.internals.events.UpdateFetchPositionsEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
@@ -77,6 +76,7 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -131,7 +131,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFe
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createLogContext;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 import static org.apache.kafka.common.utils.Utils.isBlank;
@@ -254,8 +253,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
 
-    private FetchCommittedOffsetsEvent pendingOffsetFetchEvent;
-
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer) {
@@ -355,7 +352,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     subscriptions,
-                    requestManagersSupplier);
+                    requestManagersSupplier,
+                    time);
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
@@ -533,7 +531,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 logContext,
                 metadata,
                 subscriptions,
-                requestManagersSupplier
+                requestManagersSupplier,
+                time
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
@@ -1581,48 +1580,44 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         return fetch;
     }
+
     /**
      * Set the fetch position to the committed position (if there is one)
      * or reset it using the offset reset policy the user has configured.
      *
-     * @throws AuthenticationException If authentication fails. See the exception for more details
-     * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
-     *             defined
      * @return true iff the operation completed without timing out
+     * @throws AuthenticationException       If authentication fails. See the exception for more details
+     * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
+     *                                       defined
      */
     private boolean updateFetchPositions(final Timer timer) {
+        UpdateFetchPositionsEvent updateFetchPositionsEvent = null;
         try {
-            // Validate positions using the partition leader end offsets, to detect if any partition
-            // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
-            // request, retrieve the partition end offsets, and validate the current position against it.
-            applicationEventHandler.addAndGet(new ValidatePositionsEvent(calculateDeadlineMs(timer)));
+            updateFetchPositionsEvent = new UpdateFetchPositionsEvent(calculateDeadlineMs(timer),
+                calculateDeadlineMs(time, defaultApiTimeoutMs));
+            wakeupTrigger.setActiveTask(updateFetchPositionsEvent.future());
 
-            cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
-            if (cachedSubscriptionHasAllFetchPositions) return true;
-
-            // Reset positions using committed offsets retrieved from the group coordinator, for any
-            // partitions which do not have a valid position and are not awaiting reset. This will
-            // trigger an OffsetFetch request and update positions with the offsets retrieved. This
-            // will only do a coordinator lookup if there are partitions which have missing
-            // positions, so a consumer with manually assigned partitions can avoid a coordinator
-            // dependence by always ensuring that assigned partitions have an initial position.
-            if (isCommittedOffsetsManagementEnabled() && !initWithCommittedOffsetsIfNeeded(timer))
-                return false;
-
-            // If there are partitions still needing a position and a reset policy is defined,
-            // request reset using the default policy. If no reset strategy is defined and there
-            // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
-            subscriptions.resetInitializingPositions();
-
-            // Reset positions using partition offsets retrieved from the leader, for any partitions
-            // which are awaiting reset. This will trigger a ListOffset request, retrieve the
-            // partition offsets according to the strategy (ex. earliest, latest), and update the
-            // positions.
-            applicationEventHandler.addAndGet(new ResetPositionsEvent(calculateDeadlineMs(timer)));
-            return true;
+            if (Thread.interrupted()) {
+                // Ensure we propagate the interrupted exception if the thread was interrupted
+                // before the updateFetchPositions event is processed. Otherwise, this exception
+                // could be swallowed if event is processed fast enough in the background after
+                // being added, so that it's already completed when getting the result
+                throw new InterruptException("Interrupted while updating fetch positions");
+            }
+            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(updateFetchPositionsEvent);
+        } catch (WakeupException we) {
+            log.warn("Consumer got wake up exception while trying to update fetch positions", we);
+            if (updateFetchPositionsEvent != null) {
+                // Complete event to ensure that it does not continue processing in the background
+                updateFetchPositionsEvent.future().completeExceptionally(we);
+            }
+            throw we;
         } catch (TimeoutException e) {
             return false;
+        } finally {
+            wakeupTrigger.clearTask();
         }
+        return true;
     }
 
     /**
@@ -1632,79 +1627,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private boolean isCommittedOffsetsManagementEnabled() {
         return groupMetadata.get().isPresent();
-    }
-
-    /**
-     * Refresh the committed offsets for partitions that require initialization.
-     *
-     * @param timer Timer bounding how long this method can block
-     * @return true iff the operation completed within the timeout
-     */
-    private boolean initWithCommittedOffsetsIfNeeded(Timer timer) {
-        final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
-
-        if (initializingPartitions.isEmpty())
-            return true;
-
-        log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
-
-        // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
-        // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
-        // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
-        // case it times out, subsequent attempts will also use the event in order to wait for the results.
-        if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
-            // Give the event a reasonable amount of time to complete.
-            final long timeoutMs = Math.max(defaultApiTimeoutMs, timer.remainingMs());
-            final long deadlineMs = calculateDeadlineMs(time, timeoutMs);
-            pendingOffsetFetchEvent = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
-            applicationEventHandler.add(pendingOffsetFetchEvent);
-        }
-
-        final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetchEvent.future();
-
-        try {
-            wakeupTrigger.setActiveTask(future);
-            final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(future, timer);
-
-            // Clear the pending event once its result is successfully retrieved.
-            pendingOffsetFetchEvent = null;
-
-            refreshCommittedOffsets(offsets, metadata, subscriptions);
-            return true;
-        } catch (TimeoutException e) {
-            log.debug(
-                "The committed offsets for the following partition(s) could not be refreshed within the timeout: {} ",
-                initializingPartitions
-            );
-            return false;
-        } catch (InterruptException e) {
-            throw e;
-        } catch (Throwable t) {
-            pendingOffsetFetchEvent = null;
-            throw ConsumerUtils.maybeWrapAsKafkaException(t);
-        } finally {
-            wakeupTrigger.clearTask();
-        }
-    }
-
-    /**
-     * This determines if the {@link #pendingOffsetFetchEvent pending offset fetch event} can be reused. Reuse
-     * is only possible if all the following conditions are true:
-     *
-     * <ul>
-     *     <li>A pending offset fetch event exists</li>
-     *     <li>The partition set of the pending offset fetch event is the same as the given partition set</li>
-     *     <li>The pending offset fetch event has not expired</li>
-     * </ul>
-     */
-    private boolean canReusePendingOffsetFetchEvent(Set<TopicPartition> partitions) {
-        if (pendingOffsetFetchEvent == null)
-            return false;
-
-        if (!pendingOffsetFetchEvent.partitions().equals(partitions))
-            return false;
-
-        return pendingOffsetFetchEvent.deadlineMs() > time.milliseconds();
     }
 
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
@@ -2005,10 +1927,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     SubscriptionState subscriptions() {
         return subscriptions;
-    }
-
-    boolean hasPendingOffsetFetchEvent() {
-        return pendingOffsetFetchEvent != null;
     }
 
     private void maybeUpdateSubscriptionMetadata() {

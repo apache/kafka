@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
@@ -86,7 +85,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
-    private final BackgroundEventHandler backgroundEventHandler;
 
     @SuppressWarnings("this-escape")
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
@@ -118,7 +116,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.requestTimeoutMs = requestTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
-        this.backgroundEventHandler = backgroundEventHandler;
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
                 time, retryBackoffMs, apiVersions);
         // Register the cluster metadata update callback. Note this only relies on the
@@ -200,8 +197,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         try {
             offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
         } catch (Exception e) {
-            backgroundEventHandler.add(new ErrorEvent(e));
-            return CompletableFuture.completedFuture(null);
+            CompletableFuture<Void> result = new CompletableFuture<>();
+            result.completeExceptionally(e);
+            return result;
         }
 
         if (offsetResetTimestamps.isEmpty())

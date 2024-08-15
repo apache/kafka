@@ -23,7 +23,6 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -69,11 +68,11 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -541,39 +540,29 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
 
-        requestManager.resetPositionsIfNeeded();
+        CompletableFuture<Void> resetResult = requestManager.resetPositionsIfNeeded();
 
         // Reset positions response with TopicAuthorizationException
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        assertFalse(resetResult.isDone());
         Errors topicAuthorizationFailedError = Errors.TOPIC_AUTHORIZATION_FAILED;
         ClientResponse clientResponse = buildClientResponseWithErrors(
                 unsentRequest, Collections.singletonMap(TEST_PARTITION_1, topicAuthorizationFailedError));
         clientResponse.onComplete();
 
         assertTrue(unsentRequest.future().isDone());
+        assertTrue(resetResult.isDone());
         assertFalse(unsentRequest.future().isCompletedExceptionally());
 
         verify(subscriptionState).requestFailed(any(), anyLong());
         verify(metadata).requestUpdate(false);
 
-        // Following resetPositions should enqueue the previous exception in the background event queue
-        // without performing any request
-        assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded());
+        // Following resetPositions should throw the exception
+        CompletableFuture<Void> nextReset = assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded());
         assertEquals(0, requestManager.requestsToSend());
-
-        // Check that the event was enqueued during resetPositionsIfNeeded
-        assertEquals(1, backgroundEventQueue.size());
-        BackgroundEvent event = backgroundEventQueue.poll();
-        assertNotNull(event);
-
-        // Check that the event itself is of the expected type
-        assertInstanceOf(ErrorEvent.class, event);
-        ErrorEvent errorEvent = (ErrorEvent) event;
-        assertNotNull(errorEvent.error());
-
-        // Check that the error held in the event is of the expected type
-        assertInstanceOf(topicAuthorizationFailedError.exception().getClass(), errorEvent.error());
+        assertTrue(nextReset.isCompletedExceptionally());
+        assertFutureThrows(nextReset, TopicAuthorizationException.class);
     }
 
     @Test

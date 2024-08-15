@@ -26,10 +26,9 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
-import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
-import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
+import org.apache.kafka.clients.consumer.internals.events.UpdateFetchPositionsEvent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -59,13 +58,11 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -210,17 +207,6 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    public void testResetPositionsProcessFailureIsIgnored() {
-        doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
-
-        ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
-        applicationEventsQueue.add(event);
-        assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
-
-        verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
-    }
-
-    @Test
     public void testMaximumTimeToWait() {
         final int defaultHeartbeatIntervalMs = 1000;
         // Initial value before runOnce has been called
@@ -263,8 +249,7 @@ public class ConsumerNetworkThreadTest {
                 Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
-                Arguments.of(new ResetPositionsEvent(500)),
-                Arguments.of(new ValidatePositionsEvent(500)),
+                Arguments.of(new UpdateFetchPositionsEvent(0, Long.MAX_VALUE)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
                 Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
     }
