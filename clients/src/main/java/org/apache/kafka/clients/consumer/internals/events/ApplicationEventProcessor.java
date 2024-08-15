@@ -306,7 +306,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             // positions, so a consumer with manually assigned partitions can avoid a coordinator
             // dependence by always ensuring that assigned partitions have an initial position.
             if (requestManagers.commitRequestManager.isPresent()) {
-
                 CompletableFuture<Void> initWithCommittedOffsetsResult = initWithCommittedOffsetsIfNeeded(updateFetchPositionsEvent);
                 initWithCommittedOffsetsResult.whenComplete((__, error) -> {
                     if (error == null) {
@@ -393,6 +392,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
             final long deadlineMs = Math.max(updateFetchPositionsEvent.deadlineMs(), updateFetchPositionsEvent.fetchOffsetsDeadlineMs());
             pendingOffsetFetchEvent = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
+            pendingOffsetFetchEvent.future().whenComplete((offsets, error) -> {
+                if (!updateFetchPositionsEvent.future().isDone()) {
+                    updatePositionsAndClearPendingOffsetsFetch(offsets, error, result);
+                }
+            });
             process(pendingOffsetFetchEvent);
         }
 
@@ -406,11 +410,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             } catch (Exception e) {
                 error = e;
             }
-            updatePositionsAndClearPendingOffsetsFetch(offsets, error, result, updateFetchPositionsEvent);
-        } else {
-            pendingOffsetFetchEvent.future().whenComplete((offsets, error) ->
-                updatePositionsAndClearPendingOffsetsFetch(offsets, error, result, updateFetchPositionsEvent)
-            );
+            updatePositionsAndClearPendingOffsetsFetch(offsets, error, result);
         }
 
         return result;
@@ -423,21 +423,14 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private void updatePositionsAndClearPendingOffsetsFetch(Map<TopicPartition, OffsetAndMetadata> offsets,
                                                             Throwable error,
-                                                            CompletableFuture<Void> result,
-                                                            UpdateFetchPositionsEvent updateFetchPositionsEvent) {
-        if (!updateFetchPositionsEvent.future().isDone()) {
-            pendingOffsetFetchEvent = null;
-            if (error == null) {
-                // The event is still valid, so complete it with the received offsets. This
-                // will be the case of UpdateFetchPositionsEvent triggered with non-zero
-                // timeout, where we expect to complete them without a subsequent call. ex.
-                // get positions with default api timeout
-                refreshCommittedOffsets(offsets, metadata, subscriptions);
-                result.complete(null);
-            } else {
-                log.error("Error fetching committed offsets to update positions", error);
-                result.completeExceptionally(error);
-            }
+                                                            CompletableFuture<Void> result) {
+        pendingOffsetFetchEvent = null;
+        if (error == null) {
+            refreshCommittedOffsets(offsets, metadata, subscriptions);
+            result.complete(null);
+        } else {
+            log.error("Error fetching committed offsets to update positions", error);
+            result.completeExceptionally(error);
         }
     }
 
