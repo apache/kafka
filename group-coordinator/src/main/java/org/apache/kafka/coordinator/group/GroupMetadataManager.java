@@ -52,6 +52,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Endpoint;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.KeyValue;
@@ -824,6 +825,33 @@ public class GroupMetadataManager {
         return describedGroups;
     }
 
+    /**
+     * Handles a StreamsGroupDescribe request.
+     *
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the StreamsGroupDescribeResponseData.DescribedGroup.
+     */
+    public List<StreamsGroupDescribeResponseData.DescribedGroup> streamsGroupDescribe(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        final List<StreamsGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                describedGroups.add(streamsGroup(groupId, committedOffset).asDescribedGroup(committedOffset));
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                );
+            }
+        });
+
+        return describedGroups;
+    }
+    
     /**
      * Handles a DescribeGroup request.
      *
@@ -3505,10 +3533,8 @@ public class GroupMetadataManager {
         boolean staticMemberReplaced,
         List<CoordinatorRecord> records
     ) {
-        String preferredServerAssignor = group.computePreferredServerAssignor(
-            member,
-            updatedMember
-        ).orElse(defaultTaskAssignor.name());
+        // TODO: Read the preferred server assignor from the group configuration
+        String preferredServerAssignor = defaultTaskAssignor.name();
         try {
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
                 new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(group.groupId(), groupEpoch, taskAssignors.get(preferredServerAssignor))
@@ -3517,7 +3543,6 @@ public class GroupMetadataManager {
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionMetadata(subscriptionMetadata)
                     .withTargetAssignment(group.targetAssignment())
-                    .withTopicsImage(metadataImage.topics())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
             // A new static member is replacing an older one with the same subscriptions.

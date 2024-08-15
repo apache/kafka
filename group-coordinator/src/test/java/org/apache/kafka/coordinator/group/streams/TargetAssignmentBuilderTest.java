@@ -225,8 +225,7 @@ public class TargetAssignmentBuilderTest {
                 .withTopology(topology)
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
-                .withTargetAssignment(targetAssignment)
-                .withTopicsImage(topicsImage);
+                .withTargetAssignment(targetAssignment);
 
             // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -262,12 +261,10 @@ public class TargetAssignmentBuilderTest {
             .topics();
 
         final Map<String, String> clientTags = mkMap(mkEntry("tag1", "value1"), mkEntry("tag2", "value2"));
-        final Map<String, String> assignmentConfigs = mkMap(mkEntry("conf1", "value1"), mkEntry("conf2", "value2"));
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
             .setRackId("rackId")
             .setInstanceId("instanceId")
             .setProcessId("processId")
-            .setAssignor("assignor")
             .setClientTags(clientTags)
             .build();
 

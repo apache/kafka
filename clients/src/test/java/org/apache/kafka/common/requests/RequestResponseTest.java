@@ -234,6 +234,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
@@ -1126,8 +1128,9 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateRequest(version);
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateRequest(version);
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryRequest(version);
-            case STREAMS_GROUP_HEARTBEAT: return createStreamsHeartbeatRequest(version);
-            case STREAMS_GROUP_INITIALIZE: return createStreamsInitializeRequest(version);
+            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatRequest(version);
+            case STREAMS_GROUP_INITIALIZE: return createStreamsGroupInitializeRequest(version);
+            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1222,8 +1225,9 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateResponse();
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateResponse();
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryResponse();
-            case STREAMS_GROUP_HEARTBEAT: return createStreamsHeartbeatResponse();
-            case STREAMS_GROUP_INITIALIZE: return createStreamsInitializeResponse();
+            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
+            case STREAMS_GROUP_INITIALIZE: return createStreamsGroupInitializeResponse();
+            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -4020,35 +4024,42 @@ public class RequestResponseTest {
         return new ReadShareGroupStateSummaryResponse(data);
     }
 
-//    private AbstractRequest createStreamsPrepareAssignmentRequest(final short version) {
-//        return new StreamsPrepareAssignmentRequest.Builder(new StreamsPrepareAssignmentRequestData()).build(version);
-//    }
-//
-//    private AbstractRequest createStreamsInstallAssignmentRequest(final short version) {
-//        return new StreamsInstallAssignmentRequest.Builder(new StreamsInstallAssignmentRequestData()).build(version);
-//    }
+    private AbstractRequest createStreamsGroupDescribeRequest(final short version) {
+        return new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData()
+            .setGroupIds(Collections.singletonList("group"))
+            .setIncludeAuthorizedOperations(false)).build(version);
+    }
 
-    private AbstractRequest createStreamsInitializeRequest(final short version) {
+    private AbstractRequest createStreamsGroupInitializeRequest(final short version) {
         return new StreamsGroupInitializeRequest.Builder(new StreamsGroupInitializeRequestData()).build(version);
     }
 
-    private AbstractRequest createStreamsHeartbeatRequest(final short version) {
+    private AbstractRequest createStreamsGroupHeartbeatRequest(final short version) {
         return new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData()).build(version);
     }
 
-//    private AbstractResponse createStreamsPrepareAssignmentResponse() {
-//        return new StreamsPrepareAssignmentResponse(new StreamsPrepareAssignmentResponseData());
-//    }
-//
-//    private AbstractResponse createStreamsInstallAssignmentResponse() {
-//        return new StreamsInstallAssignmentResponse(new StreamsInstallAssignmentResponseData());
-//    }
-//
-    private AbstractResponse createStreamsInitializeResponse() {
+    private AbstractResponse createStreamsGroupDescribeResponse() {
+        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
+            .setGroups(Collections.singletonList(
+                new StreamsGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId("group")
+                    .setErrorCode((short) 0)
+                    .setErrorMessage(Errors.forCode((short) 0).message())
+                    .setGroupState("EMPTY")
+                    .setGroupEpoch(0)
+                    .setAssignmentEpoch(0)
+                    .setMembers(new ArrayList<>(0))
+                    .setTopology(new ArrayList<>(0))
+            ))
+            .setThrottleTimeMs(1000);
+        return new StreamsGroupDescribeResponse(data);
+    }
+
+    private AbstractResponse createStreamsGroupInitializeResponse() {
         return new StreamsGroupInitializeResponse(new StreamsGroupInitializeResponseData());
     }
 
-    private AbstractResponse createStreamsHeartbeatResponse() {
+    private AbstractResponse createStreamsGroupHeartbeatResponse() {
         return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData());
     }
 

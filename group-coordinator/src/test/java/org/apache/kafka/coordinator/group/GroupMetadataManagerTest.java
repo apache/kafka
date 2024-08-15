@@ -53,6 +53,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
@@ -86,6 +87,10 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
+import org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -8855,6 +8860,113 @@ public class GroupMetadataManagerTest {
         assertEquals(expected, actual);
     }
 
+    @Test
+    public void testStreamsGroupDescribeNoErrors() {
+        List<String> streamsGroupIds = Arrays.asList("group-id-1", "group-id-2");
+        int epoch = 10;
+        String memberId = "member-id";
+        StreamsGroupMember.Builder memberBuilder = new StreamsGroupMember.Builder(memberId)
+            .setClientTags(Collections.singletonMap("clientTag", "clientValue"))
+            .setProcessId("processId")
+            .setMemberEpoch(epoch)
+            .setPreviousMemberEpoch(epoch - 1);
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupIds.get(0), epoch))
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupIds.get(1), epoch)
+                .withMember(memberBuilder.build()))
+            .build();
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> expected = Arrays.asList(
+            new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(epoch)
+                .setGroupId(streamsGroupIds.get(0))
+                .setGroupState(StreamsGroup.StreamsGroupState.EMPTY.toString())
+                .setAssignmentEpoch(0),
+            new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(epoch)
+                .setGroupId(streamsGroupIds.get(1))
+                .setMembers(Collections.singletonList(
+                    memberBuilder.build().asStreamsGroupDescribeMember(
+                        new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap())
+                    )
+                ))
+                .setGroupState(StreamsGroup.StreamsGroupState.ASSIGNING.toString())
+        );
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(streamsGroupIds);
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testStreamsGroupDescribeWithErrors() {
+        String groupId = "groupId";
+
+        MockTaskAssignor assignor = new MockTaskAssignor("mock");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withTaskAssignors(Collections.singletonList(assignor))
+            .build();
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(Collections.singletonList(groupId));
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+        List<StreamsGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
+            describedGroup
+        );
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testStreamsGroupDescribeBeforeAndAfterCommittingOffset() {
+        String streamsGroupId = "streamsGroupId";
+        int epoch = 10;
+        String memberId1 = "memberId1";
+        String memberId2 = "memberId2";
+        String subtopologyId = "subtopology1";
+
+        MockTaskAssignor assignor = new MockTaskAssignor("mock");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withTaskAssignors(Collections.singletonList(assignor))
+            .build();
+
+        StreamsGroupMember.Builder memberBuilder1 = new StreamsGroupMember.Builder(memberId1);
+        context.replay(CoordinatorStreamsRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder1.build()));
+        context.replay(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(streamsGroupId, epoch + 1));
+
+        Map<String, Set<Integer>> assignmentMap = new HashMap<>();
+        assignmentMap.put(subtopologyId, Collections.emptySet());
+
+        StreamsGroupMember.Builder memberBuilder2 = new StreamsGroupMember.Builder(memberId2);
+        context.replay(CoordinatorStreamsRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder2.build()));
+        context.replay(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(streamsGroupId, memberId2, assignmentMap, assignmentMap, assignmentMap));
+        context.replay(CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
+        context.replay(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(streamsGroupId, epoch + 2));
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(Collections.singletonList(streamsGroupId), context.lastCommittedOffset);
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(streamsGroupId)
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+        assertEquals(1, actual.size());
+        assertEquals(describedGroup, actual.get(0));
+
+        // Commit the offset and test again
+        context.commit();
+
+        actual = context.groupMetadataManager.streamsGroupDescribe(Collections.singletonList(streamsGroupId), context.lastCommittedOffset);
+        describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(streamsGroupId)
+            .setMembers(Arrays.asList(
+                memberBuilder1.build().asStreamsGroupDescribeMember(new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap())),
+                memberBuilder2.build().asStreamsGroupDescribeMember(new org.apache.kafka.coordinator.group.streams.Assignment(assignmentMap, assignmentMap, assignmentMap))
+            ))
+            .setGroupState(StreamsGroup.StreamsGroupState.ASSIGNING.toString())
+            .setGroupEpoch(epoch + 2);
+        assertEquals(1, actual.size());
+        assertEquals(describedGroup, actual.get(0));
+    }
+    
     @Test
     public void testDescribeGroupStable() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()

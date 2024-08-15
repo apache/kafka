@@ -599,6 +599,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
     }
+    if (protocols.contains(GroupType.STREAMS)) {
+      if (processRoles.isEmpty) {
+        throw new ConfigException(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported in KRaft cluster.")
+      }
+      warn(s"The new '${GroupType.STREAMS}' rebalance protocol is enabled along with the new group coordinator. " +
+        "This is part of the preview of KIP-1071 and MUST NOT be used in production.")
+    }
     protocols
   }
 

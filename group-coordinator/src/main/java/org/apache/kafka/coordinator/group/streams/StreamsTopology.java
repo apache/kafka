@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import java.util.List;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
@@ -87,5 +89,36 @@ public class StreamsTopology {
             "topologyId=" + topologyId +
             ", subtopologies=" + subtopologies +
             '}';
+    }
+
+    public List<StreamsGroupDescribeResponseData.Subtopology> asStreamsGroupDescribeTopology() {
+        return subtopologies.values().stream().map(
+            subtopology -> new StreamsGroupDescribeResponseData.Subtopology()
+                .setSourceTopicRegex(subtopology.sourceTopicRegex())
+                .setSubtopology(subtopology.subtopology())
+                .setSourceTopics(subtopology.sourceTopics())
+                .setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
+                .setRepartitionSourceTopics(
+                    asStreamsGroupDescribeTopicInfo(subtopology.repartitionSourceTopics()))
+                .setStateChangelogTopics(
+                    asStreamsGroupDescribeTopicInfo(subtopology.stateChangelogTopics()))
+        ).collect(Collectors.toList());
+    }
+
+    private static List<StreamsGroupDescribeResponseData.TopicInfo> asStreamsGroupDescribeTopicInfo(
+        final List<TopicInfo> topicInfos) {
+        return topicInfos.stream().map(x ->
+            new StreamsGroupDescribeResponseData.TopicInfo()
+                .setName(x.name())
+                .setPartitions(x.partitions())
+                .setTopicConfigs(
+                    x.topicConfigs() != null ?
+                        x.topicConfigs().stream().map(
+                            y -> new StreamsGroupDescribeResponseData.KeyValue()
+                                .setKey(y.key())
+                                .setValue(y.value())
+                        ).collect(Collectors.toList()) : null
+                )
+        ).collect(Collectors.toList());
     }
 }

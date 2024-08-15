@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,7 +37,7 @@ import java.util.stream.Collectors;
  */
 public class StreamsGroupMember {
 
-    /**
+  /**
      * A builder that facilitates the creation of a new member or the update of an existing one.
      * <p>
      * Please refer to the javadoc of {{@link StreamsGroupMember}} for the definition of the fields.
@@ -57,10 +54,9 @@ public class StreamsGroupMember {
         private String clientId = "";
         private String clientHost = "";
         private String topologyId;
-        private String assignor;
         private String processId;
         private StreamsGroupMemberMetadataValue.Endpoint userEndpoint;
-        private Map<String, String> clientTags;
+        private Map<String, String> clientTags = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedActiveTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedStandbyTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedWarmupTasks = Collections.emptyMap();
@@ -82,7 +78,6 @@ public class StreamsGroupMember {
             this.clientId = member.clientId;
             this.clientHost = member.clientHost;
             this.topologyId = member.topologyId;
-            this.assignor = member.assignor;
             this.processId = member.processId;
             this.userEndpoint = member.userEndpoint;
             this.clientTags = member.clientTags;
@@ -140,11 +135,6 @@ public class StreamsGroupMember {
             return this;
         }
 
-        public StreamsGroupMember.Builder maybeUpdateAssignor(Optional<String> assignor) {
-            this.assignor = assignor.orElse(this.assignor);
-            return this;
-        }
-
         public Builder setClientId(String clientId) {
             this.clientId = clientId;
             return this;
@@ -167,11 +157,6 @@ public class StreamsGroupMember {
 
         public Builder maybeUpdateTopologyId(Optional<String> topologyId) {
             this.topologyId = topologyId.orElse(this.topologyId);
-            return this;
-        }
-
-        public Builder setAssignor(String assignor) {
-            this.assignor = assignor;
             return this;
         }
 
@@ -271,7 +256,6 @@ public class StreamsGroupMember {
                 clientId,
                 clientHost,
                 topologyId,
-                assignor,
                 processId,
                 userEndpoint,
                 clientTags,
@@ -335,11 +319,6 @@ public class StreamsGroupMember {
     private final String topologyId;
 
     /**
-     * The assignor
-     */
-    private final String assignor;
-
-    /**
      * The process ID
      */
     private final String processId;
@@ -385,7 +364,6 @@ public class StreamsGroupMember {
         String clientId,
         String clientHost,
         String topologyId,
-        String assignor,
         String processId,
         StreamsGroupMemberMetadataValue.Endpoint userEndpoint,
         Map<String, String> clientTags,
@@ -405,7 +383,6 @@ public class StreamsGroupMember {
         this.clientId = clientId;
         this.clientHost = clientHost;
         this.topologyId = topologyId;
-        this.assignor = assignor;
         this.processId = processId;
         this.userEndpoint = userEndpoint;
         this.clientTags = clientTags;
@@ -479,13 +456,6 @@ public class StreamsGroupMember {
     }
 
     /**
-     * @return The assignor
-     */
-    public Optional<String> assignor() {
-        return Optional.ofNullable(assignor);
-    }
-
-    /**
      * @return The process ID
      */
     public String processId() {
@@ -548,33 +518,58 @@ public class StreamsGroupMember {
         return activeTasksPendingRevocation;
     }
 
-    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
-        Map<Uuid, Set<Integer>> partitions,
-        TopicsImage topicsImage
+    /**
+     * @param targetAssignment The target assignment of this member in the corresponding group.
+     *
+     * @return The StreamsGroupMember mapped as StreamsGroupDescribeResponseData.Member.
+     */
+    public StreamsGroupDescribeResponseData.Member asStreamsGroupDescribeMember(
+        Assignment targetAssignment
     ) {
-        List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
-        partitions.forEach((topicId, partitionSet) -> {
-            String topicName = lookupTopicNameById(topicId, topicsImage);
-            if (topicName != null) {
-                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                    .setTopicId(topicId)
-                    .setTopicName(topicName)
-                    .setPartitions(new ArrayList<>(partitionSet)));
-            }
-        });
-        return topicPartitions;
+        final StreamsGroupDescribeResponseData.Assignment describedTargetAssignment =
+            new StreamsGroupDescribeResponseData.Assignment();
+
+        if (targetAssignment != null) {
+            describedTargetAssignment
+                .setActiveTasks(taskIdsFromMap(targetAssignment.activeTasks()))
+                .setStandbyTasks(taskIdsFromMap(targetAssignment.standbyTasks()))
+                .setWarmupTasks(taskIdsFromMap(targetAssignment.warmupTasks()));
+        }
+
+        return new StreamsGroupDescribeResponseData.Member()
+            .setMemberEpoch(memberEpoch)
+            .setMemberId(memberId)
+            .setAssignment(
+                new StreamsGroupDescribeResponseData.Assignment()
+                    .setActiveTasks(taskIdsFromMap(assignedActiveTasks))
+                    .setStandbyTasks(taskIdsFromMap(assignedStandbyTasks))
+                    .setWarmupTasks(taskIdsFromMap(assignedWarmupTasks)))
+            .setTargetAssignment(describedTargetAssignment)
+            .setClientHost(clientHost)
+            .setClientId(clientId)
+            .setInstanceId(instanceId)
+            .setRackId(rackId)
+            .setClientTags(clientTags.entrySet().stream().map(
+                entry -> new StreamsGroupDescribeResponseData.KeyValue()
+                    .setKey(entry.getKey())
+                    .setValue(entry.getValue())
+            ).collect(Collectors.toList()))
+            .setProcessId(processId)
+            .setTopologyId(topologyId);
+        // TODO: TaskOffset and TaskEndOffset are missing.
+
     }
 
-    private static String lookupTopicNameById(
-        Uuid topicId,
-        TopicsImage topicsImage
+    private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(
+        Map<String, Set<Integer>> tasks
     ) {
-        TopicImage topicImage = topicsImage.getTopic(topicId);
-        if (topicImage != null) {
-            return topicImage.name();
-        } else {
-            return null;
-        }
+        List<StreamsGroupDescribeResponseData.TaskIds> taskIds = new ArrayList<>();
+        tasks.forEach((subtopologyId, partitionSet) -> {
+            taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
+                .setSubtopology(subtopologyId)
+                .setPartitions(new ArrayList<>(partitionSet)));
+        });
+        return taskIds;
     }
 
     @SuppressWarnings("checkstyle:CyclomaticComplexity")
@@ -597,7 +592,6 @@ public class StreamsGroupMember {
             && Objects.equals(clientId, that.clientId)
             && Objects.equals(clientHost, that.clientHost)
             && Objects.deepEquals(topologyId, that.topologyId)
-            && Objects.equals(assignor, that.assignor)
             && Objects.equals(processId, that.processId)
             && Objects.equals(userEndpoint, that.userEndpoint)
             && Objects.equals(clientTags, that.clientTags)
@@ -619,7 +613,6 @@ public class StreamsGroupMember {
         result = 31 * result + Objects.hashCode(clientId);
         result = 31 * result + Objects.hashCode(clientHost);
         result = 31 * result + Objects.hashCode(topologyId);
-        result = 31 * result + Objects.hashCode(assignor);
         result = 31 * result + Objects.hashCode(processId);
         result = 31 * result + Objects.hashCode(userEndpoint);
         result = 31 * result + Objects.hashCode(clientTags);

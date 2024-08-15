@@ -553,4 +553,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="STCAL_INVOKE_ON_STATIC_DATE_FORMAT_INSTANCE"/>
     </Match>
 
+    <Match>
+        <Class name="org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
+
 </FindBugsFilter>

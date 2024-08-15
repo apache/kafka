@@ -275,6 +275,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.WRITE_SHARE_GROUP_STATE => handleWriteShareGroupStateRequest(request)
         case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
+        case ApiKeys.STREAMS_GROUP_DESCRIBE => handleStreamsGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_INITIALIZE => handleStreamsInitialize(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsHeartbeat(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
@@ -3874,12 +3875,16 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   }
 
+  private def isStreamsGroupProtocolEnabled(): Boolean = {
+    config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.STREAMS)
+  }
+  
   def handleStreamsInitialize(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val streamsInitializeRequest = request.body[StreamsGroupInitializeRequest]
 
     // TODO: Check ACLs on CREATE TOPIC & DESCRIBE_CONFIGS
 
-    if (!config.isNewGroupCoordinatorEnabled) {
+    if (!isStreamsGroupProtocolEnabled()) {
       // The API is not supported by the "old" group coordinator (the default). If the
       // new one is not enabled, we fail directly here.
       requestHelper.sendMaybeThrottle(request, streamsInitializeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
@@ -3904,7 +3909,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleStreamsHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val streamsHeartbeatRequest = request.body[StreamsGroupHeartbeatRequest]
 
-    if (!config.isNewGroupCoordinatorEnabled) {
+    if (!isStreamsGroupProtocolEnabled()) {
       // The API is not supported by the "old" group coordinator (the default). If the
       // new one is not enabled, we fail directly here.
       requestHelper.sendMaybeThrottle(request, streamsHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
@@ -3926,6 +3931,63 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  def handleStreamsGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val streamsGroupDescribeRequest = request.body[StreamsGroupDescribeRequest]
+    val includeAuthorizedOperations = streamsGroupDescribeRequest.data.includeAuthorizedOperations
+
+    if (!isStreamsGroupProtocolEnabled()) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, request.body[StreamsGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      val response = new StreamsGroupDescribeResponseData()
+
+      val authorizedGroups = new ArrayBuffer[String]()
+      streamsGroupDescribeRequest.data.groupIds.forEach { groupId =>
+        if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
+          response.groups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
+          )
+        } else {
+          authorizedGroups += groupId
+        }
+      }
+
+      groupCoordinator.streamsGroupDescribe(
+        request.context,
+        authorizedGroups.asJava
+      ).handle[Unit] { (results, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, streamsGroupDescribeRequest.getErrorResponse(exception))
+        } else {
+          if (includeAuthorizedOperations) {
+            results.forEach { groupResult =>
+              if (groupResult.errorCode == Errors.NONE.code) {
+                groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
+                  request,
+                  new Resource(ResourceType.GROUP, groupResult.groupId)
+                ))
+              }
+            }
+          }
+
+          if (response.groups.isEmpty) {
+            // If the response is empty, we can directly reuse the results.
+            response.setGroups(results)
+          } else {
+            // Otherwise, we have to copy the results into the existing ones.
+            response.groups.addAll(results)
+          }
+
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupDescribeResponse(response))
+        }
+      }
+    }
+
+  }
+  
   def handleGetTelemetrySubscriptionsRequest(request: RequestChannel.Request): Unit = {
     val subscriptionRequest = request.body[GetTelemetrySubscriptionsRequest]
 

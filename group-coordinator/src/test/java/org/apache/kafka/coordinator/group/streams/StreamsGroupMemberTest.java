@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue.TaskIds;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
@@ -50,7 +55,6 @@ public class StreamsGroupMemberTest {
             .setClientId("client-id")
             .setClientHost("hostname")
             .setTopologyId("topology-hash")
-            .setAssignor("assignor")
             .setProcessId("process-id")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
@@ -68,7 +72,6 @@ public class StreamsGroupMemberTest {
         assertEquals("client-id", member.clientId());
         assertEquals("hostname", member.clientHost());
         assertEquals("topology-hash", member.topologyId());
-        assertEquals("assignor", member.assignor().get());
         assertEquals("process-id", member.processId());
         assertEquals(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090), member.userEndpoint());
         assertEquals(
@@ -107,7 +110,6 @@ public class StreamsGroupMemberTest {
             .setClientId("client-id")
             .setClientHost("hostname")
             .setTopologyId("topology-hash")
-            .setAssignor("assignor")
             .setProcessId("process-id")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
@@ -126,7 +128,6 @@ public class StreamsGroupMemberTest {
             .setClientId("client-id")
             .setClientHost("hostname")
             .setTopologyId("topology-hash")
-            .setAssignor("assignor")
             .setProcessId("process-id")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
@@ -145,7 +146,6 @@ public class StreamsGroupMemberTest {
             .setClientId("client-id")
             .setClientHost("hostname")
             .setTopologyId("topology-hash")
-            .setAssignor("assignor")
             .setProcessId("process-id")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
@@ -173,7 +173,6 @@ public class StreamsGroupMemberTest {
             .setClientId("client-id")
             .setClientHost("hostname")
             .setTopologyId("topology-hash")
-            .setAssignor("assignor")
             .setProcessId("process-id")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090))
             .setClientTags(mkMap(mkEntry("client", "tag")))
@@ -188,7 +187,6 @@ public class StreamsGroupMemberTest {
             .maybeUpdateRackId(Optional.empty())
             .maybeUpdateInstanceId(Optional.empty())
             .maybeUpdateRebalanceTimeoutMs(OptionalInt.empty())
-            .maybeUpdateAssignor(Optional.empty())
             .build();
 
         assertEquals(member, updatedMember);
@@ -197,13 +195,11 @@ public class StreamsGroupMemberTest {
             .maybeUpdateRackId(Optional.of("new-rack-id"))
             .maybeUpdateInstanceId(Optional.of("new-instance-id"))
             .maybeUpdateRebalanceTimeoutMs(OptionalInt.of(6000))
-            .maybeUpdateAssignor(Optional.of("new-assignor"))
             .build();
 
         assertEquals("new-instance-id", updatedMember.instanceId());
         assertEquals("new-rack-id", updatedMember.rackId());
         assertEquals(6000, updatedMember.rebalanceTimeoutMs());
-        assertEquals("new-assignor", updatedMember.assignor().get());
     }
 
     @Test
@@ -274,5 +270,118 @@ public class StreamsGroupMemberTest {
         assertEquals(mkAssignment(mkTaskAssignment(subtopologyId2, 6, 5, 4)), member.assignedStandbyTasks());
         assertEquals(mkAssignment(mkTaskAssignment(subtopologyId1, 7, 8, 9)), member.assignedWarmupTasks());
         assertEquals(mkAssignment(mkTaskAssignment(subtopologyId2, 2, 3, 1)), member.activeTasksPendingRevocation());
+    }
+
+    @Test
+    public void testAsStreamsGroupDescribeMember() {
+        String subTopology1 = Uuid.randomUuid().toString();
+        String subTopology2 = Uuid.randomUuid().toString();
+        String subTopology3 = Uuid.randomUuid().toString();
+        String subTopology4 = Uuid.randomUuid().toString();
+        List<Integer> assignedTasks1 = Arrays.asList(0, 1, 2);
+        List<Integer> assignedTasks2 = Arrays.asList(3, 4, 5);
+        List<Integer> assignedTasks3 = Arrays.asList(6, 7, 8);
+        List<Integer> assignedTasks4 = Arrays.asList(5, 6, 7);
+        int epoch = 10;
+        StreamsGroupCurrentMemberAssignmentValue record = new StreamsGroupCurrentMemberAssignmentValue()
+            .setMemberEpoch(epoch)
+            .setPreviousMemberEpoch(epoch - 1)
+            .setActiveTasks(Collections.singletonList(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
+                .setSubtopology(subTopology1)
+                .setPartitions(assignedTasks1)))
+            .setStandbyTasks(Collections.singletonList(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
+                .setSubtopology(subTopology2)
+                .setPartitions(assignedTasks2)))
+            .setWarmupTasks(Collections.singletonList(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
+                .setSubtopology(subTopology3)
+                .setPartitions(assignedTasks3)))
+            .setActiveTasksPendingRevocation(Collections.singletonList(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
+                .setSubtopology(subTopology4)
+                .setPartitions(assignedTasks4)));
+        String memberId = Uuid.randomUuid().toString();
+        String clientId = "clientId";
+        String instanceId = "instanceId";
+        String rackId = "rackId";
+        String clientHost = "clientHost";
+        String processId = "processId";
+        String topologyId = "topologyId";
+        Map<String, String> clientTags = Collections.singletonMap("key", "value");
+        org.apache.kafka.coordinator.group.streams.Assignment targetAssignment = new org.apache.kafka.coordinator.group.streams.Assignment(
+            mkMap(mkEntry(subTopology1, new HashSet<>(assignedTasks3))),
+            mkMap(mkEntry(subTopology2, new HashSet<>(assignedTasks2))),
+            mkMap(mkEntry(subTopology3, new HashSet<>(assignedTasks1)))
+        );
+        StreamsGroupMember member = new StreamsGroupMember.Builder(memberId)
+            .updateWith(record)
+            .setClientId(clientId)
+            .setInstanceId(instanceId)
+            .setRackId(rackId)
+            .setClientHost(clientHost)
+            .setProcessId(processId)
+            .setTopologyId(topologyId)
+            .setClientTags(clientTags)
+            .setAssignedActiveTasks(
+                mkMap(mkEntry(subTopology1, new HashSet<>(assignedTasks1)))
+            )
+            .setAssignedStandbyTasks(
+                mkMap(mkEntry(subTopology2, new HashSet<>(assignedTasks2)))
+            )
+            .setAssignedWarmupTasks(
+                mkMap(mkEntry(subTopology3, new HashSet<>(assignedTasks3)))
+            )
+            .setActiveTasksPendingRevocation(
+                mkMap(mkEntry(subTopology3, new HashSet<>(assignedTasks4)))
+            )
+            .build();
+
+        StreamsGroupDescribeResponseData.Member actual = member.asStreamsGroupDescribeMember(targetAssignment);
+        StreamsGroupDescribeResponseData.Member expected = new StreamsGroupDescribeResponseData.Member()
+            .setMemberId(memberId)
+            .setMemberEpoch(epoch)
+            .setClientId(clientId)
+            .setInstanceId(instanceId)
+            .setRackId(rackId)
+            .setClientHost(clientHost)
+            .setProcessId(processId)
+            .setTopologyId(topologyId)
+            .setClientTags(Collections.singletonList(new StreamsGroupDescribeResponseData.KeyValue().setKey("key").setValue("value")))
+            .setAssignment(
+                new StreamsGroupDescribeResponseData.Assignment()
+                    .setActiveTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
+                        .setSubtopology(subTopology1)
+                        .setPartitions(assignedTasks1)))
+                    .setStandbyTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
+                        .setSubtopology(subTopology2)
+                        .setPartitions(assignedTasks2)))
+                    .setWarmupTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
+                        .setSubtopology(subTopology3)
+                        .setPartitions(assignedTasks3)))
+            )
+            .setTargetAssignment(
+                new StreamsGroupDescribeResponseData.Assignment()
+                    .setActiveTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
+                        .setSubtopology(subTopology1)
+                        .setPartitions(assignedTasks3)))
+                    .setStandbyTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
+                        .setSubtopology(subTopology2)
+                        .setPartitions(assignedTasks2)))
+                    .setWarmupTasks(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskIds()
+                        .setSubtopology(subTopology3)
+                        .setPartitions(assignedTasks1)))
+            );
+        // TODO: Add TaskOffsets
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testAsStreamsGroupDescribeWithTargetAssignmentNull() {
+        StreamsGroupMember member = new StreamsGroupMember.Builder(Uuid.randomUuid().toString())
+            .build();
+
+        StreamsGroupDescribeResponseData.Member streamsGroupDescribeMember = member.asStreamsGroupDescribeMember(
+            null);
+
+        assertEquals(new StreamsGroupDescribeResponseData.Assignment(), streamsGroupDescribeMember.targetAssignment());
     }
 }
