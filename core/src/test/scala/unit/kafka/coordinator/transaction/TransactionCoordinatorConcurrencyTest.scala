@@ -561,7 +561,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           txnMetadata.producerId,
           txnMetadata.producerEpoch,
           transactionResult(txn),
-          2,
+          2, // 2 makes this fail
           (r, _, _) => resultCallback(r),
           RequestLocal.withThreadConfinedCaching)
       }
