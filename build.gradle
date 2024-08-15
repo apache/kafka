@@ -901,6 +901,44 @@ project(':server') {
   }
 }
 
+project(':share') {
+  base {
+    archivesName = "kafka-share"
+  }
+
+  dependencies {
+    implementation project(':server-common')
+
+    implementation libs.slf4jApi
+
+    testImplementation libs.junitJupiter
+    testImplementation libs.slf4jReload4j
+
+    testRuntimeOnly libs.junitPlatformLanucher
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-share.xml")
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
 project(':core') {
   apply plugin: 'scala'
 
@@ -934,6 +972,7 @@ project(':core') {
     implementation project(':raft')
     implementation project(':storage')
     implementation project(':server')
+    implementation project(':share')
 
     implementation libs.argparse4j
     implementation libs.commonsValidator
@@ -973,6 +1012,7 @@ project(':core') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
+    testImplementation project(':share').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
