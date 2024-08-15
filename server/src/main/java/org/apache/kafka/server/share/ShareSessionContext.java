@@ -241,14 +241,5 @@ public class ShareSessionContext extends ShareFetchContext {
             return new ErroneousAndValidPartitionData(erroneous, valid);
         }
     }
-
-//    private static final class TopicMap {
-//        private final TopicIdPartition topicIdPartition;
-//        private final ShareFetchRequest.SharePartitionData sharePartitionData;
-//
-//        TopicMap(TopicIdPartition topicIdPartition, ShareFetchRequest.SharePartitionData sharePartitionData) {
-//            this.topicIdPartition = topicIdPartition;
-//            this.sharePartitionData = sharePartitionData;
-//        }
-//    }
 }
+
