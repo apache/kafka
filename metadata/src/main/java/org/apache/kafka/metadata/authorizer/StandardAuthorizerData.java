@@ -376,7 +376,8 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
     public Iterable<AclBinding> acls(AclBindingFilter filter) {
         return aclCache.acls(filter::matches);
     }
-    
+
+    @Override
     public AuthorizationResult authorizeByResourceType(
             KafkaPrincipal principal,
             String hostAddr,
@@ -478,6 +479,6 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
             }
         }
 
-        return AuthorizationResult.DENIED;
+        return noAclRule.result();
     }
 }

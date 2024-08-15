@@ -21,30 +21,60 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Collections;
 import java.util.Set;
 
+
 @Timeout(value = 40)
-public class StandardAuthorizerTest extends AbstractClusterMetadataAuthorizerTest {
-    AbstractClusterMetadataAuthorizerTest.TestingWrapper testingWrapper = new AbstractClusterMetadataAuthorizerTest.TestingWrapper() {
-
-        @Override
-        public ClusterMetadataAuthorizer getAuthorizer() {
-            return new StandardAuthorizer();
-        }
-
-        @Override
-        public Set<String> superUsers(ClusterMetadataAuthorizer authorizer) {
-            return ((StandardAuthorizer) authorizer).getData().superUsers();
-        }
-
-        @Override
-        public AuthorizationResult defaultResult(ClusterMetadataAuthorizer authorizer) {
-            return ((StandardAuthorizer) authorizer).defaultResult();
-        }
-    };
+public class StandardAuthorizerTest extends AbstractClusterMetadataAuthorizerTest<StandardAuthorizer> {
 
     @Override
-    protected AbstractClusterMetadataAuthorizerTest.TestingWrapper getTestingWrapper() {
-        return testingWrapper;
+    protected Builder getTestingWrapperBuilder() {
+        return new Builder() {
+
+            @Override
+            public TestingWrapper<StandardAuthorizer> get() {
+
+                return new TestingWrapper<StandardAuthorizer>() {
+
+                    @Override
+                    public org.apache.kafka.metadata.authorizer.StandardAuthorizer getUnconfiguredAuthorizer() {
+                        return new StandardAuthorizer();
+                    }
+
+                    @Override
+                    public StandardAuthorizer configure(StandardAuthorizer authorizer) {
+                        authorizer.configure(configs);
+                        return authorizer;
+                    }
+
+                    @Override
+                    public StandardAuthorizer addAcls(StandardAuthorizer authorizer) {
+                        acls.forEach( aclWithId -> {
+                            authorizer.addAcl( aclWithId.id(), aclWithId.acl());
+                        });
+                        return authorizer;
+                    }
+
+                    @Override
+                    public org.apache.kafka.metadata.authorizer.StandardAuthorizer getAuthorizer() {
+                        StandardAuthorizer authorizer = configure(getUnconfiguredAuthorizer());
+                        authorizer.start(new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
+                        addAcls(authorizer).completeInitialLoad();
+                        return authorizer;
+                    }
+
+                    @Override
+                    public Set<String> superUsers(org.apache.kafka.metadata.authorizer.StandardAuthorizer authorizer) {
+                        return authorizer.getData().superUsers();
+                    }
+
+                    @Override
+                    public AuthorizationResult defaultResult(org.apache.kafka.metadata.authorizer.StandardAuthorizer authorizer) {
+                        return authorizer.defaultResult();
+                    }
+                };
+            }
+        };
     }
 }

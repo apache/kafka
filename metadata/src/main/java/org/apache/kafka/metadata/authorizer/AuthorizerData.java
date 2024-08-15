@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
+import org.apache.kafka.server.authorizer.Authorizer;
 
 import org.slf4j.Logger;
 
@@ -225,7 +226,7 @@ public interface AuthorizerData {
     AuthorizationResult defaultResult();
 
     /**
-     * Returns the number of ACLs in this Authorizer.
+     * Returns the number of ACLs in this Authorizer.  May return -1 if the number is unknown.
      * @return the number of ACLs in this Authorizer.
      */
     int aclCount();
@@ -281,6 +282,7 @@ public interface AuthorizerData {
      * @param operation the operation to limit the search to.
      * @param resourceType the resource type to limit the search to.
      * @return the authorization for the first matching resource.
+     * @see Authorizer#authorizeByResourceType(AuthorizableRequestContext, AclOperation, ResourceType)
      */
     AuthorizationResult authorizeByResourceType(KafkaPrincipal principal, String host, AclOperation operation, ResourceType resourceType);
 

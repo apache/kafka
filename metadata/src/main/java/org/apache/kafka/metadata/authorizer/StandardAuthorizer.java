@@ -194,6 +194,12 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         return data.defaultResult();
     }
 
+    /**
+     * Get the set of super users as specificed in a configuration map.
+     * @param configs the configuration map.
+     * @return the set of super users..
+     */
+
     static Set<String> getConfiguredSuperUsers(Map<String, ?> configs) {
         Object configValue = configs.get(SUPER_USERS_CONFIG);
         if (configValue == null) return Collections.emptySet();
@@ -209,6 +215,11 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         return result;
     }
 
+    /**
+     * Get the specified default Result from a configuration map.
+     * @param configs the configuration map.
+     * @return the default AuthorizationResult.
+     */
     static AuthorizationResult getDefaultResult(Map<String, ?> configs) {
         Object configValue = configs.get(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG);
         if (configValue == null) return DENIED;
