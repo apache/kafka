@@ -16,7 +16,7 @@
 {
   "apiKey": 88,
   "type": "request",
-  "listeners": ["broker"],
+  "listeners": ["broker", "zkBroker"],
   "name": "StreamsGroupInitializeRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

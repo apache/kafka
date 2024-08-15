@@ -96,6 +96,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("ClassFanOutComplexity")
 public class GroupCoordinatorShardTest {
 
     @Test

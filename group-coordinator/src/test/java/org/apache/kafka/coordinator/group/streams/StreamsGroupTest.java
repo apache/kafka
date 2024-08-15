@@ -88,9 +88,7 @@ public class StreamsGroupTest {
 
         member = streamsGroup.getOrMaybeCreateMember("member", true);
 
-        member = new StreamsGroupMember.Builder(member)
-            .setAssignor("client")
-            .build();
+        member = new StreamsGroupMember.Builder(member).build();
 
         streamsGroup.updateMember(member);
 

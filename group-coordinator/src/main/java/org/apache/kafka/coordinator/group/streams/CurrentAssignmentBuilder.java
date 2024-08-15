@@ -182,7 +182,7 @@ public class CurrentAssignmentBuilder {
 
                 // If the member provides its owned tasks. We verify if it still
                 // owns any of the revoked tasks. If it does, we cannot progress.
-                if (ownsRevokedTasks(member.activeTasksPendingRevocation())) {
+                if (ownsRevokedActiveTasks(member.activeTasksPendingRevocation())) {
                     return member;
                 }
 
@@ -229,12 +229,12 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Decides whether the current ownedTopicTasks contains any partition that is pending revocation.
+     * Decides whether the current ownedActiveTasks contains any partition that is pending revocation.
      *
      * @param assignment The assignment that has the tasks pending revocation.
      * @return A boolean based on the condition mentioned above.
      */
-    private boolean ownsRevokedTasks(
+    private boolean ownsRevokedActiveTasks(
         Map<String, Set<Integer>> assignment
     ) {
         if (ownedActiveTasks == null) {
@@ -313,7 +313,7 @@ public class CurrentAssignmentBuilder {
             }
         }
 
-        if (!newTasksPendingRevocation.isEmpty() && ownsRevokedTasks(newTasksPendingRevocation)) {
+        if (!newTasksPendingRevocation.isEmpty() && ownsRevokedActiveTasks(newTasksPendingRevocation)) {
             // If there are tasks to be revoked, the member remains in its current
             // epoch and requests the revocation of those tasks. It transitions to
             // the UNREVOKED_TASKS state to wait until the client acknowledges the

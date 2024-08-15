@@ -23,7 +23,6 @@ import org.apache.kafka.coordinator.group.taskassignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.taskassignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.taskassignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.taskassignor.TaskAssignorException;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -116,11 +115,6 @@ public class TargetAssignmentBuilder {
     private Map<String, org.apache.kafka.coordinator.group.streams.Assignment> targetAssignment = Collections.emptyMap();
 
     /**
-     * The topics image.
-     */
-    private TopicsImage topicsImage = TopicsImage.EMPTY;
-
-    /**
      * The topology.
      */
     private StreamsTopology topology;
@@ -201,19 +195,6 @@ public class TargetAssignmentBuilder {
         Map<String, org.apache.kafka.coordinator.group.streams.Assignment> targetAssignment
     ) {
         this.targetAssignment = targetAssignment;
-        return this;
-    }
-
-    /**
-     * Adds the topics image.
-     *
-     * @param topicsImage The topics image.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withTopicsImage(
-        TopicsImage topicsImage
-    ) {
-        this.topicsImage = topicsImage;
         return this;
     }
 

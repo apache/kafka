@@ -214,7 +214,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
         StreamsGroupHeartbeatRequest request = (StreamsGroupHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
 
         assertEquals(processID.toString(), request.data().processId());
-        assertEquals(endPoint, request.data().userEndpoint());
+        assertEquals(endPoint.host, request.data().userEndpoint().host());
+        assertEquals(endPoint.port, request.data().userEndpoint().port());
         assertEquals(1, request.data().clientTags().size());
         assertEquals("clientTag1", request.data().clientTags().get(0).key());
         assertEquals("value2", request.data().clientTags().get(0).value());

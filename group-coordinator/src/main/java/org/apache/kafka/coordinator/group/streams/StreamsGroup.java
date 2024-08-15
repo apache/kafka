@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.Group;
@@ -132,11 +133,6 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, String> staticMembers;
 
     /**
-     * The number of members supporting each assignor name.
-     */
-    private final TimelineHashMap<String, Integer> assignors;
-
-    /**
      * The metadata associated with each subscribed topic name.
      */
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
@@ -175,7 +171,7 @@ public class StreamsGroup implements Group {
     /**
      * The Streams topology.
      */
-    private TimelineObject<Optional<StreamsTopology>> topology;
+    private final TimelineObject<Optional<StreamsTopology>> topology;
 
     /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
@@ -197,7 +193,6 @@ public class StreamsGroup implements Group {
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.assignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -369,7 +364,6 @@ public class StreamsGroup implements Group {
         maybeUpdateTaskEpoch(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
-        maybeUpdateAssignors(oldMember, newMember);
     }
 
     /**
@@ -459,36 +453,6 @@ public class StreamsGroup implements Group {
 
     public Map<String, Map<Integer, String>> invertedTargetWarmupTasksAssignment() {
         return Collections.unmodifiableMap(invertedTargetWarmupTasksAssignment);
-    }
-
-    /**
-     * Updates the server assignors count.
-     *
-     * @param oldMember The old member.
-     * @param newMember The new member.
-     */
-    private void maybeUpdateAssignors(
-        StreamsGroupMember oldMember,
-        StreamsGroupMember newMember
-    ) {
-        maybeUpdateAssignors(assignors, oldMember, newMember);
-    }
-
-    private static void maybeUpdateAssignors(
-        Map<String, Integer> serverAssignorCount,
-        StreamsGroupMember oldMember,
-        StreamsGroupMember newMember
-    ) {
-        if (oldMember != null) {
-            oldMember.assignor().ifPresent(name ->
-                serverAssignorCount.compute(name, StreamsGroup::decValue)
-            );
-        }
-        if (newMember != null) {
-            newMember.assignor().ifPresent(name ->
-                serverAssignorCount.compute(name, StreamsGroup::incValue)
-            );
-        }
     }
 
     /**
@@ -654,43 +618,6 @@ public class StreamsGroup implements Group {
         } else {
             return partitions.getOrDefault(partitionId, -1);
         }
-    }
-
-    /**
-     * Compute the preferred (server side) assignor for the group while taking into account the updated member. The computation relies on
-     * {{@link StreamsGroup#assignors}} persisted structure but it does not update it.
-     *
-     * @param oldMember The old member.
-     * @param newMember The new member.
-     * @return An Optional containing the preferred assignor.
-     */
-    public Optional<String> computePreferredServerAssignor(
-        StreamsGroupMember oldMember,
-        StreamsGroupMember newMember
-    ) {
-        // Copy the current count and update it.
-        Map<String, Integer> counts = new HashMap<>(this.assignors);
-        maybeUpdateAssignors(counts, oldMember, newMember);
-
-        return counts.entrySet().stream()
-            .max(Map.Entry.comparingByValue())
-            .map(Map.Entry::getKey);
-    }
-
-    /**
-     * @return The preferred assignor for the group.
-     */
-    public Optional<String> preferredServerAssignor() {
-        return preferredServerAssignor(Long.MAX_VALUE);
-    }
-
-    /**
-     * @return The preferred assignor for the group with given offset.
-     */
-    public Optional<String> preferredServerAssignor(long committedOffset) {
-        return assignors.entrySet(committedOffset).stream()
-            .max(Map.Entry.comparingByValue())
-            .map(Map.Entry::getKey);
     }
 
     /**
@@ -1097,21 +1024,23 @@ public class StreamsGroup implements Group {
         });
     }
 
-    /**
-     * Decrements value by 1; returns null when reaching zero. This helper is meant to be used with Map#compute.
-     */
-    private static Integer decValue(String key, Integer value) {
-        if (value == null) {
-            return null;
-        }
-        return value == 1 ? null : value - 1;
-    }
-
-    /**
-     * Increments value by 1; This helper is meant to be used with Map#compute.
-     */
-    private static Integer incValue(String key, Integer value) {
-        return value == null ? 1 : value + 1;
+    public StreamsGroupDescribeResponseData.DescribedGroup asDescribedGroup(
+        long committedOffset
+    ) {
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setGroupEpoch(groupEpoch.get(committedOffset))
+            .setGroupState(state.get(committedOffset).toString())
+            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset))
+            .setTopology(topology.get(committedOffset).map(StreamsTopology::asStreamsGroupDescribeTopology).orElse(null));
+        members.entrySet(committedOffset).forEach(
+            entry -> describedGroup.members().add(
+                entry.getValue().asStreamsGroupDescribeMember(
+                    targetAssignment.get(entry.getValue().memberId(), committedOffset)
+                )
+            )
+        );
+        return describedGroup;
     }
 
     /**
