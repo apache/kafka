@@ -25,7 +25,7 @@ import java.nio.file.Files
 import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 
-import kafka.utils.{CoreUtils, Exit, Logging}
+import kafka.utils.{Exit, Logging}
 
 import scala.jdk.CollectionConverters._
 import org.apache.commons.lang.text.StrSubstitutor
@@ -206,7 +206,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
           builder.append(line).append("\n")
         addEntriesToDirectoryService(StrSubstitutor.replace(builder, map.asJava))
       }
-      finally CoreUtils.swallow(reader.close(), this)
+      finally Utils.closeQuietly(reader, "miniKdc reader")
     }
 
     val bindAddress = config.getProperty(MiniKdc.KdcBindAddress)
@@ -255,7 +255,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       while ({line = reader.readLine(); line != null}) {
         stringBuilder.append(line).append("{3}")
       }
-    } finally CoreUtils.swallow(reader.close(), this)
+    } finally Utils.closeQuietly(reader, "krb5 conf stream reader")
     val output = MessageFormat.format(stringBuilder.toString, realm, host, port.toString, System.lineSeparator())
     Files.write(krb5conf.toPath, output.getBytes(StandardCharsets.UTF_8))
   }
@@ -344,7 +344,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     try {
       for (ldifEntry <- reader.asScala)
         ds.getAdminSession.add(new DefaultEntry(ds.getSchemaManager, ldifEntry.getEntry))
-    } finally CoreUtils.swallow(reader.close(), this)
+    } finally Utils.closeQuietly(reader, "ldif reader")
   }
 
 }

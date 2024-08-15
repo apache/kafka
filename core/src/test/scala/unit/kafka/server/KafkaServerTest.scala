@@ -17,8 +17,9 @@
 
 package kafka.server
 
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{ReplicationConfigs, ZkConfigs}
@@ -59,7 +60,7 @@ class KafkaServerTest extends QuorumTestHarness {
         "Expected RuntimeException due to address already in use during KafkaServer startup"
       )
     } finally {
-      CoreUtils.swallow(serverSocket.close(), this)
+      Utils.closeQuietly(serverSocket, "server socket")
       TestUtils.shutdownServers(kafkaServer.toList)
     }
   }
