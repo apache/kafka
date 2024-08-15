@@ -17,7 +17,6 @@
 
 package org.apache.kafka.raft;
 
-import org.apache.kafka.raft.internals.VoterSet;
 
 import java.util.ArrayList;
 import java.util.Collection;
