@@ -792,8 +792,7 @@ public class GroupMetadataManager {
             } else if (createIfNotExists && validateOnlineUpgrade((ClassicGroup) group)) {
                 return convertToConsumerGroup((ClassicGroup) group, records);
             } else {
-                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
-                    groupId));
+                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group", groupId));
             }
         }
     }
@@ -816,10 +815,7 @@ public class GroupMetadataManager {
         if (group.type() == CONSUMER) {
             return (ConsumerGroup) group;
         } else {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
-                groupId));
+            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group", groupId));
         }
     }
 
@@ -848,11 +844,11 @@ public class GroupMetadataManager {
     ConsumerGroup getOrMaybeCreatePersistedConsumerGroup(
         String groupId,
         boolean createIfNotExists
-    ) throws GroupIdNotFoundException {
+    ) throws IllegalStateException {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new IllegalStateException(String.format("Consumer group %s not found.", groupId));
+            throw new IllegalStateException(String.format("Consumer group %s not found", groupId));
         }
 
         if (group == null) {
@@ -860,14 +856,20 @@ public class GroupMetadataManager {
             groups.put(groupId, consumerGroup);
             metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
+        } else if (group.type() == CONSUMER) {
+            return (ConsumerGroup) group;
+        } else if (group.type() == CLASSIC && ((ClassicGroup) group).isSimpleGroup()) {
+            // If the group is a simple classic group, it was automatically created to hold committed
+            // offsets if no group existed. Simple classic groups are not backed by any records
+            // in the __consumer_offsets topic hence we can safely replace it here. Without this,
+            // replaying consumer group records after offset commit records would not work.
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            groups.put(groupId, consumerGroup);
+            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
+            metrics.onClassicGroupStateTransition(EMPTY, null);
+            return consumerGroup;
         } else {
-            if (group.type() == CONSUMER) {
-                return (ConsumerGroup) group;
-            } else {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we throw an exception if a group exists with the wrong type.
-                throw new IllegalStateException(String.format("Group %s is not a consumer group.", groupId));
-            }
+            throw new IllegalStateException(String.format("Group %s is not a consumer group", groupId));
         }
     }
 
@@ -903,10 +905,7 @@ public class GroupMetadataManager {
             if (group.type() == CLASSIC) {
                 return (ClassicGroup) group;
             } else {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we throw an exception if a group exists with the wrong type.
-                throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
-                    groupId));
+                throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.", groupId));
             }
         }
     }
@@ -929,10 +928,7 @@ public class GroupMetadataManager {
         if (group.type() == CLASSIC) {
             return (ClassicGroup) group;
         } else {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
-                groupId));
+            throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.", groupId));
         }
     }
 
@@ -3215,7 +3211,14 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
         String memberId = key.memberId();
 
-        ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
+        ConsumerGroup consumerGroup;
+        try {
+            consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
+        } catch (IllegalStateException ex) {
+            // If the group does not exist and a tombstone is replayed, we can ignore it.
+            return;
+        }
+
         Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames().keySet());
 
         if (value != null) {
@@ -3224,7 +3227,14 @@ public class GroupMetadataManager {
                 .updateWith(value)
                 .build());
         } else {
-            ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, false);
+            ConsumerGroupMember oldMember;
+            try {
+                oldMember = consumerGroup.getOrMaybeCreateMember(memberId, false);
+            } catch (UnknownMemberIdException ex) {
+                // If the member does not exist, we can ignore it.
+                return;
+            }
+
             if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
                 throw new IllegalStateException("Received a tombstone record to delete member " + memberId
                     + " but did not receive ConsumerGroupCurrentMemberAssignmentValue tombstone.");
@@ -3330,7 +3340,14 @@ public class GroupMetadataManager {
             ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             consumerGroup.setGroupEpoch(value.epoch());
         } else {
-            ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
+            ConsumerGroup consumerGroup;
+            try {
+                consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
+            } catch (IllegalStateException ex) {
+                // If the group does not exist, we can ignore the tombstone.
+                return;
+            }
+
             if (!consumerGroup.members().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
                     + " but the group still has " + consumerGroup.members().size() + " members.");
@@ -3362,7 +3379,14 @@ public class GroupMetadataManager {
         ConsumerGroupPartitionMetadataValue value
     ) {
         String groupId = key.groupId();
-        ModernGroup<?> group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
+
+        ConsumerGroup group;
+        try {
+            group = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
+        } catch (IllegalStateException ex) {
+            // If the group does not exist, we can ignore the tombstone.
+            return;
+        }
 
         if (value != null) {
             Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
@@ -3388,11 +3412,18 @@ public class GroupMetadataManager {
     ) {
         String groupId = key.groupId();
         String memberId = key.memberId();
-        ModernGroup<?> group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
 
         if (value != null) {
+            ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             group.updateTargetAssignment(memberId, Assignment.fromRecord(value));
         } else {
+            ConsumerGroup group;
+            try {
+                group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
+            } catch (IllegalStateException ex) {
+                // If the group does not exist, we can ignore the tombstone.
+                return;
+            }
             group.removeTargetAssignment(memberId);
         }
     }
@@ -3410,11 +3441,18 @@ public class GroupMetadataManager {
         ConsumerGroupTargetAssignmentMetadataValue value
     ) {
         String groupId = key.groupId();
-        ModernGroup<?> group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
 
         if (value != null) {
+            ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             group.setTargetAssignmentEpoch(value.assignmentEpoch());
         } else {
+            ConsumerGroup group;
+            try {
+                group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
+            } catch (IllegalStateException ex) {
+                // If the group does not exist, we can ignore the tombstone.
+                return;
+            }
             if (!group.targetAssignment().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                     + " but the assignment still has " + group.targetAssignment().size() + " members.");
@@ -3437,15 +3475,30 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
         String memberId = key.memberId();
 
-        ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
-        ConsumerGroupMember oldMember = group.getOrMaybeCreateMember(memberId, false);
-
         if (value != null) {
+            ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
+            ConsumerGroupMember oldMember = group.getOrMaybeCreateMember(memberId, false);
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .updateWith(value)
                 .build();
             group.updateMember(newMember);
         } else {
+            ConsumerGroup group;
+            try {
+                group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
+            } catch (IllegalStateException ex) {
+                // If the group does not exist, we can ignore the tombstone.
+                return;
+            }
+
+            ConsumerGroupMember oldMember;
+            try {
+                oldMember = group.getOrMaybeCreateMember(memberId, false);
+            } catch (UnknownMemberIdException ex) {
+                // If the member does not exist, we can ignore the tombstone.
+                return;
+            }
+
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
