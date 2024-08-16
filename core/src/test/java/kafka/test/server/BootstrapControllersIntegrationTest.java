@@ -54,13 +54,13 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -247,10 +247,10 @@ public class BootstrapControllersIntegrationTest {
         }
     }
 
-    @Test
-    public void testAlterReassignmentsWithBootstrapControllers() throws ExecutionException, InterruptedException {
+    @ClusterTest
+    public void testAlterReassignmentsWithBootstrapControllers(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String topicName = "foo";
-        try (Admin admin = Admin.create(adminProperties(false))) {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, false))) {
             Map<Integer, List<Integer>> assignments = new HashMap<>();
             assignments.put(0, Arrays.asList(0, 1, 2));
             assignments.put(1, Arrays.asList(1, 2, 0));
@@ -267,7 +267,7 @@ public class BootstrapControllersIntegrationTest {
             reassignments.put(new TopicPartition(topicName, 1), Optional.of(new NewPartitionReassignment(part1Reassignment)));
             reassignments.put(new TopicPartition(topicName, 2), Optional.of(new NewPartitionReassignment(part2Reassignment)));
 
-            try (Admin adminWithBootstrapControllers = Admin.create(adminProperties(true))) {
+            try (Admin adminWithBootstrapControllers = Admin.create(adminConfig(clusterInstance, true))) {
                 adminWithBootstrapControllers.alterPartitionReassignments(reassignments).all().get();
                 TestUtils.waitForCondition(
                         () -> adminWithBootstrapControllers.listPartitionReassignments().reassignments().get().isEmpty(),
