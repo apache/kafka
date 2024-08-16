@@ -31,6 +31,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -3608,6 +3609,49 @@ public class TransactionManagerTest {
         assertInstanceOf(TransactionAbortableException.class, sendOffsetsResult.error());
 
         assertAbortableError(TransactionAbortableException.class);
+    }
+
+    private TimeoutException timeoutException(TopicPartition tp, ProducerBatch batch) {
+        return new TimeoutException(
+            String.format(
+                "Expiring %s record(s) for %s:%s ms has passed since batch creation",
+                batch.recordCount,
+                tp,
+                time.milliseconds() - batch.createdMs
+            )
+        );
+    }
+
+    @Test
+    public void testFailedBatchesAfterAbort() {
+        final TopicPartition tp1 = new TopicPartition("topic", 0);
+        final TopicPartition tp2 = new TopicPartition("topic", 1);
+
+        long producerId = 191799;
+        short epoch = 0;
+        doInitTransactions(producerId, epoch);
+        transactionManager.beginTransaction();
+
+        ProducerBatch batch1 = writeIdempotentBatchWithValue(transactionManager, tp1, "first");
+        ProducerBatch batch2 = writeIdempotentBatchWithValue(transactionManager, tp2, "second");
+
+        transactionManager.maybeTransitionToErrorState(timeoutException(tp1, batch1));
+        transactionManager.maybeTransitionToErrorState(timeoutException(tp2, batch2));
+
+        assertEquals(TransactionManager.State.ABORTABLE_ERROR, transactionManager.currentState());
+        TransactionalRequestResult result = transactionManager.beginAbort();
+        assertEquals(TransactionManager.State.ABORTING_TRANSACTION, transactionManager.currentState());
+        assertTrue(transactionManager.hasOngoingTransaction());
+        epoch++;
+
+        // Don't we need to receive the response for the end transaction?
+        // prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
+        assertEquals(TransactionManager.State.ABORTING_TRANSACTION, transactionManager.currentState());
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(result::isCompleted);
+
+        transactionManager.handleFailedBatch(batch1, new NetworkException("Disconnected from node 4"), false);
+        transactionManager.handleFailedBatch(batch2, new TimeoutException("The request timed out."), false);
     }
 
     @Test

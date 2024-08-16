@@ -194,7 +194,7 @@ public class TransactionManager {
     private volatile boolean transactionStarted = false;
     private volatile boolean epochBumpRequired = false;
 
-    private enum State {
+    enum State {
         UNINITIALIZED,
         INITIALIZING,
         READY,
@@ -781,6 +781,7 @@ public class TransactionManager {
             enqueueRequest(addPartitionsToTransactionHandler());
 
         TxnRequestHandler nextRequestHandler = pendingRequests.peek();
+        log.info("nextRequest - nextRequestHandler: {}", nextRequestHandler);
         if (nextRequestHandler == null)
             return null;
 
@@ -959,6 +960,11 @@ public class TransactionManager {
 
         // If neither of the above cases are true, retry if the exception is retriable
         return error.exception() instanceof RetriableException;
+    }
+
+    // visible for testing
+    synchronized State currentState() {
+        return currentState;
     }
 
     // visible for testing
@@ -1305,6 +1311,7 @@ public class TransactionManager {
         @Override
         public void handleResponse(AbstractResponse response) {
             InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
+            log.info("{}.handleResponse called", getClass().getSimpleName());
             Errors error = initProducerIdResponse.error();
 
             if (error == Errors.NONE) {
@@ -1546,6 +1553,7 @@ public class TransactionManager {
 
         @Override
         public void handleResponse(AbstractResponse response) {
+            log.info("{}.handleResponse called", getClass().getSimpleName());
             EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
 
