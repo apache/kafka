@@ -19,8 +19,8 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.coordinator.common.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.common.runtime.Serializer;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -73,7 +73,7 @@ import java.nio.ByteBuffer;
  * </pre>
  */
 @SuppressWarnings({ "ClassDataAbstractionCoupling", "CyclomaticComplexity" })
-public class CoordinatorRecordSerde implements Serializer<CoordinatorRecord>, Deserializer<CoordinatorRecord> {
+public class GroupCoordinatorRecordSerde implements Serializer<CoordinatorRecord>, Deserializer<CoordinatorRecord> {
     @Override
     public byte[] serializeKey(CoordinatorRecord record) {
         // Record does not accept a null key.

@@ -18,8 +18,8 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.coordinator.common.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -63,10 +63,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
-public class CoordinatorRecordSerdeTest {
+public class GroupCoordinatorRecordSerdeTest {
     @Test
     public void testSerializeKey() {
-        CoordinatorRecordSerde serializer = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
         CoordinatorRecord record = new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey().setGroupId("group"),
@@ -86,7 +86,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testSerializeValue() {
-        CoordinatorRecordSerde serializer = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
         CoordinatorRecord record = new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey().setGroupId("group"),
@@ -106,7 +106,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testSerializeNullValue() {
-        CoordinatorRecordSerde serializer = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
         CoordinatorRecord record = new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey().setGroupId("group"),
@@ -120,7 +120,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserialize() {
-        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -141,7 +141,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeWithTombstoneForValue() {
-        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -156,7 +156,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeWithInvalidRecordType() {
-        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(64);
         keyBuffer.putShort((short) 255);
@@ -172,7 +172,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeWithKeyEmptyBuffer() {
-        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(0);
         ByteBuffer valueBuffer = ByteBuffer.allocate(64);
@@ -185,7 +185,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeWithValueEmptyBuffer() {
-        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -203,7 +203,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeWithInvalidKeyBytes() {
-        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(2);
         keyBuffer.putShort((short) 3);
@@ -222,7 +222,7 @@ public class CoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeWithInvalidValueBytes() {
-        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -266,7 +266,7 @@ public class CoordinatorRecordSerdeTest {
         ApiMessage key,
         ApiMessage val
     ) {
-        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         for (short version = val.lowestSupportedVersion(); version < val.highestSupportedVersion(); version++) {
             ApiMessageAndVersion keyMessageAndVersion = new ApiMessageAndVersion(key, recordType);

@@ -14,11 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.common;
+package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 
 import java.util.ArrayList;
 import java.util.Comparator;

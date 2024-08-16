@@ -37,8 +37,6 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.common.metrics.CoordinatorMetrics;
-import org.apache.kafka.coordinator.common.metrics.CoordinatorRuntimeMetrics;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.image.MetadataDelta;
@@ -1775,7 +1773,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * 16KB. Used for initial buffer size for write operations.
      */
-    public static final int MIN_BUFFER_SIZE = 16384;
+    static final int MIN_BUFFER_SIZE = 16384;
 
     /**
      * The log prefix.

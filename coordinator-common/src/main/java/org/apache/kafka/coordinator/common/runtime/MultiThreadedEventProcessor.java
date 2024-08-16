@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.common.metrics.CoordinatorRuntimeMetrics;
 
 import org.slf4j.Logger;
 

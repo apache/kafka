@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.coordinator.common.CoordinatorRecord;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

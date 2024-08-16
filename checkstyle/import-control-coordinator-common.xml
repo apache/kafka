@@ -40,11 +40,6 @@
 
     <subpackage name="coordinator">
         <subpackage name="common">
-            <allow pkg="org.apache.kafka.coordinator.common.runtime" />
-            <allow pkg="org.apache.kafka.server.common" />
-            <allow pkg="org.apache.kafka.common.network" />
-            <allow pkg="org.apache.kafka.common.protocol" />
-            <allow pkg="org.apache.kafka.common.requests" />
             <subpackage name="runtime">
                 <allow pkg="org.apache.kafka.clients.consumer" />
                 <allow pkg="org.apache.kafka.common.annotation" />
@@ -66,8 +61,6 @@
                 <allow pkg="org.apache.kafka.coordinator.common" />
                 <allow pkg="org.apache.kafka.server.util" />
                 <allow pkg="org.apache.kafka.image" />
-            </subpackage>
-            <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics.core" />
                 <allow pkg="org.apache.kafka.timeline" />
                 <allow pkg="org.apache.kafka.server.metrics" />

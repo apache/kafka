@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.coordinator.common.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -65,8 +65,8 @@ import java.util.Set;
  * This class contains helper methods to create records stored in
  * the __consumer_offsets topic.
  */
-public class CoordinatorRecordHelpers {
-    private CoordinatorRecordHelpers() {}
+public class GroupCoordinatorRecordHelpers {
+    private GroupCoordinatorRecordHelpers() {}
 
     /**
      * Creates a ConsumerGroupMemberMetadata record.

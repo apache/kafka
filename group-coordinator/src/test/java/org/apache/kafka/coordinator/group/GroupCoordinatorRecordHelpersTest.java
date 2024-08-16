@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.common.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
@@ -74,24 +74,24 @@ import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupEpochRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
-public class CoordinatorRecordHelpersTest {
+public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupMemberSubscriptionRecord() {
@@ -550,7 +550,7 @@ public class CoordinatorRecordHelpersTest {
         });
 
         group.initNextGeneration();
-        CoordinatorRecord groupMetadataRecord = CoordinatorRecordHelpers.newGroupMetadataRecord(
+        CoordinatorRecord groupMetadataRecord = GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
             group,
             assignment,
             metadataVersion
@@ -568,7 +568,7 @@ public class CoordinatorRecordHelpersTest {
                 (short) 2),
             null);
 
-        CoordinatorRecord groupMetadataRecord = CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id");
+        CoordinatorRecord groupMetadataRecord = GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id");
         assertEquals(expectedRecord, groupMetadataRecord);
     }
 
@@ -617,7 +617,7 @@ public class CoordinatorRecordHelpersTest {
         });
 
         assertThrows(IllegalStateException.class, () ->
-            CoordinatorRecordHelpers.newGroupMetadataRecord(
+            GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
                 Collections.emptyMap(),
                 MetadataVersion.IBP_3_5_IV2
@@ -669,7 +669,7 @@ public class CoordinatorRecordHelpersTest {
         });
 
         assertThrows(IllegalStateException.class, () ->
-            CoordinatorRecordHelpers.newGroupMetadataRecord(
+            GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
                 Collections.emptyMap(),
                 MetadataVersion.IBP_3_5_IV2
@@ -710,7 +710,7 @@ public class CoordinatorRecordHelpersTest {
         );
 
         group.initNextGeneration();
-        CoordinatorRecord groupMetadataRecord = CoordinatorRecordHelpers.newEmptyGroupMetadataRecord(
+        CoordinatorRecord groupMetadataRecord = GroupCoordinatorRecordHelpers.newEmptyGroupMetadataRecord(
             group,
             metadataVersion
         );
@@ -742,7 +742,7 @@ public class CoordinatorRecordHelpersTest {
             )
         );
 
-        assertEquals(expectedRecord, CoordinatorRecordHelpers.newOffsetCommitRecord(
+        assertEquals(expectedRecord, GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
             "group-id",
             "foo",
             1,
@@ -757,7 +757,7 @@ public class CoordinatorRecordHelpersTest {
 
         value.setLeaderEpoch(-1);
 
-        assertEquals(expectedRecord, CoordinatorRecordHelpers.newOffsetCommitRecord(
+        assertEquals(expectedRecord, GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
             "group-id",
             "foo",
             1,
@@ -792,7 +792,7 @@ public class CoordinatorRecordHelpersTest {
             )
         );
 
-        assertEquals(expectedRecord, CoordinatorRecordHelpers.newOffsetCommitRecord(
+        assertEquals(expectedRecord, GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
             "group-id",
             "foo",
             1,
@@ -817,7 +817,7 @@ public class CoordinatorRecordHelpersTest {
                 (short) 1),
             null);
 
-        CoordinatorRecord record = CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
+        CoordinatorRecord record = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
         assertEquals(expectedRecord, record);
     }
 
