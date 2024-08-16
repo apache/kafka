@@ -21,6 +21,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
@@ -455,9 +456,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         QuorumStateStore quorumStateStore,
         Metrics metrics
     ) {
-        Optional<VoterSet> staticVoters = voterAddresses.isEmpty() ?
-            Optional.empty() :
-            Optional.of(VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses));
+        VoterSet staticVoters = voterAddresses.isEmpty() ?
+            VoterSet.empty() :
+            VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses);
 
         partitionState = new KRaftControlRecordStateMachine(
             staticVoters,
@@ -470,8 +471,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // Read the entire log
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         partitionState.updateState();
+        logger.info("Starting voters are {}", partitionState.lastVoterSet());
 
         if (requestManager == null) {
+            if (voterAddresses.isEmpty()) {
+                throw new ConfigException(
+                    String.format(
+                        "Missing kraft bootstrap servers. Must specify a value for %s.",
+                        QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG
+                    )
+                );
+            }
+
             // The request manager wasn't created using the bootstrap servers
             // create it using the voters static configuration
             List<Node> bootstrapNodes = voterAddresses

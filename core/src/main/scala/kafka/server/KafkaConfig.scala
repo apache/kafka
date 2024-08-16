@@ -890,30 +890,34 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
     // validate KRaft-related configs
     val voterIds = QuorumConfig.parseVoterIds(quorumVoters)
-    def validateNonEmptyQuorumVotersForKRaft(): Unit = {
-      if (voterIds.isEmpty) {
-        throw new ConfigException(s"If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
+    def validateQuorumVotersAndQuorumBootstrapServerForKRaft(): Unit = {
+      if (voterIds.isEmpty && quorumBootstrapServers.isEmpty) {
+        throw new ConfigException(
+          s"""If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
+          |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
+          |set of controllers.""".stripMargin.replace("\n", " ")
+        )
       }
     }
-    def validateNonEmptyQuorumVotersForMigration(): Unit = {
-      if (voterIds.isEmpty) {
-        throw new ConfigException(s"If using ${KRaftConfigs.MIGRATION_ENABLED_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
+    def validateQuorumVotersAndQuorumBootstrapServerForMigration(): Unit = {
+      if (voterIds.isEmpty && quorumBootstrapServers.isEmpty) {
+        throw new ConfigException(
+          s"""If using ${KRaftConfigs.MIGRATION_ENABLED_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
+          |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
+          |set of controllers.""".stripMargin.replace("\n", " ")
+        )
       }
     }
     def validateControlPlaneListenerEmptyForKRaft(): Unit = {
       require(controlPlaneListenerName.isEmpty,
         s"${SocketServerConfigs.CONTROL_PLANE_LISTENER_NAME_CONFIG} is not supported in KRaft mode.")
     }
-    def validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker(): Unit = {
-      require(advertisedBrokerListenerNames.forall(aln => !controllerListenerNames.contains(aln.value())),
-        s"The advertised.listeners config must not contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the broker role because Kafka clients that send requests via advertised listeners do not send requests to KRaft controllers -- they only send requests to KRaft brokers.")
-    }
     def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
-      require(voterIds.contains(nodeId),
+      require(voterIds.isEmpty || voterIds.contains(nodeId),
         s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
     }
-    def validateControllerListenerExistsForKRaftController(): Unit = {
-      require(controllerListeners.nonEmpty,
+    def validateAdvertisedControllerListenersNonEmptyForKRaftController(): Unit = {
+      require(effectiveAdvertisedControllerListeners.nonEmpty,
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateControllerListenerNamesMustAppearInListenersForKRaftController(): Unit = {
@@ -921,16 +925,15 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must only contain values appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
-    def validateAdvertisedListenersNonEmptyForBroker(): Unit = {
+    def validateAdvertisedBrokerListenersNonEmptyForBroker(): Unit = {
       require(advertisedBrokerListenerNames.nonEmpty,
-        "There must be at least one advertised listener." + (
+        "There must be at least one broker advertised listener." + (
           if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
-      validateNonEmptyQuorumVotersForKRaft()
+      validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
-      validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       // nodeId must not appear in controller.quorum.voters
       require(!voterIds.contains(nodeId),
         s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
@@ -952,10 +955,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (controllerListenerNames.size > 1) {
         warn(s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} has multiple entries; only the first will be used since ${KRaftConfigs.PROCESS_ROLES_CONFIG}=broker: ${controllerListenerNames.asJava}")
       }
-      validateAdvertisedListenersNonEmptyForBroker()
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
-      validateNonEmptyQuorumVotersForKRaft()
+      validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
       // listeners should only contain listeners also enumerated in the controller listener
       require(
@@ -963,21 +965,19 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         s"The ${SocketServerConfigs.LISTENERS_CONFIG} config must only contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller"
       )
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
-      validateControllerListenerExistsForKRaftController()
+      validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
     } else if (isKRaftCombinedMode) {
       // KRaft combined broker and controller
-      validateNonEmptyQuorumVotersForKRaft()
+      validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
-      validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
-      validateControllerListenerExistsForKRaftController()
+      validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
-      validateAdvertisedListenersNonEmptyForBroker()
     } else {
       // ZK-based
       if (migrationEnabled) {
-        validateNonEmptyQuorumVotersForMigration()
+        validateQuorumVotersAndQuorumBootstrapServerForMigration()
         require(controllerListenerNames.nonEmpty,
           s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
         require(interBrokerProtocolVersion.isMigrationSupported, s"Cannot enable ZooKeeper migration without setting " +
@@ -992,13 +992,12 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         require(controllerListenerNames.isEmpty,
           s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
       }
-      validateAdvertisedListenersNonEmptyForBroker()
     }
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
       // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
-      validateAdvertisedListenersNonEmptyForBroker()
+      validateAdvertisedBrokerListenersNonEmptyForBroker()
       require(advertisedBrokerListenerNames.contains(interBrokerListenerName),
         s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +
           s"The valid options based on currently configured listeners are ${advertisedBrokerListenerNames.map(_.value).mkString(",")}")
