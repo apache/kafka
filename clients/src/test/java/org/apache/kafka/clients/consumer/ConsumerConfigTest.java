@@ -237,4 +237,16 @@ public class ConsumerConfigTest {
             assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         }
     }
+
+    @Test
+    public void testPartitionAssigmentStrategyWithConsumerGroupProtocol() {
+        final Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "RoundRobinAssignor");
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+        ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertTrue(exception.getMessage().contains(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + 
+                " cannot be set when " + ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name()));
+    }
 }

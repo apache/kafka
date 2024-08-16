@@ -675,6 +675,7 @@ public class ConsumerConfig extends AbstractConfig {
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
         checkGroupRemoteAssignor();
+        checkPartitionAssigmentStrategy();
         return refinedConfigs;
     }
 
@@ -724,6 +725,15 @@ public class ConsumerConfig extends AbstractConfig {
     private void checkGroupRemoteAssignor() {
         if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CLASSIC.name()) && getString(GROUP_REMOTE_ASSIGNOR_CONFIG) != null && !getString(GROUP_REMOTE_ASSIGNOR_CONFIG).isEmpty()) {
             throw new ConfigException(GROUP_REMOTE_ASSIGNOR_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CLASSIC.name());
+        }
+    }
+
+    private void checkPartitionAssigmentStrategy() {
+        List<String> assignmentStrategies = getList(PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
+        if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CONSUMER.name())) {
+            if (assignmentStrategies != null && !assignmentStrategies.isEmpty()) {
+                throw new ConfigException(PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
+            }
         }
     }
 
