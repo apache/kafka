@@ -31,7 +31,6 @@
     <disallow pkg="kafka" />
 
     <!-- anyone can use public classes -->
-    <!-- anyone can use public classes -->
     <allow pkg="org.apache.kafka.common" exact-match="true" />
     <allow pkg="org.apache.kafka.common.security" />
     <allow pkg="org.apache.kafka.common.serialization" />

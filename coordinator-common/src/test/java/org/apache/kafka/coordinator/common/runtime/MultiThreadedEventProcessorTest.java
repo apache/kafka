@@ -25,7 +25,6 @@ import org.apache.kafka.coordinator.common.metrics.CoordinatorRuntimeMetrics;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -163,7 +163,7 @@ public class MultiThreadedEventProcessorTest {
             "event-processor-",
             2,
             Time.SYSTEM,
-            Mockito.mock(CoordinatorRuntimeMetrics.class)
+            mock(CoordinatorRuntimeMetrics.class)
         );
         eventProcessor.close();
     }
@@ -175,7 +175,7 @@ public class MultiThreadedEventProcessorTest {
             "event-processor-",
             2,
             Time.SYSTEM,
-            Mockito.mock(CoordinatorRuntimeMetrics.class)
+            mock(CoordinatorRuntimeMetrics.class)
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
@@ -212,7 +212,7 @@ public class MultiThreadedEventProcessorTest {
             "event-processor-",
             2,
             Time.SYSTEM,
-            Mockito.mock(CoordinatorRuntimeMetrics.class)
+            mock(CoordinatorRuntimeMetrics.class)
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
@@ -297,7 +297,7 @@ public class MultiThreadedEventProcessorTest {
             "event-processor-",
             2,
             Time.SYSTEM,
-            Mockito.mock(CoordinatorRuntimeMetrics.class)
+            mock(CoordinatorRuntimeMetrics.class)
         );
 
         eventProcessor.close();
@@ -313,7 +313,7 @@ public class MultiThreadedEventProcessorTest {
             "event-processor-",
             1, // Use a single thread to block event in the processor.
             Time.SYSTEM,
-            Mockito.mock(CoordinatorRuntimeMetrics.class)
+            mock(CoordinatorRuntimeMetrics.class)
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
@@ -377,7 +377,7 @@ public class MultiThreadedEventProcessorTest {
 
     @Test
     public void testMetrics() throws Exception {
-        CoordinatorRuntimeMetrics mockRuntimeMetrics = Mockito.mock(CoordinatorRuntimeMetrics.class);
+        CoordinatorRuntimeMetrics mockRuntimeMetrics = mock(CoordinatorRuntimeMetrics.class);
         Time mockTime = new MockTime();
         AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
@@ -460,7 +460,7 @@ public class MultiThreadedEventProcessorTest {
 
     @Test
     public void testRecordThreadIdleRatio() throws Exception {
-        CoordinatorRuntimeMetrics mockRuntimeMetrics = Mockito.mock(CoordinatorRuntimeMetrics.class);
+        CoordinatorRuntimeMetrics mockRuntimeMetrics = mock(CoordinatorRuntimeMetrics.class);
         Time time = new MockTime();
 
         try (CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(

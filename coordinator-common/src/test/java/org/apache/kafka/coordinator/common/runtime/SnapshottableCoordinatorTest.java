@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.common.MockCoordinatorTimer;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest.MockCoordinatorShard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -35,10 +36,10 @@ public class SnapshottableCoordinatorTest {
     public void testUpdateLastWrittenOffset() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        SnapshottableCoordinator<CoordinatorRuntimeTest.MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
+        SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
             logContext,
             snapshotRegistry,
-            new CoordinatorRuntimeTest.MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
             new TopicPartition("test-topic", 0)
         );
 
@@ -53,10 +54,10 @@ public class SnapshottableCoordinatorTest {
     public void testUpdateLastWrittenOffsetFailed() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        SnapshottableCoordinator<CoordinatorRuntimeTest.MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
+        SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
             logContext,
             snapshotRegistry,
-            new CoordinatorRuntimeTest.MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
             new TopicPartition("test-topic", 0)
         );
 
@@ -69,10 +70,10 @@ public class SnapshottableCoordinatorTest {
     public void testRevertWrittenOffset() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        SnapshottableCoordinator<CoordinatorRuntimeTest.MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
+        SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
             logContext,
             snapshotRegistry,
-            new CoordinatorRuntimeTest.MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
             new TopicPartition("test-topic", 0)
         );
 
@@ -92,10 +93,10 @@ public class SnapshottableCoordinatorTest {
     public void testRevertLastWrittenOffsetFailed() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        SnapshottableCoordinator<CoordinatorRuntimeTest.MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
+        SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
             logContext,
             snapshotRegistry,
-            new CoordinatorRuntimeTest.MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
             new TopicPartition("test-topic", 0)
         );
 
@@ -108,10 +109,10 @@ public class SnapshottableCoordinatorTest {
     public void testUpdateLastCommittedOffset() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        SnapshottableCoordinator<CoordinatorRuntimeTest.MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
+        SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
             logContext,
             snapshotRegistry,
-            new CoordinatorRuntimeTest.MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
             new TopicPartition("test-topic", 0)
         );
 
@@ -129,10 +130,10 @@ public class SnapshottableCoordinatorTest {
     public void testUpdateLastCommittedOffsetFailed() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        SnapshottableCoordinator<CoordinatorRuntimeTest.MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
+        SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
             logContext,
             snapshotRegistry,
-            new CoordinatorRuntimeTest.MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
             new TopicPartition("test-topic", 0)
         );
 

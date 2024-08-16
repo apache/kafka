@@ -21,7 +21,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.Coordinato
 import java.util.function.Supplier;
 
 /**
- * Used by the group and transaction coordinator runtimes, the metrics suite holds partition state gauges and sensors.
+ * Used by the group and coordinator runtimes, the metrics suite holds partition state gauges and sensors.
  */
 public interface CoordinatorRuntimeMetrics extends AutoCloseable {
 

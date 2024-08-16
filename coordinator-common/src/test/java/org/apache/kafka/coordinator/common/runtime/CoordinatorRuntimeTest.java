@@ -54,7 +54,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatcher;
-import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -629,8 +628,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -699,8 +698,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -749,8 +748,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -803,8 +802,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -874,8 +873,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -928,8 +927,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -982,8 +981,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1024,8 +1023,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1067,8 +1066,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1188,8 +1187,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1212,8 +1211,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1240,8 +1239,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1300,8 +1299,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1352,8 +1351,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1389,8 +1388,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1460,8 +1459,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(shardBuilderSupplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1553,8 +1552,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(shardBuilderSupplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1611,8 +1610,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1723,8 +1722,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1780,8 +1779,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1846,8 +1845,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1938,8 +1937,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -1996,8 +1995,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2021,8 +2020,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2067,8 +2066,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2119,8 +2118,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2188,8 +2187,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2251,8 +2250,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2306,8 +2305,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(processor)
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2381,8 +2380,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(processor)
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2453,8 +2452,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2513,8 +2512,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2587,8 +2586,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2630,8 +2629,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2677,7 +2676,7 @@ public class CoordinatorRuntimeTest {
         MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
-        CoordinatorRuntimeMetrics runtimeMetrics = Mockito.mock(CoordinatorRuntimeMetrics.class);
+        CoordinatorRuntimeMetrics runtimeMetrics = mock(CoordinatorRuntimeMetrics.class);
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
@@ -2689,7 +2688,7 @@ public class CoordinatorRuntimeTest {
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2746,7 +2745,7 @@ public class CoordinatorRuntimeTest {
         MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
-        CoordinatorRuntimeMetrics runtimeMetrics = Mockito.mock(CoordinatorRuntimeMetrics.class);
+        CoordinatorRuntimeMetrics runtimeMetrics = mock(CoordinatorRuntimeMetrics.class);
 
         long startTimeMs = timer.time().milliseconds();
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
@@ -2767,7 +2766,7 @@ public class CoordinatorRuntimeTest {
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2803,7 +2802,7 @@ public class CoordinatorRuntimeTest {
         MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
-        CoordinatorRuntimeMetrics runtimeMetrics = Mockito.mock(CoordinatorRuntimeMetrics.class);
+        CoordinatorRuntimeMetrics runtimeMetrics = mock(CoordinatorRuntimeMetrics.class);
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
@@ -2823,7 +2822,7 @@ public class CoordinatorRuntimeTest {
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2860,7 +2859,7 @@ public class CoordinatorRuntimeTest {
         MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
         MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
-        CoordinatorRuntimeMetrics runtimeMetrics = Mockito.mock(CoordinatorRuntimeMetrics.class);
+        CoordinatorRuntimeMetrics runtimeMetrics = mock(CoordinatorRuntimeMetrics.class);
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
@@ -2880,7 +2879,7 @@ public class CoordinatorRuntimeTest {
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
                 .withCoordinatorRuntimeMetrics(runtimeMetrics)
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2922,8 +2921,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -2992,8 +2991,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -3066,8 +3065,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(processor)
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .build();
 
@@ -3135,8 +3134,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(serializer)
                 .build();
 
@@ -3185,8 +3184,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -3319,8 +3318,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -3370,8 +3369,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -3455,8 +3454,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -3552,8 +3551,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -3694,8 +3693,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -3808,8 +3807,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -3856,8 +3855,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -3964,8 +3963,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
@@ -4059,8 +4058,8 @@ public class CoordinatorRuntimeTest {
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
-                .withCoordinatorRuntimeMetrics(Mockito.mock(CoordinatorRuntimeMetrics.class))
-                .withCoordinatorMetrics(Mockito.mock(CoordinatorMetrics.class))
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
                 .withAppendLingerMs(10)
                 .build();
