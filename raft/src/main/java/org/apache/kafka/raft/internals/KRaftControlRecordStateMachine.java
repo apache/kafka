@@ -281,7 +281,7 @@ public final class KRaftControlRecordStateMachine {
             switch (record.type()) {
                 case KRAFT_VOTERS:
                     VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
-                    logger.info("Latest set of voters is {} at {}", voters, currentOffset);
+                    logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
                     synchronized (voterSetHistory) {
                         voterSetHistory.addAt(currentOffset, voters);
                     }
@@ -292,7 +292,7 @@ public final class KRaftControlRecordStateMachine {
                         ((KRaftVersionRecord) record.message()).kRaftVersion()
                     );
                     logger.info(
-                        "Latest {} is {} at {}",
+                        "Latest {} is {} at offset {}",
                         KRaftVersion.FEATURE_NAME,
                         kraftVersion,
                         currentOffset
