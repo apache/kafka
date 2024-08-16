@@ -91,6 +91,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
         true
       )
     }
+    when(metadataCache.metadataVersion())
+      .thenReturn(MetadataVersion.latestProduction())
 
     txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, metadataCache, txnConfig, time,
       new Metrics())

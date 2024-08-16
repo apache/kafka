@@ -34,6 +34,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.when
@@ -70,6 +71,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   override def setUp(): Unit = {
     super.setUp()
 
+    when(replicaManager.metadataCache.metadataVersion())
+      .thenReturn(MetadataVersion.latestProduction())
     when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
       .thenReturn(Some(numPartitions))
 
