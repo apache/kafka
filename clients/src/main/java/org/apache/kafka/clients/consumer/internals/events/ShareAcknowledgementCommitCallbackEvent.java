@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.internals.Acknowledgements;
 import org.apache.kafka.common.TopicIdPartition;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public class ShareAcknowledgementCommitCallbackEvent extends BackgroundEvent {
@@ -27,7 +28,7 @@ public class ShareAcknowledgementCommitCallbackEvent extends BackgroundEvent {
 
     public ShareAcknowledgementCommitCallbackEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
         super(Type.SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK);
-        this.acknowledgementsMap = acknowledgementsMap;
+        this.acknowledgementsMap = new HashMap<>(acknowledgementsMap);
     }
 
     public Map<TopicIdPartition, Acknowledgements> acknowledgementsMap() {
