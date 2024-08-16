@@ -710,7 +710,6 @@ class BrokerServer(
       if (forwardingManager != null)
         CoreUtils.swallow(forwardingManager.close(), this)
 
-
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
