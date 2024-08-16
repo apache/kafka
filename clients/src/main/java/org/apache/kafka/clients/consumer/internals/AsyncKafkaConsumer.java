@@ -76,7 +76,6 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -1605,13 +1604,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new InterruptException("Interrupted while updating fetch positions");
             }
             cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(updateFetchPositionsEvent);
-        } catch (WakeupException we) {
-            log.warn("Consumer got wake up exception while trying to update fetch positions", we);
-            if (updateFetchPositionsEvent != null) {
-                // Complete event to ensure that it does not continue processing in the background
-                updateFetchPositionsEvent.future().completeExceptionally(we);
-            }
-            throw we;
         } catch (TimeoutException e) {
             return false;
         } finally {

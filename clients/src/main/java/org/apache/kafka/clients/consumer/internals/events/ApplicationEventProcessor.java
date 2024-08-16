@@ -33,7 +33,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
@@ -325,18 +324,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
     }
 
-    private void maybeWakeupPendingOffsetFetch(Throwable error) {
-        if (error instanceof WakeupException) {
-            log.warn("Application event to update fetch positions was completed" +
-                "Clearing background offsetFetchEvent", error);
-            if (pendingOffsetFetchEvent != null) {
-                log.warn("UpdateFetchPosition event got wakeup exception. Passing wake up" +
-                    " to the long-running pendingOffsetFetchEvent to abort it");
-                pendingOffsetFetchEvent.future().completeExceptionally(error);
-            }
-        }
-    }
-
     private void initWithPartitionOffsetsIfNeeded(final UpdateFetchPositionsEvent updateFetchPositionsEvent) {
         try {
             // If there are partitions still needing a position and a reset policy is defined,
@@ -379,8 +366,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (initializingPartitions.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
-
-        updateFetchPositionsEvent.future().whenComplete((__, error) -> maybeWakeupPendingOffsetFetch(error));
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         CompletableFuture<Void> result = new CompletableFuture<>();
