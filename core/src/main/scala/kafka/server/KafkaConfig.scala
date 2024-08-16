@@ -894,8 +894,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (voterIds.isEmpty && quorumBootstrapServers.isEmpty) {
         throw new ConfigException(
           s"""If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
-          | contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
-          | set of controllers.""".stripMargin
+          |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
+          |set of controllers.""".stripMargin.replace("\n", " ")
         )
       }
     }
@@ -903,8 +903,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (voterIds.isEmpty && quorumBootstrapServers.isEmpty) {
         throw new ConfigException(
           s"""If using ${KRaftConfigs.MIGRATION_ENABLED_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
-          | contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
-          | set of controllers.""".stripMargin)
+          |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
+          |set of controllers.""".stripMargin.replace("\n", " ")
+        )
       }
     }
     def validateControlPlaneListenerEmptyForKRaft(): Unit = {
