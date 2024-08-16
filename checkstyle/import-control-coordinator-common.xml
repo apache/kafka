@@ -31,20 +31,21 @@
     <disallow pkg="kafka" />
 
     <!-- anyone can use public classes -->
+    <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.common.memory" />
     <allow pkg="org.apache.kafka.common.security" />
     <allow pkg="org.apache.kafka.common.serialization" />
     <allow pkg="org.apache.kafka.common.utils" />
-    <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
-    <allow pkg="org.apache.kafka.common.memory" />
 
     <subpackage name="coordinator">
         <subpackage name="common">
             <subpackage name="runtime">
+                <allow pkg="com.yammer.metrics.core" />
                 <allow pkg="org.apache.kafka.clients.consumer" />
                 <allow pkg="org.apache.kafka.common.annotation" />
-                <allow pkg="org.apache.kafka.common.config" />
                 <allow pkg="org.apache.kafka.common.compress" />
+                <allow pkg="org.apache.kafka.common.config" />
                 <allow pkg="org.apache.kafka.common.internals" />
                 <allow pkg="org.apache.kafka.common.message" />
                 <allow pkg="org.apache.kafka.common.metadata" />
@@ -52,18 +53,15 @@
                 <allow pkg="org.apache.kafka.common.protocol" />
                 <allow pkg="org.apache.kafka.common.record" />
                 <allow pkg="org.apache.kafka.common.requests" />
-                <allow pkg="org.apache.kafka.deferred" />
-                <allow pkg="org.apache.kafka.server.common" />
-                <allow pkg="org.apache.kafka.timeline" />
-                <allow pkg="org.apache.kafka.storage.internals.log" />
-                <allow pkg="org.apache.kafka.common.record" />
-                <allow pkg="org.apache.kafka.test" />
                 <allow pkg="org.apache.kafka.coordinator.common" />
-                <allow pkg="org.apache.kafka.server.util" />
+                <allow pkg="org.apache.kafka.deferred" />
                 <allow pkg="org.apache.kafka.image" />
-                <allow pkg="com.yammer.metrics.core" />
-                <allow pkg="org.apache.kafka.timeline" />
+                <allow pkg="org.apache.kafka.server.common" />
                 <allow pkg="org.apache.kafka.server.metrics" />
+                <allow pkg="org.apache.kafka.server.util" />
+                <allow pkg="org.apache.kafka.storage.internals.log" />
+                <allow pkg="org.apache.kafka.test" />
+                <allow pkg="org.apache.kafka.timeline" />
             </subpackage>
         </subpackage>
     </subpackage>
