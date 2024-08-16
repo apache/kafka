@@ -49,7 +49,6 @@ final class ForwardingManagerMetrics extends AutoCloseable {
   val remoteTimeMsName: MetricName = metricsGroup.metricName("RemoteTimeMs", Collections.emptyMap())
   val remoteTimeMsHist: Histogram = KafkaYammerMetrics.defaultRegistry().newHistogram(remoteTimeMsName, true)
 
-
   override def close(): Unit = {
     KafkaYammerMetrics.defaultRegistry().removeMetric(queueTimeMsName)
     KafkaYammerMetrics.defaultRegistry().removeMetric(queueLengthName)

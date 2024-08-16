@@ -218,8 +218,8 @@ class NodeToControllerChannelManagerImpl(
    * @param callback        Request completion callback.
    */
   def sendRequest(
-     request: AbstractRequest.Builder[_ <: AbstractRequest],
-     callback: ControllerRequestCompletionHandler
+    request: AbstractRequest.Builder[_ <: AbstractRequest],
+    callback: ControllerRequestCompletionHandler
   ): Unit = {
     requestThread.enqueue(NodeToControllerQueueItem(
       time.milliseconds(),
