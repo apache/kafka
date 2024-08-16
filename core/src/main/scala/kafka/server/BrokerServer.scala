@@ -707,6 +707,10 @@ class BrokerServer(
       if (alterPartitionManager != null)
         CoreUtils.swallow(alterPartitionManager.shutdown(), this)
 
+      if (forwardingManager != null)
+        CoreUtils.swallow(forwardingManager.close(), this)
+
+
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 

@@ -42,22 +42,22 @@ import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 case class ControllerInformation(
-  node: Option[Node],
-  listenerName: ListenerName,
-  securityProtocol: SecurityProtocol,
-  saslMechanism: String,
-  isZkController: Boolean
-)
+                                  node: Option[Node],
+                                  listenerName: ListenerName,
+                                  securityProtocol: SecurityProtocol,
+                                  saslMechanism: String,
+                                  isZkController: Boolean
+                                )
 
 trait ControllerNodeProvider {
   def getControllerInfo(): ControllerInformation
 }
 
 class MetadataCacheControllerNodeProvider(
-  val metadataCache: ZkMetadataCache,
-  val config: KafkaConfig,
-  val quorumControllerNodeProvider: () => Option[ControllerInformation]
-) extends ControllerNodeProvider {
+                                           val metadataCache: ZkMetadataCache,
+                                           val config: KafkaConfig,
+                                           val quorumControllerNodeProvider: () => Option[ControllerInformation]
+                                         ) extends ControllerNodeProvider {
 
   private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
   private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
@@ -86,9 +86,9 @@ class MetadataCacheControllerNodeProvider(
 
 object RaftControllerNodeProvider {
   def apply(
-    raftManager: RaftManager[ApiMessageAndVersion],
-    config: KafkaConfig,
-  ): RaftControllerNodeProvider = {
+             raftManager: RaftManager[ApiMessageAndVersion],
+             config: KafkaConfig,
+           ): RaftControllerNodeProvider = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
     val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
@@ -106,11 +106,11 @@ object RaftControllerNodeProvider {
  * This provider is used when we are using a Raft-based metadata quorum.
  */
 class RaftControllerNodeProvider(
-  val raftManager: RaftManager[ApiMessageAndVersion],
-  val listenerName: ListenerName,
-  val securityProtocol: SecurityProtocol,
-  val saslMechanism: String
-) extends ControllerNodeProvider with Logging {
+                                  val raftManager: RaftManager[ApiMessageAndVersion],
+                                  val listenerName: ListenerName,
+                                  val securityProtocol: SecurityProtocol,
+                                  val saslMechanism: String
+                                ) extends ControllerNodeProvider with Logging {
 
   private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName)
 
@@ -127,14 +127,14 @@ class RaftControllerNodeProvider(
  * care must be taken to not block on outstanding requests for too long.
  */
 class NodeToControllerChannelManagerImpl(
-  controllerNodeProvider: ControllerNodeProvider,
-  time: Time,
-  metrics: Metrics,
-  config: KafkaConfig,
-  channelName: String,
-  threadNamePrefix: String,
-  retryTimeoutMs: Long
-) extends NodeToControllerChannelManager with Logging {
+                                          controllerNodeProvider: ControllerNodeProvider,
+                                          time: Time,
+                                          metrics: Metrics,
+                                          config: KafkaConfig,
+                                          channelName: String,
+                                          threadNamePrefix: String,
+                                          retryTimeoutMs: Long
+                                        ) extends NodeToControllerChannelManager with Logging {
   private val logContext = new LogContext(s"[NodeToControllerChannelManager id=${config.nodeId} name=${channelName}] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
@@ -218,9 +218,9 @@ class NodeToControllerChannelManagerImpl(
    * @param callback        Request completion callback.
    */
   def sendRequest(
-    request: AbstractRequest.Builder[_ <: AbstractRequest],
-    callback: ControllerRequestCompletionHandler
-  ): Unit = {
+                   request: AbstractRequest.Builder[_ <: AbstractRequest],
+                   callback: ControllerRequestCompletionHandler
+                 ): Unit = {
     requestThread.enqueue(NodeToControllerQueueItem(
       time.milliseconds(),
       request,
@@ -233,25 +233,29 @@ class NodeToControllerChannelManagerImpl(
       Option(apiVersions.get(activeController.idString))
     }.asJava
   }
+
+  def servedRequestCreatedMs(): Long = {
+    requestThread.servedRequestCreatedTime
+  }
 }
 
 case class NodeToControllerQueueItem(
-  createdTimeMs: Long,
-  request: AbstractRequest.Builder[_ <: AbstractRequest],
-  callback: ControllerRequestCompletionHandler
-)
+                                      createdTimeMs: Long,
+                                      request: AbstractRequest.Builder[_ <: AbstractRequest],
+                                      callback: ControllerRequestCompletionHandler
+                                    )
 
 class NodeToControllerRequestThread(
-  initialNetworkClient: KafkaClient,
-  var isNetworkClientForZkController: Boolean,
-  networkClientFactory: ControllerInformation => KafkaClient,
-  metadataUpdater: ManualMetadataUpdater,
-  controllerNodeProvider: ControllerNodeProvider,
-  config: KafkaConfig,
-  time: Time,
-  threadName: String,
-  retryTimeoutMs: Long
-) extends InterBrokerSendThread(
+                                     initialNetworkClient: KafkaClient,
+                                     var isNetworkClientForZkController: Boolean,
+                                     networkClientFactory: ControllerInformation => KafkaClient,
+                                     metadataUpdater: ManualMetadataUpdater,
+                                     controllerNodeProvider: ControllerNodeProvider,
+                                     config: KafkaConfig,
+                                     time: Time,
+                                     threadName: String,
+                                     retryTimeoutMs: Long
+                                   ) extends InterBrokerSendThread(
   threadName,
   initialNetworkClient,
   Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt,
@@ -279,6 +283,7 @@ class NodeToControllerRequestThread(
 
   private val requestQueue = new LinkedBlockingDeque[NodeToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
+  private val servedRequestCreatedMs = new AtomicReference[Long](0)
 
   // Used for testing
   @volatile
@@ -306,6 +311,10 @@ class NodeToControllerRequestThread(
     requestQueue.size
   }
 
+  def servedRequestCreatedTime: Long = {
+    servedRequestCreatedMs.get
+  }
+
   override def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
     val currentTimeMs = time.milliseconds()
     val requestIter = requestQueue.iterator()
@@ -318,6 +327,7 @@ class NodeToControllerRequestThread(
         val controllerAddress = activeControllerAddress()
         if (controllerAddress.isDefined) {
           requestIter.remove()
+          servedRequestCreatedMs.set(request.createdTimeMs)
           return util.Collections.singletonList(new RequestAndCompletionHandler(
             time.milliseconds(),
             controllerAddress.get,

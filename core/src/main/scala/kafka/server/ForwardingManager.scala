@@ -29,6 +29,8 @@ import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToContro
 import scala.compat.java8.OptionConverters._
 
 trait ForwardingManager {
+  def close(): Unit
+
   def forwardRequest(
     originalRequest: RequestChannel.Request,
     responseCallback: Option[AbstractResponse] => Unit
@@ -105,7 +107,12 @@ object ForwardingManager {
 
 class ForwardingManagerImpl(
   channelManager: NodeToControllerChannelManager
-) extends ForwardingManager with Logging {
+) extends ForwardingManager with AutoCloseable with Logging {
+
+  var forwardingManagerMetrics: ForwardingManagerMetrics = _
+  if (channelManager.isInstanceOf[NodeToControllerChannelManagerImpl]) {
+    forwardingManagerMetrics = new ForwardingManagerMetrics
+  }
 
   override def forwardRequest(
     requestContext: RequestContext,
@@ -118,6 +125,10 @@ class ForwardingManagerImpl(
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {
+
+        Option(forwardingManagerMetrics).foreach(_.queueLength.getAndDecrement())
+        Option(forwardingManagerMetrics).foreach(_.remoteTimeMsHist.update(clientResponse.requestLatencyMs()))
+        Option(forwardingManagerMetrics).foreach(_.queueTimeMsHist.update(clientResponse.receivedTimeMs() - clientResponse.requestLatencyMs() - channelManager.asInstanceOf[NodeToControllerChannelManagerImpl].servedRequestCreatedMs()))
 
         if (clientResponse.versionMismatch != null) {
           debug(s"Returning `UNKNOWN_SERVER_ERROR` in response to ${requestToString()} " +
@@ -161,7 +172,12 @@ class ForwardingManagerImpl(
       }
     }
 
+    Option(forwardingManagerMetrics).foreach(_.queueLength.getAndIncrement())
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
+  }
+
+  override def close(): Unit = {
+    Option(forwardingManagerMetrics).foreach(_.close())
   }
 
   override def controllerApiVersions: Option[NodeApiVersions] =

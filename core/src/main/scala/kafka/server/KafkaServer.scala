@@ -1032,6 +1032,9 @@ class KafkaServer(
         if (alterPartitionManager != null)
           CoreUtils.swallow(alterPartitionManager.shutdown(), this)
 
+        if (forwardingManager.isDefined)
+          CoreUtils.swallow(forwardingManager.get.close(), this)
+
         if (clientToControllerChannelManager != null)
           CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
