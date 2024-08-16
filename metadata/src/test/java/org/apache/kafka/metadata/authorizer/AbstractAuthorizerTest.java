@@ -146,17 +146,17 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         protected final List<StandardAclWithId> acls = new ArrayList<>();
         protected final HashMap<String, Object> configs = new HashMap<>();
 
-        final public Builder addAcls(Stream<StandardAcl> acls) {
+        public final Builder addAcls(Stream<StandardAcl> acls) {
             acls.forEach(this::addAcl);
             return this;
         }
 
-        final public Builder addAcl(StandardAcl acl) {
+        public final Builder addAcl(StandardAcl acl) {
             acls.add(withId(acl));
             return this;
         }
 
-        final public Builder superUser(String superUser) {
+        public final Builder superUser(String superUser) {
             String value = (String) configs.get(SUPER_USERS_CONFIG);
             if (value == null) {
                 configs.put(SUPER_USERS_CONFIG, superUser);
@@ -166,7 +166,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
             return this;
         }
 
-        final public Builder config(String key, Object value) {
+        public final Builder config(String key, Object value) {
             configs.put(key, value);
             return this;
         }
@@ -328,11 +328,11 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
     public final void testFindResultPrincipalMatching() throws Exception {
         assertEquals(ALLOWED, findResult(newAction(READ, TOPIC, "foo_bar"),
                 newRequestContext("bob"),
-                new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD,READ, ALLOW)));
+                new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, READ, ALLOW)));
         // Principal does not match.
         assertNull(findResult(newAction(READ, TOPIC, "foo_bar"),
                 newRequestContext("alice"),
-                new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD,READ, ALLOW)));
+                new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, READ, ALLOW)));
         // Wildcard principal matches anything.
         assertEquals(DENIED, findResult(newAction(READ, GROUP, "bar"),
                 newRequestContext("alice"),
@@ -396,7 +396,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 Supplier<String> name = () -> format("No ACLs, default not set, %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
-                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name );
+                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
                 } else {
                     execAuthorizeByResourceType(name, authorizer, requestContext, op, type, DENIED);
                 }
@@ -412,7 +412,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 Supplier<String> name = () -> format("No ACLs, default 'false'', %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
-                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name );
+                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
                 } else {
                     execAuthorizeByResourceType(name, authorizer, requestContext, op, type, DENIED);
                 }
@@ -428,7 +428,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 Supplier<String> name = () -> format("No ACLs, default 'true'', %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
-                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name );
+                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
                 } else {
                     execAuthorizeByResourceType(name, authorizer, requestContext, op, type, ALLOWED);
                 }
@@ -453,7 +453,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 Supplier<String> name = () -> format("No ACLs, default not set, %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
-                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name );
+                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
                 } else {
                     execAuthorizeByResourceType(name, authorizer, requestContext, op, type, DENIED);
                 }
@@ -469,7 +469,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 Supplier<String> name = () -> format("No ACLs, default 'false'', %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
-                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name );
+                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
                 } else {
                     execAuthorizeByResourceType(name, authorizer, requestContext, op, type, DENIED);
                 }
@@ -485,7 +485,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 Supplier<String> name = () -> format("No ACLs, default 'true'', %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
-                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name );
+                    assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
                 } else {
                     execAuthorizeByResourceType(name, authorizer, requestContext, op, type, ALLOWED);
                 }
@@ -587,28 +587,28 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
     @Test
     public void testListAcls() throws Exception {
-        StandardAcl foo_read = new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, READ, ALLOW);
-        StandardAcl foo_write = new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, WRITE, ALLOW);
-        StandardAcl bar_describe = new StandardAcl(GROUP, "bar", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, DESCRIBE_CONFIGS, DENY);
-        StandardAcl bar_alter = new StandardAcl(GROUP, "bar", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, ALTER_CONFIGS, DENY);
+        StandardAcl fooRead = new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, READ, ALLOW);
+        StandardAcl fooWrite = new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, WRITE, ALLOW);
+        StandardAcl barDescribe = new StandardAcl(GROUP, "bar", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, DESCRIBE_CONFIGS, DENY);
+        StandardAcl barAlter = new StandardAcl(GROUP, "bar", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, ALTER_CONFIGS, DENY);
 
         Authorizer authorizer = getTestingWrapperBuilder().superUser("User:superman")
-                .addAcl(foo_read).addAcl(foo_write).addAcl(bar_describe).addAcl(bar_alter).get().getAuthorizer();
+                .addAcl(fooRead).addAcl(fooWrite).addAcl(barDescribe).addAcl(barAlter).get().getAuthorizer();
 
 
         assertContains(authorizer.acls(AclBindingFilter.ANY),
-                foo_read, foo_write, bar_describe, bar_alter);
+                fooRead, fooWrite, barDescribe, barAlter);
 
         assertContains(authorizer.acls(new AclBindingFilter(new ResourcePatternFilter(
                         TOPIC, null, PatternType.ANY), AccessControlEntryFilter.ANY)),
-                foo_read, foo_write);
+                fooRead, fooWrite);
 
         assertFalse(authorizer.acls(new AclBindingFilter(new ResourcePatternFilter(
                 TOPIC, null, LITERAL), AccessControlEntryFilter.ANY)).iterator().hasNext());
 
         assertContains(authorizer.acls(new AclBindingFilter(new ResourcePatternFilter(
                         ResourceType.ANY, "bar", ANY), AccessControlEntryFilter.ANY)),
-                bar_describe, bar_alter);
+                barDescribe, barAlter);
 
         assertFalse(authorizer.acls(new AclBindingFilter(new ResourcePatternFilter(
                 ResourceType.ANY, "bar", PREFIXED), AccessControlEntryFilter.ANY)).iterator().hasNext());
@@ -618,12 +618,12 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
         // named user matches wildcard principal
         assertContains(authorizer.acls(new AclBindingFilter(ResourcePatternFilter.ANY, new AccessControlEntryFilter("User:bob", WILDCARD, DESCRIBE_CONFIGS, DENY))),
-                bar_describe);
+                barDescribe);
 
         // named host matches wildcard host
         InetAddress host1 = InetAddress.getByName("192.168.1.1");
         assertContains(authorizer.acls(new AclBindingFilter(ResourcePatternFilter.ANY, new AccessControlEntryFilter(WILDCARD_PRINCIPAL, host1.getHostName(), DESCRIBE_CONFIGS, DENY))),
-                bar_describe);
+                barDescribe);
 
     }
 

@@ -50,8 +50,8 @@ public class StandardAuthorizerTest extends AbstractClusterMetadataAuthorizerTes
 
                     @Override
                     public StandardAuthorizer addAcls(StandardAuthorizer authorizer) {
-                        acls.forEach( aclWithId -> {
-                            authorizer.addAcl( aclWithId.id(), aclWithId.acl());
+                        acls.forEach(aclWithId -> {
+                            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
                         });
                         return authorizer;
                     }
