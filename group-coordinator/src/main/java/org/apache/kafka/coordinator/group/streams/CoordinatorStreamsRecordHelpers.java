@@ -58,7 +58,7 @@ public class CoordinatorStreamsRecordHelpers {
                 new StreamsGroupMemberMetadataKey()
                     .setGroupId(groupId)
                     .setMemberId(member.memberId()),
-                (short) 14
+                (short) 17
             ),
             new ApiMessageAndVersion(
                 new StreamsGroupMemberMetadataValue()
@@ -96,7 +96,7 @@ public class CoordinatorStreamsRecordHelpers {
                 new StreamsGroupMemberMetadataKey()
                     .setGroupId(groupId)
                     .setMemberId(memberId),
-                (short) 14
+                (short) 17
             ),
             null // Tombstone.
         );
@@ -137,7 +137,7 @@ public class CoordinatorStreamsRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupPartitionMetadataKey()
                     .setGroupId(groupId),
-                (short) 13
+                (short) 16
             ),
             new ApiMessageAndVersion(
                 value,
@@ -159,7 +159,7 @@ public class CoordinatorStreamsRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupPartitionMetadataKey()
                     .setGroupId(groupId),
-                (short) 13
+                (short) 16
             ),
             null // Tombstone.
         );
@@ -173,7 +173,7 @@ public class CoordinatorStreamsRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataKey()
                     .setGroupId(groupId),
-                (short) 12
+                (short) 15
             ),
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataValue()
@@ -196,7 +196,7 @@ public class CoordinatorStreamsRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataKey()
                     .setGroupId(groupId),
-                (short) 12
+                (short) 15
             ),
             null // Tombstone.
         );
@@ -239,7 +239,7 @@ public class CoordinatorStreamsRecordHelpers {
                 new StreamsGroupTargetAssignmentMemberKey()
                     .setGroupId(groupId)
                     .setMemberId(memberId),
-                (short) 16
+                (short) 19
             ),
             new ApiMessageAndVersion(
                 new StreamsGroupTargetAssignmentMemberValue()
@@ -267,7 +267,7 @@ public class CoordinatorStreamsRecordHelpers {
                 new StreamsGroupTargetAssignmentMemberKey()
                     .setGroupId(groupId)
                     .setMemberId(memberId),
-                (short) 16
+                (short) 19
             ),
             null // Tombstone.
         );
@@ -282,7 +282,7 @@ public class CoordinatorStreamsRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupTargetAssignmentMetadataKey()
                     .setGroupId(groupId),
-                (short) 15
+                (short) 18
             ),
             new ApiMessageAndVersion(
                 new StreamsGroupTargetAssignmentMetadataValue()
@@ -305,7 +305,7 @@ public class CoordinatorStreamsRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupTargetAssignmentMetadataKey()
                     .setGroupId(groupId),
-                (short) 15
+                (short) 18
             ),
             null // Tombstone.
         );
@@ -320,7 +320,7 @@ public class CoordinatorStreamsRecordHelpers {
                 new StreamsGroupCurrentMemberAssignmentKey()
                     .setGroupId(groupId)
                     .setMemberId(member.memberId()),
-                (short) 17
+                (short) 20
             ),
             new ApiMessageAndVersion(
                 new StreamsGroupCurrentMemberAssignmentValue()
@@ -352,7 +352,7 @@ public class CoordinatorStreamsRecordHelpers {
                 new StreamsGroupCurrentMemberAssignmentKey()
                     .setGroupId(groupId)
                     .setMemberId(memberId),
-                (short) 17
+                (short) 20
             ),
             null // Tombstone
         );
@@ -402,7 +402,10 @@ public class CoordinatorStreamsRecordHelpers {
                 .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
         });
 
-        return new CoordinatorRecord(new ApiMessageAndVersion(new StreamsGroupTopologyKey().setGroupId(groupId), (short) 18),
+        return new CoordinatorRecord(new ApiMessageAndVersion(
+            new StreamsGroupTopologyKey()
+                .setGroupId(groupId),
+            (short) 21),
             new ApiMessageAndVersion(value, (short) 0));
     }
 
@@ -419,7 +422,7 @@ public class CoordinatorStreamsRecordHelpers {
             new ApiMessageAndVersion(
                 new StreamsGroupTopologyKey()
                     .setGroupId(groupId),
-                (short) 18
+                (short) 21
             ),
             null // Tombstone
         );

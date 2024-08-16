@@ -61,7 +61,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState;
 
-    private final MembershipManager membershipManager;
+    private final ConsumerMembershipManager membershipManager;
 
     private final StreamsInitializeRequestManager streamsInitializeRequestManager;
 
@@ -83,7 +83,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final StreamsInitializeRequestManager streamsInitializeRequestManager,
-        final MembershipManager membershipManager,
+        final ConsumerMembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics,
         final StreamsAssignmentInterface streamsAssignmentInterface,
@@ -158,7 +158,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                                                                      final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
         return request;
     }
@@ -335,7 +335,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
         this.heartbeatState.reset();
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
-        membershipManager.onHeartbeatFailure();
+        membershipManager.onHeartbeatFailure(false);
 
         switch (error) {
             case NOT_COORDINATOR:
@@ -503,7 +503,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     static class HeartbeatState {
 
-        private final MembershipManager membershipManager;
+        private final ConsumerMembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
         private final StreamsGroupHeartbeatRequestManager.HeartbeatState.SentFields sentFields;
 
@@ -514,7 +514,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
         public HeartbeatState(
             final StreamsAssignmentInterface streamsInterface,
-            final MembershipManager membershipManager,
+            final ConsumerMembershipManager membershipManager,
             final int rebalanceTimeoutMs) {
             this.membershipManager = membershipManager;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
@@ -552,9 +552,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             // Immutable -- only sent when joining
             if (joining) {
                 data.setProcessId(streamsInterface.processID().toString());
-//                data.setActiveTasks(Collections.emptyList());
-//                data.setStandbyTasks(Collections.emptyList());
-//                data.setWarmupTasks(Collections.emptyList());
+                data.setActiveTasks(Collections.emptyList());
+                data.setStandbyTasks(Collections.emptyList());
+                data.setWarmupTasks(Collections.emptyList());
                 streamsInterface.endpoint().ifPresent(streamsEndpoint -> {
                     data.setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint()
                         .setHost(streamsEndpoint.host)

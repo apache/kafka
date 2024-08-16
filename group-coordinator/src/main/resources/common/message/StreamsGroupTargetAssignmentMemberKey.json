@@ -17,12 +17,12 @@
 {
   "type": "data",
   "name": "StreamsGroupTargetAssignmentMemberKey",
-  "validVersions": "16",
+  "validVersions": "19",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "16",
+    { "name": "GroupId", "type": "string", "versions": "19",
       "about": "The group id." },
-    { "name": "MemberId", "type": "string", "versions": "16",
+    { "name": "MemberId", "type": "string", "versions": "19",
       "about": "The member id." }
   ]
 }

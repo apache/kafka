@@ -3151,7 +3151,7 @@ public class GroupMetadataManager {
         if (!updatedMember.equals(member)) {
             records.add(newStreamsGroupMemberRecord(groupId, updatedMember));
 
-            if (updatedMember.topologyId().equals(member.topologyId())) {
+            if (!updatedMember.topologyId().equals(member.topologyId())) {
                 log.info("[GroupId {}] Member {} updated its topology ID to: {}.",
                     groupId, memberId, updatedMember.topologyId());
                 return true;
