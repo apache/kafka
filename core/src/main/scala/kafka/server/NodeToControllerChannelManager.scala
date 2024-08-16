@@ -233,10 +233,6 @@ class NodeToControllerChannelManagerImpl(
       Option(apiVersions.get(activeController.idString))
     }.asJava
   }
-
-  def servedRequestCreatedMs(): Long = {
-    requestThread.servedRequestCreatedTime
-  }
 }
 
 case class NodeToControllerQueueItem(
@@ -283,7 +279,6 @@ class NodeToControllerRequestThread(
 
   private val requestQueue = new LinkedBlockingDeque[NodeToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
-  private val servedRequestCreatedMs = new AtomicReference[Long](0)
 
   // Used for testing
   @volatile
@@ -311,10 +306,6 @@ class NodeToControllerRequestThread(
     requestQueue.size
   }
 
-  def servedRequestCreatedTime: Long = {
-    servedRequestCreatedMs.get
-  }
-
   override def generateRequests(): util.Collection[RequestAndCompletionHandler] = {
     val currentTimeMs = time.milliseconds()
     val requestIter = requestQueue.iterator()
@@ -327,7 +318,6 @@ class NodeToControllerRequestThread(
         val controllerAddress = activeControllerAddress()
         if (controllerAddress.isDefined) {
           requestIter.remove()
-          servedRequestCreatedMs.set(request.createdTimeMs)
           return util.Collections.singletonList(new RequestAndCompletionHandler(
             time.milliseconds(),
             controllerAddress.get,

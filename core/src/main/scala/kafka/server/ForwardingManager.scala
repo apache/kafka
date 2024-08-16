@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
+import java.util.concurrent.TimeUnit
 import scala.compat.java8.OptionConverters._
 
 trait ForwardingManager {
@@ -39,6 +40,7 @@ trait ForwardingManager {
     buffer.flip()
     forwardRequest(originalRequest.context,
       buffer,
+      originalRequest.startTimeNanos,
       originalRequest.body[AbstractRequest],
       () => originalRequest.toString,
       responseCallback)
@@ -52,6 +54,7 @@ trait ForwardingManager {
     val buffer = newRequestBody.serializeWithHeader(originalRequest.header)
     forwardRequest(originalRequest.context,
       buffer,
+      originalRequest.startTimeNanos,
       newRequestBody,
       () => originalRequest.toString,
       responseCallback)
@@ -75,6 +78,7 @@ trait ForwardingManager {
   def forwardRequest(
     requestContext: RequestContext,
     requestBufferCopy: ByteBuffer,
+    requestCreationNs: Long,
     requestBody: AbstractRequest,
     requestToString: () => String,
     responseCallback: Option[AbstractResponse] => Unit
@@ -109,26 +113,25 @@ class ForwardingManagerImpl(
   channelManager: NodeToControllerChannelManager
 ) extends ForwardingManager with AutoCloseable with Logging {
 
-  var forwardingManagerMetrics: ForwardingManagerMetrics = _
-  if (channelManager.isInstanceOf[NodeToControllerChannelManagerImpl]) {
-    forwardingManagerMetrics = new ForwardingManagerMetrics
-  }
+  var forwardingManagerMetrics = new ForwardingManagerMetrics
 
   override def forwardRequest(
     requestContext: RequestContext,
     requestBufferCopy: ByteBuffer,
+    requestCreationNs: Long,
     requestBody: AbstractRequest,
     requestToString: () => String,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
     val envelopeRequest = ForwardingManager.buildEnvelopeRequest(requestContext, requestBufferCopy)
+    val requestCreationTimeMs = TimeUnit.NANOSECONDS.toMillis(requestCreationNs)
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {
 
-        Option(forwardingManagerMetrics).foreach(_.queueLength.getAndDecrement())
-        Option(forwardingManagerMetrics).foreach(_.remoteTimeMsHist.update(clientResponse.requestLatencyMs()))
-        Option(forwardingManagerMetrics).foreach(_.queueTimeMsHist.update(clientResponse.receivedTimeMs() - clientResponse.requestLatencyMs() - channelManager.asInstanceOf[NodeToControllerChannelManagerImpl].servedRequestCreatedMs()))
+        forwardingManagerMetrics.queueLength.getAndDecrement()
+        forwardingManagerMetrics.remoteTimeMsHist.update(clientResponse.requestLatencyMs())
+        forwardingManagerMetrics.queueTimeMsHist.update(clientResponse.receivedTimeMs() - clientResponse.requestLatencyMs() - requestCreationTimeMs)
 
         if (clientResponse.versionMismatch != null) {
           debug(s"Returning `UNKNOWN_SERVER_ERROR` in response to ${requestToString()} " +
