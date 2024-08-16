@@ -30,12 +30,16 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState;
  */
 public class UpdateFetchPositionsEvent extends CompletableApplicationEvent<Boolean> {
 
+    /**
+     * Deadline to complete the UpdateFetchPositionsEvent. If the event does not complete before
+     * this time, it will be completed exceptionally with a TimeoutException.
+     */
     private final long deadlineMs;
 
     /**
      * Deadline for the OffsetFetch request needed to update positions. This is expected to be
      * longer than the update positions {@link #deadlineMs} so that an OffsetFetch request can be
-     * reused if it completes after the update positions event that triggered it has expired. In
+     * used if it completes after the update positions event that triggered it has expired. In
      * that case, the following update positions event will use the retrieved offsets only if it
      * has the same set of partitions.
      */
@@ -51,9 +55,6 @@ public class UpdateFetchPositionsEvent extends CompletableApplicationEvent<Boole
         return fetchOffsetsDeadlineMs;
     }
 
-    /**
-     * Timer to bound the execution time of the event.
-     */
     public long deadlineMs() {
         return deadlineMs;
     }

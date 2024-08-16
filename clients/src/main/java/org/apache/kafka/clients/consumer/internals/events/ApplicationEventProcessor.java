@@ -394,12 +394,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             pendingOffsetFetchEvent = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
             pendingOffsetFetchEvent.future().whenComplete((offsets, error) -> {
                 if (!updateFetchPositionsEvent.future().isDone()) {
-                    updatePositionsAndClearPendingOffsetsFetch(offsets, error, result);
+                    pendingOffsetFetchEvent = null;
+                    updatePositionsUsingFetchOffsetsResults(offsets, error, result);
                 }
             });
             process(pendingOffsetFetchEvent);
         } else {
-            // Using previous fetch issued for the same set of partitions, that hasn't been used yet
+            // Using pending fetch that was issued for the same set of partitions
             if (pendingOffsetFetchEvent.future().isDone()) {
                 Map<TopicPartition, OffsetAndMetadata> offsets = null;
                 Throwable error = null;
@@ -410,7 +411,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 } catch (Exception e) {
                     error = e;
                 }
-                updatePositionsAndClearPendingOffsetsFetch(offsets, error, result);
+                pendingOffsetFetchEvent = null;
+                updatePositionsUsingFetchOffsetsResults(offsets, error, result);
             }
         }
 
@@ -422,10 +424,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         return pendingOffsetFetchEvent != null;
     }
 
-    private void updatePositionsAndClearPendingOffsetsFetch(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                            Throwable error,
-                                                            CompletableFuture<Void> result) {
-        pendingOffsetFetchEvent = null;
+    private void updatePositionsUsingFetchOffsetsResults(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                         final Throwable error,
+                                                         final CompletableFuture<Void> result) {
         if (error == null) {
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             result.complete(null);
