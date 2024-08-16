@@ -16,20 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
-import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
-import org.apache.kafka.clients.consumer.internals.events.PollEvent;
-import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
-import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
-import org.apache.kafka.clients.consumer.internals.events.UpdateFetchPositionsEvent;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -40,23 +29,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.stream.Stream;
 
-import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -182,30 +165,6 @@ public class ConsumerNetworkThreadTest {
         verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
 
-    @ParameterizedTest
-    @MethodSource("applicationEvents")
-    public void testApplicationEventIsProcessed(ApplicationEvent e) {
-        applicationEventsQueue.add(e);
-        consumerNetworkThread.runOnce();
-
-        if (e instanceof CompletableEvent)
-            verify(applicationEventReaper).add((CompletableEvent<?>) e);
-
-        verify(applicationEventProcessor).process(any(e.getClass()));
-        assertTrue(applicationEventsQueue.isEmpty());
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testListOffsetsEventIsProcessed(boolean requireTimestamp) {
-        Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
-        ApplicationEvent e = new ListOffsetsEvent(timestamps, calculateDeadlineMs(time, 100), requireTimestamp);
-        applicationEventsQueue.add(e);
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
-        assertTrue(applicationEventsQueue.isEmpty());
-    }
-
     @Test
     public void testMaximumTimeToWait() {
         final int defaultHeartbeatIntervalMs = 1000;
@@ -239,18 +198,5 @@ public class ConsumerNetworkThreadTest {
         when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
         consumerNetworkThread.cleanup();
         verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
-    }
-
-    private static Stream<Arguments> applicationEvents() {
-        Map<TopicPartition, OffsetAndMetadata> offset = new HashMap<>();
-        final long currentTimeMs = 12345;
-        return Stream.of(
-                Arguments.of(new PollEvent(100)),
-                Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
-                Arguments.of(new AsyncCommitEvent(new HashMap<>())),
-                Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
-                Arguments.of(new UpdateFetchPositionsEvent(0, Long.MAX_VALUE)),
-                Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
-                Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
     }
 }

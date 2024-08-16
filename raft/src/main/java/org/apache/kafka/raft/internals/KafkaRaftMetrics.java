@@ -28,6 +28,7 @@ import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
+import org.apache.kafka.raft.ReplicaKey;
 
 import java.util.Arrays;
 import java.util.OptionalLong;
