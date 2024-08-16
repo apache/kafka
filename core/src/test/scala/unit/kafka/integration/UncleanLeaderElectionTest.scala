@@ -124,7 +124,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionDisabled(): Unit = {
+  def testUncleanLeaderElectionDisabled(quorum: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 
@@ -136,7 +136,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionEnabledByTopicOverride(): Unit = {
+  def testUncleanLeaderElectionEnabledByTopicOverride(quorum: String): Unit = {
     // disable unclean leader election globally, but enable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "false")
     configProps2.put("unclean.leader.election.enable", "false")
@@ -152,7 +152,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionDisabledByTopicOverride(): Unit = {
+  def testUncleanLeaderElectionDisabledByTopicOverride(quorum: String): Unit = {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")
@@ -168,7 +168,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk"))
-  def testUncleanLeaderElectionInvalidTopicOverride(): Unit = {
+  def testUncleanLeaderElectionInvalidTopicOverride(quorum: String): Unit = {
     startBrokers(Seq(configProps1))
 
     // create topic with an invalid value for unclean leader election
@@ -313,7 +313,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk"))
-  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(): Unit = {
+  def testTopicUncleanLeaderElectionEnableWithAlterTopicConfigs(quorum: String): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
 

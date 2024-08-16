@@ -94,7 +94,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testListOffsetsRequestOldestVersion(): Unit = {
+  def testListOffsetsRequestOldestVersion(quorum: String): Unit = {
     val consumerRequestBuilder = ListOffsetsRequest.Builder
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false)
 

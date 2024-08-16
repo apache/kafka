@@ -41,8 +41,7 @@ object TestInfoUtils {
         throw new RuntimeException(s"Unknown quorum value")
       }
     } else {
-      val failTestName = testInfo.getTestClass.get().getSimpleName + "." + testInfo.getTestMethod.get().getName
-      throw new RuntimeException(s"Test without quorum: $failTestName")
+      false
     }
   }
 
