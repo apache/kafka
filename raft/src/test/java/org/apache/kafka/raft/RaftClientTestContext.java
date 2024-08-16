@@ -168,9 +168,9 @@ public final class RaftClientTestContext {
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
         private MemoryPool memoryPool = MemoryPool.NONE;
-        private List<InetSocketAddress> bootstrapServers = Collections.emptyList();
+        private Optional<List<InetSocketAddress>> bootstrapServers = Optional.empty();
         private boolean kip853Rpc = false;
-        private Optional<VoterSet> startingVoters = Optional.empty();
+        private VoterSet startingVoters = VoterSet.empty();
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
 
@@ -193,15 +193,7 @@ public final class RaftClientTestContext {
             this.localDirectoryId = localDirectoryId;
         }
 
-        private static IllegalStateException missingStartingVoterException() {
-            return new IllegalStateException(
-                "The starting voter set must be set with withStaticVoters or withBootstrapSnapshot"
-            );
-        }
-
-
         Builder withElectedLeader(int epoch, int leaderId) {
-            VoterSet startingVoters = this.startingVoters.orElseThrow(Builder::missingStartingVoterException);
             quorumStateStore.writeElectionState(
                 ElectionState.withElectedLeader(epoch, leaderId, startingVoters.voterIds()),
                 kraftVersion
@@ -210,7 +202,6 @@ public final class RaftClientTestContext {
         }
 
         Builder withUnknownLeader(int epoch) {
-            VoterSet startingVoters = this.startingVoters.orElseThrow(Builder::missingStartingVoterException);
             quorumStateStore.writeElectionState(
                 ElectionState.withUnknownLeader(epoch, startingVoters.voterIds()),
                 kraftVersion
@@ -219,7 +210,6 @@ public final class RaftClientTestContext {
         }
 
         Builder withVotedCandidate(int epoch, ReplicaKey votedKey) {
-            VoterSet startingVoters = this.startingVoters.orElseThrow(Builder::missingStartingVoterException);
             quorumStateStore.writeElectionState(
                 ElectionState.withVotedCandidate(epoch, votedKey, startingVoters.voterIds()),
                 kraftVersion
@@ -293,7 +283,7 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withBootstrapServers(List<InetSocketAddress> bootstrapServers) {
+        Builder withBootstrapServers(Optional<List<InetSocketAddress>> bootstrapServers) {
             this.bootstrapServers = bootstrapServers;
             return this;
         }
@@ -319,18 +309,19 @@ public final class RaftClientTestContext {
         }
 
         Builder withStaticVoters(VoterSet staticVoters) {
-            this.startingVoters = Optional.of(staticVoters);
-            this.isStartingVotersStatic = true;
+            startingVoters = staticVoters;
+            isStartingVotersStatic = true;
+            kraftVersion = KRaftVersion.KRAFT_VERSION_0;
 
             return this;
         }
 
         Builder withBootstrapSnapshot(Optional<VoterSet> voters) {
+            startingVoters = voters.orElse(VoterSet.empty());
+            isStartingVotersStatic = false;
+
             if (voters.isPresent()) {
                 kraftVersion = KRaftVersion.KRAFT_VERSION_1;
-
-                startingVoters = voters;
-                isStartingVotersStatic = false;
 
                 RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
                     .setRawSnapshotWriter(
@@ -357,8 +348,6 @@ public final class RaftClientTestContext {
         }
 
         public RaftClientTestContext build() throws IOException {
-            VoterSet startingVoters = this.startingVoters.orElseThrow(Builder::missingStartingVoterException);
-
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             MockListener listener = new MockListener(localId);
@@ -395,6 +384,18 @@ public final class RaftClientTestContext {
                 appendLingerMs
             );
 
+            List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {
+                if (isStartingVotersStatic) {
+                    return Collections.emptyList();
+                } else {
+                    return startingVoters
+                        .voterNodes(startingVoters.voterIds().stream(), channel.listenerName())
+                        .stream()
+                        .map(node -> InetSocketAddress.createUnresolved(node.host(), node.port()))
+                        .collect(Collectors.toList());
+                }
+            });
+
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 localId,
                 localDirectoryId,
@@ -407,7 +408,7 @@ public final class RaftClientTestContext {
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
                 clusterId,
-                bootstrapServers,
+                computedBootstrapServers,
                 localListeners,
                 Features.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
@@ -436,7 +437,7 @@ public final class RaftClientTestContext {
                 startingVoters,
                 IntStream
                     .iterate(-2, id -> id - 1)
-                    .limit(bootstrapServers.size())
+                    .limit(bootstrapServers.map(List::size).orElse(0))
                     .boxed()
                     .collect(Collectors.toSet()),
                 kip853Rpc,
