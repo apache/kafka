@@ -55,7 +55,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
         .setCurrentLeaderEpoch(0)).asJava)).asJava
 
     val consumerRequest = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, targetTimes)
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, false, targetTimes)
       .setTargetTimes(targetTimes)
       .build()
 
@@ -98,24 +98,28 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   def testListOffsetsRequestOldestVersion(): Unit = {
     val topics: util.List[ListOffsetsTopic] = Nil.asJava
     val consumerRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, topics)
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, false, topics)
 
     val requireTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false, false, topics)
+      .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false, false, false, topics)
 
     val requestCommittedRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_COMMITTED, false, false, topics)
+      .forConsumer(false, IsolationLevel.READ_COMMITTED, false, false, false, topics)
 
     val maxTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true, false, topics)
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true, false, false, topics)
+
+    val requireEarliestLocalTimestampRequestBuilder = ListOffsetsRequest.Builder
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, true, false, topics)
 
     val requireTieredStorageTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, true, topics)
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, true, topics)
 
     assertEquals(0.toShort, consumerRequestBuilder.oldestAllowedVersion())
     assertEquals(1.toShort, requireTimestampRequestBuilder.oldestAllowedVersion())
     assertEquals(2.toShort, requestCommittedRequestBuilder.oldestAllowedVersion())
     assertEquals(7.toShort, maxTimestampRequestBuilder.oldestAllowedVersion())
+    assertEquals(8.toShort, requireEarliestLocalTimestampRequestBuilder.oldestAllowedVersion())
     assertEquals(9.toShort, requireTieredStorageTimestampRequestBuilder.oldestAllowedVersion())
   }
 
@@ -129,7 +133,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       .setName(topic)
       .setPartitions(List(listOffsetPartition).asJava)).asJava
     val request = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, targetTimes)
+      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, false, targetTimes)
       .setTargetTimes(targetTimes)
       .build()
     assertResponseError(error, brokerId, request)
@@ -173,7 +177,12 @@ class ListOffsetsRequestTest extends BaseRequestTest {
         .setTimestamp(timestamp)).asJava)).asJava
 
     val builder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, targetTimes)
+      .forConsumer(false,
+        IsolationLevel.READ_UNCOMMITTED,
+        false,
+        false,
+        false,
+        targetTimes)
       .setTargetTimes(targetTimes)
 
     val request = if (version == -1) builder.build() else builder.build(version)

@@ -66,11 +66,14 @@ public class ListOffsetsRequest extends AbstractRequest {
         public static Builder forConsumer(boolean requireTimestamp,
                                           IsolationLevel isolationLevel,
                                           boolean requireMaxTimestamp,
+                                          boolean requireEarliestLocalTimestamp,
                                           boolean requireTieredStorageTimestamp,
                                           List<ListOffsetsTopic> topics) {
             short minVersion = 0;
             if (requireTieredStorageTimestamp)
                 minVersion = 9;
+            else if (requireEarliestLocalTimestamp)
+                minVersion = 8;
             else if (requireMaxTimestamp)
                 minVersion = 7;
             else if (isolationLevel == IsolationLevel.READ_COMMITTED)

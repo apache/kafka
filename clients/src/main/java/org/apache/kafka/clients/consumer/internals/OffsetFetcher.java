@@ -394,7 +394,7 @@ public class OffsetFetcher {
                                                                   boolean requireTimestamp) {
         List<ListOffsetsRequestData.ListOffsetsTopic> topics = ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch);
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamp, isolationLevel, false, false, topics)
+                .forConsumer(requireTimestamp, isolationLevel, false, false, false, topics)
                 .setTargetTimes(topics);
 
         log.debug("Sending ListOffsetRequest {} to broker {}", builder, node);

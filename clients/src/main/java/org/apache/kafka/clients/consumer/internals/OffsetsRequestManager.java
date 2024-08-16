@@ -338,7 +338,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
         List<ListOffsetsRequestData.ListOffsetsTopic> topics = ListOffsetsRequest.toListOffsetsTopics(targetTimes);
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamps, isolationLevel, false, false, topics)
+                .forConsumer(requireTimestamps, isolationLevel, false, false, false, topics)
                 .setTargetTimes(topics);
 
         log.debug("Creating ListOffset request {} for broker {} to reset positions", builder,

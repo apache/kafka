@@ -76,6 +76,7 @@ public class ListOffsetRequestBenchmark {
                         IsolationLevel.READ_UNCOMMITTED,
                         false,
                         false,
+                        false,
                         Collections.emptyList())
                 .build(ApiKeys.LIST_OFFSETS.latestVersion());
     }

@@ -293,7 +293,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitionIndex(tp.partition)
         .setTimestamp(0L)
         .setCurrentLeaderEpoch(27)).asJava)).asJava
-    requests.ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, topics)
+    requests.ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, false, topics)
       .setTargetTimes(topics)
       .build()
   }
