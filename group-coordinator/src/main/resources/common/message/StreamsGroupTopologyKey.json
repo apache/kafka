@@ -17,10 +17,10 @@
 {
   "type": "data",
   "name": "StreamsGroupTopologyKey",
-  "validVersions": "18",
+  "validVersions": "21",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "18",
+    { "name": "GroupId", "type": "string", "versions": "21",
       "about": "The group id." }
   ]
 }

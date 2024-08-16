@@ -268,7 +268,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param memberId The consumer group member id.
      * @return The record.
      */
-    public static CoordinatorRecord newTargetAssignmentTombstoneRecord(
+    public static CoordinatorRecord newConsumerGroupTargetAssignmentTombstoneRecord(
         String groupId,
         String memberId
     ) {
@@ -314,7 +314,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param groupId The consumer group id.
      * @return The record.
      */
-    public static CoordinatorRecord newConsumerTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochTombstoneRecord(
         String groupId
     ) {
         return new CoordinatorRecord(

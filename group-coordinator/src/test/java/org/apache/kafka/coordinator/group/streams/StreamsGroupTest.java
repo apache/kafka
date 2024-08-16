@@ -649,7 +649,7 @@ public class StreamsGroupTest {
             group.validateOffsetFetch("member-id", 0, Long.MAX_VALUE));
 
         // Create a member.
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         group.updateMember(new StreamsGroupMember.Builder("member-id").build());
 
         // The member does not exist at last committed offset 0.
@@ -716,13 +716,13 @@ public class StreamsGroupTest {
             new TopicPartition("__consumer_offsets", 0)
         );
         StreamsGroup group = new StreamsGroup(snapshotRegistry, "group-foo", metricsShard);
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
 
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot((1));
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
         assertTrue(group.isInStates(Collections.singleton("stable"), 1));
         assertFalse(group.isInStates(Collections.singleton("empty"), 1));

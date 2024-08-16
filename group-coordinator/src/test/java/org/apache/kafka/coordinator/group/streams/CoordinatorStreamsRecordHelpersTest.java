@@ -96,7 +96,7 @@ class CoordinatorStreamsRecordHelpersTest {
             new ApiMessageAndVersion(
                 new StreamsGroupTopologyKey()
                     .setGroupId("group-id"),
-                (short) 18),
+                (short) 21),
             new ApiMessageAndVersion(
                 new StreamsGroupTopologyValue()
                     .setTopology(expectedTopology),

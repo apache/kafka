@@ -55,7 +55,6 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -74,6 +73,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     public static final int TEST_MEMBER_EPOCH = 5;
     public static final String TEST_INSTANCE_ID = "instanceId";
     public static final int TEST_THROTTLE_TIME_MS = 5;
+    private static final int DEFAULT_MAX_POLL_INTERVAL_MS = 10000;
     private StreamsGroupHeartbeatRequestManager heartbeatRequestManager;
 
     private Time time;
@@ -89,7 +89,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private StreamsInitializeRequestManager streamsInitializeRequestManager;
 
     @Mock
-    private MembershipManager membershipManager;
+    private ConsumerMembershipManager membershipManager;
 
     @Mock
     private BackgroundEventHandler backgroundEventHandler;
