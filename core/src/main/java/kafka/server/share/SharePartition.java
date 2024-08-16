@@ -1163,7 +1163,7 @@ public class SharePartition {
                                 inFlightBatch, groupId, topicIdPartition);
                             return Optional.of(new InvalidRecordStateException("The batch cannot be acknowledged. The subset batch is not in the acquired state."));
                         }
-                        // The request batch is a subset or per offset state is managed hence update
+                        // The request batch is a subset and requires per offset state hence initialize
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
