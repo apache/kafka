@@ -30,23 +30,17 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,7 +56,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
@@ -144,8 +137,7 @@ public class ApplicationEventProcessorTest {
                 Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
-                Arguments.of(new ResetPositionsEvent(500)),
-                Arguments.of(new ValidatePositionsEvent(500)),
+                Arguments.of(new UpdateFetchPositionsEvent(500, 30000)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
                 Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
     }
@@ -158,14 +150,6 @@ public class ApplicationEventProcessorTest {
         ApplicationEvent e = new ListOffsetsEvent(timestamps, calculateDeadlineMs(time, 100), requireTimestamp);
         applicationEventProcessor.process(e);
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
-    }
-
-    @Test
-    public void testResetPositionsProcess() {
-        ApplicationEventProcessor applicationEventProcessor = mock(ApplicationEventProcessor.class);
-        ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
-        applicationEventProcessor.process(event);
-        verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
     }
 
     @Test
@@ -277,10 +261,6 @@ public class ApplicationEventProcessorTest {
 
     @ParameterizedTest
     @MethodSource("offsetFetchExceptionSupplier")
-    // This clears the error only when it can propagate it (a following update positions event
-    // arrives). Alternatively, we could clear the pending as soon as it fails if we propagate
-    // the error to the app thread via an ErrorEvent. (this would mean that successful results of
-    // pendingFetch are propagated on the next updateFetchPositions, but failed results not)
     public void testOffsetFetchErrorsClearPendingEvent(Throwable fetchException) {
         setupProcessor(true);
         when(offsetsRequestManager.validatePositionsIfNeeded()).thenReturn(CompletableFuture.completedFuture(null));

@@ -398,19 +398,20 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 }
             });
             process(pendingOffsetFetchEvent);
-        }
-
-        if (pendingOffsetFetchEvent.future().isDone()) {
-            Map<TopicPartition, OffsetAndMetadata> offsets = null;
-            Throwable error = null;
-            try {
-                offsets = pendingOffsetFetchEvent.future().get();
-            } catch (ExecutionException e) {
-                error = e.getCause();
-            } catch (Exception e) {
-                error = e;
+        } else {
+            // Using previous fetch issued for the same set of partitions, that hasn't been used yet
+            if (pendingOffsetFetchEvent.future().isDone()) {
+                Map<TopicPartition, OffsetAndMetadata> offsets = null;
+                Throwable error = null;
+                try {
+                    offsets = pendingOffsetFetchEvent.future().get();
+                } catch (ExecutionException e) {
+                    error = e.getCause();
+                } catch (Exception e) {
+                    error = e;
+                }
+                updatePositionsAndClearPendingOffsetsFetch(offsets, error, result);
             }
-            updatePositionsAndClearPendingOffsetsFetch(offsets, error, result);
         }
 
         return result;
