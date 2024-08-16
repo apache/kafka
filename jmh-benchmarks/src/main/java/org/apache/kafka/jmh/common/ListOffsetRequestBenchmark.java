@@ -38,6 +38,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -71,7 +72,11 @@ public class ListOffsetRequestBenchmark {
             }
         }
 
-        this.offsetRequest = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false)
+        this.offsetRequest = ListOffsetsRequest.Builder.forConsumer(false,
+                        IsolationLevel.READ_UNCOMMITTED,
+                        false,
+                        false,
+                        Collections.emptyList())
                 .build(ApiKeys.LIST_OFFSETS.latestVersion());
     }
 

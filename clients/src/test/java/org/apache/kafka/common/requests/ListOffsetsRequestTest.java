@@ -72,7 +72,7 @@ public class ListOffsetsRequestTest {
                                 new ListOffsetsPartition()
                                     .setPartitionIndex(0))));
             ListOffsetsRequest request = ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false, false)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false, false, topics)
                     .setTargetTimes(topics)
                     .build(version);
             ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
@@ -105,7 +105,7 @@ public class ListOffsetsRequestTest {
                             new ListOffsetsPartition()
                                 .setPartitionIndex(0))));
         ListOffsetsRequest request = ListOffsetsRequest.Builder
-                .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false, false)
+                .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false, false, topics)
                 .setTargetTimes(topics)
                 .build((short) 0);
         ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
@@ -152,39 +152,35 @@ public class ListOffsetsRequestTest {
 
     @Test
     public void testCheckEarliestLocalTimestampVersion() {
-        testUnsupportedVersion(EARLIEST_LOCAL_TIMESTAMP, (short) 7);
+        int maxVersion = ApiKeys.LIST_OFFSETS.latestVersion();
+        for (int i = 0; i <= maxVersion; i++) {
+            testUnsupportedVersion(i, EARLIEST_LOCAL_TIMESTAMP);
+        }
     }
 
     @Test
     public void testCheckLatestTieredTimestampVersion() {
-        testUnsupportedVersion(LATEST_TIERED_TIMESTAMP, (short) 8);
+        int maxVersion = ApiKeys.LIST_OFFSETS.latestVersion();
+        for (int i = 0; i <= maxVersion; i++) {
+            testUnsupportedVersion(i, LATEST_TIERED_TIMESTAMP);
+        }
     }
 
-    private void testUnsupportedVersion(long timestamp, short version) {
+    private void testUnsupportedVersion(int version, long timestamp) {
         String topicName = "topic";
         int partitionIndex = 0;
-        List<ListOffsetsPartition> partitions = Collections.singletonList(
-                new ListOffsetsPartition().setPartitionIndex(partitionIndex).setTimestamp(timestamp)
-        );
+        ListOffsetsPartition partition = new ListOffsetsPartition().setPartitionIndex(partitionIndex).setTimestamp(timestamp);
 
-        List<ListOffsetsTopic> topics = Collections.singletonList(
-                new ListOffsetsTopic()
-                .setName(topicName)
-                .setPartitions(partitions)
-        );
-
-        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(true,
-                        IsolationLevel.READ_COMMITTED,
-                        false,
-                        false)
-                .setTargetTimes(topics);
-
-        UnsupportedVersionException exception = assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
-        if (timestamp == EARLIEST_LOCAL_TIMESTAMP) {
-            assertEquals("apiVersion must be >= 8 for EARLIEST_LOCAL_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex, exception.getMessage());
-        } else if (timestamp == LATEST_TIERED_TIMESTAMP) {
-            assertEquals("apiVersion must be >= 9 for LATEST_TIERED_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex, exception.getMessage(), exception.getMessage());
+        if (timestamp == EARLIEST_LOCAL_TIMESTAMP && version < 8) {
+            assertUnsupportedVersion(version, topicName, partition, "apiVersion must be >= 8 for EARLIEST_LOCAL_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex);
+        } else if (timestamp == LATEST_TIERED_TIMESTAMP && version < 9) {
+            assertUnsupportedVersion(version, topicName, partition, "apiVersion must be >= 9 for LATEST_TIERED_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex);
         }
+    }
+
+    private void assertUnsupportedVersion(int version, String topicName, ListOffsetsPartition partition, String expectedMessage) {
+        UnsupportedVersionException exception = assertThrows(UnsupportedVersionException.class,
+                () -> ListOffsetsRequest.Builder.checkVersion((short) version, topicName, partition));
+        assertEquals(expectedMessage, exception.getMessage());
     }
 }

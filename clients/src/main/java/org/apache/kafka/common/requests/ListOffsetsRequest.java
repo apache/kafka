@@ -66,7 +66,8 @@ public class ListOffsetsRequest extends AbstractRequest {
         public static Builder forConsumer(boolean requireTimestamp,
                                           IsolationLevel isolationLevel,
                                           boolean requireMaxTimestamp,
-                                          boolean requireTieredStorageTimestamp) {
+                                          boolean requireTieredStorageTimestamp,
+                                          List<ListOffsetsTopic> topics) {
             short minVersion = 0;
             if (requireTieredStorageTimestamp)
                 minVersion = 9;
@@ -76,7 +77,11 @@ public class ListOffsetsRequest extends AbstractRequest {
                 minVersion = 2;
             else if (requireTimestamp)
                 minVersion = 1;
-            return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+
+            short version = ApiKeys.LIST_OFFSETS.latestVersion();
+            topics.forEach(topic -> topic.partitions().forEach(partition -> checkVersion(version, topic.name(), partition)));
+
+            return new Builder(minVersion, version, CONSUMER_REPLICA_ID, isolationLevel);
         }
 
         private Builder(short oldestAllowedVersion,
@@ -96,12 +101,6 @@ public class ListOffsetsRequest extends AbstractRequest {
 
         @Override
         public ListOffsetsRequest build(short version) {
-            for (ListOffsetsTopic topic : data.topics()) {
-                for (ListOffsetsPartition partition : topic.partitions()) {
-                    checkVersion(version, topic.name(), partition);
-                }
-            }
-
             return new ListOffsetsRequest(data, version);
         }
 
@@ -110,7 +109,8 @@ public class ListOffsetsRequest extends AbstractRequest {
             return data.toString();
         }
 
-        private void checkVersion(short version, String topicName, ListOffsetsPartition partition) {
+        // visible for test
+        static void checkVersion(short version, String topicName, ListOffsetsPartition partition) {
             long timestamp = partition.timestamp();
             int partitionIndex = partition.partitionIndex();
 
