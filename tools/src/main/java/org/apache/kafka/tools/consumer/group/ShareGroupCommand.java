@@ -169,7 +169,22 @@ public class ShareGroupCommand {
             }
         }
 
-        private void describeGroups() throws ExecutionException, InterruptedException {
+        /**
+         * Prints a summary of the state for situations where the group is empty or dead.
+         *
+         * @return Whether the group detail should be printed
+         */
+        public static boolean maybePrintEmptyGroupState(String group, ShareGroupState state, int numRows) {
+            if (state == ShareGroupState.DEAD) {
+                printError("Share group '" + group + "' does not exist.", Optional.empty());
+            } else if (state == ShareGroupState.EMPTY) {
+                System.err.println("\nShare group '" + group + "' has no active members.");
+            }
+
+            return !state.equals(ShareGroupState.DEAD) && numRows > 0;
+        }
+
+        public void describeGroups() throws ExecutionException, InterruptedException {
             String group = opts.options.valueOf(opts.groupOpt);
             ShareGroupDescription description = getDescribeGroup(group);
             if (description == null)
@@ -218,7 +233,7 @@ public class ShareGroupCommand {
 
         private void printOffsets(ShareGroupDescription description) throws ExecutionException, InterruptedException {
             Map<TopicPartition, Long> offsets = getOffsets(description.members());
-            if (offsets != null && !offsets.isEmpty()) {
+            if (maybePrintEmptyGroupState(description.groupId(), description.state(), offsets.size())) {
                 String fmt = printOffsetFormat(description, offsets);
                 System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET");
 
@@ -238,6 +253,8 @@ public class ShareGroupCommand {
         }
 
         private void printStates(ShareGroupDescription description) {
+            maybePrintEmptyGroupState(description.groupId(), description.state(), 1);
+
             int groupLen = Math.max(15, description.groupId().length());
             String coordinator = description.coordinator().host() + ":" + description.coordinator().port() + "  (" + description.coordinator().idString() + ")";
             int coordinatorLen = Math.max(25, coordinator.length());
@@ -251,17 +268,19 @@ public class ShareGroupCommand {
             int groupLen = Math.max(15, description.groupId().length());
             int maxConsumerIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
             Collection<MemberDescription> members = description.members();
-            for (MemberDescription member : members) {
-                maxConsumerIdLen = Math.max(maxConsumerIdLen, member.consumerId().length());
-                maxHostLen = Math.max(maxHostLen, member.host().length());
-                maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
-            }
+            if (maybePrintEmptyGroupState(description.groupId(), description.state(), description.members().size())) {
+                for (MemberDescription member : members) {
+                    maxConsumerIdLen = Math.max(maxConsumerIdLen, member.consumerId().length());
+                    maxHostLen = Math.max(maxHostLen, member.host().length());
+                    maxClientIdLen = Math.max(maxClientIdLen, member.clientId().length());
+                }
 
-            String fmt = "%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
-            System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
-            for (MemberDescription member : members) {
-                System.out.printf(fmt, description.groupId(), member.consumerId(), member.host(), member.clientId(),
-                    member.assignment().topicPartitions().stream().map(part -> part.topic() + ":" + part.partition()).collect(Collectors.joining(",")));
+                String fmt = "%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
+                System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
+                for (MemberDescription member : members) {
+                    System.out.printf(fmt, description.groupId(), member.consumerId(), member.host(), member.clientId(),
+                        member.assignment().topicPartitions().stream().map(part -> part.topic() + ":" + part.partition()).collect(Collectors.joining(",")));
+                }
             }
         }
 
