@@ -70,6 +70,7 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -372,7 +373,7 @@ public class TransactionManager {
         TxnRequestHandler handler;
         if (coordinatorSupportsTransactionV2) {
             log.debug("Begin adding offsets {} for consumer group {} to transaction with transaction protocol V2", offsets, groupMetadata);
-            handler = txnOffsetCommitHandler(null, offsets, groupMetadata, Short.MAX_VALUE);
+            handler = txnOffsetCommitHandler(null, offsets, groupMetadata, ApiKeys.TXN_OFFSET_COMMIT.latestVersion());
         } else {
             log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
             AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(

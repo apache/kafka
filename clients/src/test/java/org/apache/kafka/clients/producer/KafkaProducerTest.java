@@ -88,6 +88,7 @@ import org.apache.kafka.test.MockPartitioner;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -96,8 +97,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -123,6 +122,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
