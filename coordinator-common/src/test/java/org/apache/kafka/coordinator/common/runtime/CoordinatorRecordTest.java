@@ -14,11 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
@@ -26,12 +24,13 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 public class CoordinatorRecordTest {
     @Test
     public void testAttributes() {
-        ApiMessageAndVersion key = new ApiMessageAndVersion(new ConsumerGroupMetadataKey(), (short) 0);
-        ApiMessageAndVersion value = new ApiMessageAndVersion(new ConsumerGroupMetadataValue(), (short) 0);
+        ApiMessageAndVersion key = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
+        ApiMessageAndVersion value = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
         CoordinatorRecord record = new CoordinatorRecord(key, value);
         assertEquals(key, record.key());
         assertEquals(value, record.value());
@@ -44,7 +43,7 @@ public class CoordinatorRecordTest {
 
     @Test
     public void testValueCanBeNull() {
-        ApiMessageAndVersion key = new ApiMessageAndVersion(new ConsumerGroupMetadataKey(), (short) 0);
+        ApiMessageAndVersion key = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
         CoordinatorRecord record = new CoordinatorRecord(key, null);
         assertEquals(key, record.key());
         assertNull(record.value());
@@ -52,8 +51,8 @@ public class CoordinatorRecordTest {
 
     @Test
     public void testEquals() {
-        ApiMessageAndVersion key = new ApiMessageAndVersion(new ConsumerGroupMetadataKey(), (short) 0);
-        ApiMessageAndVersion value = new ApiMessageAndVersion(new ConsumerGroupMetadataValue(), (short) 0);
+        ApiMessageAndVersion key = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
+        ApiMessageAndVersion value = new ApiMessageAndVersion(mock(ApiMessage.class), (short) 0);
         CoordinatorRecord record1 = new CoordinatorRecord(key, value);
         CoordinatorRecord record2 = new CoordinatorRecord(key, value);
         assertEquals(record1, record2);
