@@ -27,7 +27,7 @@
   <allow pkg="org.slf4j" />
   <allow pkg="org.junit" />
 
-  <!-- no one depends on the share -->
+  <!-- no one depends on the server -->
   <disallow pkg="kafka" />
 
   <!-- anyone can use public classes -->
