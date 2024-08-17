@@ -23,8 +23,8 @@ public enum TestFeatureVersion implements FeatureVersion {
     TEST_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
     // TEST_1 released right before MV 3.7-IVO was released, and it has no dependencies
     TEST_1(1, MetadataVersion.IBP_3_7_IV0, Collections.emptyMap()),
-    // TEST_2 released right before MV 4.0-IVO was released, and it depends on this metadata version
-    TEST_2(2, MetadataVersion.IBP_4_0_IV0, Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_0_IV0.featureLevel()));
+    // TEST_2 is not yet released and maps to the latest testing version, and it depends on this metadata version
+    TEST_2(2, MetadataVersion.latestTesting(), Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel()));
 
     private final short featureLevel;
     private final MetadataVersion metadataVersionMapping;
