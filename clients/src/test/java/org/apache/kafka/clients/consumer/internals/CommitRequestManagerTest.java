@@ -681,7 +681,8 @@ public class CommitRequestManagerTest {
             // OffsetFetchRequestState is evaluated via isExpired().
             time.sleep(defaultApiTimeoutMs);
             assertFalse(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
-            commitRequestManager.poll(time.milliseconds());
+            NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
+            mimicResponse(error, poll);
             futures.forEach(f -> assertFutureThrows(f, TimeoutException.class));
             assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
         } else {
@@ -1213,16 +1214,21 @@ public class CommitRequestManagerTest {
         NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, poll.unsentRequests.size());
         futures.forEach(f -> assertFalse(f.isDone()));
-        poll.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(poll.unsentRequests.get(0), new HashSet<>(), error));
+        mimicResponse(error, poll);
 
         // Sleep util timeout
         time.sleep(defaultApiTimeoutMs);
         poll = commitRequestManager.poll(time.milliseconds());
-        assertEquals(0, poll.unsentRequests.size());
+        assertEquals(1, poll.unsentRequests.size());
+        mimicResponse(error, poll);
         futures.forEach(f -> {
             assertTrue(f.isCompletedExceptionally());
             assertFutureThrows(f, TimeoutException.class);
         });
+    }
+
+    private void mimicResponse(Errors error, NetworkClientDelegate.PollResult poll) {
+        poll.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(poll.unsentRequests.get(0), new HashSet<>(), error));
     }
 
     private void testNonRetriable(final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {

@@ -1188,8 +1188,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 .map(OffsetCommitRequestState::toUnsentRequest)
                 .collect(Collectors.toCollection(ArrayList::new));
 
-            failAndRemoveExpiredFetchRequests();
-
             // Partition the unsent offset fetch requests into sendable and non-sendable lists
             Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
                     unsentOffsetFetches.stream()
@@ -1216,15 +1214,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         private void failAndRemoveExpiredCommitRequests() {
             Queue<OffsetCommitRequestState> requestsToPurge = new LinkedList<>(unsentOffsetCommits);
-            requestsToPurge.forEach(RetriableRequestState::maybeExpire);
-        }
-
-        /**
-         * Find the unsent fetch requests that have expired, remove them and complete their
-         * futures with a TimeoutException.
-         */
-        private void failAndRemoveExpiredFetchRequests() {
-            Queue<OffsetFetchRequestState> requestsToPurge = new LinkedList<>(unsentOffsetFetches);
             requestsToPurge.forEach(RetriableRequestState::maybeExpire);
         }
 
