@@ -173,6 +173,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final Logger logger;
     private final Time time;
     private final int fetchMaxWaitMs;
+    private final boolean alwaysFlush;
     private final String clusterId;
     private final Endpoints localListeners;
     private final SupportedVersionRange localSupportedKRaftVersion;
@@ -229,6 +230,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Time time,
         ExpirationService expirationService,
         LogContext logContext,
+        boolean alwaysFlush,
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
@@ -246,6 +248,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             time,
             expirationService,
             MAX_FETCH_WAIT_MS,
+            alwaysFlush,
             clusterId,
             bootstrapServers,
             localListeners,
@@ -267,6 +270,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Time time,
         ExpirationService expirationService,
         int fetchMaxWaitMs,
+        boolean alwaysFlush,
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
@@ -290,6 +294,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.localListeners = localListeners;
         this.localSupportedKRaftVersion = localSupportedKRaftVersion;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
+        this.alwaysFlush = alwaysFlush;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
         this.quorumConfig = quorumConfig;
@@ -1684,9 +1689,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Records records
     ) {
         LogAppendInfo info = log.appendAsFollower(records);
-        if (quorum.isVoter()) {
-            // the leader only requires that voters have flushed their log before sending
-            // a Fetch request
+        if (quorum.isVoter() || alwaysFlush) {
+            // the leader only requires that voters have flushed their log before sending a Fetch
+            // request. Because of reconfiguration some observers (that are getting added to the
+            // voter set) need to flush the disk because the leader may assume that they are in the
+            // set of voters.
             log.flush(false);
         }
 
@@ -3355,8 +3362,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalArgumentException("Attempt to resign from an invalid negative epoch " + epoch);
         } else if (!isInitialized()) {
             throw new IllegalStateException("Replica needs to be initialized before resigning");
-        } else if (!quorum.isVoter()) {
-            throw new IllegalStateException("Attempt to resign by a non-voter");
         }
 
         LeaderAndEpoch leaderAndEpoch = leaderAndEpoch();

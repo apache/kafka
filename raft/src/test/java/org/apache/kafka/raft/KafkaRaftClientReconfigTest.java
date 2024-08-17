@@ -1112,7 +1112,14 @@ public class KafkaRaftClientReconfigTest {
 
         // Expect END_QUORUM_EPOCH requests
         context.pollUntilRequest();
-        context.collectEndQuorumRequests(epoch, new HashSet<>(Arrays.asList(follower1.id(), follower2.id())), Optional.empty());
+        context.collectEndQuorumRequests(
+            epoch,
+            new HashSet<>(Arrays.asList(follower1.id(), follower2.id())),
+            Optional.empty()
+        );
+
+        // Calls to resign should be allowed and not throw an exception
+        context.client.resign(epoch);
 
         // Election timeout is randome numer in [electionTimeoutMs, 2 * electionTimeoutMs)
         context.time.sleep(2 * context.electionTimeoutMs());
