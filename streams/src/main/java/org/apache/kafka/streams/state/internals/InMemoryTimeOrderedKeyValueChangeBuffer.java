@@ -200,9 +200,6 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        init(root);
     }
 
     @Override

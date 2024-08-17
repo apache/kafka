@@ -159,13 +159,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        if (context instanceof StateStoreContext) {
-            init((StateStoreContext) context, root);
-        } else {
-            throw new UnsupportedOperationException(
-                "Use RocksDBStore#init(StateStoreContext, StateStore) instead."
-            );
-        }
     }
 
     @Override

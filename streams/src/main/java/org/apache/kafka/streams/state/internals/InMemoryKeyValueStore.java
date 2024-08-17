@@ -70,40 +70,45 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        if (root != null) {
-            final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                context.appConfigs(),
-                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                false
-            );
-            // register the store
-            open = true;
 
-            context.register(
-                root,
-                (RecordBatchingStateRestoreCallback) records -> {
-                    synchronized (position) {
-                        for (final ConsumerRecord<byte[], byte[]> record : records) {
-                            put(Bytes.wrap(record.key()), record.value());
-                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                                record,
-                                consistencyEnabled,
-                                position
-                            );
-                        }
-                    }
-                }
-            );
-        }
-
-        open = true;
     }
 
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
-        init(StoreToProcessorContextAdapter.adapt(context), root);
+        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
         this.context = context;
+    }
+
+    private void initInternal(final ProcessorContext context,
+                              final StateStore root) {
+        if (root != null) {
+            final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+                    context.appConfigs(),
+                    IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                    false
+            );
+            // register the store
+            open = true;
+
+            context.register(
+                    root,
+                    (RecordBatchingStateRestoreCallback) records -> {
+                        synchronized (position) {
+                            for (final ConsumerRecord<byte[], byte[]> record : records) {
+                                put(Bytes.wrap(record.key()), record.value());
+                                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                        record,
+                                        consistencyEnabled,
+                                        position
+                                );
+                            }
+                        }
+                    }
+            );
+        }
+
+        open = true;
     }
 
     @Override

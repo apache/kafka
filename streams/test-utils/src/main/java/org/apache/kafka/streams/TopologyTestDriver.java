@@ -1236,7 +1236,6 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void init(final ProcessorContext context,
                          final StateStore root) {
-            inner.init(context, root);
         }
 
         @Override
@@ -1309,7 +1308,6 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void init(final ProcessorContext context,
                          final StateStore root) {
-            inner.init(context, root);
         }
 
         @Override

@@ -245,6 +245,16 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        this.stateStoreContext = context;
+        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
+    }
+
+    private void initInternal(final ProcessorContext context,
+                              final StateStore root) {
         this.context = context;
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
@@ -252,9 +262,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final String taskName = context.taskId().toString();
 
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-            threadId,
-            taskName,
-            metrics
+                threadId,
+                taskName,
+                metrics
         );
 
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
@@ -266,24 +276,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
-            root,
-            (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+                root,
+                (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
+                () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
 
         open = true;
 
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
-            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-            false
+                context.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false
         );
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        this.stateStoreContext = context;
-        init(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override

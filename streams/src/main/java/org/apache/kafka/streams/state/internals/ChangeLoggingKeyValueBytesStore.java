@@ -44,9 +44,6 @@ public class ChangeLoggingKeyValueBytesStore
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        this.context = asInternalProcessorContext(context);
-        super.init(context, root);
-        maybeSetEvictionListener();
     }
 
     @Override

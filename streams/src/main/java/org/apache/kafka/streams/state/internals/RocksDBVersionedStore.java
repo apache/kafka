@@ -353,6 +353,15 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        this.stateStoreContext = context;
+        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
+    }
+
+    private void initInternal(final ProcessorContext context, final StateStore root) {
         this.context = context;
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
@@ -387,12 +396,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false
         );
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        this.stateStoreContext = context;
-        init(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     // VisibleForTesting

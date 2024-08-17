@@ -63,7 +63,6 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        wrapped.init(context, root);
     }
 
     @Override

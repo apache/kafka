@@ -87,13 +87,6 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-
-        // register the store
-        context.register(root, (key, value) -> {
-            restoring = true;
-            put(Bytes.wrap(key), value);
-            restoring = false;
-        });
     }
 
     @Override

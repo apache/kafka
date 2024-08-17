@@ -96,7 +96,7 @@ public interface StateStore {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     default void init(final StateStoreContext context, final StateStore root) {
-        init(StoreToProcessorContextAdapter.adapt(context), root);
+//        init(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     /**

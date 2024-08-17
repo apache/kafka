@@ -298,6 +298,16 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        this.stateStoreContext = context;
+        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
+    }
+
+    private void initInternal(final ProcessorContext context,
+                              final StateStore root) {
         this.context = context;
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
@@ -318,9 +328,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
-            root,
-            (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+                root,
+                (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
+                () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
 
         open = true;
@@ -329,12 +339,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        this.stateStoreContext = context;
-        init(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override

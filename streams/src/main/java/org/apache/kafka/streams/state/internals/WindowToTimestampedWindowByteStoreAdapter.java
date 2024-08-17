@@ -160,7 +160,6 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        store.init(context, root);
     }
 
     @Override

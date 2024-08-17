@@ -206,8 +206,6 @@ public class MockProcessorContextTest {
 
         final KeyValueStore<String, Long> store = storeBuilder.build();
 
-        store.init(context, store);
-
         processor.init(context);
 
         processor.process("foo", 5L);

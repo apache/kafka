@@ -79,14 +79,14 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        if (rocksdbStore) {
-            // cf. RocksDBStore
-            new File(context.stateDir() + File.separator + "rocksdb" + File.separator + name).mkdirs();
-        } else {
-            new File(context.stateDir() + File.separator + name).mkdir();
-        }
-        this.initialized = true;
-        context.register(root, (k, v) -> { });
+//        if (rocksdbStore) {
+//            // cf. RocksDBStore
+//            new File(context.stateDir() + File.separator + "rocksdb" + File.separator + name).mkdirs();
+//        } else {
+//            new File(context.stateDir() + File.separator + name).mkdir();
+//        }
+//        this.initialized = true;
+//        context.register(root, (k, v) -> { });
     }
 
     @Override

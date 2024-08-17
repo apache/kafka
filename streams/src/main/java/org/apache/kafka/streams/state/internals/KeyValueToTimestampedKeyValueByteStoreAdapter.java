@@ -99,7 +99,6 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        store.init(context, root);
     }
 
     @Override

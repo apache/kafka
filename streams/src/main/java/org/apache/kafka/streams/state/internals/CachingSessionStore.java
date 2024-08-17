@@ -73,8 +73,6 @@ class CachingSessionStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
     }
 
     @Override

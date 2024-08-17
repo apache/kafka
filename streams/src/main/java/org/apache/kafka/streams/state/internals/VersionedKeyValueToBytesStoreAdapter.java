@@ -91,7 +91,6 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        inner.init(context, root);
     }
 
     @Override

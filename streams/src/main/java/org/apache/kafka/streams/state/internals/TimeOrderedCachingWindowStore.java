@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
@@ -111,24 +112,17 @@ class TimeOrderedCachingWindowStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
+        initInternal(context);
         super.init(context, root);
     }
 
-    private void initInternal(final InternalProcessorContext<?, ?> context) {
-        final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
-            StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
-        );
-        this.context = context;
-        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  context.taskId().topologyName());
+    private void initInternal(final StateStoreContext context) {
+        this.context = asInternalProcessorContext(context);
+        final String topic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
 
         bytesSerdes = new StateSerdes<>(
             topic,
@@ -136,8 +130,8 @@ class TimeOrderedCachingWindowStore
             Serdes.ByteArray());
         cacheName = context.taskId() + "-" + name();
 
-        context.registerCacheFlushListener(cacheName, entries -> {
-            putAndMaybeForward(entries, context);
+        this.context.registerCacheFlushListener(cacheName, entries -> {
+            putAndMaybeForward(entries, this.context);
         });
     }
 

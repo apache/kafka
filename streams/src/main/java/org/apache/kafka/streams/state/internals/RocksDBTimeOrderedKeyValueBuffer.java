@@ -172,12 +172,6 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        store.init(context, root);
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        partition = context.taskId().partition();
-        if (loggingEnabled) {
-            changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        }
     }
 
     @Override
