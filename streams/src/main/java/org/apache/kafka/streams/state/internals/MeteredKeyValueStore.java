@@ -125,12 +125,6 @@ public class MeteredKeyValueStore<K, V>
         this.valueSerde = valueSerde;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-    }
-
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {

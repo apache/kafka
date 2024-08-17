@@ -21,7 +21,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -68,11 +67,6 @@ class CachingSessionStore
         this.keySchema = new SessionKeySchema();
         this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
         this.maxObservedTimestamp = RecordQueue.UNKNOWN;
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
     }
 
     @Override

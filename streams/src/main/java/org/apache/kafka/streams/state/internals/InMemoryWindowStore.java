@@ -101,19 +101,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         return name;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        this.stateStoreContext = context;
-        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
-    }
-
     private void initInternal(final ProcessorContext context, final StateStore root) {
         this.context = context;
 
@@ -121,38 +108,45 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-                threadId,
-                taskName,
-                metrics
+            threadId,
+            taskName,
+            metrics
         );
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                    context.appConfigs(),
-                    IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                    false
+                context.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false
             );
             context.register(
-                    root,
-                    (RecordBatchingStateRestoreCallback) records -> {
-                        synchronized (position) {
-                            for (final ConsumerRecord<byte[], byte[]> record : records) {
-                                put(
-                                        Bytes.wrap(extractStoreKeyBytes(record.key())),
-                                        record.value(),
-                                        extractStoreTimestamp(record.key())
-                                );
-                                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                                        record,
-                                        consistencyEnabled,
-                                        position
-                                );
-                            }
+                root,
+                (RecordBatchingStateRestoreCallback) records -> {
+                    synchronized (position) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records) {
+                            put(
+                                Bytes.wrap(extractStoreKeyBytes(record.key())),
+                                record.value(),
+                                extractStoreTimestamp(record.key())
+                            );
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
                         }
                     }
+                }
             );
         }
         open = true;
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        this.stateStoreContext = context;
+        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override

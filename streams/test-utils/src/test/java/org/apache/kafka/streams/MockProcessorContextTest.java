@@ -23,9 +23,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
 
 import org.junit.jupiter.api.Test;
 
@@ -184,36 +181,6 @@ public class MockProcessorContextTest {
         context.resetCommit();
 
         assertFalse(context.committed());
-    }
-
-    @Test
-    public void shouldStoreAndReturnStateStores() {
-        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
-            @Override
-            public void process(final String key, final Long value) {
-                final KeyValueStore<String, Long> stateStore = context().getStateStore("my-state");
-                stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
-                stateStore.put("all", (stateStore.get("all") == null ? 0 : stateStore.get("all")) + value);
-            }
-        };
-
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
-
-        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
-                Stores.inMemoryKeyValueStore("my-state"),
-                Serdes.String(),
-                Serdes.Long()).withLoggingDisabled();
-
-        final KeyValueStore<String, Long> store = storeBuilder.build();
-
-        processor.init(context);
-
-        processor.process("foo", 5L);
-        processor.process("bar", 50L);
-
-        assertEquals(5L, (long) store.get("foo"));
-        assertEquals(50L, (long) store.get("bar"));
-        assertEquals(55L, (long) store.get("all"));
     }
 
     @Test

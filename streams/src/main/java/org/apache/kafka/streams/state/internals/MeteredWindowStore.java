@@ -24,7 +24,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -116,13 +115,6 @@ public class MeteredWindowStore<K, V>
         this.valueSerde = valueSerde;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-
-    }
-
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
@@ -153,14 +145,6 @@ public class MeteredWindowStore<K, V>
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> openIterators.isEmpty() ? null : openIterators.first().startTimestamp()
         );
-    }
-
-    @Deprecated
-    private void initStoreSerde(final ProcessorContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, this::prepareValueSerde);
     }
 
     private void initStoreSerde(final StateStoreContext context) {

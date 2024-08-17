@@ -95,21 +95,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         return name;
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        this.stateStoreContext = context;
-        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
-    }
-
-    private void initInternal(final ProcessorContext context,
-                              final StateStore root) {
+    private void initInternal(final ProcessorContext context, final StateStore root) {
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 
@@ -119,9 +105,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             this.context = (InternalProcessorContext) context;
             final StreamsMetricsImpl metrics = this.context.metrics();
             expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-                    threadId,
-                    taskName,
-                    metrics
+                threadId,
+                taskName,
+                metrics
             );
         } else {
             this.context = null;
@@ -130,27 +116,34 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                    context.appConfigs(),
-                    IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                    false
+                context.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false
             );
             context.register(
-                    root,
-                    (RecordBatchingStateRestoreCallback) records -> {
-                        synchronized (position) {
-                            for (final ConsumerRecord<byte[], byte[]> record : records) {
-                                put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
-                                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                                        record,
-                                        consistencyEnabled,
-                                        position
-                                );
-                            }
+                root,
+                (RecordBatchingStateRestoreCallback) records -> {
+                    synchronized (position) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records) {
+                            put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
                         }
                     }
+                }
             );
         }
         open = true;
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        this.stateStoreContext = context;
+        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override

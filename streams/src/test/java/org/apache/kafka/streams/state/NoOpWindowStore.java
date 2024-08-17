@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.Position;
 
@@ -53,12 +52,6 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     @Override
     public String name() {
         return "";
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-
     }
 
     @Override
