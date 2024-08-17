@@ -27,7 +27,7 @@ import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
-import org.apache.kafka.server.config.{ServerConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs, ZkConfigs}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
@@ -67,6 +67,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     }
 
     setUpSasl()
+    this.serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "testKey")
     super.setUp(testInfo)
     setInitialAcls()
   }
@@ -329,6 +330,25 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     assertEquals(Set(clusterAcl, emptyResourceNameAcl), results.values.keySet().asScala)
     assertFutureExceptionTypeEquals(results.values.get(clusterAcl), classOf[InvalidRequestException])
     assertFutureExceptionTypeEquals(results.values.get(emptyResourceNameAcl), classOf[InvalidRequestException])
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateDelegationTokenWithOptions(quorum: String): Unit = {
+    client = createAdminClient
+    val timeout = 1000
+    val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout);
+    val token = client.createDelegationToken(options).delegationToken().get()
+    assertEquals(timeout, token.tokenInfo.maxTimestamp - token.tokenInfo.issueTimestamp)
+  }
+
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateDelegationTokenWithoutOptions(quorum: String): Unit = {
+    client = createAdminClient
+    val token = client.createDelegationToken().delegationToken().get()
+    assertEquals(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_MS_DEFAULT, token.tokenInfo.maxTimestamp - token.tokenInfo.issueTimestamp)
   }
 
   private def verifyCauseIsClusterAuth(e: Throwable): Unit = assertEquals(classOf[ClusterAuthorizationException], e.getCause.getClass)
