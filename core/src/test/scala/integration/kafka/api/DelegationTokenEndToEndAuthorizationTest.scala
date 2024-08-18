@@ -16,6 +16,8 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
+
 import java.util.Properties
 import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -43,11 +45,11 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramUser)
-  private val clientPassword = JaasTestUtils.KafkaScramPassword
+  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_USER)
+  private val clientPassword = JaasTestUtils.KAFKA_SCRAM_PASSWORD
 
-  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
-  protected val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_ADMIN)
+  protected val kafkaPassword = JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD
 
   protected val privilegedAdminClientConfig = new Properties()
 
@@ -71,7 +73,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ")
     formatter.setScramArguments(
-      List(s"SCRAM-SHA-256=[name=${JaasTestUtils.KafkaScramAdmin},password=${JaasTestUtils.KafkaScramAdminPassword}]").asJava)
+      List(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
   }
 
   override def createPrivilegedAdminClient(): Admin = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)

@@ -18,12 +18,10 @@
 package org.apache.kafka.controller.errors;
 
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.apache.kafka.server.mutable.BoundedListTooLongException;
 
 import java.util.Objects;
@@ -88,11 +86,6 @@ public final class EventHandlerExceptionInfo {
             return new EventHandlerExceptionInfo(false, false, internal,
                 new PolicyViolationException("Unable to perform excessively large batch " +
                     "operation."));
-        } else if (internal instanceof UnexpectedBaseOffsetException) {
-            // The active controller picked the wrong end offset for its next batch. It must now
-            // fail over. This should be pretty rare.
-            return new EventHandlerExceptionInfo(false, true, internal,
-                new NotControllerException("Unexpected end offset. Controller will resign."));
         } else if (internal instanceof InterruptedException) {
             // The controller event queue has been interrupted. This normally only happens during
             // a JUnit test that has hung. The test framework sometimes sends an InterruptException
