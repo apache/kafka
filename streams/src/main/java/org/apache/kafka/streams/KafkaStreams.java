@@ -430,32 +430,6 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    /**
-     * Set the handler invoked when an internal {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG stream thread} abruptly
-     * terminates due to an uncaught exception.
-     *
-     * @param uncaughtExceptionHandler the uncaught exception handler for all internal threads; {@code null} deletes the current handler
-     * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
-     *
-     * @deprecated Since 2.8.0. Use {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
-     *
-     */
-    @Deprecated
-    public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
-        synchronized (stateLock) {
-            if (state.hasNotStarted()) {
-                oldHandler = true;
-                processStreamThread(thread -> thread.setUncaughtExceptionHandler(uncaughtExceptionHandler));
-
-                if (globalStreamThread != null) {
-                    globalStreamThread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
-                }
-            } else {
-                throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
-                    "Current state is: " + state);
-            }
-        }
-    }
 
     /**
      * Set the handler invoked when an internal {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG stream thread}
@@ -1398,7 +1372,7 @@ public class KafkaStreams implements AutoCloseable {
      * However, if you have global stores in your topology, this method blocks until all global stores are restored.
      * As a consequence, any fatal exception that happens during processing is by default only logged.
      * If you want to be notified about dying threads, you can
-     * {@link #setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler) register an uncaught exception handler}
+     * {@link #setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler) register an uncaught exception handler}
      * before starting the {@code KafkaStreams} instance.
      * <p>
      * Note, for brokers with version {@code 0.9.x} or lower, the broker version cannot be checked.
