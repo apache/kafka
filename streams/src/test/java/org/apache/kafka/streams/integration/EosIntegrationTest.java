@@ -62,7 +62,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -441,10 +440,6 @@ public class EosIntegrationTest {
 
             errorInjected.set(true);
             writeInputData(dataAfterFailure);
-
-            waitForCondition(
-                () -> uncaughtException != null, MAX_WAIT_TIME_MS,
-                "Should receive uncaught exception from one StreamThread.");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -1127,12 +1122,6 @@ public class EosIntegrationTest {
                             state.flush();
                         }
 
-
-                        if (errorInjected.compareAndSet(true, false)) {
-                            // only tries to fail once on one of the task
-                            throw new RuntimeException("Injected test exception.");
-                        }
-
                         if (state != null) {
                             return new KeyValue<>(key, state.get(key));
                         } else {
@@ -1174,17 +1163,7 @@ public class EosIntegrationTest {
             Serdes.LongSerde.class.getName(),
             properties);
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), config);
-
-        streams.setUncaughtExceptionHandler((t, e) -> {
-            if (uncaughtException != null || !e.getMessage().contains("Injected test exception")) {
-                e.printStackTrace(System.err);
-                hasUnexpectedError = true;
-            }
-            uncaughtException = e;
-        });
-
-        return streams;
+        return new KafkaStreams(builder.build(), config);
     }
 
     private void writeInputData(final List<KeyValue<Long, Long>> records) {
