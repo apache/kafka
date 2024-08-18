@@ -251,8 +251,7 @@ public class ClusterTestExtensionsTest {
         Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
     }
 
-
-    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4, listener = "TEST_LISTENER")
     public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
         try (Admin admin = clusterInstance.createAdminClient()) {
             String testTopic = "testTopic";

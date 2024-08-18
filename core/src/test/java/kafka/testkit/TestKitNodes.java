@@ -41,6 +41,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+@SuppressWarnings("NPathComplexity")
 public class TestKitNodes {
     public static final int CONTROLLER_ID_OFFSET = 3000;
     public static final int BROKER_ID_OFFSET = 0;
@@ -120,6 +121,10 @@ public class TestKitNodes {
             }
             if (numDisksPerBroker <= 0) {
                 throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
+            }
+            // TODO: remove this assertion after https://issues.apache.org/jira/browse/KAFKA-16680 is finished
+            if (securityProtocol != SecurityProtocol.PLAINTEXT) {
+                throw new IllegalArgumentException("Currently only support PLAINTEXT security protocol");
             }
 
             String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
