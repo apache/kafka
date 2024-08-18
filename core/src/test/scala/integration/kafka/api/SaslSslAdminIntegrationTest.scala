@@ -537,34 +537,29 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     )
 
     // Test expiring the token immediately
-    val token1 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    val token1Future = client.createDelegationToken(createDelegationTokenOptions).delegationToken()
+    TestUtils.waitUntilTrue(() => token1Future.isDone, "Take too long to complete future", 500)
     val expireTokeOptions = new ExpireDelegationTokenOptions()
-    // wait for broker sync
-    Thread.sleep(500)
-    val token1ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(
-      token1.hmac(),
-      expireTokeOptions.expiryTimePeriodMs(-1)).expiryTimestamp().get()
-    )
-    assertTrue(token1ExpireTime < System.currentTimeMillis())
+    val token1ExpireFuture = client.expireDelegationToken(token1Future.get().hmac(), expireTokeOptions.expiryTimePeriodMs(-1)).expiryTimestamp()
+    TestUtils.waitUntilTrue(() => token1ExpireFuture.isDone , "Take too long to complete future", 500)
+    assertTrue(token1ExpireFuture.get() < System.currentTimeMillis())
 
     // Test expiring the expired token
-    val token2 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    val token2 = client.createDelegationToken(createDelegationTokenOptions.maxlifeTimeMs(1000)).delegationToken().get()
     // Ensure current time > maxLifeTimeMs of token
-    Thread.sleep(5000)
+    Thread.sleep(1000)
     TestUtils.assertFutureExceptionTypeEquals(
       client.expireDelegationToken(token2.hmac(), expireTokeOptions.expiryTimePeriodMs(1)).expiryTimestamp(),
       classOf[DelegationTokenExpiredException]
     )
 
     // Test shortening the expiryTimestamp
-    val token3 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
-    // wait for broker sync
-    Thread.sleep(500)
-    val token3ExpireTime = assertDoesNotThrow(() => client.expireDelegationToken(
-      token3.hmac(),
-      expireTokeOptions.expiryTimePeriodMs(1000)).expiryTimestamp().get()
-    )
-    assertTrue(token3ExpireTime < token3.tokenInfo().expiryTimestamp())
+    val token3Future = client.createDelegationToken(createDelegationTokenOptions).delegationToken()
+    TestUtils.waitUntilTrue(() => token3Future.isDone, "Take too long to complete future", 500)
+    val token3 = token3Future.get()
+    val token3ExpireFuture = client.expireDelegationToken(token3.hmac(), expireTokeOptions.expiryTimePeriodMs(200)).expiryTimestamp()
+    TestUtils.waitUntilTrue(() => token3ExpireFuture.isDone, "Take too long to complete future", 500)
+    assertTrue(token3ExpireFuture.get() < token3.tokenInfo().expiryTimestamp())
   }
 
   private def describeConfigs(topic: String): Iterable[ConfigEntry] = {
