@@ -59,6 +59,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
