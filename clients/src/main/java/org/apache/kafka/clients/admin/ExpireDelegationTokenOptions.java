@@ -30,7 +30,7 @@ public class ExpireDelegationTokenOptions extends AbstractOptions<ExpireDelegati
 
     /**
      * @param expiryTimePeriodMs the time period until we should expire this token.
-     * {@code expiryTimestamp} will be set to {@code min(expiryTimestamp, maxTimestamp)}
+     * {@code expiryTimestamp} is the time we actually expire the token.
      * If {@code expiryTimePeriodMs} < 0, token will be expired immediately.
      * If {@code expiryTimePeriodMs} >= 0 and {@code expiryTimestamp} is not due,
      * {@code expiryTimestamp} will be set to {@code min(expiryTimestamp, maxTimestamp)}.
