@@ -76,6 +76,13 @@ public class ApiError {
     }
 
     /**
+     * The error code for the exception
+     */
+    public short code() {
+        return error.code();
+    }
+
+    /**
      * Return the optional error message or null. Consider using {@link #messageWithFallback()} instead.
      */
     public String message() {

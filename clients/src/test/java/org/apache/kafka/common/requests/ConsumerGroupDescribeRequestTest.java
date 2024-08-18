@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ConsumerGroupDescribeRequestTest {
 
     @Test
-    void testGetErrorResponse() {
+    void testGetErrorConsumerGroupDescribeResponse() {
         List<String> groupIds = Arrays.asList("group0", "group1");
         ConsumerGroupDescribeRequestData data = new ConsumerGroupDescribeRequestData();
         data.groupIds().addAll(groupIds);
@@ -39,34 +39,39 @@ public class ConsumerGroupDescribeRequestTest {
             .build();
         Throwable e = Errors.GROUP_AUTHORIZATION_FAILED.exception();
         int throttleTimeMs = 1000;
-
         ConsumerGroupDescribeResponse response = request.getErrorResponse(throttleTimeMs, e);
 
         assertEquals(throttleTimeMs, response.throttleTimeMs());
+        ApiError apiError = ApiError.fromThrowable(e);
         for (int i = 0; i < groupIds.size(); i++) {
             ConsumerGroupDescribeResponseData.DescribedGroup group = response.data().groups().get(i);
             assertEquals(groupIds.get(i), group.groupId());
-            assertEquals(Errors.forException(e).code(), group.errorCode());
+            assertEquals(apiError.code(), group.errorCode());
+            assertEquals(e.getMessage(), group.errorMessage());
         }
     }
 
     @Test
-    public void testGetErrorDescribedGroupList() {
+    public void testGetErrorDescribedGroupListResponse() {
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroupList = Arrays.asList(
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-1")
-                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()),
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message()),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-2")
-                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()),
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message()),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-3")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message())
         );
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroupList = getErrorDescribedGroupList(
             Arrays.asList("group-id-1", "group-id-2", "group-id-3"),
-            Errors.COORDINATOR_LOAD_IN_PROGRESS
+            Errors.COORDINATOR_LOAD_IN_PROGRESS,
+            Errors.COORDINATOR_LOAD_IN_PROGRESS.message()
         );
 
         assertEquals(expectedDescribedGroupList, describedGroupList);

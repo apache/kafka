@@ -601,7 +601,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
                 groupIds,
-                Errors.COORDINATOR_NOT_AVAILABLE
+                Errors.COORDINATOR_NOT_AVAILABLE,
+                Errors.COORDINATOR_NOT_AVAILABLE.message()
             ));
         }
 
@@ -632,7 +633,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "consumer-group-describe",
                     groupList,
                     exception,
-                    (error, __) -> ConsumerGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
+                    (error, message) -> ConsumerGroupDescribeRequest.getErrorDescribedGroupList(groupList, error, message)
                 ));
 
             futures.add(future);
@@ -1232,7 +1233,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             case UNKNOWN_SERVER_ERROR:
                 log.error("Operation {} with {} hit an unexpected exception: {}.",
                     operationName, operationInput, exception.getMessage(), exception);
-                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, Errors.UNKNOWN_SERVER_ERROR.message());
 
             case NETWORK_EXCEPTION:
                 // When committing offsets transactionally, we now verify the transaction with the
@@ -1240,24 +1241,24 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 // retriable error which older clients may not expect and retry correctly. We
                 // translate the error to `COORDINATOR_LOAD_IN_PROGRESS` because it causes clients
                 // to retry the request without an unnecessary coordinator lookup.
-                return handler.apply(Errors.COORDINATOR_LOAD_IN_PROGRESS, null);
+                return handler.apply(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.COORDINATOR_LOAD_IN_PROGRESS.message());
 
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:
             case REQUEST_TIMED_OUT:
-                return handler.apply(Errors.COORDINATOR_NOT_AVAILABLE, null);
+                return handler.apply(Errors.COORDINATOR_NOT_AVAILABLE, Errors.COORDINATOR_NOT_AVAILABLE.message());
 
             case NOT_LEADER_OR_FOLLOWER:
             case KAFKA_STORAGE_ERROR:
-                return handler.apply(Errors.NOT_COORDINATOR, null);
+                return handler.apply(Errors.NOT_COORDINATOR, Errors.NOT_COORDINATOR.message());
 
             case MESSAGE_TOO_LARGE:
             case RECORD_LIST_TOO_LARGE:
             case INVALID_FETCH_SIZE:
-                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, Errors.UNKNOWN_SERVER_ERROR.message());
 
             default:
-                return handler.apply(apiError.error(), apiError.message());
+                return handler.apply(apiError.error(), apiError.messageWithFallback());
         }
     }
 

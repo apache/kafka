@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 
@@ -68,11 +67,13 @@ public class ConsumerGroupHeartbeatRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public ConsumerGroupHeartbeatResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ApiError apiError = ApiError.fromThrowable(e);
         return new ConsumerGroupHeartbeatResponse(
             new ConsumerGroupHeartbeatResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(Errors.forException(e).code())
+                .setErrorCode(apiError.code())
+                .setErrorMessage(apiError.messageWithFallback())
         );
     }
 
