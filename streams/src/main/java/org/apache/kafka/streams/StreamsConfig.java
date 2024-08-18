@@ -1507,14 +1507,18 @@ public class StreamsConfig extends AbstractConfig {
         });
     }
 
-    private void overwritePropertyMap(final Map<String, Object> props, final String configName, final Object unmodifiableDefaultValue, final String clientType) {
-        final String overwritePropertyLogMessage = "Unexpected %s config `%s` found. User setting (%s) will be ignored and the Kafka Streams default setting (%s) will be used";
+    private void overwritePropertyMap(final Map<String, Object> props, final String configName, final Object unmodifiableValue, final Object unmodifiableLogValue, final String clientType) {
+        final String overwritePropertyLogMessage = "Unexpected %s config `%s` found. User setting (%s) will be ignored and the Kafka Streams setting (%s) will be used";
         
-        if (props.containsKey(configName) && (!Objects.equals(props.get(configName), unmodifiableDefaultValue))) {
-            log.warn(String.format(overwritePropertyLogMessage, clientType, configName, props.get(configName), unmodifiableDefaultValue));
+        if (props.containsKey(configName) && (!Objects.equals(props.get(configName), unmodifiableValue))) {
+            log.warn(String.format(overwritePropertyLogMessage, clientType, configName, props.get(configName), unmodifiableLogValue));
         }
 
-        props.put(configName, unmodifiableDefaultValue);
+        props.put(configName, unmodifiableValue);
+    }
+
+    private void overwritePropertyMap(final Map<String, Object> props, final String configName, final Object unmodifiableValue, final String clientType) {
+        overwritePropertyMap(props, configName, unmodifiableValue, unmodifiableValue, clientType);
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {
@@ -1555,7 +1559,15 @@ public class StreamsConfig extends AbstractConfig {
     private void validateProducerPropertyMap(final Map<String, Object> props) {
         if (eosEnabled) {
             for (final Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED.entrySet()) {
-                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "producer");
+                if (entry.getKey().equals(ProducerConfig.TRANSACTIONAL_ID_CONFIG)) {
+                    if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+                        overwritePropertyMap(props, entry.getKey(), entry.getValue(), "<application.id>-<task_id>", "producer");
+                    } else if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2) {
+                        overwritePropertyMap(props, entry.getKey(), entry.getValue(), "<application.id>-<processId>-<threadIdx>", "producer");
+                    }
+                } else {
+                    overwritePropertyMap(props, entry.getKey(), entry.getValue(), "producer");
+                } 
             }
             verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
         }
