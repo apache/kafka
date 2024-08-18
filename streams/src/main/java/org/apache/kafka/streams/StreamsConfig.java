@@ -1507,14 +1507,14 @@ public class StreamsConfig extends AbstractConfig {
         });
     }
 
-    private void overwritePropertyMap(final Map<String, Object> props, final String key, final Object unmodifiableDefaultValue, final String config) {
+    private void overwritePropertyMap(final Map<String, Object> props, final String configName, final Object unmodifiableDefaultValue, final String clientType) {
         final String overwritePropertyLogMessage = "Unexpected %s config `%s` found. User setting (%s) will be ignored and the Kafka Streams default setting (%s) will be used";
         
-        if (props.containsKey(key) && (!Objects.equals(props.get(key), unmodifiableDefaultValue))) {
-            log.warn(String.format(overwritePropertyLogMessage, config, key, props.get(key), unmodifiableDefaultValue));
+        if (props.containsKey(configName) && (!Objects.equals(props.get(configName), unmodifiableDefaultValue))) {
+            log.warn(String.format(overwritePropertyLogMessage, clientType, configName, props.get(configName), unmodifiableDefaultValue));
         }
 
-        props.put(key, unmodifiableDefaultValue);
+        props.put(configName, unmodifiableDefaultValue);
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {
