@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.common;
 
 import kafka.network.RequestConvertToJson;
 
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -38,7 +37,6 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -72,13 +70,7 @@ public class ListOffsetRequestBenchmark {
             }
         }
 
-        this.offsetRequest = ListOffsetsRequest.Builder.forConsumer(false,
-                        IsolationLevel.READ_UNCOMMITTED,
-                        false,
-                        false,
-                        false,
-                        Collections.emptyList())
-                .build(ApiKeys.LIST_OFFSETS.latestVersion());
+        this.offsetRequest = ListOffsetsRequest.Builder.defaultBuilder().build(ApiKeys.LIST_OFFSETS.latestVersion());
     }
 
     @Benchmark

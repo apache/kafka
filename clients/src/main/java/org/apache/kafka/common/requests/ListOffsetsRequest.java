@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
@@ -63,28 +62,28 @@ public class ListOffsetsRequest extends AbstractRequest {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
-        public static Builder forConsumer(boolean requireTimestamp,
-                                          IsolationLevel isolationLevel,
-                                          boolean requireMaxTimestamp,
-                                          boolean requireEarliestLocalTimestamp,
-                                          boolean requireTieredStorageTimestamp,
-                                          List<ListOffsetsTopic> topics) {
-            short minVersion = 0;
-            if (requireTieredStorageTimestamp)
-                minVersion = 9;
-            else if (requireEarliestLocalTimestamp)
-                minVersion = 8;
-            else if (requireMaxTimestamp)
-                minVersion = 7;
-            else if (isolationLevel == IsolationLevel.READ_COMMITTED)
-                minVersion = 2;
-            else if (requireTimestamp)
-                minVersion = 1;
+        public static Builder forTieredStorageTimestamp(IsolationLevel isolationLevel) {
+            return new Builder((short) 9, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+        }
 
-            short version = ApiKeys.LIST_OFFSETS.latestVersion();
-            topics.forEach(topic -> topic.partitions().forEach(partition -> checkVersion(version, topic.name(), partition)));
+        public static Builder forEarliestLocalTimestamp(IsolationLevel isolationLevel) {
+            return new Builder((short) 8, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+        }
 
-            return new Builder(minVersion, version, CONSUMER_REPLICA_ID, isolationLevel);
+        public static Builder forMaxTimestamp(IsolationLevel isolationLevel) {
+            return new Builder((short) 7, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+        }
+
+        public static Builder forReadCommitted() {
+            return new Builder((short) 2, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, IsolationLevel.READ_COMMITTED);
+        }
+
+        public static Builder forRequiredTimestamp() {
+            return new Builder((short) 1, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, IsolationLevel.READ_UNCOMMITTED);
+        }
+
+        public static Builder defaultBuilder() {
+            return new Builder((short) 0, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, IsolationLevel.READ_UNCOMMITTED);
         }
 
         private Builder(short oldestAllowedVersion,
@@ -112,20 +111,6 @@ public class ListOffsetsRequest extends AbstractRequest {
             return data.toString();
         }
 
-        // visible for test
-        static void checkVersion(short version, String topicName, ListOffsetsPartition partition) {
-            long timestamp = partition.timestamp();
-            int partitionIndex = partition.partitionIndex();
-
-            if (timestamp == EARLIEST_LOCAL_TIMESTAMP && version < 8) {
-                throw new UnsupportedVersionException(
-                        "apiVersion must be >= 8 for EARLIEST_LOCAL_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex);
-            }
-            if (timestamp == LATEST_TIERED_TIMESTAMP && version < 9) {
-                throw new UnsupportedVersionException(
-                        "apiVersion must be >= 9 for LATEST_TIERED_TIMESTAMP in topic " + topicName + " and partition " + partitionIndex);
-            }
-        }
     }
 
     /**

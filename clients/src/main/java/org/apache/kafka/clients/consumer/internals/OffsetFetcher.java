@@ -393,9 +393,7 @@ public class OffsetFetcher {
                                                                   final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
                                                                   boolean requireTimestamp) {
         List<ListOffsetsRequestData.ListOffsetsTopic> topics = ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch);
-        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamp, isolationLevel, false, false, false, topics)
-                .setTargetTimes(topics);
+        ListOffsetsRequest.Builder builder = getBuilder(requireTimestamp).setTargetTimes(topics);
 
         log.debug("Sending ListOffsetRequest {} to broker {}", builder, node);
         return client.send(node, builder)
@@ -407,6 +405,15 @@ public class OffsetFetcher {
                         handleListOffsetResponse(lor, future);
                     }
                 });
+    }
+
+    private ListOffsetsRequest.Builder getBuilder(boolean requireTimestamp) {
+        if (isolationLevel == IsolationLevel.READ_COMMITTED)
+            return  ListOffsetsRequest.Builder.forReadCommitted();
+        else if (requireTimestamp)
+            return  ListOffsetsRequest.Builder.forRequiredTimestamp();
+        else
+            return  ListOffsetsRequest.Builder.defaultBuilder();
     }
 
     /**

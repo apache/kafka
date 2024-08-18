@@ -337,9 +337,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             boolean requireTimestamps,
             List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
         List<ListOffsetsRequestData.ListOffsetsTopic> topics = ListOffsetsRequest.toListOffsetsTopics(targetTimes);
-        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamps, isolationLevel, false, false, false, topics)
-                .setTargetTimes(topics);
+        ListOffsetsRequest.Builder builder = getBuilder(requireTimestamps).setTargetTimes(topics);
 
         log.debug("Creating ListOffset request {} for broker {} to reset positions", builder,
                 node);
@@ -368,6 +366,15 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             }
         });
         return result;
+    }
+
+    private ListOffsetsRequest.Builder getBuilder(boolean requireTimestamp) {
+        if (isolationLevel == IsolationLevel.READ_COMMITTED)
+            return  ListOffsetsRequest.Builder.forReadCommitted();
+        else if (requireTimestamp)
+            return  ListOffsetsRequest.Builder.forRequiredTimestamp();
+        else
+            return  ListOffsetsRequest.Builder.defaultBuilder();
     }
 
     /**
