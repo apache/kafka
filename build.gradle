@@ -162,8 +162,8 @@ allprojects {
           // ZooKeeper (potentially older and containing CVEs)
           libs.nettyHandler,
           libs.nettyTransportNativeEpoll,
-	  // be explicit about the reload4j version instead of relying on the transitive versions
-	  libs.reload4j
+          // be explicit about the reload4j version instead of relying on the transitive versions
+          libs.reload4j
         )
       }
     }
@@ -734,7 +734,7 @@ subprojects {
       jacoco {
         toolVersion = versions.jacoco
       }
-      
+
       jacocoTestReport {
         dependsOn tasks.test
         sourceSets sourceSets.main
@@ -758,8 +758,8 @@ subprojects {
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
   }
-  //  the task `removeUnusedImports` is implemented by google-java-format, 
-  //  and unfortunately the google-java-format version used by spotless 6.14.0 can't work with JDK 21. 
+  //  the task `removeUnusedImports` is implemented by google-java-format,
+  //  and unfortunately the google-java-format version used by spotless 6.14.0 can't work with JDK 21.
   //  Hence, we apply spotless tasks only if the env is either JDK11 or JDK17
   if ((JavaVersion.current().isJava11() || (JavaVersion.current() == JavaVersion.VERSION_17))) {
     apply plugin: 'com.diffplug.spotless'
@@ -934,6 +934,7 @@ project(':core') {
     implementation project(':raft')
     implementation project(':storage')
     implementation project(':server')
+    implementation project(':coordinator-common')
 
     implementation libs.argparse4j
     implementation libs.commonsValidator
@@ -1192,7 +1193,7 @@ project(':core') {
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
     from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
-    // log4j-appender is not in core dependencies, 
+    // log4j-appender is not in core dependencies,
     // so we add it to dependant-testlibs to avoid ClassNotFoundException in running kafka_log4j_appender.py
     from (project(':log4j-appender').jar ) { "$buildDir/dependant-testlibs" }
     duplicatesStrategy 'exclude'
@@ -1372,6 +1373,7 @@ project(':group-coordinator') {
     implementation project(':metadata')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':storage')
+    implementation project(':coordinator-common')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
@@ -1379,6 +1381,7 @@ project(':group-coordinator') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':coordinator-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
@@ -1442,7 +1445,7 @@ project(':transaction-coordinator') {
     implementation project(':clients')
     generator project(':generator')
   }
-  
+
   sourceSets {
     main {
       java {
@@ -1477,6 +1480,50 @@ project(':transaction-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':coordinator-common') {
+  base {
+    archivesName = "kafka-coordinator-common"
+  }
+
+  dependencies {
+    implementation project(':clients')
+    implementation project(':server-common')
+    implementation project(':metadata')
+    implementation project(':storage')
+    implementation libs.slf4jApi
+    implementation libs.metrics
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-coordinator-common.xml")
+  }
 
   javadoc {
     enabled = false
@@ -1717,6 +1764,7 @@ project(':raft') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
+    testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.junitPlatformLanucher
@@ -2121,6 +2169,7 @@ project(':tools') {
     implementation project(':tools:tools-api')
     implementation project(':transaction-coordinator')
     implementation project(':group-coordinator')
+    implementation project(':coordinator-common')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv

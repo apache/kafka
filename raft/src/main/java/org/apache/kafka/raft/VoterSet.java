@@ -48,11 +48,7 @@ import java.util.stream.Stream;
 public final class VoterSet {
     private final Map<Integer, VoterNode> voters;
 
-    public VoterSet(Map<Integer, VoterNode> voters) {
-        if (voters.isEmpty()) {
-            throw new IllegalArgumentException("Voters cannot be empty");
-        }
-
+    private VoterSet(Map<Integer, VoterNode> voters) {
         this.voters = voters;
     }
 
@@ -407,6 +403,11 @@ public final class VoterSet {
         ) {
             return new VoterNode(voterKey, listeners, supportedKRaftVersion);
         }
+    }
+
+    private static final VoterSet EMPTY = new VoterSet(Collections.emptyMap());
+    public static VoterSet empty() {
+        return EMPTY;
     }
 
     /**
