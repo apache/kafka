@@ -126,17 +126,18 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     val brokenClient = Admin.create(config)
 
-    val alterLogLevelsEntries = Seq(
-      new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL)
-    ).asJavaCollection
+    try {
+      val alterLogLevelsEntries = Seq(
+        new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL)
+      ).asJavaCollection
 
-    val exception = assertThrows(classOf[ExecutionException], () => {
-      brokenClient.alterConfigs(
-      Map(brokerLoggerConfigResource -> new Config(alterLogLevelsEntries)).asJava,
-      new AlterConfigsOptions().timeoutMs(0)).all()
-    })
-    assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    brokenClient.close(time.Duration.ZERO)
+      val exception = assertThrows(classOf[ExecutionException], () => {
+        brokenClient.alterConfigs(
+        Map(brokerLoggerConfigResource -> new Config(alterLogLevelsEntries)).asJava,
+          new AlterConfigsOptions().timeoutMs(0)).all()
+      })
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally brokenClient.close(time.Duration.ZERO)
   }
 
   @ParameterizedTest

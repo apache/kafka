@@ -147,13 +147,14 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     val brokenClient = Admin.create(config)
 
-    val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
+    try {
+      val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
-    val exception = assertThrows(classOf[ExecutionException], () => {
+      val exception = assertThrows(classOf[ExecutionException], () => {
       brokenClient.createAcls(Collections.singleton(acl), new CreateAclsOptions().timeoutMs(0)).all().get()
-    })
-    assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    brokenClient.close(time.Duration.ZERO)
+      })
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally brokenClient.close(time.Duration.ZERO)
   }
 
   @ParameterizedTest
@@ -168,17 +169,20 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // prepare normal client
     client = createAdminClient
 
-    val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
+    try {
+      val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
 
-    client.createAcls(Collections.singleton(acl)).all().get()
+      client.createAcls(Collections.singleton(acl)).all().get()
 
-    val exception = assertThrows(classOf[ExecutionException], () => {
+      val exception = assertThrows(classOf[ExecutionException], () => {
       brokenClient.deleteAcls(Collections.singleton(AclBindingFilter.ANY), new DeleteAclsOptions().timeoutMs(0)).all().get()
-    })
-    assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    brokenClient.close(time.Duration.ZERO)
-    client.close(time.Duration.ZERO)
+      })
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally {
+      brokenClient.close(time.Duration.ZERO)
+      client.close(time.Duration.ZERO)
+    }
   }
 
   @ParameterizedTest
@@ -199,16 +203,18 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       (createResult, expireResult)
     }
 
-    // Note that maxTimestamp = token created time + maxLifeTimeMs
-    val (createResult1, expireResult1) = generateTokenResult(10000, -1)
-    // if expiryTimePeriodMs < 0, token will be expired immediately.
-    assertTrue(createResult1.delegationToken().get().tokenInfo().maxTimestamp() > expireResult1.expiryTimestamp().get())
+    try {
+      // Note that maxTimestamp = token created time + maxLifeTimeMs
+      val (createResult1, expireResult1) = generateTokenResult(10000, -1)
+      // if expiryTimePeriodMs < 0, token will be expired immediately.
+      assertTrue(createResult1.delegationToken().get().tokenInfo().maxTimestamp() > expireResult1.expiryTimestamp().get())
 
-    // expireDelegationToken will decrease the value of expiryTimestamp, since this token is not expired,
-    // expiryTimestamp will be set to min(expiryTimestamp, maxTimestamp),
-    // in this case, maxTimestamp is smaller, so expiryTimestamp will not be modified
-    val (createResult2, expireResult2) = generateTokenResult(5000, 100000)
-    assert(createResult2.delegationToken().get().tokenInfo().expiryTimestamp() == expireResult2.expiryTimestamp().get())
+      // expireDelegationToken will decrease the value of expiryTimestamp, since this token is not expired,
+      // expiryTimestamp will be set to min(expiryTimestamp, maxTimestamp),
+      // in this case, maxTimestamp is smaller, so expiryTimestamp will not be modified
+      val (createResult2, expireResult2) = generateTokenResult(5000, 100000)
+      assert(createResult2.delegationToken().get().tokenInfo().expiryTimestamp() == expireResult2.expiryTimestamp().get())
+    } finally client.close(time.Duration.ZERO)
   }
 
   @ParameterizedTest
