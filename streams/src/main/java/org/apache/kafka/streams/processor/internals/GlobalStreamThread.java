@@ -47,7 +47,6 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
@@ -176,6 +175,12 @@ public class GlobalStreamThread extends Thread {
             }
 
             state = newState;
+
+            // Question: Is this a good idea? Or should we spread the latch countdown to finally blocks
+            // Count down the latch if transitioning from CREATED to any other state
+            if (oldState == State.CREATED && newState != State.CREATED) {
+                initializationLatch.countDown();
+            }
         }
 
         if (stateListener != null) {
@@ -192,12 +197,6 @@ public class GlobalStreamThread extends Thread {
     public boolean inErrorState() {
         synchronized (stateLock) {
             return state.inErrorState();
-        }
-    }
-
-    public boolean stillInitializing() {
-        synchronized (stateLock) {
-            return state.equals(CREATED);
         }
     }
 
@@ -365,8 +364,6 @@ public class GlobalStreamThread extends Thread {
 
             setState(DEAD);
 
-            initializationLatch.countDown();
-
             log.info("Shutdown complete");
         }
     }
@@ -439,8 +436,6 @@ public class GlobalStreamThread extends Thread {
         } catch (final Exception fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
-        } finally {
-            initializationLatch.countDown();
         }
         return null;
     }
