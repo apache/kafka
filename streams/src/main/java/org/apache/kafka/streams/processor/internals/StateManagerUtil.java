@@ -137,6 +137,7 @@ final class StateManagerUtil {
                     try {
                         if (wipeStateStore) {
                             log.debug("Wiping state stores for {} task {}", taskType, id);
+                            stateDirectory.removeTaskOffsets(id);
                             // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
                             // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
                             // need to re-bootstrap the restoration from the beginning
