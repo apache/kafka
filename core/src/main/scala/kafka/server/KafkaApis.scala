@@ -4618,7 +4618,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupId = shareFetchRequest.data.groupId
     val memberId = shareFetchRequest.data.memberId
 
-    val partitions = new util.LinkedHashMap[TopicIdPartition, ShareFetchResponseData.PartitionData](responsePartitionData.asJava)
     val nodeEndpoints = new mutable.HashMap[Int, Node]
     responsePartitionData.foreach { case(tp, partitionData) =>
       partitionData.errorCode match {
@@ -4633,6 +4632,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ =>
       }
     }
+    val partitions = new util.LinkedHashMap[TopicIdPartition, ShareFetchResponseData.PartitionData](responsePartitionData.asJava)
 
     var shareFetchResponse: ShareFetchResponse = null
 
