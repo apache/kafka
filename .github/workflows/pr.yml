@@ -32,33 +32,34 @@ jobs:
         java: [8, 21]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-    - name: Setup Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: ${{ matrix.java }}
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
-      env:
-        GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
-      with:
-        gradle-version: wrapper
-        # Only write to the cache from trunk
-        #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
-        cache-read-only: false
-        # Cache downloaded JDKs in addition to the default directories.
-        gradle-home-cache-includes: |
-          caches
-          notifications
-          jdks
-        gradle-home-cache-cleanup: true
-        cache-overwrite-existing: true
-    - name: Compile and validate
-      run: ./gradlew --build-cache --info --scan check -x test
+      - name: Checkout code
+	uses: actions/checkout@v4
+	with:
+	  persist-credentials: false
+      - name: Setup Java
+	uses: actions/setup-java@v4
+	with:
+	  distribution: temurin
+	  java-version: ${{ matrix.java }}
+      - name: Setup Gradle
+	uses: gradle/actions/setup-gradle@v4
+	env:
+	  GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
+	with:
+	  gradle-version: wrapper
+	  develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+	  # Only write to the cache from trunk
+	  #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
+	  cache-read-only: false
+	  # Cache downloaded JDKs in addition to the default directories.
+	  gradle-home-cache-includes: |
+	    caches
+	    notifications
+	    jdks
+	  cache-cleanup: true
+	  cache-overwrite-existing: true
+      - name: Compile and validate
+	run: ./gradlew --build-cache --info --scan check -x test
 
   test:
     needs: validate
@@ -84,6 +85,7 @@ jobs:
           GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
         with:
           gradle-version: wrapper
+          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
           # Only write to the cache from trunk
           #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
           cache-read-only: false
@@ -92,7 +94,7 @@ jobs:
             caches
             notifications
             jdks
-          gradle-home-cache-cleanup: true
+          cache-cleanup: true
           cache-overwrite-existing: true
       - name: Test
         run: |
