@@ -84,4 +84,5 @@ public class MetadataResponseBenchmark {
     public static void main(String[] args) throws RunnerException {
         new Runner(new OptionsBuilder().include(MetadataResponseBenchmark.class.getSimpleName()).build()).run();
     }
+
 }
