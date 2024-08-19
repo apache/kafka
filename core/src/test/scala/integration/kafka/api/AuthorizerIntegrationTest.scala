@@ -293,8 +293,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitions(List(new ListOffsetsPartition()
           .setPartitionIndex(tp.partition)
           .setTimestamp(0L)
-          .setCurrentLeaderEpoch(27)).asJava)).asJava)
-      .build()
+          .setCurrentLeaderEpoch(27)).asJava)).asJava
+      ).
+      build()
   }
 
   private def offsetsForLeaderEpochRequest: OffsetsForLeaderEpochRequest = {
