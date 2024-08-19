@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.FetchSession;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
@@ -41,9 +40,12 @@ import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.group.share.Persister;
 import org.apache.kafka.server.share.CachedSharePartition;
+import org.apache.kafka.server.share.FinalContext;
 import org.apache.kafka.server.share.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.ShareFetchContext;
 import org.apache.kafka.server.share.ShareSession;
 import org.apache.kafka.server.share.ShareSessionCache;
+import org.apache.kafka.server.share.ShareSessionContext;
 import org.apache.kafka.server.share.ShareSessionKey;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -502,7 +504,7 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     private static String partitionsToLogString(Collection<TopicIdPartition> partitions) {
-        return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
+        return ShareSession.partitionsToLogString(partitions, log.isTraceEnabled());
     }
 
     /**

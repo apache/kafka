@@ -48,9 +48,13 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.group.share.NoOpShareStatePersister;
 import org.apache.kafka.server.group.share.Persister;
 import org.apache.kafka.server.share.CachedSharePartition;
+import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
+import org.apache.kafka.server.share.FinalContext;
 import org.apache.kafka.server.share.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.ShareFetchContext;
 import org.apache.kafka.server.share.ShareSession;
 import org.apache.kafka.server.share.ShareSessionCache;
+import org.apache.kafka.server.share.ShareSessionContext;
 import org.apache.kafka.server.share.ShareSessionKey;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
@@ -1865,16 +1869,17 @@ public class SharePartitionManagerTest {
         assertEquals(partitionsSet, partitionsInContext);
     }
 
-    private void assertErroneousAndValidTopicIdPartitions(ErroneousAndValidPartitionData erroneousAndValidPartitionData,
+    private void assertErroneousAndValidTopicIdPartitions(
+        ErroneousAndValidPartitionData erroneousAndValidPartitionData,
                                                           List<TopicIdPartition> expectedErroneous, List<TopicIdPartition> expectedValid) {
         Set<TopicIdPartition> expectedErroneousSet = new HashSet<>(expectedErroneous);
         Set<TopicIdPartition> expectedValidSet = new HashSet<>(expectedValid);
         Set<TopicIdPartition> actualErroneousPartitions = new HashSet<>();
         Set<TopicIdPartition> actualValidPartitions = new HashSet<>();
-        erroneousAndValidPartitionData.erroneous().forEach(topicIdPartitionPartitionDataTuple2 ->
-                actualErroneousPartitions.add(topicIdPartitionPartitionDataTuple2._1));
-        erroneousAndValidPartitionData.validTopicIdPartitions().forEach(topicIdPartitionPartitionDataTuple2 ->
-                actualValidPartitions.add(topicIdPartitionPartitionDataTuple2._1));
+        erroneousAndValidPartitionData.erroneous().forEach((topicIdPartition, partitionData) ->
+                actualErroneousPartitions.add(topicIdPartition));
+        erroneousAndValidPartitionData.validTopicIdPartitions().forEach((topicIdPartition, partitionData) ->
+                actualValidPartitions.add(topicIdPartition));
         assertEquals(expectedErroneousSet, actualErroneousPartitions);
         assertEquals(expectedValidSet, actualValidPartitions);
     }
