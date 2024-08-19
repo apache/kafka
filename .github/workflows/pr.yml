@@ -16,9 +16,9 @@
 name: pr
 
 on:
-  push:
-    branches:
-      - 'gh-*'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: 'gh-*'
 
 jobs:
   validate:
