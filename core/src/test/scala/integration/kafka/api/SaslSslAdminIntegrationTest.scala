@@ -335,13 +335,16 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateDelegationTokenWithOptions(quorum: String): Unit = {
+    val owner = new KafkaPrincipal("User", "client2")
+    val renewers = List(new KafkaPrincipal("User", "client")).asJava
     client = createAdminClient
     val timeout = 1000
-    val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout);
+    val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout).owner(owner).renewers(renewers)
     val token = client.createDelegationToken(options).delegationToken().get()
     assertEquals(timeout, token.tokenInfo.maxTimestamp - token.tokenInfo.issueTimestamp)
+    assertEquals(owner, token.tokenInfo.owner)
+    assertEquals(renewers, token.tokenInfo.renewers)
   }
-
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
