@@ -26,7 +26,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.message.ShareAcknowledgeRequestData;
@@ -387,8 +386,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      */
     public void commitAsync(final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
         final Cluster cluster = metadata.fetch();
-        final AtomicInteger resultCount = new AtomicInteger();
-        final ResultHandler resultHandler = new ResultHandler(resultCount, Optional.empty());
+        final ResultHandler resultHandler = new ResultHandler(Optional.empty());
 
         sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Node node = cluster.nodeById(nodeId);
@@ -1021,6 +1019,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         private final AtomicInteger remainingResults;
         private final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future;
 
+        ResultHandler(final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
+            this(null, future);
+        }
+
         ResultHandler(final AtomicInteger remainingResults,
                       final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
             result = new HashMap<>();
@@ -1038,7 +1040,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
             // For commitAsync, we do not wait for other results to complete, we prepare a background event
             // for every ShareAcknowledgeResponse.
-            if (isCommitAsync || remainingResults.decrementAndGet() == 0) {
+            if (isCommitAsync || (remainingResults  != null && remainingResults.decrementAndGet() == 0)) {
                 ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(result);
                 backgroundEventHandler.add(event);
                 future.ifPresent(future -> future.complete(result));
@@ -1049,7 +1051,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * Handles the case where there are no results pending after initialization.
          */
         public void completeIfEmpty() {
-            if (remainingResults.get() == 0) {
+            if (remainingResults != null && remainingResults.get() == 0) {
                 future.ifPresent(future -> future.complete(result));
             }
         }
@@ -1085,7 +1087,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return acknowledgeRequestStates.get(nodeId);
     }
 
-    @InterfaceStability.Evolving
     public enum AcknowledgeRequestType {
         COMMIT_ASYNC((byte) 0),
         COMMIT_SYNC((byte) 1),

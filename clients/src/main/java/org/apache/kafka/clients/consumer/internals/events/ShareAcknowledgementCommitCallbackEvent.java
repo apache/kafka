@@ -24,7 +24,7 @@ import java.util.Map;
 
 public class ShareAcknowledgementCommitCallbackEvent extends BackgroundEvent {
 
-    private Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
+    private final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
 
     public ShareAcknowledgementCommitCallbackEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
         super(Type.SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK);
