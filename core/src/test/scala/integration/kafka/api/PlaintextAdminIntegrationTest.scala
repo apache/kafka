@@ -2059,16 +2059,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
-          val fakeGroupException = assertThrows(classOf[ExecutionException], () => {
-            describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
-          })
-          assertInstanceOf(classOf[GroupIdNotFoundException], fakeGroupException.getCause)
+          // Test that the fake group is listed as dead.
+          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
+          val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
 
-          // Test that all() fails because there is a failing future
-          val allException = assertThrows(classOf[ExecutionException], () => {
-            describeWithFakeGroupResult.all().get()
-          })
-          assertInstanceOf(classOf[GroupIdNotFoundException], allException.getCause)
+          assertEquals(fakeGroupId, fakeGroupDescription.groupId())
+          assertEquals(0, fakeGroupDescription.members().size())
+          assertEquals(ShareGroupState.DEAD, fakeGroupDescription.state())
+          assertNull(fakeGroupDescription.authorizedOperations())
+
+          // Test that all() returns 2 results
+          assertEquals(2, describeWithFakeGroupResult.all().get().size())
 
           val describeTestGroupResult = client.describeShareGroups(Seq(testGroupId).asJava,
             new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
