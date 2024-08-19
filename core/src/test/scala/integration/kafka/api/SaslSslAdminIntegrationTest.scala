@@ -180,10 +180,10 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     client = createAdminClient
     val renewer = List(SecurityUtils.parseKafkaPrincipal("User:renewer"))
 
-    def generateTokenResult(maxLifeTimeMs: Int, expiryTimePeriodMs: Int): (CreateDelegationTokenResult, ExpireDelegationTokenResult) = {
+    def generateTokenResult(maxLifeTimeMs: Int, expiryTimePeriodMs: Int, expectedTokenNum: Int): (CreateDelegationTokenResult, ExpireDelegationTokenResult) = {
       val createResult = client.createDelegationToken(new CreateDelegationTokenOptions().renewers(renewer.asJava).maxlifeTimeMs(maxLifeTimeMs))
       val tokenCreated = createResult.delegationToken.get
-      TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),
+      TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == expectedTokenNum),
             "Timed out waiting for token to propagate to all servers")
       val expireResult = client.expireDelegationToken(
         tokenCreated.hmac(),
@@ -194,15 +194,19 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     try {
       // Note that maxTimestamp = token created time + maxLifeTimeMs
-      val (createResult1, expireResult1) = generateTokenResult(10000, -1)
+      val (createResult1, expireResult1) = generateTokenResult(10000, -1, 1)
       // if expiryTimePeriodMs < 0, token will be expired immediately.
       assertTrue(createResult1.delegationToken().get().tokenInfo().maxTimestamp() > expireResult1.expiryTimestamp().get())
 
       // expireDelegationToken will decrease the value of expiryTimestamp, since this token is not expired,
       // expiryTimestamp will be set to min(expiryTimestamp, maxTimestamp),
       // in this case, maxTimestamp is smaller, so expiryTimestamp will not be modified
-      val (createResult2, expireResult2) = generateTokenResult(5000, 100000)
+      val (createResult2, expireResult2) = generateTokenResult(50000, 100000, 1)
       assert(createResult2.delegationToken().get().tokenInfo().expiryTimestamp() == expireResult2.expiryTimestamp().get())
+
+      // since previous token is not expired yet, we need to set expectedTokenNum to 2
+      val (createResult3, expireResult3) = generateTokenResult(5000, 2000, 2)
+      assert(createResult3.delegationToken().get().tokenInfo().expiryTimestamp() > expireResult3.expiryTimestamp().get())
     } finally client.close(time.Duration.ZERO)
   }
 
