@@ -14,21 +14,20 @@
 // limitations under the License.
 
 plugins {
-    id 'com.gradle.enterprise' version '3.14.1'
-    id 'com.gradle.common-custom-user-data-gradle-plugin' version '1.11.1'
+    id 'com.gradle.develocity' version '3.17.6'
+    id 'com.gradle.common-custom-user-data-gradle-plugin' version '2.0.2'
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
 def isJenkins = System.getenv('JENKINS_URL') != null
 def isCI = isGithubActions || isJenkins
 
-gradleEnterprise {
+develocity {
     server = "https://ge.apache.org"
+    projectId = "kafka"
     buildScan {
-        capture { taskInputFiles = true }
         uploadInBackground = !isCI
-        publishAlways()
-        publishIfAuthenticated()
+        publishing.onlyIf { it.authenticated }
         obfuscation {
             // This obfuscates the IP addresses of the build machine in the build scan.
             // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
@@ -42,7 +41,7 @@ buildCache {
         enabled = !isCI
     }
 
-    remote(gradleEnterprise.buildCache) {
+    remote(develocity.buildCache) {
         enabled = false
     }
 }
@@ -57,6 +56,7 @@ include 'clients',
     'connect:runtime',
     'connect:test-plugins',
     'connect:transforms',
+    'coordinator-common',
     'core',
     'examples',
     'generator',
@@ -106,3 +106,4 @@ include 'clients',
 
 project(":storage:api").name = "storage-api"
 rootProject.name = 'kafka'
+
