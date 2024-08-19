@@ -22,6 +22,7 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -139,6 +140,13 @@ public class ShareSession {
         result.put(ModifiedTopicIdPartitionType.UPDATED, updated);
         result.put(ModifiedTopicIdPartitionType.REMOVED, removed);
         return result;
+    }
+
+    public static String partitionsToLogString(Collection<TopicIdPartition> partitions, Boolean traceEnabled) {
+        if (traceEnabled) {
+            return String.format("( %s )", String.join(", ", partitions.toString()));
+        }
+        return String.format("%s partition(s)", partitions.size());
     }
 
     public String toString() {
