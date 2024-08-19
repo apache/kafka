@@ -30,11 +30,18 @@
     <!-- anyone can use public classes -->
     <subpackage name="coordinator">
         <subpackage name="share">
+            <allow pkg="org.apache.kafka.common" />
+            <allow pkg="org.apache.kafka.common.annotation" />
             <allow pkg="org.apache.kafka.common.config" />
             <allow pkg="org.apache.kafka.common.message" />
+            <allow pkg="org.apache.kafka.common.protocol" />
             <allow pkg="org.apache.kafka.common.requests" />
             <allow pkg="org.apache.kafka.coordinator.common" />
+            <allow pkg="org.apache.kafka.coordinator.share.generated" />
             <allow pkg="org.apache.kafka.image" />
+            <allow pkg="org.apache.kafka.server.common" />
+            <allow pkg="org.apache.kafka.server.group.share" />
+            <allow pkg="org.junit.jupiter.api" />
             <subpackage name="generated">
                 <allow class="org.apache.kafka.common.Uuid" />
                 <allow pkg="com.fasterxml.jackson" />
