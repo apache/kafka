@@ -25,6 +25,8 @@ import org.junit.jupiter.api.Assertions._
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -39,10 +41,10 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT, Type.ZK),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.compression.codec", value = "1"),
-      new ClusterConfigProperty(key = "controlled.shutdown.enable", value = "false"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, value = "false"),
     )
   )
   def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(): Unit = {
@@ -74,13 +76,13 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
-  def testCoordinatorFailoverWithConsumerGroupRecordsAfterCompactingPartition(): Unit = {
+  def testCoordinatorFailoverAfterCompactingPartitionWithConsumerGroupMemberJoiningAndLeaving(): Unit = {
     withAdmin { admin =>
       TestUtils.createTopicWithAdminRaw(
         admin = admin,
@@ -97,6 +99,45 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
           consumer.assignment.asScala.nonEmpty
         }, msg = "Consumer did not get an non empty assignment")
       }
+    }
+
+    // Force a compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. If replaying any of the records fails, the
+    // group coordinator won't be available.
+    withAdmin { admin =>
+      val groups = admin
+        .describeConsumerGroups(List("grp1").asJava)
+        .describedGroups()
+        .asScala
+        .toMap
+
+      assertDescribedGroup(groups, "grp1", GroupType.CONSUMER, ConsumerGroupState.EMPTY)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testCoordinatorFailoverCompactingPartitionWithManualOffsetCommitsAndConsumerGroupMemberUnsubscribingAndResubscribing(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
 
       // Create a consumer group grp2 with one member. The member subscribes to foo, manually commits offsets,
       // unsubscribes and finally re-subscribes to foo. This creates a mix of group records with tombstones
@@ -116,6 +157,45 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
           consumer.assignment().asScala.nonEmpty
         }, msg = "Consumer did not get an non empty assignment")
       }
+    }
+
+    // Force a compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. If replaying any of the records fails, the
+    // group coordinator won't be available.
+    withAdmin { admin =>
+      val groups = admin
+        .describeConsumerGroups(List("grp2").asJava)
+        .describedGroups()
+        .asScala
+        .toMap
+
+      assertDescribedGroup(groups, "grp2", GroupType.CONSUMER, ConsumerGroupState.EMPTY)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testCoordinatorFailoverAfterCompactingPartitionWithConsumerGroupDeleted(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
 
       // Create a consumer group grp3 with one member. The member subscribes to foo and leaves the group. Then
       // the group is deleted. This creates tombstones to delete the member, the group and the offsets.
@@ -132,6 +212,45 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         .deletedGroups()
         .get("grp3")
         .get(10, TimeUnit.SECONDS)
+    }
+
+    // Force a compaction.
+    rollAndCompactConsumerOffsets()
+
+    // Restart the broker to reload the group coordinator.
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
+
+    // Verify the state of the groups to ensure that the group coordinator
+    // was correctly loaded. If replaying any of the records fails, the
+    // group coordinator won't be available.
+    withAdmin { admin =>
+      val groups = admin
+        .describeConsumerGroups(List("grp3").asJava)
+        .describedGroups()
+        .asScala
+        .toMap
+
+      assertDescribedGroup(groups, "grp3", GroupType.CLASSIC, ConsumerGroupState.DEAD)
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testCoordinatorFailoverAfterCompactingPartitionWithUpgradedConsumerGroup(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
 
       // Create a classic group grp4 with one member. Upgrades the group to the consumer
       // protocol.
@@ -153,31 +272,32 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     }
 
     // Force a compaction.
-    val tp = new TopicPartition("__consumer_offsets", 0)
-    val broker = cluster.brokers().asScala.head._2
-    val log = broker.logManager.getLog(tp).get
-    log.roll()
-    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0))
+    rollAndCompactConsumerOffsets()
 
     // Restart the broker to reload the group coordinator.
-    cluster.shutdownBroker(broker.config.brokerId)
-    cluster.startBroker(broker.config.brokerId)
+    cluster.shutdownBroker(0)
+    cluster.startBroker(0)
 
     // Verify the state of the groups to ensure that the group coordinator
     // was correctly loaded. If replaying any of the records fails, the
     // group coordinator won't be available.
     withAdmin { admin =>
       val groups = admin
-        .describeConsumerGroups(List("grp1", "grp2", "grp3", "grp4").asJava)
+        .describeConsumerGroups(List("grp4").asJava)
         .describedGroups()
         .asScala
         .toMap
 
-      assertDescribedGroup(groups, "grp1", GroupType.CONSUMER, ConsumerGroupState.EMPTY)
-      assertDescribedGroup(groups, "grp2", GroupType.CONSUMER, ConsumerGroupState.EMPTY)
-      assertDescribedGroup(groups, "grp3", GroupType.CLASSIC, ConsumerGroupState.DEAD)
       assertDescribedGroup(groups, "grp4", GroupType.CONSUMER, ConsumerGroupState.EMPTY)
     }
+  }
+
+  private def rollAndCompactConsumerOffsets(): Unit = {
+    val tp = new TopicPartition("__consumer_offsets", 0)
+    val broker = cluster.brokers.asScala.head._2
+    val log = broker.logManager.getLog(tp).get
+    log.roll()
+    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0))
   }
 
   private def withAdmin(f: Admin => Unit): Unit = {
@@ -210,13 +330,13 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   private def assertDescribedGroup(
     groups: Map[String, KafkaFuture[ConsumerGroupDescription]],
     groupId: String,
-    `type`: GroupType,
+    groupType: GroupType,
     state: ConsumerGroupState
   ): Unit = {
     val group = groups(groupId).get(10, TimeUnit.SECONDS)
 
     assertEquals(groupId, group.groupId)
-    assertEquals(`type`, group.`type`)
+    assertEquals(groupType, group.`type`)
     assertEquals(state, group.state)
     assertEquals(Collections.emptyList, group.members)
   }

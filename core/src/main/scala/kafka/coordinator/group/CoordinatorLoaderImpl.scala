@@ -141,7 +141,7 @@ class CoordinatorLoaderImpl[T](
                   val controlRecord = ControlRecordType.parse(record.key)
                   if (controlRecord == ControlRecordType.COMMIT) {
                     if (isTraceEnabled) {
-                      trace(s"Replaying end transaction marker at offset ${record.offset} to commit transaction " +
+                      trace(s"Replaying end transaction marker from $tp at offset ${record.offset} to commit transaction " +
                         s"with producer id ${batch.producerId} and producer epoch ${batch.producerEpoch}.")
                     }
                     coordinator.replayEndTransactionMarker(
@@ -151,7 +151,7 @@ class CoordinatorLoaderImpl[T](
                     )
                   } else if (controlRecord == ControlRecordType.ABORT) {
                     if (isTraceEnabled) {
-                      trace(s"Replaying end transaction marker at offset ${record.offset} to abort transaction " +
+                      trace(s"Replaying end transaction marker from $tp at offset ${record.offset} to abort transaction " +
                         s"with producer id ${batch.producerId} and producer epoch ${batch.producerEpoch}.")
                     }
                     coordinator.replayEndTransactionMarker(
@@ -174,8 +174,8 @@ class CoordinatorLoaderImpl[T](
                           s"from $tp. Ignoring it. It could be a left over from an aborted upgrade.")
                         None
                       case ex: RuntimeException =>
-                        val msg = s"Deserializing record $record failed due to: ${ex.getMessage}."
-                        error(msg)
+                        val msg = s"Deserializing record $record from $tp failed due to: ${ex.getMessage}"
+                        error(s"$msg.")
                         throw new RuntimeException(msg, ex)
                     }
                   }
@@ -183,7 +183,7 @@ class CoordinatorLoaderImpl[T](
                   coordinatorRecordOpt.foreach { coordinatorRecord =>
                     try {
                       if (isTraceEnabled) {
-                        trace(s"Replaying record $coordinatorRecord at offset ${record.offset()} " +
+                        trace(s"Replaying record $coordinatorRecord from $tp at offset ${record.offset()} " +
                           s"with producer id ${batch.producerId} and producer epoch ${batch.producerEpoch}.")
                       }
                       coordinator.replay(
@@ -193,14 +193,11 @@ class CoordinatorLoaderImpl[T](
                         coordinatorRecord
                       )
                     } catch {
-                      case ex: UnknownRecordTypeException =>
-                        warn(s"Unknown record type ${ex.unknownType} while loading offsets and group metadata " +
-                          s"from $tp. Ignoring it. It could be a left over from an aborted upgrade.")
                       case ex: RuntimeException =>
-                        val msg = s"Replaying record $coordinatorRecord at offset ${record.offset()} " +
+                        val msg = s"Replaying record $coordinatorRecord from $tp at offset ${record.offset()} " +
                           s"with producer id ${batch.producerId} and producer epoch ${batch.producerEpoch} " +
-                          s"failed due to: ${ex.getMessage}."
-                        error(msg)
+                          s"failed due to: ${ex.getMessage}"
+                        error(s"$msg.")
                         throw new RuntimeException(msg, ex)
                     }
                   }
