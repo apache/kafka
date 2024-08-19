@@ -166,23 +166,12 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     val brokenClient = Admin.create(config)
 
-    // prepare normal client
-    client = createAdminClient
-
     try {
-      val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
-      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
-
-      client.createAcls(Collections.singleton(acl)).all().get()
-
       val exception = assertThrows(classOf[ExecutionException], () => {
-      brokenClient.deleteAcls(Collections.singleton(AclBindingFilter.ANY), new DeleteAclsOptions().timeoutMs(0)).all().get()
+        brokenClient.deleteAcls(Collections.singleton(AclBindingFilter.ANY), new DeleteAclsOptions().timeoutMs(0)).all().get()
       })
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
-    } finally {
-      brokenClient.close(time.Duration.ZERO)
-      client.close(time.Duration.ZERO)
-    }
+    } finally brokenClient.close(time.Duration.ZERO)
   }
 
   @ParameterizedTest
