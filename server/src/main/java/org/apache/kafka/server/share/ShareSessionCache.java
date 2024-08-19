@@ -18,7 +18,7 @@
 package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.requests.ShareFetchMetadata;
+import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 
 import java.util.HashMap;
@@ -151,7 +151,7 @@ public class ShareSessionCache {
     public synchronized ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
         if (sessions.size() < maxEntries || tryEvict(now)) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
-                    now, now, ShareFetchMetadata.nextEpoch(ShareFetchMetadata.INITIAL_EPOCH));
+                    now, now, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
             touch(session, now);
             return session.key();

@@ -145,7 +145,8 @@ public class LocalLogManagerTest {
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(1), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(2), (short) 0));
-            assertEquals(3, activeLogManager.scheduleAppend(epoch, messages));
+            assertEquals(3, activeLogManager.prepareAppend(epoch, messages));
+            activeLogManager.schedulePreparedAppend();
             for (LocalLogManager logManager : env.logManagers()) {
                 waitForLastCommittedOffset(3, logManager);
             }

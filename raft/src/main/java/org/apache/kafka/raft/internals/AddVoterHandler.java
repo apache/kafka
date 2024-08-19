@@ -29,6 +29,8 @@ import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.RaftUtil;
+import org.apache.kafka.raft.ReplicaKey;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -87,17 +89,15 @@ public final class AddVoterHandler {
         Endpoints voterEndpoints,
         long currentTimeMs
     ) {
-        // Check if there are any pending add voter requests
-        if (isOperationPending(leaderState, currentTimeMs)) {
+        // Check if there are any pending voter change requests
+        if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
-                    "Request timed out waiting for leader to handle previous add voter request"
+                    "Request timed out waiting for leader to handle previous voter change request"
                 )
             );
         }
-
-        Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
 
         // Check that the leader has established a HWM and committed the current epoch
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
@@ -126,6 +126,7 @@ public final class AddVoterHandler {
         }
 
         // Check that there are no uncommitted VotersRecord
+        Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
         if (!votersEntry.isPresent() || votersEntry.get().offset() >= highWatermark.get()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
@@ -229,13 +230,13 @@ public final class AddVoterHandler {
                 error
             );
 
-            abortAddVoter(
-                leaderState,
+            leaderState.resetAddVoterHandlerState(
                 Errors.REQUEST_TIMED_OUT,
                 String.format(
                     "Aborted add voter operation for since API_VERSIONS returned an error %s",
                     error
-                )
+                ),
+                Optional.empty()
             );
 
             return false;
@@ -252,8 +253,7 @@ public final class AddVoterHandler {
                 supportedKraftVersions
             );
 
-            abortAddVoter(
-                leaderState,
+            leaderState.resetAddVoterHandlerState(
                 Errors.INVALID_REQUEST,
                 String.format(
                     "Aborted add voter operation for %s since the %s range %s doesn't " +
@@ -270,7 +270,8 @@ public final class AddVoterHandler {
                         )
                         .orElse("(min: 0, max: 0)"),
                     kraftVersion.featureLevel()
-                )
+                ),
+                Optional.empty()
             );
 
             return true;
@@ -285,13 +286,13 @@ public final class AddVoterHandler {
                 leaderState.getReplicaState(current.voterKey())
             );
 
-            abortAddVoter(
-                leaderState,
+            leaderState.resetAddVoterHandlerState(
                 Errors.REQUEST_TIMED_OUT,
                 String.format(
                     "Aborted add voter operation for %s since it is lagging behind",
                     current.voterKey()
-                )
+                ),
+                Optional.empty()
             );
 
             return true;
@@ -330,35 +331,15 @@ public final class AddVoterHandler {
                 current.lastOffset().ifPresent(lastOffset -> {
                     if (highWatermark.offset() > lastOffset) {
                         // VotersRecord with the added voter was committed; complete the RPC
-                        completeAddVoter(leaderState);
+                        leaderState.resetAddVoterHandlerState(Errors.NONE, null, Optional.empty());
                     }
                 });
             });
         });
     }
 
-    public long maybeExpirePendingOperation(LeaderState<?> leaderState, long currentTimeMs) {
-        long timeUntilOperationExpiration = leaderState
-            .addVoterHandlerState()
-            .map(state -> state.timeUntilOperationExpiration(currentTimeMs))
-            .orElse(Long.MAX_VALUE);
-
-        if (timeUntilOperationExpiration == 0) {
-            abortAddVoter(leaderState, Errors.REQUEST_TIMED_OUT, null);
-            return Long.MAX_VALUE;
-        } else {
-            return timeUntilOperationExpiration;
-        }
-
-    }
-
     private ApiVersionsRequestData buildApiVersionsRequest() {
         return new ApiVersionsRequest.Builder().build().data();
-    }
-
-    private boolean isOperationPending(LeaderState<?> leaderState, long currentTimeMs) {
-        maybeExpirePendingOperation(leaderState, currentTimeMs);
-        return leaderState.addVoterHandlerState().isPresent();
     }
 
     private boolean validVersionRange(
@@ -368,13 +349,5 @@ public final class AddVoterHandler {
         return supportedKraftVersions.isPresent() &&
             (supportedKraftVersions.get().minVersion() <= finalizedVersion.featureLevel() &&
              supportedKraftVersions.get().maxVersion() >= finalizedVersion.featureLevel());
-    }
-
-    private void completeAddVoter(LeaderState<?> leaderState) {
-        leaderState.resetAddVoterHandlerState(Errors.NONE, null, Optional.empty());
-    }
-
-    private void abortAddVoter(LeaderState<?> leaderState, Errors error, String message) {
-        leaderState.resetAddVoterHandlerState(error, message, Optional.empty());
     }
 }
