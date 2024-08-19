@@ -51,7 +51,7 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{ElectionType, KafkaException, Node, TopicPartition, Uuid, requests}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, Node, TopicPartition, Uuid, requests}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
@@ -293,7 +293,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setPartitionIndex(tp.partition)
         .setTimestamp(0L)
         .setCurrentLeaderEpoch(27)).asJava)).asJava
-    requests.ListOffsetsRequest.Builder.defaultBuilder()
+    requests.ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(topics)
       .build()
   }

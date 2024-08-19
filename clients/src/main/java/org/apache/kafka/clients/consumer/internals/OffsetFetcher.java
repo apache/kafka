@@ -31,7 +31,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
@@ -44,7 +43,6 @@ import org.slf4j.Logger;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -392,8 +390,9 @@ public class OffsetFetcher {
     private RequestFuture<ListOffsetResult> sendListOffsetRequest(final Node node,
                                                                   final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
                                                                   boolean requireTimestamp) {
-        List<ListOffsetsRequestData.ListOffsetsTopic> topics = ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch);
-        ListOffsetsRequest.Builder builder = getBuilder(requireTimestamp).setTargetTimes(topics);
+        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
+                .forConsumer(requireTimestamp, isolationLevel)
+                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch));
 
         log.debug("Sending ListOffsetRequest {} to broker {}", builder, node);
         return client.send(node, builder)
@@ -405,15 +404,6 @@ public class OffsetFetcher {
                         handleListOffsetResponse(lor, future);
                     }
                 });
-    }
-
-    private ListOffsetsRequest.Builder getBuilder(boolean requireTimestamp) {
-        if (isolationLevel == IsolationLevel.READ_COMMITTED)
-            return  ListOffsetsRequest.Builder.forReadCommitted();
-        else if (requireTimestamp)
-            return  ListOffsetsRequest.Builder.forRequiredTimestamp();
-        else
-            return  ListOffsetsRequest.Builder.defaultBuilder();
     }
 
     /**

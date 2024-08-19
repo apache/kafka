@@ -58,32 +58,32 @@ public class ListOffsetsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListOffsetsRequest> {
         private final ListOffsetsRequestData data;
 
+        public static Builder forConsumer(boolean requireTimestamp,
+                                          IsolationLevel isolationLevel) {
+            return forConsumer(requireTimestamp, isolationLevel, false, false, false);
+        }
+
+        public static Builder forConsumer(boolean requireTimestamp,
+                                          IsolationLevel isolationLevel,
+                                          boolean requireMaxTimestamp,
+                                          boolean requireEarliestTimestamp,
+                                          boolean requireTieredStorageTimestamp) {
+            short minVersion = 0;
+            if (requireTieredStorageTimestamp)
+                minVersion = 9;
+            else if (requireEarliestTimestamp)
+                minVersion = 8;
+            else if (requireMaxTimestamp)
+                minVersion = 7;
+            else if (isolationLevel == IsolationLevel.READ_COMMITTED)
+                minVersion = 2;
+            else if (requireTimestamp)
+                minVersion = 1;
+            return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+        }
+
         public static Builder forReplica(short allowedVersion, int replicaId) {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
-        }
-
-        public static Builder forTieredStorageTimestamp(IsolationLevel isolationLevel) {
-            return new Builder((short) 9, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
-        }
-
-        public static Builder forEarliestLocalTimestamp(IsolationLevel isolationLevel) {
-            return new Builder((short) 8, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
-        }
-
-        public static Builder forMaxTimestamp(IsolationLevel isolationLevel) {
-            return new Builder((short) 7, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
-        }
-
-        public static Builder forReadCommitted() {
-            return new Builder((short) 2, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, IsolationLevel.READ_COMMITTED);
-        }
-
-        public static Builder forRequiredTimestamp() {
-            return new Builder((short) 1, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, IsolationLevel.READ_UNCOMMITTED);
-        }
-
-        public static Builder defaultBuilder() {
-            return new Builder((short) 0, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, IsolationLevel.READ_UNCOMMITTED);
         }
 
         private Builder(short oldestAllowedVersion,

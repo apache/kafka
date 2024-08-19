@@ -289,7 +289,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setTimestamp(0L)
               .setCurrentLeaderEpoch(15)).asJava)
           val targetTimes = List(topic).asJava
-          ListOffsetsRequest.Builder.defaultBuilder().setTargetTimes(targetTimes)
+          ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED).setTargetTimes(targetTimes)
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,

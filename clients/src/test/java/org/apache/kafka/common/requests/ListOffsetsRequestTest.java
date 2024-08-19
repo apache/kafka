@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
@@ -75,7 +76,7 @@ public class ListOffsetsRequestTest {
                                 new ListOffsetsPartition()
                                     .setPartitionIndex(0))));
             ListOffsetsRequest request = ListOffsetsRequest.Builder
-                    .forReadCommitted()
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(topics)
                     .build(version);
             ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
@@ -108,7 +109,7 @@ public class ListOffsetsRequestTest {
                             new ListOffsetsPartition()
                                 .setPartitionIndex(0))));
         ListOffsetsRequest request = ListOffsetsRequest.Builder
-                .forRequiredTimestamp()
+                .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                 .setTargetTimes(topics)
                 .build((short) 0);
         ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());

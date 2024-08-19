@@ -2356,7 +2356,7 @@ public class RequestResponseTest {
                             .setCurrentLeaderEpoch(5)));
             List<ListOffsetsTopic> topics = singletonList(topic);
             return ListOffsetsRequest.Builder
-                    .defaultBuilder()
+                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(topics)
                     .build(version);
         } else if (version == 1) {
@@ -2368,7 +2368,7 @@ public class RequestResponseTest {
                             .setCurrentLeaderEpoch(5)));
             List<ListOffsetsTopic> topics = singletonList(topic);
             return ListOffsetsRequest.Builder
-                    .forRequiredTimestamp()
+                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(topics)
                     .build(version);
         } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
@@ -2382,7 +2382,7 @@ public class RequestResponseTest {
                     .setPartitions(singletonList(partition));
             List<ListOffsetsTopic> topics = singletonList(topic);
             return ListOffsetsRequest.Builder
-                    .forReadCommitted()
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(topics)
                     .build(version);
         } else {

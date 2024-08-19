@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
@@ -104,28 +103,12 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
         List<ListOffsetsTopic> topics = new ArrayList<>(topicsByName.values());
 
-        return getBuilder(options.isolationLevel(),
-                supportsMaxTimestamp,
-                requireEarliestLocalTimestamp,
-                requireTieredStorageTimestamp)
+        return ListOffsetsRequest.Builder.forConsumer(true,
+                        options.isolationLevel(),
+                        supportsMaxTimestamp,
+                        requireEarliestLocalTimestamp,
+                        requireTieredStorageTimestamp)
                 .setTargetTimes(topics);
-    }
-
-    private ListOffsetsRequest.Builder getBuilder(IsolationLevel isolationLevel,
-                                                  boolean requireMaxTimestamp,
-                                                  boolean requireEarliestLocalTimestamp,
-                                                  boolean requireTieredStorageTimestamp) {
-
-        if (requireTieredStorageTimestamp)
-            return ListOffsetsRequest.Builder.forTieredStorageTimestamp(isolationLevel);
-        else if (requireEarliestLocalTimestamp)
-            return ListOffsetsRequest.Builder.forEarliestLocalTimestamp(isolationLevel);
-        else if (requireMaxTimestamp)
-            return ListOffsetsRequest.Builder.forMaxTimestamp(isolationLevel);
-        else if (isolationLevel == IsolationLevel.READ_COMMITTED)
-            return ListOffsetsRequest.Builder.forReadCommitted();
-        else
-            return ListOffsetsRequest.Builder.forRequiredTimestamp();
     }
 
     @Override
