@@ -29,7 +29,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -45,6 +44,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.CREATED;
@@ -72,6 +72,7 @@ public class GlobalStreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture = new KafkaFutureImpl<>();
+    private final CountDownLatch initializationLatch = new CountDownLatch(1);
 
     /**
      * The states that the global stream thread can be in
@@ -364,6 +365,8 @@ public class GlobalStreamThread extends Thread {
 
             setState(DEAD);
 
+            initializationLatch.countDown();
+
             log.info("Shutdown complete");
         }
     }
@@ -436,6 +439,8 @@ public class GlobalStreamThread extends Thread {
         } catch (final Exception fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
+        } finally {
+            initializationLatch.countDown();
         }
         return null;
     }
@@ -453,11 +458,15 @@ public class GlobalStreamThread extends Thread {
     @Override
     public synchronized void start() {
         super.start();
-        while (stillInitializing()) {
-            Utils.sleep(1);
-            if (startupException != null) {
-                throw startupException;
-            }
+        try {
+            initializationLatch.await();
+        } catch (final InterruptedException e) {
+            currentThread().interrupt();
+            throw new IllegalStateException("Thread was interrupted during initialization", e);
+        }
+
+        if (startupException != null) {
+            throw startupException;
         }
 
         if (inErrorState()) {
