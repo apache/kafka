@@ -293,14 +293,14 @@ class OffsetControlManager {
      * Called by the active controller after it has invoked scheduleAtomicAppend to schedule some
      * records to be written.
      *
-     * @param endOffset The offset of the last record that was written.
+     * @param lastOffset The offset of the last record that was written.
      */
-    void handleScheduleAtomicAppend(long endOffset) {
-        this.nextWriteOffset = endOffset + 1;
+    void handleScheduleAppend(long lastOffset) {
+        this.nextWriteOffset = lastOffset + 1;
 
-        snapshotRegistry.idempotentCreateSnapshot(endOffset);
+        snapshotRegistry.idempotentCreateSnapshot(lastOffset);
 
-        metrics.setLastAppliedRecordOffset(endOffset);
+        metrics.setLastAppliedRecordOffset(lastOffset);
 
         // This is not truly the append timestamp. The KRaft client doesn't expose the append
         // time when scheduling a write. This is good enough because this is called right after

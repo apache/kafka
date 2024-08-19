@@ -123,7 +123,7 @@ public class FeaturesTest {
     @EnumSource(MetadataVersion.class)
     public void testDefaultTestVersion(MetadataVersion metadataVersion) {
         short expectedVersion;
-        if (!metadataVersion.isLessThan(MetadataVersion.IBP_4_0_IV0)) {
+        if (!metadataVersion.isLessThan(MetadataVersion.latestTesting())) {
             expectedVersion = 2;
         } else if (!metadataVersion.isLessThan(MetadataVersion.IBP_3_7_IV0)) {
             expectedVersion = 1;
