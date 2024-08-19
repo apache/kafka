@@ -26,11 +26,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [8, 21]
+        java: [8, 11, 17, 21]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         persist-credentials: false
     - name: Setup Java
@@ -39,7 +39,7 @@ jobs:
         distribution: temurin
         java-version: ${{ matrix.java }}
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
+      uses: gradle/actions/setup-gradle@v4
       env:
         GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
       with:
@@ -63,11 +63,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 8, 21 ]
+        java: [ 11, 17 ]
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Setup Java
@@ -76,7 +76,7 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
         env:
           GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
         with:
