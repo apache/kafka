@@ -34,11 +34,11 @@ develocity {
             ipAddresses { addresses -> addresses.collect { address -> "0.0.0.0"} }
         }
         if (System.getenv("JENKINS_URL")) {
-          tag "jenkins"
-        else if (System.getenv("GITHUB_ACTIONS")) {
-          tag "github"
-        else {
-          tag "local"
+            tag "jenkins"
+        } else if (System.getenv("GITHUB_ACTIONS")) {
+            tag "github"
+        } else {
+            tag "local"
         }
     }
 }
