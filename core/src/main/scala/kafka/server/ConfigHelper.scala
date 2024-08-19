@@ -32,7 +32,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ApiError, DescribeConfigsRequest, DescribeConfigsResponse}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -58,6 +59,8 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
           authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)
         case ConfigResource.Type.TOPIC =>
           authHelper.authorize(request.context, DESCRIBE_CONFIGS, TOPIC, resource.resourceName)
+        case ConfigResource.Type.GROUP =>
+          authHelper.authorize(request.context, DESCRIBE_CONFIGS, GROUP, resource.resourceName)
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
       }
     }
@@ -66,6 +69,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
       val error = ConfigResource.Type.forId(resource.resourceType) match {
         case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS => Errors.CLUSTER_AUTHORIZATION_FAILED
         case ConfigResource.Type.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
+        case ConfigResource.Type.GROUP => Errors.GROUP_AUTHORIZATION_FAILED
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
       }
       new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code)
@@ -137,7 +141,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Client metrics subscription name must not be empty")
             } else {
               val entityProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName))
-              val configEntries = new  ListBuffer[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
+              val configEntries = new ListBuffer[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
               entityProps.forEach((name, value) => {
                 configEntries += new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name.toString)
                   .setValue(value.toString).setConfigSource(ConfigSource.CLIENT_METRICS_CONFIG.id())
@@ -147,6 +151,16 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               new DescribeConfigsResponseData.DescribeConfigsResult()
                 .setErrorCode(Errors.NONE.code)
                 .setConfigs(configEntries.asJava)
+            }
+
+          case ConfigResource.Type.GROUP =>
+            val group = resource.resourceName
+            if (group == null || group.isEmpty) {
+              throw new InvalidRequestException("Group name must not be empty")
+            } else {
+              val groupProps = configRepository.groupConfig(group)
+              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap, groupProps)
+              createResponseConfig(allConfigs(groupConfig), createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
             }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
@@ -169,6 +183,30 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
       }
     }
+  }
+
+  def createGroupConfigEntry(groupConfig: GroupConfig, groupProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
+                            (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
+    val allNames = brokerSynonyms(name)
+    val configEntryType = GroupConfig.configType(name).asScala
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
+    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
+    val allSynonyms = {
+      val list = configSynonyms(name, allNames, isSensitive)
+      if (!groupProps.containsKey(name))
+        list
+      else
+        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
+          .setSource(ConfigSource.GROUP_CONFIG.id) +: list
+    }
+    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
+    val dataType = configResponseType(configEntryType)
+    val configDocumentation = if (includeDocumentation) groupConfig.documentationOf(name) else null
+    new DescribeConfigsResponseData.DescribeConfigsResourceResult()
+      .setName(name).setValue(valueAsString).setConfigSource(source)
+      .setIsSensitive(isSensitive).setReadOnly(false).setSynonyms(synonyms.asJava)
+      .setDocumentation(configDocumentation).setConfigType(dataType.id)
   }
 
   def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
