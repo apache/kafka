@@ -57,7 +57,7 @@ class EchoServer extends Thread {
     public EchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs) throws Exception {
         switch (securityProtocol) {
             case SSL:
-                this.sslFactory = new SslFactory(Mode.SERVER);
+                this.sslFactory = new SslFactory(ConnectionMode.SERVER);
                 this.sslFactory.configure(configs);
                 SSLContext sslContext = ((DefaultSslEngineFactory) this.sslFactory.sslEngineFactory()).sslContext();
                 this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);
@@ -89,6 +89,7 @@ class EchoServer extends Thread {
                 }
                 synchronized (sockets) {
                     if (closing) {
+                        socket.close();
                         break;
                     }
                     sockets.add(socket);

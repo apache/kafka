@@ -62,9 +62,14 @@ public class ListOffsetsRequest extends AbstractRequest {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
-        public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel, boolean requireMaxTimestamp) {
+        public static Builder forConsumer(boolean requireTimestamp,
+                                          IsolationLevel isolationLevel,
+                                          boolean requireMaxTimestamp,
+                                          boolean requireTieredStorageTimestamp) {
             short minVersion = 0;
-            if (requireMaxTimestamp)
+            if (requireTieredStorageTimestamp)
+                minVersion = 9;
+            else if (requireMaxTimestamp)
                 minVersion = 7;
             else if (isolationLevel == IsolationLevel.READ_COMMITTED)
                 minVersion = 2;

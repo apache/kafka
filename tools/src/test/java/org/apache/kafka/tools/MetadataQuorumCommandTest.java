@@ -26,17 +26,17 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -44,13 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@Tag("integration")
 class MetadataQuorumCommandTest {
-
-    private final ClusterInstance cluster;
-    public MetadataQuorumCommandTest(ClusterInstance cluster) {
-        this.cluster = cluster;
-    }
 
     /**
      * 1. The same number of broker controllers
@@ -62,33 +56,37 @@ class MetadataQuorumCommandTest {
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
     })
-    public void testDescribeQuorumReplicationSuccessful() throws InterruptedException {
+    public void testDescribeQuorumReplicationSuccessful(ClusterInstance cluster) throws InterruptedException {
         cluster.waitForReadyBrokers();
         String describeOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         );
 
-        List<String> outputs = stream(describeOutput.split("\n")).skip(1).collect(Collectors.toList());
+        List<String> outputs = Arrays.stream(describeOutput.split("\n")).collect(Collectors.toList());
+        String header = outputs.get(0);
+        List<String> data = outputs.subList(1, outputs.size());
+
+        assertTrue(header.matches("NodeId\\s+DirectoryId\\s+LogEndOffset\\s+Lag\\s+LastFetchTimestamp\\s+LastCaughtUpTimestamp\\s+Status\\s+"));
+
         if (cluster.type() == Type.CO_KRAFT)
-          assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), outputs.size());
+          assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), data.size());
         else
-          assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), outputs.size());
+          assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), data.size());
 
-        Pattern leaderPattern = Pattern.compile("\\d+\\s+\\d+\\s+\\d+\\s+[\\dmsago\\s]+-?[\\dmsago\\s]+Leader\\s*");
-        assertTrue(leaderPattern.matcher(outputs.get(0)).find());
-        assertTrue(outputs.stream().skip(1).noneMatch(o -> leaderPattern.matcher(o).find()));
+        Pattern leaderPattern = Pattern.compile("\\d+\\s+\\S+\\s+\\d+\\s+\\d+\\s+-?\\d+\\s+-?\\d+\\s+Leader\\s*");
+        assertTrue(leaderPattern.matcher(data.get(0)).find());
+        assertTrue(data.stream().skip(1).noneMatch(o -> leaderPattern.matcher(o).find()));
 
-        Pattern followerPattern = Pattern.compile("\\d+\\s+\\d+\\s+\\d+\\s+[\\dmsago\\s]+-?[\\dmsago\\s]+Follower\\s*");
-        assertEquals(cluster.config().numControllers() - 1, outputs.stream().filter(o -> followerPattern.matcher(o).find()).count());
+        Pattern followerPattern = Pattern.compile("\\d+\\s+\\S+\\s+\\d+\\s+\\d+\\s+-?\\d+\\s+-?\\d+\\s+Follower\\s*");
+        assertEquals(cluster.config().numControllers() - 1, data.stream().filter(o -> followerPattern.matcher(o).find()).count());
 
-        Pattern observerPattern = Pattern.compile("\\d+\\s+\\d+\\s+\\d+\\s+[\\dmsago\\s]+-?[\\dmsago\\s]+Observer\\s*");
+        Pattern observerPattern = Pattern.compile("\\d+\\s+\\S+\\s+\\d+\\s+\\d+\\s+-?\\d+\\s+-?\\d+\\s+Observer\\s*");
         if (cluster.type() == Type.CO_KRAFT)
             assertEquals(Math.max(0, cluster.config().numBrokers() - cluster.config().numControllers()),
-                outputs.stream().filter(o -> observerPattern.matcher(o).find()).count());
+                data.stream().filter(o -> observerPattern.matcher(o).find()).count());
         else
-            assertEquals(cluster.config().numBrokers(), outputs.stream().filter(o -> observerPattern.matcher(o).find()).count());
+            assertEquals(cluster.config().numBrokers(), data.stream().filter(o -> observerPattern.matcher(o).find()).count());
     }
-
 
     /**
      * 1. The same number of broker controllers
@@ -100,31 +98,45 @@ class MetadataQuorumCommandTest {
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 2, controllers = 1),
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 1, controllers = 2),
     })
-    public void testDescribeQuorumStatusSuccessful() throws InterruptedException {
+    public void testDescribeQuorumStatusSuccessful(ClusterInstance cluster) throws InterruptedException {
         cluster.waitForReadyBrokers();
-        String describeOutput = ToolsTestUtils.captureStandardOut(() ->
-            MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
+        String describeOutput = ToolsTestUtils.captureStandardOut(
+            () -> MetadataQuorumCommand.mainNoExit(
+                "--bootstrap-server",
+                cluster.bootstrapServers(),
+                "describe",
+                "--status"
+            )
         );
         String[] outputs = describeOutput.split("\n");
 
-        assertTrue(outputs[0].matches("ClusterId:\\s+\\S{22}"));
-        assertTrue(outputs[1].matches("LeaderId:\\s+\\d+"));
-        assertTrue(outputs[2].matches("LeaderEpoch:\\s+\\d+"));
+        assertTrue(outputs[0].matches("ClusterId:\\s+\\S{22}"), describeOutput);
+        assertTrue(outputs[1].matches("LeaderId:\\s+\\d+"), describeOutput);
+        assertTrue(outputs[2].matches("LeaderEpoch:\\s+\\d+"), describeOutput);
         // HighWatermark may be -1
-        assertTrue(outputs[3].matches("HighWatermark:\\s+-?\\d+"));
-        assertTrue(outputs[4].matches("MaxFollowerLag:\\s+\\d+"));
-        assertTrue(outputs[5].matches("MaxFollowerLagTimeMs:\\s+-?\\d+"));
-        assertTrue(outputs[6].matches("CurrentVoters:\\s+\\[\\d+(,\\d+)*]"));
+        assertTrue(outputs[3].matches("HighWatermark:\\s+-?\\d+"), describeOutput);
+        assertTrue(outputs[4].matches("MaxFollowerLag:\\s+\\d+"), describeOutput);
+        assertTrue(outputs[5].matches("MaxFollowerLagTimeMs:\\s+-?\\d+"), describeOutput);
+        assertTrue(
+            outputs[6].matches("CurrentVoters:\\s+\\[\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+,\\s+" +
+                "\"endpoints\":\\s+\\[\"\\S+://\\[?\\S+]?:\\d+\",?.*]"),
+            describeOutput
+        );
 
         // There are no observers if we have fewer brokers than controllers
-        if (cluster.type() == Type.CO_KRAFT && cluster.config().numBrokers() <= cluster.config().numControllers())
-            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[]"));
-        else
-            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[\\d+(,\\d+)*]"));
+        if (cluster.type() == Type.CO_KRAFT && cluster.config().numBrokers() <= cluster.config().numControllers()) {
+            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[]"), describeOutput);
+        } else {
+            assertTrue(
+                outputs[7].matches("CurrentObservers:\\s+\\[\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+}" +
+                    "(,\\s+\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+})*]"),
+                describeOutput
+            );
+        }
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testOnlyOneBrokerAndOneController() {
+    public void testOnlyOneBrokerAndOneController(ClusterInstance cluster) {
         String statusOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
         );
@@ -134,19 +146,19 @@ class MetadataQuorumCommandTest {
         String replicationOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         );
-        assertEquals("0", replicationOutput.split("\n")[1].split("\\s+")[2]);
+        assertEquals("0", replicationOutput.split("\n")[1].split("\\s+")[3]);
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT})
+    @Test
     public void testCommandConfig() throws IOException {
         // specifying a --command-config containing properties that would prevent login must fail
         File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
-        assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
+        assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
                         "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
     }
 
     @ClusterTest(types = {Type.ZK})
-    public void testDescribeQuorumInZkMode() {
+    public void testDescribeQuorumInZkMode(ClusterInstance cluster) {
         assertInstanceOf(UnsupportedVersionException.class, assertThrows(
                 ExecutionException.class,
                 () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status")
@@ -156,11 +168,10 @@ class MetadataQuorumCommandTest {
                 ExecutionException.class,
                 () -> MetadataQuorumCommand.execute("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         ).getCause());
-
     }
 
     @ClusterTest(types = {Type.CO_KRAFT})
-    public void testHumanReadableOutput() {
+    public void testHumanReadableOutput(ClusterInstance cluster) {
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--human-readable"));
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status", "--human-readable"));
         String out0 = ToolsTestUtils.captureStandardOut(() ->
@@ -179,9 +190,9 @@ class MetadataQuorumCommandTest {
 
     private static void assertHumanReadable(String output) {
         String dataRow = output.split("\n")[1];
-        String lastFetchTimestamp = dataRow.split("\t")[3];
+        String lastFetchTimestamp = dataRow.split("\t")[4];
         String lastFetchTimestampValue = lastFetchTimestamp.split(" ")[0];
-        String lastCaughtUpTimestamp = dataRow.split("\t")[4];
+        String lastCaughtUpTimestamp = dataRow.split("\t")[5];
         String lastCaughtUpTimestampValue = lastCaughtUpTimestamp.split(" ")[0];
         assertTrue(lastFetchTimestamp.contains("ms ago"));
         assertTrue(lastFetchTimestampValue.matches("\\d*"));

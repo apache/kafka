@@ -26,8 +26,16 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FeaturesTest {
+    @ParameterizedTest
+    @EnumSource(Features.class)
+    public void testV0SupportedInEarliestMV(Features feature) {
+        assertTrue(feature.featureVersions().length >= 1);
+        assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION,
+                feature.featureVersions()[0].bootstrapMetadataVersion());
+    }
 
     @ParameterizedTest
     @EnumSource(Features.class)
@@ -36,13 +44,13 @@ public class FeaturesTest {
         int numFeatures = featureImplementations.length;
         short latestProductionLevel = feature.latestProduction();
 
-        for (short i = 1; i < numFeatures; i++) {
+        for (short i = 0; i < numFeatures; i++) {
             short level = i;
             if (latestProductionLevel < i) {
-                assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(level, true));
+                assertEquals(featureImplementations[i], feature.fromFeatureLevel(level, true));
                 assertThrows(IllegalArgumentException.class, () -> feature.fromFeatureLevel(level, false));
             } else {
-                assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(level, false));
+                assertEquals(featureImplementations[i], feature.fromFeatureLevel(level, false));
             }
         }
     }
@@ -60,7 +68,7 @@ public class FeaturesTest {
 
             // Ensure that the feature is valid given the typical metadataVersionMapping and the dependencies.
             // Note: Other metadata versions are valid, but this one should always be valid.
-            Features.validateVersion(featureImpl, deps, true);
+            Features.validateVersion(featureImpl, deps);
         }
     }
 
@@ -70,8 +78,7 @@ public class FeaturesTest {
         assertThrows(IllegalArgumentException.class,
             () -> Features.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.emptyMap(),
-                true
+                Collections.emptyMap()
             )
         );
 
@@ -79,8 +86,7 @@ public class FeaturesTest {
         assertThrows(IllegalArgumentException.class,
             () -> Features.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_2_8_IV0.featureLevel()),
-                true
+                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_2_8_IV0.featureLevel())
             )
         );
 
@@ -88,8 +94,7 @@ public class FeaturesTest {
         assertThrows(IllegalArgumentException.class,
              () -> Features.validateVersion(
                  TestFeatureVersion.TEST_2,
-                 Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_6_IV0.featureLevel()),
-                 true
+                 Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_6_IV0.featureLevel())
              )
         );
     }
@@ -98,8 +103,13 @@ public class FeaturesTest {
     @EnumSource(Features.class)
     public void testDefaultValueAllFeatures(Features feature) {
         for (FeatureVersion featureImpl : feature.featureVersions()) {
-            assertEquals(feature.defaultValue(featureImpl.bootstrapMetadataVersion()), featureImpl.featureLevel(),
-                    "Failed to get the correct default for " + featureImpl);
+            // If features have the same bootstrapMetadataVersion, the highest level feature should be chosen.
+            short defaultLevel = feature.defaultValue(featureImpl.bootstrapMetadataVersion());
+            if (defaultLevel != featureImpl.featureLevel()) {
+                FeatureVersion otherFeature = feature.fromFeatureLevel(defaultLevel, true);
+                assertEquals(featureImpl.bootstrapMetadataVersion(), otherFeature.bootstrapMetadataVersion());
+                assertTrue(defaultLevel > featureImpl.featureLevel());
+            }
         }
     }
 

@@ -162,8 +162,8 @@ allprojects {
           // ZooKeeper (potentially older and containing CVEs)
           libs.nettyHandler,
           libs.nettyTransportNativeEpoll,
-	  // be explicit about the reload4j version instead of relying on the transitive versions
-	  libs.reload4j
+          // be explicit about the reload4j version instead of relying on the transitive versions
+          libs.reload4j
         )
       }
     }
@@ -485,9 +485,11 @@ subprojects {
       includeEngines 'junit-jupiter'
     }
 
-    retry {
-      maxRetries = userMaxTestRetries
-      maxFailures = userMaxTestRetryFailures
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
     }
   }
 
@@ -515,9 +517,11 @@ subprojects {
       includeEngines 'junit-jupiter'
     }
 
-    retry {
-      maxRetries = userMaxTestRetries
-      maxFailures = userMaxTestRetryFailures
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
     }
   }
 
@@ -543,9 +547,11 @@ subprojects {
       includeEngines 'junit-jupiter'
     }
 
-    retry {
-      maxRetries = userMaxTestRetries
-      maxFailures = userMaxTestRetryFailures
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
     }
   }
 
@@ -588,6 +594,10 @@ subprojects {
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
       from sourceSets.test.output
+      // The junit-platform.properties file is used for configuring and customizing the behavior of the JUnit platform.
+      // It should only apply to Kafka's own JUnit tests, and should not exist in the test JAR.
+      // If we include it in the test JAR, it could lead to conflicts with user configurations.
+      exclude 'junit-platform.properties'
     }
 
     task testSrcJar(type: Jar, dependsOn: testJar) {
@@ -730,7 +740,7 @@ subprojects {
       jacoco {
         toolVersion = versions.jacoco
       }
-      
+
       jacocoTestReport {
         dependsOn tasks.test
         sourceSets sourceSets.main
@@ -754,8 +764,8 @@ subprojects {
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
   }
-  //  the task `removeUnusedImports` is implemented by google-java-format, 
-  //  and unfortunately the google-java-format version used by spotless 6.14.0 can't work with JDK 21. 
+  //  the task `removeUnusedImports` is implemented by google-java-format,
+  //  and unfortunately the google-java-format version used by spotless 6.14.0 can't work with JDK 21.
   //  Hence, we apply spotless tasks only if the env is either JDK11 or JDK17
   if ((JavaVersion.current().isJava11() || (JavaVersion.current() == JavaVersion.VERSION_17))) {
     apply plugin: 'com.diffplug.spotless'
@@ -837,6 +847,7 @@ project(':server') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':metadata')
     implementation project(':server-common')
     implementation project(':storage')
     implementation project(':group-coordinator')
@@ -854,6 +865,8 @@ project(':server') {
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jReload4j
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   task createVersionFile() {
@@ -894,6 +907,44 @@ project(':server') {
   }
 }
 
+project(':share') {
+  base {
+    archivesName = "kafka-share"
+  }
+
+  dependencies {
+    implementation project(':server-common')
+
+    implementation libs.slf4jApi
+
+    testImplementation libs.junitJupiter
+    testImplementation libs.slf4jReload4j
+
+    testRuntimeOnly libs.junitPlatformLanucher
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-share.xml")
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
 project(':core') {
   apply plugin: 'scala'
 
@@ -909,10 +960,6 @@ project(':core') {
 
   base {
     archivesName = "kafka_${versions.baseScala}"
-  }
-
-  configurations {
-    generator
   }
 
   dependencies {
@@ -931,6 +978,8 @@ project(':core') {
     implementation project(':raft')
     implementation project(':storage')
     implementation project(':server')
+    implementation project(':coordinator-common')
+    implementation project(':share')
 
     implementation libs.argparse4j
     implementation libs.commonsValidator
@@ -970,6 +1019,7 @@ project(':core') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
+    testImplementation project(':share').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -989,8 +1039,8 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jReload4j
     testImplementation libs.caffeine
-    
-    generator project(':generator')
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   if (userEnableTestCoverage) {
@@ -1029,24 +1079,6 @@ project(':core') {
     into "$buildDir/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
   }
-
-  task processMessages(type:JavaExec) {
-    mainClass = "org.apache.kafka.message.MessageGenerator"
-    classpath = configurations.generator
-    args = [ "-p", "kafka.internals.generated",
-             "-o", "src/generated/java/kafka/internals/generated",
-             "-i", "src/main/resources/common/message",
-             "-m", "MessageDataGenerator"
-    ]
-    inputs.dir("src/main/resources/common/message")
-        .withPropertyName("messages")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-    outputs.cacheIf { true }
-    outputs.dir("src/generated/java/kafka/internals/generated")
-  }
-
-  compileJava.dependsOn 'processMessages'
-  srcJar.dependsOn 'processMessages'
 
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
@@ -1207,6 +1239,9 @@ project(':core') {
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
     from (project(':clients').testJar ) { "$buildDir/dependant-testlibs" }
+    // log4j-appender is not in core dependencies,
+    // so we add it to dependant-testlibs to avoid ClassNotFoundException in running kafka_log4j_appender.py
+    from (project(':log4j-appender').jar ) { "$buildDir/dependant-testlibs" }
     duplicatesStrategy 'exclude'
   }
 
@@ -1262,6 +1297,9 @@ project(':metadata') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+
+    testRuntimeOnly libs.junitPlatformLanucher
+
     generator project(':generator')
   }
 
@@ -1381,6 +1419,7 @@ project(':group-coordinator') {
     implementation project(':metadata')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':storage')
+    implementation project(':coordinator-common')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
@@ -1388,10 +1427,12 @@ project(':group-coordinator') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':coordinator-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -1404,7 +1445,7 @@ project(':group-coordinator') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1441,10 +1482,16 @@ project(':transaction-coordinator') {
     archivesName = "kafka-transaction-coordinator"
   }
 
-  dependencies {
-    implementation project(':clients')
-
+  configurations {
+    generator
   }
+
+  dependencies {
+    implementation libs.jacksonDatabind
+    implementation project(':clients')
+    generator project(':generator')
+  }
+
   sourceSets {
     main {
       java {
@@ -1453,7 +1500,7 @@ project(':transaction-coordinator') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1461,6 +1508,125 @@ project(':transaction-coordinator') {
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-transaction-coordinator.xml")
   }
+
+  task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.coordinator.transaction.generated",
+             "-o", "src/generated/java/org/apache/kafka/coordinator/transaction/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/coordinator/transaction/generated")
+  }
+
+  compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':coordinator-common') {
+  base {
+    archivesName = "kafka-coordinator-common"
+  }
+
+  dependencies {
+    implementation project(':clients')
+    implementation project(':server-common')
+    implementation project(':metadata')
+    implementation project(':storage')
+    implementation libs.slf4jApi
+    implementation libs.metrics
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-coordinator-common.xml")
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':share-coordinator') {
+  base {
+    archivesName = "kafka-share-coordinator"
+  }
+
+  configurations {
+    generator
+  }
+
+  dependencies {
+    implementation libs.jacksonDatabind
+    implementation project(':clients')
+    implementation project(':coordinator-common')
+    implementation project(':metadata')
+    generator project(':generator')
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-share-coordinator.xml")
+  }
+
+  task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.coordinator.share.generated",
+             "-o", "src/generated/java/org/apache/kafka/coordinator/share/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+            .withPropertyName("messages")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("src/generated/java/org/apache/kafka/coordinator/share/generated")
+  }
+
+  compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
 
   javadoc {
     enabled = false
@@ -1492,6 +1658,8 @@ project(':generator') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonJaxrsJsonProvider
     testImplementation libs.junitJupiter
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -1537,6 +1705,7 @@ project(':clients') {
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -1698,8 +1867,10 @@ project(':raft') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
+    testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -1794,6 +1965,7 @@ project(':server-common') {
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   task createVersionFile() {
@@ -1851,6 +2023,7 @@ project(':storage:storage-api') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   task createVersionFile() {
@@ -1917,7 +2090,10 @@ project(':storage') {
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
-    implementation libs.caffeine
+    implementation project(':transaction-coordinator')
+    implementation(libs.caffeine) {
+      exclude group: 'org.checkerframework', module: 'checker-qual'
+    }
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
     implementation libs.metrics
@@ -1935,6 +2111,7 @@ project(':storage') {
     testImplementation libs.bcpkix
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -2030,6 +2207,7 @@ project(':tools:tools-api') {
   dependencies {
     implementation project(':clients')
     testImplementation libs.junitJupiter
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   task createVersionFile() {
@@ -2086,10 +2264,15 @@ project(':tools') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':metadata')
     implementation project(':storage')
+    implementation project(':server')
     implementation project(':server-common')
     implementation project(':connect:runtime')
     implementation project(':tools:tools-api')
+    implementation project(':transaction-coordinator')
+    implementation project(':group-coordinator')
+    implementation project(':coordinator-common')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
@@ -2113,7 +2296,7 @@ project(':tools') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.main.output
-    testImplementation project(':group-coordinator')
+    testImplementation project(':storage').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2122,6 +2305,8 @@ project(':tools') {
       exclude group: 'junit', module: 'junit'
     }
     testImplementation libs.reload4j
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2172,6 +2357,7 @@ project(':trogdor') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2224,6 +2410,7 @@ project(':shell') {
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2291,6 +2478,7 @@ project(':streams') {
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
   }
@@ -2404,6 +2592,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-35:test',
             ':streams:upgrade-system-tests-36:test',
             ':streams:upgrade-system-tests-37:test',
+            ':streams:upgrade-system-tests-38:test',
             ':streams:examples:test'
     ]
   )
@@ -2441,6 +2630,7 @@ project(':streams:streams-scala') {
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.hamcrest
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2493,10 +2683,7 @@ project(':streams:test-utils') {
     testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jReload4j
-  }
-
-  javadoc {
-    include "**/org/apache/kafka/streams/test/**"
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -2533,6 +2720,8 @@ project(':streams:examples') {
     testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -2903,6 +3092,21 @@ project(':streams:upgrade-system-tests-37') {
   }
 }
 
+project(':streams:upgrade-system-tests-38') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-38"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_38
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'io.github.goooler.shadow'
@@ -2989,6 +3193,8 @@ project(':log4j-appender') {
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -3008,6 +3214,7 @@ project(':connect:api') {
     implementation libs.jaxrsApi
 
     testImplementation libs.junitJupiter
+    testRuntimeOnly libs.junitPlatformLanucher
     testRuntimeOnly libs.slf4jReload4j
     testImplementation project(':clients').sourceSets.test.output
   }
@@ -3047,6 +3254,7 @@ project(':connect:transforms') {
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -3089,6 +3297,7 @@ project(':connect:json') {
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
   }
 
@@ -3144,7 +3353,7 @@ project(':connect:runtime') {
     implementation libs.jettyServlet
     implementation libs.jettyServlets
     implementation libs.jettyClient
-    implementation libs.reflections
+    implementation libs.classgraph
     implementation libs.mavenArtifact
     implementation libs.swaggerAnnotations
 
@@ -3156,13 +3365,14 @@ project(':connect:runtime') {
     testImplementation project(':core')
     testImplementation project(':server')
     testImplementation project(':metadata')
+    testImplementation project(':server-common')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server')
     testImplementation project(':group-coordinator')
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
-    testImplementation project(':group-coordinator')
+    testImplementation project(':server-common').sourceSets.test.output
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -3172,6 +3382,7 @@ project(':connect:runtime') {
 
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.bcpkix
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -3273,11 +3484,13 @@ project(':connect:file') {
     testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
   }
 
   javadoc {
@@ -3320,6 +3533,7 @@ project(':connect:basic-auth-extension') {
 
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.jerseyContainerServlet
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -3378,10 +3592,12 @@ project(':connect:mirror') {
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server')
+    testImplementation project(':server-common').sourceSets.test.output
 
     testRuntimeOnly project(':connect:runtime')
     testRuntimeOnly libs.slf4jReload4j
     testRuntimeOnly libs.bcpkix
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {
@@ -3447,6 +3663,7 @@ project(':connect:mirror-client') {
     testImplementation project(':clients').sourceSets.test.output
 
     testRuntimeOnly libs.slf4jReload4j
+    testRuntimeOnly libs.junitPlatformLanucher
   }
 
   javadoc {

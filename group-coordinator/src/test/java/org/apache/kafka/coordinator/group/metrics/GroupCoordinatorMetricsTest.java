@@ -23,7 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricsRegistry;
@@ -154,8 +154,8 @@ public class GroupCoordinatorMetricsTest {
             9
         );
 
-        snapshotRegistry0.getOrCreateSnapshot(1000);
-        snapshotRegistry1.getOrCreateSnapshot(1500);
+        snapshotRegistry0.idempotentCreateSnapshot(1000);
+        snapshotRegistry1.idempotentCreateSnapshot(1500);
         shard0.commitUpTo(1000);
         shard1.commitUpTo(1500);
 

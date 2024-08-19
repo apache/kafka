@@ -26,7 +26,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
@@ -34,6 +33,7 @@ import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
+import org.apache.kafka.snapshot.Snapshots;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -49,7 +49,9 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -60,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public final class KafkaRaftClientSnapshotTest {
     @Test
     public void testLatestSnapshotId() throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -78,7 +80,7 @@ public final class KafkaRaftClientSnapshotTest {
 
     @Test
     public void testLatestSnapshotIdMissing() throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -94,9 +96,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    @CsvSource({ "false,false", "false,true", "true,false", "true,true" })
     public void testLeaderListenerNotified(boolean entireLog, boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, false);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
@@ -117,7 +119,7 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
 
         // Advance the highWatermark
-        long localLogEndOffset = context.log.endOffset().offset;
+        long localLogEndOffset = context.log.endOffset().offset();
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, localLogEndOffset, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
@@ -126,14 +128,14 @@ public final class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
+            SnapshotWriterReaderTest.assertDataSnapshot(Collections.emptyList(), snapshot);
         }
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testFollowerListenerNotified(boolean entireLog) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -152,7 +154,7 @@ public final class KafkaRaftClientSnapshotTest {
         RaftClientTestContext context = contextBuilder.build();
 
         // Advance the highWatermark
-        long localLogEndOffset = context.log.endOffset().offset;
+        long localLogEndOffset = context.log.endOffset().offset();
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, localLogEndOffset, snapshotId.epoch());
@@ -168,14 +170,14 @@ public final class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
+            SnapshotWriterReaderTest.assertDataSnapshot(Collections.emptyList(), snapshot);
         }
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     public void testSecondListenerNotified(boolean entireLog) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -194,7 +196,7 @@ public final class KafkaRaftClientSnapshotTest {
         RaftClientTestContext context = contextBuilder.build();
 
         // Advance the highWatermark
-        long localLogEndOffset = context.log.endOffset().offset;
+        long localLogEndOffset = context.log.endOffset().offset();
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, localLogEndOffset, snapshotId.epoch());
@@ -214,14 +216,14 @@ public final class KafkaRaftClientSnapshotTest {
         // Check that the second listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = secondListener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
+            SnapshotWriterReaderTest.assertDataSnapshot(Collections.emptyList(), snapshot);
         }
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testListenerRenotified(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
@@ -242,7 +244,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.listener.updateReadCommit(false);
 
         // Advance the highWatermark
-        long localLogEndOffset = context.log.endOffset().offset;
+        long localLogEndOffset = context.log.endOffset().offset();
         context.deliverRequest(context.fetchRequest(epoch, otherNodeKey, localLogEndOffset, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
@@ -251,7 +253,7 @@ public final class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
+            SnapshotWriterReaderTest.assertDataSnapshot(Collections.emptyList(), snapshot);
         }
 
         // Generate a new snapshot
@@ -270,15 +272,15 @@ public final class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the second snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(secondSnapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
+            SnapshotWriterReaderTest.assertDataSnapshot(Collections.emptyList(), snapshot);
         }
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testLeaderImmediatelySendsSnapshotId(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
-        ReplicaKey otherNodeKey = replicaKey(1, withKip853Rpc);
+        int localId = randomReplicaId();
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 4);
 
@@ -309,9 +311,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestOffsetLessThanLogStart(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
 
@@ -324,11 +326,12 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
 
         List<String> appendRecords = Arrays.asList("a", "b", "c");
-        context.client.scheduleAppend(epoch, appendRecords);
+        context.client.prepareAppend(epoch, appendRecords);
+        context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
-        long localLogEndOffset = context.log.endOffset().offset;
+        long localLogEndOffset = context.log.endOffset().offset();
         assertTrue(
             appendRecords.size() <= localLogEndOffset,
             String.format("Record length = %s, log end offset = %s", appendRecords.size(), localLogEndOffset)
@@ -357,10 +360,10 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestOffsetAtZero(boolean withKip853Rpc) throws Exception {
         // When the follower sends a FETCH request at offset 0, reply with snapshot id if it exists
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
 
@@ -373,11 +376,12 @@ public final class KafkaRaftClientSnapshotTest {
         int epoch = context.currentEpoch();
 
         List<String> appendRecords = Arrays.asList("a", "b", "c");
-        context.client.scheduleAppend(epoch, appendRecords);
+        context.client.prepareAppend(epoch, appendRecords);
+        context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
-        long localLogEndOffset = context.log.endOffset().offset;
+        long localLogEndOffset = context.log.endOffset().offset();
         assertTrue(
             appendRecords.size() <= localLogEndOffset,
             String.format("Record length = %s, log end offset = %s", appendRecords.size(), localLogEndOffset)
@@ -405,9 +409,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestWithLargerLastFetchedEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
 
@@ -434,7 +438,8 @@ public final class KafkaRaftClientSnapshotTest {
         }
         context.client.poll();
 
-        context.client.scheduleAppend(epoch, Arrays.asList("g", "h", "i"));
+        context.client.prepareAppend(epoch, Arrays.asList("g", "h", "i"));
+        context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
 
@@ -445,9 +450,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestTruncateToLogStart(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         int syncNodeId = otherNodeKey.id() + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id(), syncNodeId);
@@ -495,9 +500,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestAtLogStartOffsetWithValidEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         int syncNodeId = otherNodeKey.id() + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id(), syncNodeId);
@@ -541,9 +546,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestAtLogStartOffsetWithInvalidEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         int syncNodeId = otherNodeKey.id() + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id(), syncNodeId);
@@ -593,11 +598,11 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchRequestWithLastFetchedEpochLessThanOldestSnapshot(
         boolean withKip853Rpc
     ) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, withKip853Rpc);
         int syncNodeId = otherNodeKey.id() + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id(), syncNodeId);
@@ -631,7 +636,7 @@ public final class KafkaRaftClientSnapshotTest {
             context.fetchRequest(
                 epoch,
                 otherNodeKey,
-                context.log.endOffset().offset,
+                context.log.endOffset().offset(),
                 oldestSnapshotId.epoch() - 1,
                 0
             )
@@ -646,9 +651,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestMissingSnapshot(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
@@ -663,7 +668,40 @@ public final class KafkaRaftClientSnapshotTest {
             fetchSnapshotRequest(
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
+                Integer.MAX_VALUE,
+                0
+            )
+        );
+
+        context.client.poll();
+
+        FetchSnapshotResponseData.PartitionSnapshot response = context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+        assertEquals(Errors.SNAPSHOT_NOT_FOUND, Errors.forCode(response.errorCode()));
+    }
+
+    @Test
+    public void testFetchSnapshotRequestBootstrapSnapshot() throws Exception {
+        ReplicaKey localKey = replicaKey(0, true);
+        VoterSet voters = VoterSetTest.voterSet(
+            Stream.of(localKey, replicaKey(localKey.id() + 1, true))
+        );
+
+        RaftClientTestContext context = new RaftClientTestContext
+            .Builder(localKey.id(), localKey.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        context.deliverRequest(
+            fetchSnapshotRequest(
+                context.metadataPartition,
+                epoch,
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -676,9 +714,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestUnknownPartition(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         TopicPartition topicPartition = new TopicPartition("unknown", 0);
 
@@ -694,7 +732,7 @@ public final class KafkaRaftClientSnapshotTest {
             fetchSnapshotRequest(
                 topicPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -707,9 +745,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestAsLeader(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -758,14 +796,14 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testLeaderShouldResignLeadershipIfNotGetFetchSnapshotRequestFromMajorityVoters(
         boolean withKip853Rpc
     ) throws Exception {
-        int localId = 0;
-        ReplicaKey voter1 = replicaKey(1, withKip853Rpc);
-        ReplicaKey voter2 = replicaKey(2, withKip853Rpc);
-        ReplicaKey observer3 = replicaKey(3, withKip853Rpc);
+        int localId = randomReplicaId();
+        ReplicaKey voter1 = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey voter2 = replicaKey(localId + 2, withKip853Rpc);
+        ReplicaKey observer3 = replicaKey(localId + 3, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, voter1.id(), voter2.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -853,9 +891,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testPartialFetchSnapshotRequestAsLeader(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(2, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -934,13 +972,13 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestAsFollower(boolean withKip853Rpc) throws IOException {
-        int localId = 0;
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
@@ -966,9 +1004,9 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestWithInvalidPosition(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
         List<String> records = Arrays.asList("foo", "bar");
@@ -1026,11 +1064,11 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestWithOlderEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(1)
@@ -1059,11 +1097,11 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestWithNewerEpoch(boolean withKip853Rpc) throws Exception {
-        int localId = 0;
+        int localId = randomReplicaId();
         Set<Integer> voters = Utils.mkSet(localId, localId + 1);
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(0, 0);
+        OffsetAndEpoch snapshotId = Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(1)
@@ -1091,9 +1129,10 @@ public final class KafkaRaftClientSnapshotTest {
         assertEquals(localId, response.currentLeader().leaderId());
     }
 
-    @Test
-    public void testFetchResponseWithInvalidSnapshotId() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchResponseWithInvalidSnapshotId(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1103,6 +1142,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1152,9 +1192,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertVotedCandidate(epoch + 1, localId);
     }
 
-    @Test
-    public void testFetchResponseWithSnapshotId() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchResponseWithSnapshotId(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1162,6 +1203,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1177,10 +1219,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1214,18 +1256,19 @@ public final class KafkaRaftClientSnapshotTest {
         // Check that the snapshot was written to the log
         RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
         assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-        SnapshotWriterReaderTest.assertSnapshot(Collections.singletonList(records), snapshot);
+        SnapshotWriterReaderTest.assertDataSnapshot(Collections.singletonList(records), snapshot);
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> reader = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, reader.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Collections.singletonList(records), reader);
+            SnapshotWriterReaderTest.assertDataSnapshot(Collections.singletonList(records), reader);
         }
     }
 
-    @Test
-    public void testFetchSnapshotResponsePartialData() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchSnapshotResponsePartialData(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1233,6 +1276,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1248,10 +1292,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1284,10 +1328,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         snapshotRequest = context.assertSentFetchSnapshotRequest();
         request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1317,18 +1361,19 @@ public final class KafkaRaftClientSnapshotTest {
         // Check that the snapshot was written to the log
         RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
         assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-        SnapshotWriterReaderTest.assertSnapshot(Collections.singletonList(records), snapshot);
+        SnapshotWriterReaderTest.assertDataSnapshot(Collections.singletonList(records), snapshot);
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> reader = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, reader.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Collections.singletonList(records), reader);
+            SnapshotWriterReaderTest.assertDataSnapshot(Collections.singletonList(records), reader);
         }
     }
 
-    @Test
-    public void testFetchSnapshotResponseMissingSnapshot() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchSnapshotResponseMissingSnapshot(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1336,6 +1381,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1351,10 +1397,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1372,6 +1418,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setLeaderEpoch(epoch)
                         .setLeaderId(leaderId);
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot
                         .setErrorCode(Errors.SNAPSHOT_NOT_FOUND.code());
                 }
@@ -1383,9 +1431,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
-    @Test
-    public void testFetchSnapshotResponseFromNewerEpochNotLeader() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchSnapshotResponseFromNewerEpochNotLeader(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int firstLeaderId = localId + 1;
         int secondLeaderId = firstLeaderId + 1;
         Set<Integer> voters = Utils.mkSet(localId, firstLeaderId, secondLeaderId);
@@ -1394,6 +1443,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, firstLeaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1409,10 +1459,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1430,6 +1480,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setLeaderEpoch(epoch + 1)
                         .setLeaderId(secondLeaderId);
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot
                         .setErrorCode(Errors.FENCED_LEADER_EPOCH.code());
                 }
@@ -1441,9 +1493,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
     }
 
-    @Test
-    public void testFetchSnapshotResponseFromNewerEpochLeader() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchSnapshotResponseFromNewerEpochLeader(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1451,6 +1504,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1466,10 +1520,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1487,6 +1541,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setLeaderEpoch(epoch + 1)
                         .setLeaderId(leaderId);
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot
                         .setErrorCode(Errors.FENCED_LEADER_EPOCH.code());
                 }
@@ -1498,9 +1554,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
     }
 
-    @Test
-    public void testFetchSnapshotResponseFromOlderEpoch() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchSnapshotResponseFromOlderEpoch(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1508,6 +1565,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1523,10 +1581,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1544,6 +1602,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setLeaderEpoch(epoch - 1)
                         .setLeaderId(leaderId + 1);
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot
                         .setErrorCode(Errors.UNKNOWN_LEADER_EPOCH.code());
                 }
@@ -1555,19 +1615,20 @@ public final class KafkaRaftClientSnapshotTest {
         // Follower should resend the fetch snapshot request
         snapshotRequest = context.assertSentFetchSnapshotRequest();
         request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
         assertEquals(0, request.position());
     }
 
-    @Test
-    public void testFetchSnapshotResponseWithInvalidId() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchSnapshotResponseWithInvalidId(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1575,6 +1636,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1590,10 +1652,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.pollUntilRequest();
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1616,6 +1678,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setEndOffset(-1)
                         .setEpoch(snapshotId.epoch());
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot;
                 }
             )
@@ -1637,10 +1701,10 @@ public final class KafkaRaftClientSnapshotTest {
 
         snapshotRequest = context.assertSentFetchSnapshotRequest();
         request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1663,6 +1727,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setEndOffset(snapshotId.offset())
                         .setEpoch(-1);
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot;
                 }
             )
@@ -1675,9 +1741,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
-    @Test
-    public void testFetchSnapshotResponseToNotFollower() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testFetchSnapshotResponseToNotFollower(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int leaderId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, leaderId);
         int epoch = 2;
@@ -1685,6 +1752,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
             .build();
 
         context.pollUntilRequest();
@@ -1701,10 +1769,10 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftRequest.Outbound snapshotRequest = context.assertSentFetchSnapshotRequest();
         FetchSnapshotRequestData.PartitionSnapshot request = assertFetchSnapshotRequest(
-                snapshotRequest,
-                context.metadataPartition,
-                localId,
-                Integer.MAX_VALUE
+            snapshotRequest,
+            context.metadataPartition,
+            localId,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1735,6 +1803,8 @@ public final class KafkaRaftClientSnapshotTest {
                         .setEndOffset(snapshotId.offset())
                         .setEpoch(snapshotId.epoch());
 
+                    responsePartitionSnapshot.setUnalignedRecords(UnalignedMemoryRecords.empty());
+
                     return responsePartitionSnapshot;
                 }
             )
@@ -1746,12 +1816,12 @@ public final class KafkaRaftClientSnapshotTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestClusterIdValidation(
         boolean withKip853Rpc
     ) throws Exception {
-        int localId = 0;
-        ReplicaKey otherNode = replicaKey(1, withKip853Rpc);
+        int localId = randomReplicaId();
+        ReplicaKey otherNode = replicaKey(localId + 1, withKip853Rpc);
         Set<Integer> voters = Utils.mkSet(localId, otherNode.id());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
@@ -1769,7 +1839,7 @@ public final class KafkaRaftClientSnapshotTest {
                 otherNode,
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -1784,7 +1854,7 @@ public final class KafkaRaftClientSnapshotTest {
                 otherNode,
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -1799,7 +1869,7 @@ public final class KafkaRaftClientSnapshotTest {
                 otherNode,
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -1814,7 +1884,7 @@ public final class KafkaRaftClientSnapshotTest {
                 otherNode,
                 context.metadataPartition,
                 epoch,
-                new OffsetAndEpoch(0, 0),
+                Snapshots.BOOTSTRAP_SNAPSHOT_ID,
                 Integer.MAX_VALUE,
                 0
             )
@@ -1823,9 +1893,10 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertSentFetchSnapshotResponse(Errors.INCONSISTENT_CLUSTER_ID);
     }
 
-    @Test
-    public void testCreateSnapshotAsLeaderWithInvalidSnapshotId() throws Exception {
-        int localId = 0;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testCreateSnapshotAsLeaderWithInvalidSnapshotId(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         int epoch = 2;
@@ -1834,9 +1905,10 @@ public final class KafkaRaftClientSnapshotTest {
         OffsetAndEpoch invalidSnapshotId1 = new OffsetAndEpoch(4, epoch);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .appendToLog(epoch, appendRecords)
-                .withAppendLingerMs(1)
-                .build();
+            .appendToLog(epoch, appendRecords)
+            .withAppendLingerMs(1)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
 
         context.becomeLeader();
         int currentEpoch = context.currentEpoch();
@@ -1850,10 +1922,11 @@ public final class KafkaRaftClientSnapshotTest {
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         // append some more records to make the LEO > high watermark
         List<String> newRecords = Arrays.asList("d", "e", "f");
-        context.client.scheduleAppend(currentEpoch, newRecords);
+        context.client.prepareAppend(currentEpoch, newRecords);
+        context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
-        assertEquals(context.log.endOffset().offset, context.client.highWatermark().getAsLong() + newRecords.size());
+        assertEquals(context.log.endOffset().offset(), context.client.highWatermark().getAsLong() + newRecords.size());
 
         OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 2, currentEpoch);
         assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2, 0));
@@ -1869,17 +1942,19 @@ public final class KafkaRaftClientSnapshotTest {
         assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4, 0));
     }
 
-    @Test
-    public void testCreateSnapshotAsFollowerWithInvalidSnapshotId() throws Exception {
-        int localId = 0;
-        int leaderId = 1;
-        int otherFollowerId = 2;
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testCreateSnapshotAsFollowerWithInvalidSnapshotId(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int leaderId = localId + 1;
+        int otherFollowerId = localId + 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, leaderId, otherFollowerId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .withElectedLeader(epoch, leaderId)
-                .build();
+            .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
         context.assertElectedLeader(epoch, leaderId);
 
         // When follower creating snapshot:
@@ -1941,7 +2016,11 @@ public final class KafkaRaftClientSnapshotTest {
         return ReplicaKey.of(id, directoryId);
     }
 
-    private static FetchSnapshotRequestData fetchSnapshotRequest(
+    private static int randomReplicaId() {
+        return ThreadLocalRandom.current().nextInt(1025);
+    }
+
+    public static FetchSnapshotRequestData fetchSnapshotRequest(
             TopicPartition topicPartition,
             int epoch,
             OffsetAndEpoch offsetAndEpoch,

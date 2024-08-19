@@ -25,6 +25,8 @@ import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.ReplicatedLog;
+import org.apache.kafka.raft.VoterSet;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
@@ -39,13 +41,16 @@ import java.util.OptionalLong;
  * The KRaft state machine for tracking control records in the topic partition.
  *
  * This type keeps track of changes to the finalized kraft.version and the sets of voters between
- * the latest snasphot and the log end offset.
+ * the latest snapshot and the log end offset.
  *
  * There are two type of actors/threads accessing this type. One is the KRaft driver which indirectly call a lot of
  * the public methods. The other actors/threads are the callers of {@code RaftClient.createSnapshot} which
  * indirectly call {@code voterSetAtOffset} and {@code kraftVersionAtOffset} when freezing a snapshot.
  */
 public final class KRaftControlRecordStateMachine {
+    private static final long STARTING_NEXT_OFFSET = -1;
+    private static final long SMALLEST_LOG_OFFSET = 0;
+
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
@@ -56,7 +61,7 @@ public final class KRaftControlRecordStateMachine {
     // are the KRaft driver when calling updateState and the RaftClient callers when freezing
     // snapshots
     private final VoterSetHistory voterSetHistory;
-    private final LogHistory<Short> kraftVersionHistory = new TreeMapLogHistory<>();
+    private final LogHistory<KRaftVersion> kraftVersionHistory = new TreeMapLogHistory<>();
 
     // This synchronization is enough because
     // 1. The write operation updateState only sets the value without reading it and updates to
@@ -64,7 +69,7 @@ public final class KRaftControlRecordStateMachine {
     //
     // 2. The read operations lastVoterSet, voterSetAtOffset and kraftVersionAtOffset read
     // the nextOffset first before reading voterSetHistory or kraftVersionHistory
-    private volatile long nextOffset = 0;
+    private volatile long nextOffset = STARTING_NEXT_OFFSET;
 
     /**
      * Constructs an internal log listener
@@ -77,7 +82,7 @@ public final class KRaftControlRecordStateMachine {
      * @param logContext the log context
      */
     public KRaftControlRecordStateMachine(
-        Optional<VoterSet> staticVoterSet,
+        VoterSet staticVoterSet,
         ReplicatedLog log,
         RecordSerde<?> serde,
         BufferSupplier bufferSupplier,
@@ -138,11 +143,30 @@ public final class KRaftControlRecordStateMachine {
     }
 
     /**
+     * Return the latest entry for the set of voters.
+     */
+    public Optional<LogHistory.Entry<VoterSet>> lastVoterSetEntry() {
+        synchronized (voterSetHistory) {
+            return voterSetHistory.lastEntry();
+        }
+    }
+
+    /**
+     * Returns the offset of the last voter set.
+     */
+    public OptionalLong lastVoterSetOffset() {
+        synchronized (voterSetHistory) {
+            return voterSetHistory.lastVoterSetOffset();
+        }
+    }
+
+    /**
      * Returns the last kraft version.
      */
-    public short lastKraftVersion() {
+    public KRaftVersion lastKraftVersion() {
         synchronized (kraftVersionHistory) {
-            return kraftVersionHistory.lastEntry().map(LogHistory.Entry::value).orElse((short) 0);
+            return kraftVersionHistory.lastEntry().map(LogHistory.Entry::value).
+                orElse(KRaftVersion.KRAFT_VERSION_0);
         }
     }
 
@@ -166,11 +190,12 @@ public final class KRaftControlRecordStateMachine {
      * @param offset the offset (inclusive)
      * @return the finalized kraft version if one exist, otherwise 0
      */
-    public short kraftVersionAtOffset(long offset) {
+    public KRaftVersion kraftVersionAtOffset(long offset) {
         checkOffsetIsValid(offset);
 
         synchronized (kraftVersionHistory) {
-            return kraftVersionHistory.valueAtOrBefore(offset).orElse((short) 0);
+            return kraftVersionHistory.valueAtOrBefore(offset).
+                orElse(KRaftVersion.KRAFT_VERSION_0);
         }
     }
 
@@ -189,7 +214,7 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void maybeLoadLog() {
-        while (log.endOffset().offset > nextOffset) {
+        while (log.endOffset().offset() > nextOffset) {
             LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
             try (RecordsIterator<?> iterator = new RecordsIterator<>(
                     info.records,
@@ -209,7 +234,7 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void maybeLoadSnapshot() {
-        if ((nextOffset == 0 || nextOffset < log.startOffset()) && log.latestSnapshot().isPresent()) {
+        if ((nextOffset == STARTING_NEXT_OFFSET || nextOffset < log.startOffset()) && log.latestSnapshot().isPresent()) {
             RawSnapshotReader rawSnapshot = log.latestSnapshot().get();
             // Clear the current state
             synchronized (kraftVersionHistory) {
@@ -242,6 +267,10 @@ public final class KRaftControlRecordStateMachine {
 
                 nextOffset = reader.lastContainedLogOffset() + 1;
             }
+        } else if (nextOffset == STARTING_NEXT_OFFSET) {
+            // Listener just started and there are no snapshots; set the nextOffset to
+            // 0 to start reading the log
+            nextOffset = SMALLEST_LOG_OFFSET;
         }
     }
 
@@ -251,14 +280,25 @@ public final class KRaftControlRecordStateMachine {
             long currentOffset = overrideOffset.orElse(batch.baseOffset() + offsetDelta);
             switch (record.type()) {
                 case KRAFT_VOTERS:
+                    VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
+                    logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
                     synchronized (voterSetHistory) {
-                        voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message()));
+                        voterSetHistory.addAt(currentOffset, voters);
                     }
                     break;
 
                 case KRAFT_VERSION:
+                    KRaftVersion kraftVersion = KRaftVersion.fromFeatureLevel(
+                        ((KRaftVersionRecord) record.message()).kRaftVersion()
+                    );
+                    logger.info(
+                        "Latest {} is {} at offset {}",
+                        KRaftVersion.FEATURE_NAME,
+                        kraftVersion,
+                        currentOffset
+                    );
                     synchronized (kraftVersionHistory) {
-                        kraftVersionHistory.addAt(currentOffset, ((KRaftVersionRecord) record.message()).kRaftVersion());
+                        kraftVersionHistory.addAt(currentOffset, kraftVersion);
                     }
                     break;
 

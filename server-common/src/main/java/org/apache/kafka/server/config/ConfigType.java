@@ -29,7 +29,8 @@ public class ConfigType {
     public static final String BROKER = "brokers";
     public static final String IP = "ips";
     public static final String CLIENT_METRICS = "client-metrics";
+    public static final String GROUP = "groups";
 
-    // Do not include ClientMetrics in `all` as ClientMetrics is not supported on ZK.
+    // Do not include ClientMetrics and Groups in `all` as they are not supported on ZK.
     public static final List<String> ALL = Arrays.asList(TOPIC, CLIENT, USER, BROKER, IP);
 }

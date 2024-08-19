@@ -25,8 +25,16 @@ import java.util.Map;
  * happens while attempting to produce result records.
  */
 public class DefaultProductionExceptionHandler implements ProductionExceptionHandler {
+    @Deprecated
     @Override
     public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
+                                                     final Exception exception) {
+        return ProductionExceptionHandlerResponse.FAIL;
+    }
+
+    @Override
+    public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
+                                                     final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
         return ProductionExceptionHandlerResponse.FAIL;
     }

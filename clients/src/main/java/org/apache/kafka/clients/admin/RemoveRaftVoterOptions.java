@@ -18,9 +18,21 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Optional;
+
 /**
  * Options for {@link Admin#removeRaftVoter}.
  */
 @InterfaceStability.Stable
 public class RemoveRaftVoterOptions extends AbstractOptions<RemoveRaftVoterOptions> {
+    private Optional<String> clusterId = Optional.empty();
+
+    public RemoveRaftVoterOptions setClusterId(Optional<String> clusterId) {
+        this.clusterId = clusterId;
+        return this;
+    }
+
+    public Optional<String> clusterId() {
+        return clusterId;
+    }
 }

@@ -23,7 +23,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -40,14 +39,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class EventHandlerExceptionInfoTest {
     private static final EventHandlerExceptionInfo TOPIC_EXISTS =
-        EventHandlerExceptionInfo.fromInternal(
-            new TopicExistsException("Topic exists."),
-            () -> OptionalInt.empty());
+        EventHandlerExceptionInfo.fromInternal(new TopicExistsException("Topic exists."), OptionalInt::empty);
 
     private static final EventHandlerExceptionInfo REJECTED_EXECUTION =
-        EventHandlerExceptionInfo.fromInternal(
-            new RejectedExecutionException(),
-            () -> OptionalInt.empty());
+        EventHandlerExceptionInfo.fromInternal(new RejectedExecutionException(), OptionalInt::empty);
 
     private static final EventHandlerExceptionInfo INTERRUPTED =
         EventHandlerExceptionInfo.fromInternal(
@@ -63,11 +58,6 @@ public class EventHandlerExceptionInfoTest {
         EventHandlerExceptionInfo.fromInternal(
             new NotLeaderException("Append failed"),
             () -> OptionalInt.of(2));
-
-    private static final EventHandlerExceptionInfo UNEXPECTED_END_OFFSET =
-        EventHandlerExceptionInfo.fromInternal(
-            new UnexpectedBaseOffsetException("Wanted base offset 3, but the next offset was 4"),
-            () -> OptionalInt.of(1));
 
     @Test
     public void testTopicExistsExceptionInfo() {
@@ -160,22 +150,6 @@ public class EventHandlerExceptionInfoTest {
     }
 
     @Test
-    public void testUnexpectedBaseOffsetExceptionInfo() {
-        assertEquals(new EventHandlerExceptionInfo(false, true,
-            new UnexpectedBaseOffsetException("Wanted base offset 3, but the next offset was 4"),
-            new NotControllerException("Unexpected end offset. Controller will resign.")),
-                UNEXPECTED_END_OFFSET);
-    }
-
-    @Test
-    public void testUnexpectedBaseOffsetFailureMessage() {
-        assertEquals("event failed with UnexpectedBaseOffsetException (treated as " +
-            "NotControllerException) at epoch 123 in 90 microseconds. Renouncing leadership " +
-            "and reverting to the last committed offset 456. Exception message: Wanted base offset 3, but the next offset was 4",
-                UNEXPECTED_END_OFFSET.failureMessage(123, OptionalLong.of(90L), true, 456L));
-    }
-
-    @Test
     public void testFaultExceptionFailureMessage() {
         EventHandlerExceptionInfo faultExceptionInfo = EventHandlerExceptionInfo.fromInternal(
                 new KafkaException("Custom kafka exception message"),
@@ -193,7 +167,6 @@ public class EventHandlerExceptionInfoTest {
         assertFalse(INTERRUPTED.isTimeoutException());
         assertFalse(NULL_POINTER.isTimeoutException());
         assertFalse(NOT_LEADER.isTimeoutException());
-        assertFalse(UNEXPECTED_END_OFFSET.isTimeoutException());
     }
 
     @Test

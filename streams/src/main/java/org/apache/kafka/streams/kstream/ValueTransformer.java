@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 
 import java.time.Duration;
 
@@ -46,7 +47,9 @@ import java.time.Duration;
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
  * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
+ * @deprecated Since 4.0. Use {@link FixedKeyProcessor} instead.
  */
+@Deprecated
 public interface ValueTransformer<V, VR> {
 
     /**

@@ -48,7 +48,7 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
@@ -165,7 +165,7 @@ public class SaslChannelBuilderTest {
     }
 
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
-        SaslChannelBuilder channelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
+        SaslChannelBuilder channelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
             SecurityProtocol.SASL_PLAINTEXT, new ListenerName("GSSAPI"), false, "GSSAPI",
             true, null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier()) {
 
@@ -179,8 +179,8 @@ public class SaslChannelBuilderTest {
         return channelBuilder;
     }
 
-    private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
-        return () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+    private Function<Short, ApiVersionsResponse> defaultApiVersionsSupplier() {
+        return version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol, String saslMechanism) {
@@ -205,7 +205,7 @@ public class SaslChannelBuilderTest {
         jaasConfig.addEntry("jaasContext", loginModule.getName(), new HashMap<>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
-        return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
+        return new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
                 false, saslMechanism, true, null,
                 null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
     }

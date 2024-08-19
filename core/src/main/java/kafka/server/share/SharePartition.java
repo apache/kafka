@@ -257,7 +257,7 @@ public class SharePartition {
     /**
      * The next fetch offset is used to determine the next offset that should be fetched from the leader.
      * The offset should be the next offset after the last fetched batch but there could be batches/
-     * offsets that are either released by acknowledgement API or lock timed out hence the next fetch
+     * offsets that are either released by acknowledge API or lock timed out hence the next fetch
      * offset might be different from the last batch next offset. Hence, method checks if the next
      * fetch offset should be recomputed else returns the last computed next fetch offset.
      *
@@ -464,13 +464,13 @@ public class SharePartition {
      * that should be fetched from the leader, if required.
      *
      * @param memberId The member id of the client that is fetching the record.
-     * @param acknowledgementBatch The acknowledgement batch list for the share partition.
+     * @param acknowledgementBatches The acknowledgement batch list for the share partition.
      *
      * @return A future which is completed when the records are acknowledged.
      */
     public CompletableFuture<Optional<Throwable>> acknowledge(
         String memberId,
-        List<ShareAcknowledgementBatch> acknowledgementBatch
+        List<ShareAcknowledgementBatch> acknowledgementBatches
     ) {
         log.trace("Acknowledgement batch request for share partition: {}-{}", groupId, topicIdPartition);
 
@@ -481,9 +481,7 @@ public class SharePartition {
         try {
             // Avoided using enhanced for loop as need to check if the last batch have offsets
             // in the range.
-            for (int i = 0; i < acknowledgementBatch.size(); i++) {
-                ShareAcknowledgementBatch batch = acknowledgementBatch.get(i);
-
+            for (ShareAcknowledgementBatch batch : acknowledgementBatches) {
                 // Client can either send a single entry in acknowledgeTypes which represents the state
                 // of the complete batch or can send individual offsets state.
                 Map<Long, RecordState> recordStateMap;
@@ -506,14 +504,14 @@ public class SharePartition {
                 // be a full match, subset or spans over multiple fetched batches.
                 NavigableMap<Long, InFlightBatch> subMap;
                 try {
-                    subMap = fetchSubMapForAcknowledgementBatch(batch, i == acknowledgementBatch.size() - 1);
+                    subMap = fetchSubMapForAcknowledgementBatch(batch);
                 } catch (InvalidRecordStateException | InvalidRequestException e) {
                     throwable = e;
                     break;
                 }
 
                 // Acknowledge the records for the batch.
-                Optional<Throwable> ackThrowable = acknowledgementBatchRecords(
+                Optional<Throwable> ackThrowable = acknowledgeBatchRecords(
                     memberId,
                     batch,
                     recordStateMap,
@@ -689,7 +687,127 @@ public class SharePartition {
      * @param logStartOffset The new log start offset.
      */
     void updateCacheAndOffsets(long logStartOffset) {
-        // TODO: Provide implementation to update cache and offsets on LSO movement.
+        lock.writeLock().lock();
+        try {
+            if (logStartOffset <= startOffset) {
+                log.error("The log start offset: {} is not greater than the start offset: {} for the share partition: {}-{}",
+                        logStartOffset, startOffset, groupId, topicIdPartition);
+                return;
+            }
+            log.debug("Updating start offset for share partition: {}-{} from: {} to: {} since LSO has moved to: {}",
+                    groupId, topicIdPartition, startOffset, logStartOffset, logStartOffset);
+            if (cachedState.isEmpty()) {
+                // If the cached state is empty, then the start and end offset will be the new log start offset.
+                // This can occur during the initialization of share partition if LSO has moved.
+                startOffset = logStartOffset;
+                endOffset = logStartOffset;
+                return;
+            }
+
+            // Archive the available records in the cached state that are before the new log start offset.
+            boolean anyRecordArchived = archiveAvailableRecordsOnLsoMovement(logStartOffset);
+            // If we have transitioned the state of any batch/offset from AVAILABLE to ARCHIVED,
+            // then there is a chance that the next fetch offset can change.
+            if (anyRecordArchived) {
+                findNextFetchOffset.set(true);
+            }
+
+            // The new startOffset will be the log start offset.
+            startOffset = logStartOffset;
+            if (endOffset < startOffset) {
+                // This case means that the cached state is completely fresh now.
+                // Example scenario - batch of 0-10 in acquired state in cached state, then LSO moves to 15,
+                // then endOffset should be 15 as well.
+                endOffset = startOffset;
+            }
+
+            // Note -
+            // 1. We will be writing the new starOffset lazily during acknowledge/release acquired records API call.
+            // 2. We will not be writing the archived state batches to the persister.
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private boolean archiveAvailableRecordsOnLsoMovement(long logStartOffset) {
+        lock.writeLock().lock();
+        try {
+            boolean isAnyOffsetArchived = false, isAnyBatchArchived = false;
+            for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+                long batchStartOffset = entry.getKey();
+                // We do not need to transition state of batches/offsets that are later than the new log start offset.
+                if (batchStartOffset >= logStartOffset) {
+                    break;
+                }
+                InFlightBatch inFlightBatch = entry.getValue();
+                boolean fullMatch = checkForFullMatch(inFlightBatch, startOffset, logStartOffset - 1);
+
+                // Maintain state per offset if the inflight batch is not a full match or the offset state is managed.
+                if (!fullMatch || inFlightBatch.offsetState() != null) {
+                    log.debug("Subset or offset tracked batch record found while trying to update offsets and cached" +
+                                    " state map due to LSO movement, batch: {}, offsets to update - " +
+                                    "first: {}, last: {} for the share partition: {}-{}", inFlightBatch, startOffset,
+                            logStartOffset - 1, groupId, topicIdPartition);
+
+                    if (inFlightBatch.offsetState() == null) {
+                        if (inFlightBatch.batchState() != RecordState.AVAILABLE) {
+                            continue;
+                        }
+                        inFlightBatch.maybeInitializeOffsetStateUpdate();
+                    }
+                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset, logStartOffset - 1);
+                    continue;
+                }
+                // The in-flight batch is a full match hence change the state of the complete batch.
+                isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch);
+            }
+            return isAnyOffsetArchived || isAnyBatchArchived;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private boolean archivePerOffsetBatchRecords(InFlightBatch inFlightBatch,
+                                                 long startOffsetToArchive,
+                                                 long endOffsetToArchive) {
+        lock.writeLock().lock();
+        try {
+            boolean isAnyOffsetArchived = false;
+            log.trace("Archiving offset tracked batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+            for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
+                if (offsetState.getKey() < startOffsetToArchive) {
+                    continue;
+                }
+                if (offsetState.getKey() > endOffsetToArchive) {
+                    // No further offsets to process.
+                    break;
+                }
+                if (offsetState.getValue().state != RecordState.AVAILABLE) {
+                    continue;
+                }
+
+                offsetState.getValue().archive(EMPTY_MEMBER_ID);
+                isAnyOffsetArchived = true;
+            }
+            return isAnyOffsetArchived;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private boolean archiveCompleteBatch(InFlightBatch inFlightBatch) {
+        lock.writeLock().lock();
+        try {
+            log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+            if (inFlightBatch.batchState() == RecordState.AVAILABLE) {
+                // Change the state of complete batch since the same state exists for the entire inFlight batch.
+                inFlightBatch.archiveBatch(EMPTY_MEMBER_ID);
+                return true;
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+        return false;
     }
 
     /**
@@ -792,6 +910,9 @@ public class SharePartition {
             // in the cached state are not missed
             findNextFetchOffset.set(true);
             endOffset = cachedState.lastEntry().getValue().lastOffset();
+            // In case the persister read state RPC result contains no AVAILABLE records, we can update cached state
+            // and start/end offsets.
+            maybeUpdateCachedStateAndOffsets();
         } else {
             endOffset = partitionData.startOffset();
         }
@@ -903,7 +1024,8 @@ public class SharePartition {
      * @return True if the start offset has moved and within the request first and last offset, false otherwise.
      */
     private boolean checkForStartOffsetWithinBatch(long batchFirstOffset, long batchLastOffset) {
-        return batchFirstOffset < startOffset && batchLastOffset >= startOffset;
+        long localStartOffset = startOffset();
+        return batchFirstOffset < localStartOffset && batchLastOffset >= localStartOffset;
     }
 
     private Map<Long, RecordState> fetchRecordStateMapForAcknowledgementBatch(
@@ -934,8 +1056,7 @@ public class SharePartition {
     }
 
     private NavigableMap<Long, InFlightBatch> fetchSubMapForAcknowledgementBatch(
-        ShareAcknowledgementBatch batch,
-        boolean isLastBatch
+        ShareAcknowledgementBatch batch
     ) {
         lock.writeLock().lock();
         try {
@@ -949,7 +1070,7 @@ public class SharePartition {
                     // If the start offset has been moved and within the request batch then fetch
                     // the floor entry from start offset and acknowledge cached offsets. Consider
                     // the case where the start offset has moved from 0 to 10, with the cached batch
-                    // of 0 - 5, 5 - 10, 10 - 12, 12 - 15. The request batch for acknowledgement is 5 - 15,
+                    // of 0 - 5, 5 - 10, 10 - 12, 12 - 15. The request batch for acknowledge is 5 - 15,
                     // then post acquisition lock timeout the cache will have data from only from 10 to 15.
                     // Hence, we need to fetch the floor entry from start offset.
                     floorOffset = cachedState.floorEntry(startOffset);
@@ -962,8 +1083,8 @@ public class SharePartition {
             }
 
             NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(floorOffset.getKey(), true, batch.lastOffset(), true);
-            // Validate if the request batch has the first offset less than the last offset of the last
-            // fetched cached batch, then there will be offsets in the request that are already acquired.
+            // Validate if the request batch has the first offset greater than the last offset of the last
+            // fetched cached batch, then there will be no offsets in the request that can be acknowledged.
             if (subMap.lastEntry().getValue().lastOffset < batch.firstOffset()) {
                 log.debug("Request batch: {} has offsets which are not found for share partition: {}-{}", batch, groupId, topicIdPartition);
                 throw new InvalidRequestException("Batch record not found. The first offset in request is past acquired records.");
@@ -972,7 +1093,7 @@ public class SharePartition {
             // Validate if the request batch has the last offset greater than the last offset of
             // the last fetched cached batch, then there will be offsets in the request than cannot
             // be found in the fetched batches.
-            if (isLastBatch && batch.lastOffset() > subMap.lastEntry().getValue().lastOffset) {
+            if (batch.lastOffset() > subMap.lastEntry().getValue().lastOffset) {
                 log.debug("Request batch: {} has offsets which are not found for share partition: {}-{}", batch, groupId, topicIdPartition);
                 throw new InvalidRequestException("Batch record not found. The last offset in request is past acquired records.");
             }
@@ -983,7 +1104,7 @@ public class SharePartition {
         }
     }
 
-    private Optional<Throwable> acknowledgementBatchRecords(
+    private Optional<Throwable> acknowledgeBatchRecords(
         String memberId,
         ShareAcknowledgementBatch batch,
         Map<Long, RecordState> recordStateMap,
@@ -1018,7 +1139,7 @@ public class SharePartition {
                 // Determine if the in-flight batch is a full match from the request batch.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, batch.firstOffset(), batch.lastOffset());
                 boolean isPerOffsetClientAck = batch.acknowledgeTypes().size() > 1;
-                boolean hasStartOffsetMoved = checkForStartOffsetWithinBatch(inFlightBatch.firstOffset, inFlightBatch.lastOffset);
+                boolean hasStartOffsetMoved = checkForStartOffsetWithinBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
 
                 // Maintain state per offset if the inflight batch is not a full match or the
                 // offset state is managed or client sent individual offsets state or
@@ -1039,7 +1160,7 @@ public class SharePartition {
                                 inFlightBatch, groupId, topicIdPartition);
                             return Optional.of(new InvalidRecordStateException("The batch cannot be acknowledged. The subset batch is not in the acquired state."));
                         }
-                        // The request batch is a subset or per offset state is managed hence update
+                        // The request batch is a subset and requires per offset state hence initialize
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
@@ -1221,6 +1342,9 @@ public class SharePartition {
         List<InFlightState> updatedStates,
         List<PersisterStateBatch> stateBatches
     ) {
+        if (stateBatches.isEmpty() && updatedStates.isEmpty())
+            return;
+
         lock.writeLock().lock();
         try {
             if (throwable != null || !isWriteShareGroupStateSuccessful(stateBatches)) {
@@ -1310,7 +1434,7 @@ public class SharePartition {
     }
 
     private boolean canMoveStartOffset() {
-        // The Share Partition Start Offset may be moved after acknowledgement request is complete.
+        // The Share Partition Start Offset may be moved after acknowledge request is complete.
         // The following conditions need to be met to move the startOffset:
         // 1. When the cachedState is not empty.
         // 2. When the acknowledgement type for the records is either ACCEPT or REJECT.
@@ -1404,7 +1528,7 @@ public class SharePartition {
 
         PartitionErrorData partitionData = state.partitions().get(0);
         if (partitionData.errorCode() != Errors.NONE.code()) {
-            Exception exception = Errors.forCode(partitionData.errorCode()).exception();
+            Exception exception = Errors.forCode(partitionData.errorCode()).exception(partitionData.errorMessage());
             log.error("Failed to write the share group state for share partition: {}-{} due to exception",
                 groupId, topicIdPartition, exception);
             return false;
@@ -1707,6 +1831,13 @@ public class SharePartition {
             return offsetState;
         }
 
+        private void archiveBatch(String newMemberId) {
+            if (batchState == null) {
+                throw new IllegalStateException("The batch state is not available as the offset state is maintained");
+            }
+            batchState.archive(newMemberId);
+        }
+
         private InFlightState tryUpdateBatchState(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {
             if (batchState == null) {
                 throw new IllegalStateException("The batch state update is not available as the offset state is maintained");
@@ -1802,11 +1933,6 @@ public class SharePartition {
             return state;
         }
 
-        // Visible for testing.
-        int deliveryCount() {
-            return deliveryCount;
-        }
-
         String memberId() {
             return memberId;
         }
@@ -1851,6 +1977,11 @@ public class SharePartition {
                 log.error("Failed to update state of the records", e);
                 return null;
             }
+        }
+
+        private void archive(String newMemberId) {
+            state = RecordState.ARCHIVED;
+            memberId = newMemberId;
         }
 
         private InFlightState startStateTransition(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {

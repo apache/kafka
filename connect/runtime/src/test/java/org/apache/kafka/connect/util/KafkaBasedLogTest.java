@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -402,6 +403,50 @@ public class KafkaBasedLogTest {
         // Producer flushes when read to log end is called
         verify(producer).flush();
         verifyStartAndStop();
+    }
+
+    @Test
+    public void testOffsetReadFailureWhenWorkThreadFails() throws Exception {
+        RuntimeException exception = new RuntimeException();
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        admin = mock(TopicAdmin.class);
+        when(admin.endOffsets(eq(tps)))
+            .thenReturn(endOffsets)
+            .thenThrow(exception)
+            .thenReturn(endOffsets);
+
+        store.start();
+
+        AtomicInteger numSuccesses = new AtomicInteger();
+        AtomicInteger numFailures = new AtomicInteger();
+        AtomicReference<FutureCallback<Void>> finalSuccessCallbackRef = new AtomicReference<>();
+        final FutureCallback<Void> successCallback = new FutureCallback<>((error, result) -> numSuccesses.getAndIncrement());
+        store.readToEnd(successCallback);
+        // First log end read should succeed.
+        successCallback.get(1000, TimeUnit.MILLISECONDS);
+
+        // Second log end read fails.
+        final FutureCallback<Void> firstFailedCallback = new FutureCallback<>((error, result) -> {
+            numFailures.getAndIncrement();
+            // We issue another readToEnd call here to simulate the case that more read requests can come in while
+            // the failure is being handled in the WorkThread. This read request should not be impacted by the outcome of
+            // the current read request's failure.
+            final FutureCallback<Void> finalSuccessCallback = new FutureCallback<>((e, r) -> numSuccesses.getAndIncrement());
+            finalSuccessCallbackRef.set(finalSuccessCallback);
+            store.readToEnd(finalSuccessCallback);
+        });
+        store.readToEnd(firstFailedCallback);
+        ExecutionException e1 = assertThrows(ExecutionException.class, () -> firstFailedCallback.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(exception, e1.getCause());
+
+        // Last log read end should succeed.
+        finalSuccessCallbackRef.get().get(1000, TimeUnit.MILLISECONDS);
+
+        assertEquals(2, numSuccesses.get());
+        assertEquals(1, numFailures.get());
     }
 
     @Test

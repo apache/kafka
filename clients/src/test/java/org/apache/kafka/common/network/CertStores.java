@@ -62,9 +62,9 @@ public class CertStores {
 
     private CertStores(boolean server, String commonName, String keyAlgorithm, TestSslUtils.CertificateBuilder certBuilder, boolean usePem) throws Exception {
         String name = server ? "server" : "client";
-        Mode mode = server ? Mode.SERVER : Mode.CLIENT;
+        ConnectionMode connectionMode = server ? ConnectionMode.SERVER : ConnectionMode.CLIENT;
         File truststoreFile = usePem ? null : TestUtils.tempFile(name + "TS", ".jks");
-        sslConfig = new SslConfigsBuilder(mode)
+        sslConfig = new SslConfigsBuilder(connectionMode)
                 .useClientCert(!server)
                 .certAlias(name)
                 .cn(commonName)

@@ -93,6 +93,17 @@ public class TopicConfig {
             "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `retention.bytes` value.";
 
+    public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
+    public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
+            " and no more data uploading on a topic. Once this config is set to true, the local retention configuration " +
+            "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
+            "(i.e. retention.ms/bytes).";
+
+    public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
+    public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
+            "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
+            "set `remote.storage.enable` from true to false";
+
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
         "The largest record batch size allowed by Kafka (after compression if compression is enabled). " +

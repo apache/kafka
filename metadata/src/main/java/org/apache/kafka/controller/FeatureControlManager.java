@@ -259,8 +259,7 @@ public class FeatureControlManager {
                 if (newVersion != 0) {
                     Features.validateVersion(
                         Features.featureFromName(featureName).fromFeatureLevel(newVersion, true),
-                        proposedUpdatedVersions,
-                        true);
+                        proposedUpdatedVersions);
                 }
             } catch (IllegalArgumentException e) {
                 return invalidUpdateVersion(featureName, newVersion, e.getMessage());

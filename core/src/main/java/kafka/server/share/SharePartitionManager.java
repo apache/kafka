@@ -16,30 +16,36 @@
  */
 package kafka.server.share;
 
-import kafka.server.FetchSession;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
-import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
+import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.group.share.Persister;
 import org.apache.kafka.server.share.CachedSharePartition;
+import org.apache.kafka.server.share.FinalContext;
 import org.apache.kafka.server.share.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.ShareFetchContext;
 import org.apache.kafka.server.share.ShareSession;
 import org.apache.kafka.server.share.ShareSessionCache;
+import org.apache.kafka.server.share.ShareSessionContext;
 import org.apache.kafka.server.share.ShareSessionKey;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -134,6 +140,11 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final Persister persister;
 
+    /**
+     * Class with methods to record share group metrics.
+     */
+    private final ShareGroupMetrics shareGroupMetrics;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -141,17 +152,18 @@ public class SharePartitionManager implements AutoCloseable {
         int recordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
-        Persister persister
+        Persister persister,
+        Metrics metrics
     ) {
-        this(
-            replicaManager,
+        this(replicaManager,
             time,
             cache,
             new ConcurrentHashMap<>(),
             recordLockDurationMs,
             maxDeliveryCount,
             maxInFlightMessages,
-            persister
+            persister,
+            metrics
         );
     }
 
@@ -163,7 +175,8 @@ public class SharePartitionManager implements AutoCloseable {
         int recordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
-        Persister persister
+        Persister persister,
+        Metrics metrics
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -177,6 +190,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
+        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
     }
 
     // Visible for testing.
@@ -185,23 +199,26 @@ public class SharePartitionManager implements AutoCloseable {
             Time time,
             ShareSessionCache cache,
             Map<SharePartitionKey, SharePartition> partitionCacheMap,
+            ConcurrentLinkedQueue<ShareFetchPartitionData> fetchQueue,
             int recordLockDurationMs,
             Timer timer,
             int maxDeliveryCount,
             int maxInFlightMessages,
-            Persister persister
+            Persister persister,
+            Metrics metrics
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
         this.cache = cache;
         this.partitionCacheMap = partitionCacheMap;
-        this.fetchQueue = new ConcurrentLinkedQueue<>();
+        this.fetchQueue = fetchQueue;
         this.processFetchQueueLock = new AtomicBoolean(false);
         this.recordLockDurationMs = recordLockDurationMs;
         this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
+        this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
     }
 
     /**
@@ -211,24 +228,21 @@ public class SharePartitionManager implements AutoCloseable {
      * @param groupId The group id, this is used to identify the share group.
      * @param memberId The member id, generated by the group-coordinator, this is used to identify the client.
      * @param fetchParams The fetch parameters from the share fetch request.
-     * @param topicIdPartitions The topic-partitions to fetch messages for.
      * @param partitionMaxBytes The maximum number of bytes to fetch for each partition.
      *
      * @return A future that will be completed with the fetched messages.
      */
-    public CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> fetchMessages(
+    public CompletableFuture<Map<TopicIdPartition, PartitionData>> fetchMessages(
         String groupId,
         String memberId,
         FetchParams fetchParams,
-        List<TopicIdPartition> topicIdPartitions,
         Map<TopicIdPartition, Integer> partitionMaxBytes
     ) {
         log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
-            topicIdPartitions, groupId, fetchParams);
+                partitionMaxBytes.keySet(), groupId, fetchParams);
 
-        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
-        ShareFetchPartitionData shareFetchPartitionData = new ShareFetchPartitionData(fetchParams, groupId, memberId,
-            topicIdPartitions, future, partitionMaxBytes);
+        CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
+        ShareFetchPartitionData shareFetchPartitionData = new ShareFetchPartitionData(fetchParams, groupId, memberId, future, partitionMaxBytes);
         fetchQueue.add(shareFetchPartitionData);
         maybeProcessFetchQueue();
 
@@ -252,11 +266,35 @@ public class SharePartitionManager implements AutoCloseable {
     ) {
         log.trace("Acknowledge request for topicIdPartitions: {} with groupId: {}",
             acknowledgeTopics.keySet(), groupId);
+        this.shareGroupMetrics.shareAcknowledgement();
+        Map<TopicIdPartition, CompletableFuture<Errors>> futures = new HashMap<>();
+        acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
+            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+            if (sharePartition != null) {
+                CompletableFuture<Errors> future = sharePartition.acknowledge(memberId, acknowledgePartitionBatches).thenApply(throwable -> {
+                    if (throwable.isPresent()) {
+                        return Errors.forException(throwable.get());
+                    }
+                    acknowledgePartitionBatches.forEach(batch -> {
+                        batch.acknowledgeTypes().forEach(this.shareGroupMetrics::recordAcknowledgement);
+                    });
+                    return Errors.NONE;
+                });
+                futures.put(topicIdPartition, future);
+            } else {
+                futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            }
+        });
 
-        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> future = new CompletableFuture<>();
-        future.completeExceptionally(new UnsupportedOperationException("Not implemented yet"));
-
-        return future;
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+            futures.values().toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
+            futures.forEach((topicIdPartition, future) -> result.put(topicIdPartition, new ShareAcknowledgeResponseData.PartitionData()
+                .setPartitionIndex(topicIdPartition.partition())
+                .setErrorCode(future.join().code())));
+            return result;
+        });
     }
 
     /**
@@ -265,17 +303,20 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @param groupId The group id, this is used to identify the share group.
      * @param memberId The member id, generated by the group-coordinator, this is used to identify the client.
-     * @param topicIdPartitions The topic-partitions to release the acquired records for.
      *
      * @return A future that will be completed with the release response.
      */
     public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseAcquiredRecords(
         String groupId,
-        String memberId,
-        List<TopicIdPartition> topicIdPartitions
+        String memberId
     ) {
-        log.trace("Release acquired records request for topicIdPartitions: {} with groupId: {}",
-            topicIdPartitions, groupId);
+        log.trace("Release acquired records request for groupId: {}, memberId: {}", groupId, memberId);
+        List<TopicIdPartition> topicIdPartitions = cachedTopicIdPartitionsInShareSession(
+            groupId, Uuid.fromString(memberId));
+        if (topicIdPartitions.isEmpty()) {
+            return CompletableFuture.completedFuture(Collections.emptyMap());
+        }
+
         Map<TopicIdPartition, CompletableFuture<Errors>> futuresMap = new HashMap<>();
         topicIdPartitions.forEach(topicIdPartition -> {
             SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
@@ -310,10 +351,11 @@ public class SharePartitionManager implements AutoCloseable {
      * @param shareFetchData The topic-partitions and their corresponding maxBytes data in the share fetch request.
      * @param toForget The topic-partitions to forget present in the share fetch request.
      * @param reqMetadata The metadata in the share fetch request.
+     * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not
      * @return The new share fetch context object
      */
-    public ShareFetchContext newContext(String groupId, Map<TopicIdPartition,
-            ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> toForget, ShareFetchMetadata reqMetadata) {
+    public ShareFetchContext newContext(String groupId, Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData,
+                                        List<TopicIdPartition> toForget, ShareRequestMetadata reqMetadata, Boolean isAcknowledgeDataPresent) {
         ShareFetchContext context;
         // TopicPartition with maxBytes as 0 should not be added in the cachedPartitions
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchDataWithMaxBytes = new HashMap<>();
@@ -324,16 +366,23 @@ public class SharePartitionManager implements AutoCloseable {
         // new session in case it is INITIAL_EPOCH. Hence, we need to treat them as special cases.
         if (reqMetadata.isFull()) {
             ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
-            if (reqMetadata.epoch() == ShareFetchMetadata.FINAL_EPOCH) {
+            if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
                 // If the epoch is FINAL_EPOCH, don't try to create a new session.
                 if (!shareFetchDataWithMaxBytes.isEmpty()) {
                     throw Errors.INVALID_REQUEST.exception();
                 }
-                context = new FinalContext();
-                if (cache.remove(key) != null) {
-                    log.debug("Removed share session with key {}", key);
+                if (cache.remove(key) == null) {
+                    log.error("Share session error for {}: no such share session found", key);
+                    throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+                } else {
+                    log.debug("Removed share session with key " + key);
                 }
+                context = new FinalContext();
             } else {
+                if (isAcknowledgeDataPresent) {
+                    log.error("Acknowledge data present in Initial Fetch Request for group {} member {}", groupId, reqMetadata.memberId());
+                    throw Errors.INVALID_REQUEST.exception();
+                }
                 if (cache.remove(key) != null) {
                     log.debug("Removed share session with key {}", key);
                 }
@@ -370,7 +419,7 @@ public class SharePartitionManager implements AutoCloseable {
                 Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
                         shareFetchDataWithMaxBytes, toForget);
                 cache.touch(shareSession, time.milliseconds());
-                shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+                shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
                 log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
                                 "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
                         partitionsToLogString(modifiedTopicIdPartitions.get(
@@ -385,18 +434,57 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     /**
+     * The acknowledgeSessionUpdate method is used to update the request epoch and lastUsed time of the share session.
+     * @param groupId The group id in the share fetch request.
+     * @param reqMetadata The metadata in the share acknowledge request.
+     */
+    public void acknowledgeSessionUpdate(String groupId, ShareRequestMetadata reqMetadata) {
+        if (reqMetadata.epoch() == ShareRequestMetadata.INITIAL_EPOCH) {
+            // ShareAcknowledge Request cannot have epoch as INITIAL_EPOCH (0)
+            throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+        } else if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
+            ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
+            if (cache.remove(key) == null) {
+                log.error("Share session error for {}: no such share session found", key);
+                throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+            } else {
+                log.debug("Removed share session with key " + key);
+            }
+        } else {
+            synchronized (cache) {
+                ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
+                ShareSession shareSession = cache.get(key);
+                if (shareSession == null) {
+                    log.debug("Share session error for {}: no such share session found", key);
+                    throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+                } else {
+                    if (shareSession.epoch != reqMetadata.epoch()) {
+                        log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
+                                shareSession.epoch, reqMetadata.epoch());
+                        throw  Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+                    } else {
+                        cache.touch(shareSession, time.milliseconds());
+                        shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * The cachedTopicIdPartitionsInShareSession method is used to get the cached topic-partitions in the share session.
      *
      * @param groupId The group id in the share fetch request.
      * @param memberId The member id in the share fetch request.
      *
-     * @return The list of cached topic-partitions in the share session.
+     * @return The list of cached topic-partitions in the share session if present, otherwise an empty list.
      */
-    public List<TopicIdPartition> cachedTopicIdPartitionsInShareSession(String groupId, Uuid memberId) {
+    // Visible for testing.
+    List<TopicIdPartition> cachedTopicIdPartitionsInShareSession(String groupId, Uuid memberId) {
         ShareSessionKey key = shareSessionKey(groupId, memberId);
         ShareSession shareSession = cache.get(key);
         if (shareSession == null) {
-            throw new ShareSessionNotFoundException("Share session not found in cache");
+            return Collections.emptyList();
         }
         List<TopicIdPartition> cachedTopicIdPartitions = new ArrayList<>();
         shareSession.partitionMap().forEach(cachedSharePartition -> cachedTopicIdPartitions.add(
@@ -416,13 +504,14 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     private static String partitionsToLogString(Collection<TopicIdPartition> partitions) {
-        return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
+        return ShareSession.partitionsToLogString(partitions, log.isTraceEnabled());
     }
 
     /**
      * Recursive function to process all the fetch requests present inside the fetch queue
      */
-    private void maybeProcessFetchQueue() {
+    // Visible for testing.
+    void maybeProcessFetchQueue() {
         if (!processFetchQueueLock.compareAndSet(false, true)) {
             // The queue is already being processed hence avoid re-triggering.
             return;
@@ -439,14 +528,19 @@ public class SharePartitionManager implements AutoCloseable {
         }
 
         try {
-            shareFetchPartitionData.topicIdPartitions.forEach(topicIdPartition -> {
+            shareFetchPartitionData.partitionMaxBytes.keySet().forEach(topicIdPartition -> {
                 SharePartitionKey sharePartitionKey = sharePartitionKey(
                     shareFetchPartitionData.groupId,
                     topicIdPartition
                 );
                 SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey,
-                    k -> new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxInFlightMessages, maxDeliveryCount,
-                        recordLockDurationMs, timer, time, persister));
+                    k -> {
+                        long start = time.hiResClockMs();
+                        SharePartition partition = new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxInFlightMessages, maxDeliveryCount,
+                            recordLockDurationMs, timer, time, persister);
+                        this.shareGroupMetrics.partitionLoadTime(start);
+                        return partition;
+                    });
                 int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
                 // Add the share partition to the list of partitions to be fetched only if we can
                 // acquire the fetch lock on it.
@@ -480,6 +574,8 @@ public class SharePartitionManager implements AutoCloseable {
                 // the lock on share partition already exists which facilitates correct behaviour
                 // with multiple requests from queue being processed.
                 releaseProcessFetchQueueLock();
+                if (!fetchQueue.isEmpty())
+                    maybeProcessFetchQueue();
                 return;
             }
 
@@ -518,12 +614,13 @@ public class SharePartitionManager implements AutoCloseable {
         } catch (Exception e) {
             // In case exception occurs then release the locks so queue can be further processed.
             log.error("Error processing fetch queue for share partitions", e);
+            shareFetchPartitionData.future.completeExceptionally(e);
             releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
         }
     }
 
     // Visible for testing.
-    CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> processFetchResponse(
+    CompletableFuture<Map<TopicIdPartition, PartitionData>> processFetchResponse(
         ShareFetchPartitionData shareFetchPartitionData,
         List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData
     ) {
@@ -537,7 +634,7 @@ public class SharePartitionManager implements AutoCloseable {
                 .handle((acquiredRecords, throwable) -> {
                     log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
                         topicIdPartition, shareFetchPartitionData, acquiredRecords);
-                    ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                    PartitionData partitionData = new PartitionData()
                         .setPartitionIndex(topicIdPartition.partition());
 
                     if (throwable != null) {
@@ -574,7 +671,7 @@ public class SharePartitionManager implements AutoCloseable {
         });
 
         return CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0])).thenApply(v -> {
-            Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processedResult = new HashMap<>();
+            Map<TopicIdPartition, PartitionData> processedResult = new HashMap<>();
             futures.forEach((topicIdPartition, future) -> processedResult.put(topicIdPartition, future.join()));
             return processedResult;
         });
@@ -599,8 +696,9 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @return The offset for the earliest timestamp.
      */
-    private long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
-        // TODO: We need to know the isolation level from group configs, for now we are passing Option.empty() for isolationLevel
+    // Visible for testing.
+    long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
+        // Isolation level is only required when reading from the latest offset hence use Option.empty() for now.
         Option<TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
             Optional.empty(), true);
@@ -656,20 +754,111 @@ public class SharePartitionManager implements AutoCloseable {
         private final FetchParams fetchParams;
         private final String groupId;
         private final String memberId;
-        private final List<TopicIdPartition> topicIdPartitions;
-        private final CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future;
+        private final CompletableFuture<Map<TopicIdPartition, PartitionData>> future;
         private final Map<TopicIdPartition, Integer> partitionMaxBytes;
 
         public ShareFetchPartitionData(FetchParams fetchParams, String groupId, String memberId,
-                                       List<TopicIdPartition> topicIdPartitions,
-                                       CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future,
+                                       CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
                                        Map<TopicIdPartition, Integer> partitionMaxBytes) {
             this.fetchParams = fetchParams;
             this.groupId = groupId;
             this.memberId = memberId;
-            this.topicIdPartitions = topicIdPartitions;
             this.future = future;
             this.partitionMaxBytes = partitionMaxBytes;
+        }
+    }
+
+    static class ShareGroupMetrics {
+        /**
+         * share-acknowledgement (share-acknowledgement-rate and share-acknowledgement-count) - The total number of offsets acknowledged for share groups (requests to be ack).
+         * record-acknowledgement (record-acknowledgement-rate and record-acknowledgement-count) - The number of records acknowledged per acknowledgement type.
+         * partition-load-time (partition-load-time-avg and partition-load-time-max) - The time taken to load the share partitions.
+         */
+
+        public static final String METRICS_GROUP_NAME = "share-group-metrics";
+
+        public static final String SHARE_ACK_SENSOR = "share-acknowledgement-sensor";
+        public static final String SHARE_ACK_RATE = "share-acknowledgement-rate";
+        public static final String SHARE_ACK_COUNT = "share-acknowledgement-count";
+
+        public static final String RECORD_ACK_SENSOR_PREFIX = "record-acknowledgement";
+        public static final String RECORD_ACK_RATE = "record-acknowledgement-rate";
+        public static final String RECORD_ACK_COUNT = "record-acknowledgement-count";
+        public static final String ACK_TYPE = "ack-type";
+
+        public static final String PARTITION_LOAD_TIME_SENSOR = "partition-load-time-sensor";
+        public static final String PARTITION_LOAD_TIME_AVG = "partition-load-time-avg";
+        public static final String PARTITION_LOAD_TIME_MAX = "partition-load-time-max";
+
+        public static final Map<Byte, String> RECORD_ACKS_MAP = new HashMap<>();
+        
+        private final Time time;
+        private final Sensor shareAcknowledgementSensor;
+        private final Map<Byte, Sensor> recordAcksSensorMap = new HashMap<>();
+        private final Sensor partitionLoadTimeSensor;
+
+        static {
+            RECORD_ACKS_MAP.put((byte) 1, AcknowledgeType.ACCEPT.toString());
+            RECORD_ACKS_MAP.put((byte) 2, AcknowledgeType.RELEASE.toString());
+            RECORD_ACKS_MAP.put((byte) 3, AcknowledgeType.REJECT.toString());
+        }
+
+        public ShareGroupMetrics(Metrics metrics, Time time) {
+            this.time = time;
+
+            shareAcknowledgementSensor = metrics.sensor(SHARE_ACK_SENSOR);
+            shareAcknowledgementSensor.add(new Meter(
+                metrics.metricName(
+                    SHARE_ACK_RATE,
+                    METRICS_GROUP_NAME,
+                    "Rate of acknowledge requests."),
+                metrics.metricName(
+                    SHARE_ACK_COUNT,
+                    METRICS_GROUP_NAME,
+                    "The number of acknowledge requests.")));
+
+            for (Map.Entry<Byte, String> entry : RECORD_ACKS_MAP.entrySet()) {
+                recordAcksSensorMap.put(entry.getKey(), metrics.sensor(String.format("%s-%s-sensor", RECORD_ACK_SENSOR_PREFIX, entry.getValue())));
+                recordAcksSensorMap.get(entry.getKey())
+                    .add(new Meter(
+                        metrics.metricName(
+                            RECORD_ACK_RATE,
+                            METRICS_GROUP_NAME,
+                            "Rate of records acknowledged per acknowledgement type.",
+                            ACK_TYPE, entry.getValue()),
+                        metrics.metricName(
+                            RECORD_ACK_COUNT,
+                            METRICS_GROUP_NAME,
+                            "The number of records acknowledged per acknowledgement type.",
+                            ACK_TYPE, entry.getValue())));
+            }
+
+            partitionLoadTimeSensor = metrics.sensor(PARTITION_LOAD_TIME_SENSOR);
+            partitionLoadTimeSensor.add(metrics.metricName(
+                    PARTITION_LOAD_TIME_AVG,
+                    METRICS_GROUP_NAME,
+                    "The average time in milliseconds to load the share partitions."),
+                new Avg());
+            partitionLoadTimeSensor.add(metrics.metricName(
+                    PARTITION_LOAD_TIME_MAX,
+                    METRICS_GROUP_NAME,
+                    "The maximum time in milliseconds to load the share partitions."),
+                new Max());
+        }
+
+        void shareAcknowledgement() {
+            shareAcknowledgementSensor.record();
+        }
+
+        void recordAcknowledgement(byte ackType) {
+            // unknown ack types (such as gaps for control records) are intentionally ignored
+            if (recordAcksSensorMap.containsKey(ackType)) {
+                recordAcksSensorMap.get(ackType).record();
+            }
+        }
+
+        void partitionLoadTime(long start) {
+            partitionLoadTimeSensor.record(time.hiResClockMs() - start);
         }
     }
 }

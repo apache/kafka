@@ -55,6 +55,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -110,11 +111,11 @@ import java.util.stream.Stream;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
-import static org.apache.kafka.clients.consumer.internals.MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
@@ -1617,13 +1618,13 @@ public class AsyncKafkaConsumerTest {
 
         consumer.unsubscribe();
 
-        final ConsumerGroupMetadata groupMetadataAfterUnsubscription = new ConsumerGroupMetadata(
+        final ConsumerGroupMetadata groupMetadataAfterUnsubscribe = new ConsumerGroupMetadata(
             groupId,
             JoinGroupRequest.UNKNOWN_GENERATION_ID,
             JoinGroupRequest.UNKNOWN_MEMBER_ID,
             Optional.empty()
         );
-        assertEquals(groupMetadataAfterUnsubscription, consumer.groupMetadata());
+        assertEquals(groupMetadataAfterUnsubscribe, consumer.groupMetadata());
     }
 
     /**
@@ -1634,7 +1635,7 @@ public class AsyncKafkaConsumerTest {
      *
      * Note that we test {@link ConsumerRebalanceListener} that throws errors in its different callbacks. Failed
      * callback execution does <em>not</em> immediately errors. Instead, those errors are forwarded to the
-     * application event thread for the {@link MembershipManagerImpl} to handle.
+     * application event thread for the {@link ConsumerMembershipManager} to handle.
      */
     @ParameterizedTest
     @MethodSource("listenerCallbacksInvokeSource")
@@ -1758,6 +1759,7 @@ public class AsyncKafkaConsumerTest {
     public void testGroupRemoteAssignorUnusedIfGroupIdUndefined() {
         final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         final ConsumerConfig config = new ConsumerConfig(props);
         consumer = newConsumer(config);
 
@@ -1765,15 +1767,12 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testGroupRemoteAssignorUnusedInGenericProtocol() {
+    public void testGroupRemoteAssignorInClassicProtocol() {
         final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT));
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
-        final ConsumerConfig config = new ConsumerConfig(props);
-        consumer = newConsumer(config);
-
-        assertTrue(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+        assertThrows(ConfigException.class, () -> new ConsumerConfig(props));
     }
 
     @Test
@@ -2075,6 +2074,15 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(Collections.singletonList("topic"));
         consumer.poll(Duration.ZERO);
         verify(backgroundEventReaper).reap(time.milliseconds());
+    }
+
+    @Test
+    public void testUnsubscribeWithoutGroupId() {
+        consumer = newConsumerWithoutGroupId();
+
+        completeUnsubscribeApplicationEventSuccessfully();
+        consumer.unsubscribe();
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
     }
 
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {

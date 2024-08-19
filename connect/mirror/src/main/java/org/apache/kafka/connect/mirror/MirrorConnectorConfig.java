@@ -110,9 +110,19 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String TOPIC_FILTER_CLASS_DOC = "TopicFilter to use. Selects topics to replicate.";
     public static final Class<?> TOPIC_FILTER_CLASS_DEFAULT = DefaultTopicFilter.class;
 
-    public static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
+    public static final String OFFSET_SYNCS_TOPIC_CONFIG_PREFIX = "offset-syncs.topic.";
+    public static final String OFFSET_SYNCS_TOPIC_LOCATION = OFFSET_SYNCS_TOPIC_CONFIG_PREFIX + "location";
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
+
+    public static final String EMIT_OFFSET_SYNCS_ENABLED = "emit.offset-syncs" + ENABLED_SUFFIX;
+    public static final String EMIT_OFFSET_SYNCS_ENABLED_DOC = "Whether to store the new offset of the replicated records in offset-syncs topic or not. " +
+            "MirrorCheckpointConnector will not be able to sync group offsets or emit checkpoints if emit.checkpoints.enabled and/or sync.group.offsets.enabled are enabled while " +
+            EMIT_OFFSET_SYNCS_ENABLED + " is disabled.";
+    public static final boolean EMIT_OFFSET_SYNCS_ENABLED_DEFAULT = true;
+
+    public static final String OFFSET_SYNCS_CLIENT_ROLE_PREFIX = "offset-syncs-";
+
     public static final String TASK_INDEX = "task.index";
 
     private final ReplicationPolicy replicationPolicy;
@@ -316,8 +326,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     true,
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
-            )
-            .withClientSslSupport()
+            ).withClientSslSupport()
             .withClientSaslSupport();
 
     public static void main(String[] args) {

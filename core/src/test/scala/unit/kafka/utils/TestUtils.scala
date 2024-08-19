@@ -21,10 +21,10 @@ import kafka.api._
 import kafka.controller.ControllerEventManager
 import kafka.log._
 import kafka.network.RequestChannel
+import kafka.security.JaasTestUtils
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.tools.StorageTool
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -43,7 +43,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ClientInformation, ListenerName, Mode}
+import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
@@ -54,12 +54,11 @@ import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
-import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
@@ -86,10 +85,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Arrays, Collections, Optional, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq, immutable, mutable}
+import scala.collection.{Map, Seq, mutable}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -348,20 +348,21 @@ object TestUtils extends Logging {
     props.put(ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG, "100")
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
     props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    props.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100")
     if (!props.containsKey(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG))
       props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5")
     if (!props.containsKey(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG))
       props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     rack.foreach(props.put(ServerConfigs.BROKER_RACK_CONFIG, _))
     // Reduce number of threads per broker
-    props.put(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2")
+    props.put(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG, "2")
     props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "2")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
-      props ++= sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId")
+      props ++= sslConfigs(ConnectionMode.SERVER, false, trustStoreFile, s"server$nodeId")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSaslAuthentication(protocol) })
-      props ++= JaasTestUtils.saslConfigs(saslProperties)
+      props ++= JaasTestUtils.saslConfigs(saslProperties.toJava)
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG, protocol.name)
@@ -646,7 +647,7 @@ object TestUtils extends Logging {
   /**
    * Returns security configuration options for broker or clients
    *
-   * @param mode Client or server mode
+   * @param connectionMode Client or server mode
    * @param securityProtocol Security protocol which indicates if SASL or SSL or both configs are included
    * @param trustStoreFile Trust store file must be provided for SSL and SASL_SSL
    * @param certAlias Alias of certificate in SSL key store
@@ -656,7 +657,7 @@ object TestUtils extends Logging {
    * @param needsClientCert If not empty, a flag which indicates if client certificates are required. By default
    *                        client certificates are generated only if securityProtocol is SSL (not for SASL_SSL).
    */
-  def securityConfigs(mode: Mode,
+  def securityConfigs(connectionMode: ConnectionMode,
                       securityProtocol: SecurityProtocol,
                       trustStoreFile: Option[File],
                       certAlias: String,
@@ -667,11 +668,11 @@ object TestUtils extends Logging {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol)) {
       val addClientCert = needsClientCert.getOrElse(securityProtocol == SecurityProtocol.SSL)
-      props ++= sslConfigs(mode, addClientCert, trustStoreFile, certAlias, certCn, tlsProtocol)
+      props ++= sslConfigs(connectionMode, addClientCert, trustStoreFile, certAlias, certCn, tlsProtocol)
     }
 
     if (usesSaslAuthentication(securityProtocol))
-      props ++= JaasTestUtils.saslConfigs(saslProperties)
+      props ++= JaasTestUtils.saslConfigs(saslProperties.toJava)
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
@@ -679,7 +680,7 @@ object TestUtils extends Logging {
   def producerSecurityConfigs(securityProtocol: SecurityProtocol,
                               trustStoreFile: Option[File],
                               saslProperties: Option[Properties]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "producer", SslCertificateCn, saslProperties)
+    securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "producer", SslCertificateCn, saslProperties)
 
   /**
    * Create a (new) producer with a few pre-configured properties.
@@ -727,10 +728,10 @@ object TestUtils extends Logging {
   }
 
   def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer", SslCertificateCn, saslProperties)
+    securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "consumer", SslCertificateCn, saslProperties)
 
   def adminClientSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
-    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "admin-client", SslCertificateCn, saslProperties)
+    securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, "admin-client", SslCertificateCn, saslProperties)
 
   /**
    * Create a consumer with a few pre-configured properties.
@@ -1167,27 +1168,6 @@ object TestUtils extends Logging {
     assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
   }
 
-  def formatDirectories(
-    directories: immutable.Seq[String],
-    metaProperties: MetaProperties,
-    metadataVersion: MetadataVersion,
-    optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]]
-  ): Unit = {
-    val stream = new ByteArrayOutputStream()
-    var out: PrintStream = null
-    try {
-      out = new PrintStream(stream)
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion, optionalMetadataRecords, "format command")
-      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted = false) != 0) {
-        throw new RuntimeException(stream.toString())
-      }
-      debug(s"Formatted storage directory(ies) ${directories}")
-    } finally {
-      if (out != null) out.close()
-      stream.close()
-    }
-  }
-
   /**
    * Create new LogManager instance with default configuration for testing
    */
@@ -1404,7 +1384,7 @@ object TestUtils extends Logging {
     new String(bytes, encoding)
   }
 
-  def sslConfigs(mode: Mode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String,
+  def sslConfigs(mode: ConnectionMode, clientCert: Boolean, trustStoreFile: Option[File], certAlias: String,
                  certCn: String = SslCertificateCn,
                  tlsProtocol: String = TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS): Properties = {
     val trustStore = trustStoreFile.getOrElse {
