@@ -113,7 +113,7 @@ class ForwardingManagerImpl(
   channelManager: NodeToControllerChannelManager
 ) extends ForwardingManager with AutoCloseable with Logging {
 
-  var forwardingManagerMetrics = new ForwardingManagerMetrics
+  val forwardingManagerMetrics: ForwardingManagerMetrics = ForwardingManagerMetrics()
 
   override def forwardRequest(
     requestContext: RequestContext,
@@ -175,13 +175,12 @@ class ForwardingManagerImpl(
       }
     }
 
-    Option(forwardingManagerMetrics).foreach(_.queueLength.getAndIncrement())
+    forwardingManagerMetrics.queueLength.getAndIncrement()
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
 
-  override def close(): Unit = {
-    Option(forwardingManagerMetrics).foreach(_.close())
-  }
+  override def close(): Unit =
+    forwardingManagerMetrics.close()
 
   override def controllerApiVersions: Option[NodeApiVersions] =
     channelManager.controllerApiVersions.asScala

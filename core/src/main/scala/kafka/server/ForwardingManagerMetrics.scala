@@ -23,7 +23,8 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
-final class ForwardingManagerMetrics extends AutoCloseable {
+final class ForwardingManagerMetrics private
+  extends AutoCloseable {
   import ForwardingManagerMetrics._
 
   private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup("kafka.server","ForwardingManager")
@@ -60,4 +61,6 @@ object ForwardingManagerMetrics {
   private final class FuncGauge[T](func: T) extends Gauge[T] {
     override def value(): T = func
   }
+
+  def apply(): ForwardingManagerMetrics = new ForwardingManagerMetrics
 }

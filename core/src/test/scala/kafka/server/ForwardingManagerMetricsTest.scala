@@ -36,7 +36,7 @@ final class ForwardingManagerMetricsTest {
       "kafka.server:type=ForwardingManager,name=RemoteTimeMs"
     )
 
-    Using(new ForwardingManagerMetrics) { _ =>
+    Using(ForwardingManagerMetrics()) { _ =>
       val histogramsMap = metricsRegistry.allMetrics().asScala.filter { case (name, _) => name.getGroup == "kafka.server" && name.getType == "ForwardingManager"}
       assertEquals(histogramsMap.size, expectedMetrics.size)
       histogramsMap.foreach {case (name, _) =>
@@ -49,22 +49,10 @@ final class ForwardingManagerMetricsTest {
   }
 
   @Test
-  def testQueueLength(): Unit = {
-    val metricsRegistry = KafkaYammerMetrics.defaultRegistry()
-
-    Using(new ForwardingManagerMetrics) { forwardingManagerMetrics =>
-      val queueLength = metricsRegistry.allMetrics().get(forwardingManagerMetrics.queueLengthName).asInstanceOf[Gauge[Int]]
-      assertEquals(0, queueLength.value())
-      forwardingManagerMetrics.queueLength.getAndIncrement()
-      assertEquals(1, queueLength.value())
-    }
-  }
-
-  @Test
   def testQueueTimeMs(): Unit = {
     val metricsRegistry = KafkaYammerMetrics.defaultRegistry()
 
-    Using(new ForwardingManagerMetrics) { forwardingManagerMetrics =>
+    Using(ForwardingManagerMetrics()) { forwardingManagerMetrics =>
       val queueTimeMs = metricsRegistry.allMetrics().get(forwardingManagerMetrics.queueTimeMsName).asInstanceOf[Histogram]
       forwardingManagerMetrics.queueTimeMsHist.update(10)
       assertEquals(10, queueTimeMs.max())
@@ -74,10 +62,22 @@ final class ForwardingManagerMetricsTest {
   }
 
   @Test
+  def testQueueLength(): Unit = {
+    val metricsRegistry = KafkaYammerMetrics.defaultRegistry()
+
+    Using(ForwardingManagerMetrics()) { forwardingManagerMetrics =>
+      val queueLength = metricsRegistry.allMetrics().get(forwardingManagerMetrics.queueLengthName).asInstanceOf[Gauge[Int]]
+      assertEquals(0, queueLength.value())
+      forwardingManagerMetrics.queueLength.getAndIncrement()
+      assertEquals(1, queueLength.value())
+    }
+  }
+
+  @Test
   def testRemoteTimeMs(): Unit = {
     val metricsRegistry = KafkaYammerMetrics.defaultRegistry()
 
-    Using(new ForwardingManagerMetrics) { forwardingManagerMetrics =>
+    Using(ForwardingManagerMetrics()) { forwardingManagerMetrics =>
       val remoteTimeMs = metricsRegistry.allMetrics().get(forwardingManagerMetrics.remoteTimeMsName).asInstanceOf[Histogram]
       forwardingManagerMetrics.remoteTimeMsHist.update(10)
       assertEquals(10, remoteTimeMs.max())
