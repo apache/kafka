@@ -56,7 +56,7 @@ jobs:
             caches
             notifications
             jdks
-          cache-cleanup: true
+          cache-cleanup: on-success
           cache-overwrite-existing: true
       - name: Compile and validate
         run: ./gradlew --build-cache --info --scan check -x test
@@ -94,7 +94,7 @@ jobs:
             caches
             notifications
             jdks
-          cache-cleanup: true
+          cache-cleanup: on-success
           cache-overwrite-existing: true
       - name: Test
         run: |
