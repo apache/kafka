@@ -3151,21 +3151,6 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testRefreshOffsetLoadInProgress() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
-        subscriptions.assignFromUser(singleton(t1p));
-        client.prepareResponse(offsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
-        client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
-        coordinator.initWithCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
-
-        assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
-        assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(100L, subscriptions.position(t1p).offset);
-    }
-
-    @Test
     public void testRefreshOffsetsGroupNotAuthorized() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -3212,6 +3197,7 @@ public abstract class ConsumerCoordinatorTest {
     @CsvSource({
         "NOT_COORDINATOR, true",
         "COORDINATOR_NOT_AVAILABLE, true",
+        "COORDINATOR_LOAD_IN_PROGRESS, false",
         "NETWORK_EXCEPTION, false",
     })
     public void testRefreshOffsetRetriableErrorCoordinatorLookup(Errors error, boolean expectCoordinatorRelookup) {
