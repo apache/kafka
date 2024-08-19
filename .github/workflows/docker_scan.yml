@@ -19,6 +19,9 @@ on:
     # This job will run at 3:30 UTC daily
     - cron: '30 3 * * *'
   workflow_dispatch:
+permissions:  # added using https://github.com/step-security/secure-repo
+  contents: read
+
 jobs:
   scan_jvm:
     if: github.repository == 'apache/kafka'
@@ -29,7 +32,7 @@ jobs:
         supported_image_tag: ['latest', '3.7.0']
     steps:
       - name: Run CVE scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.24.0
         if: always()
         with:
           image-ref: apache/kafka:${{ matrix.supported_image_tag }}
