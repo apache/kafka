@@ -282,13 +282,14 @@ class RequestQuotaTest extends BaseRequestTest {
           new MetadataRequest.Builder(List(topic).asJava, true)
 
         case ApiKeys.LIST_OFFSETS =>
-          val targetTimes = List(new ListOffsetsTopic()
+          val topic = new ListOffsetsTopic()
             .setName(tp.topic)
             .setPartitions(List(new ListOffsetsPartition()
               .setPartitionIndex(tp.partition)
               .setTimestamp(0L)
-              .setCurrentLeaderEpoch(15)).asJava)).asJava
-          ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED).setTargetTimes(targetTimes)
+              .setCurrentLeaderEpoch(15)).asJava)
+          ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+            .setTargetTimes(List(topic).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
