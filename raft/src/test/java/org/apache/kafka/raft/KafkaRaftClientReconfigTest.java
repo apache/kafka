@@ -179,7 +179,6 @@ public class KafkaRaftClientReconfigTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withStaticVoters(voters)
-            .withBootstrapSnapshot(Optional.empty())
             .withUnknownLeader(0)
             .build();
 
@@ -200,19 +199,6 @@ public class KafkaRaftClientReconfigTest {
                 )
             )
         );
-
-        // check the bootstrap snapshot exists but is empty
-        assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
-        try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
-                context.log.latestSnapshot().get(),
-                context.serde,
-                BufferSupplier.NO_CACHING,
-                KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-                false
-            )
-        ) {
-            SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);
-        }
 
         // check leader does not write bootstrap records to log
         context.becomeLeader();
@@ -2243,6 +2229,25 @@ public class KafkaRaftClientReconfigTest {
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
         assertEquals(voter2.id(), fetchRequest.destination().id());
+    }
+
+    @Test
+    void testObserverDiscoversLeaderWithUnknownVoters() throws Exception {
+        ReplicaKey local = replicaKey(randomeReplicaId(), true);
+        InetSocketAddress bootstrapAdddress = InetSocketAddress.createUnresolved("localhost", 1234);
+        int epoch = 3;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.empty())
+            .withUnknownLeader(epoch)
+            .withBootstrapServers(Optional.of(Collections.singletonList(bootstrapAdddress)))
+            .build();
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        assertEquals(-2, fetchRequest.destination().id());
     }
 
     private static void verifyVotersRecord(

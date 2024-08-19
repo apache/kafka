@@ -68,6 +68,8 @@
             <allow pkg="org.apache.kafka.storage.internals.log"/>
             <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.apache.kafka.timeline" />
+            <allow pkg="org.apache.kafka.coordinator.common" />
+            <allow pkg="org.apache.kafka.coordinator.common.runtime" />
             <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics"/>
                 <allow pkg="org.apache.kafka.common.metrics" />
