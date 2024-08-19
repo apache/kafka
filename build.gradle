@@ -485,9 +485,11 @@ subprojects {
       includeEngines 'junit-jupiter'
     }
 
-    retry {
-      maxRetries = userMaxTestRetries
-      maxFailures = userMaxTestRetryFailures
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
     }
   }
 
@@ -515,9 +517,11 @@ subprojects {
       includeEngines 'junit-jupiter'
     }
 
-    retry {
-      maxRetries = userMaxTestRetries
-      maxFailures = userMaxTestRetryFailures
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
     }
   }
 
@@ -543,9 +547,11 @@ subprojects {
       includeEngines 'junit-jupiter'
     }
 
-    retry {
-      maxRetries = userMaxTestRetries
-      maxFailures = userMaxTestRetryFailures
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
     }
   }
 
