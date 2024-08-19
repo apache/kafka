@@ -25,7 +25,6 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
-import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -154,8 +153,7 @@ public class SharePartitionManager implements AutoCloseable {
         Persister persister,
         Metrics metrics
     ) {
-        this(
-            replicaManager,
+        this(replicaManager,
             time,
             cache,
             new ConcurrentHashMap<>(),
@@ -232,7 +230,7 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @return A future that will be completed with the fetched messages.
      */
-    public CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> fetchMessages(
+    public CompletableFuture<Map<TopicIdPartition, PartitionData>> fetchMessages(
         String groupId,
         String memberId,
         FetchParams fetchParams,
@@ -241,7 +239,7 @@ public class SharePartitionManager implements AutoCloseable {
         log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
                 partitionMaxBytes.keySet(), groupId, fetchParams);
 
-        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
         ShareFetchPartitionData shareFetchPartitionData = new ShareFetchPartitionData(fetchParams, groupId, memberId, future, partitionMaxBytes);
         fetchQueue.add(shareFetchPartitionData);
         maybeProcessFetchQueue();
@@ -614,12 +612,13 @@ public class SharePartitionManager implements AutoCloseable {
         } catch (Exception e) {
             // In case exception occurs then release the locks so queue can be further processed.
             log.error("Error processing fetch queue for share partitions", e);
+            shareFetchPartitionData.future.completeExceptionally(e);
             releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
         }
     }
 
     // Visible for testing.
-    CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> processFetchResponse(
+    CompletableFuture<Map<TopicIdPartition, PartitionData>> processFetchResponse(
         ShareFetchPartitionData shareFetchPartitionData,
         List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData
     ) {
@@ -633,7 +632,7 @@ public class SharePartitionManager implements AutoCloseable {
                 .handle((acquiredRecords, throwable) -> {
                     log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
                         topicIdPartition, shareFetchPartitionData, acquiredRecords);
-                    ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                    PartitionData partitionData = new PartitionData()
                         .setPartitionIndex(topicIdPartition.partition());
 
                     if (throwable != null) {
@@ -670,7 +669,7 @@ public class SharePartitionManager implements AutoCloseable {
         });
 
         return CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0])).thenApply(v -> {
-            Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processedResult = new HashMap<>();
+            Map<TopicIdPartition, PartitionData> processedResult = new HashMap<>();
             futures.forEach((topicIdPartition, future) -> processedResult.put(topicIdPartition, future.join()));
             return processedResult;
         });
@@ -697,7 +696,7 @@ public class SharePartitionManager implements AutoCloseable {
      */
     // Visible for testing.
     long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
-        // TODO: We need to know the isolation level from group configs, for now we are passing Option.empty() for isolationLevel
+        // Isolation level is only required when reading from the latest offset hence use Option.empty() for now.
         Option<TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
             topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
             Optional.empty(), true);
@@ -753,11 +752,11 @@ public class SharePartitionManager implements AutoCloseable {
         private final FetchParams fetchParams;
         private final String groupId;
         private final String memberId;
-        private final CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future;
+        private final CompletableFuture<Map<TopicIdPartition, PartitionData>> future;
         private final Map<TopicIdPartition, Integer> partitionMaxBytes;
 
         public ShareFetchPartitionData(FetchParams fetchParams, String groupId, String memberId,
-                                       CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future,
+                                       CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
                                        Map<TopicIdPartition, Integer> partitionMaxBytes) {
             this.fetchParams = fetchParams;
             this.groupId = groupId;
