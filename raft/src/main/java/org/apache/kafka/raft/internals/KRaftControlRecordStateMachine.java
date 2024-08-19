@@ -82,7 +82,7 @@ public final class KRaftControlRecordStateMachine {
      * @param logContext the log context
      */
     public KRaftControlRecordStateMachine(
-        VoterSet staticVoterSet,
+        Optional<VoterSet> staticVoterSet,
         ReplicatedLog log,
         RecordSerde<?> serde,
         BufferSupplier bufferSupplier,
@@ -280,25 +280,19 @@ public final class KRaftControlRecordStateMachine {
             long currentOffset = overrideOffset.orElse(batch.baseOffset() + offsetDelta);
             switch (record.type()) {
                 case KRAFT_VOTERS:
-                    VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
-                    logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
                     synchronized (voterSetHistory) {
-                        voterSetHistory.addAt(currentOffset, voters);
+                        voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message()));
                     }
                     break;
 
                 case KRAFT_VERSION:
-                    KRaftVersion kraftVersion = KRaftVersion.fromFeatureLevel(
-                        ((KRaftVersionRecord) record.message()).kRaftVersion()
-                    );
-                    logger.info(
-                        "Latest {} is {} at offset {}",
-                        KRaftVersion.FEATURE_NAME,
-                        kraftVersion,
-                        currentOffset
-                    );
                     synchronized (kraftVersionHistory) {
-                        kraftVersionHistory.addAt(currentOffset, kraftVersion);
+                        kraftVersionHistory.addAt(
+                            currentOffset,
+                            KRaftVersion.fromFeatureLevel(
+                                ((KRaftVersionRecord) record.message()).kRaftVersion()
+                            )
+                        );
                     }
                     break;
 

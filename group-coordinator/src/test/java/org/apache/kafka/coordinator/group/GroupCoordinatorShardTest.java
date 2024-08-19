@@ -34,11 +34,6 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
-import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -59,6 +54,9 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -74,8 +72,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_EXPIRATION_KEY;
+import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -212,8 +210,8 @@ public class GroupCoordinatorShardTest {
         for (String groupId : groupIds) {
             expectedResultCollection.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId(groupId));
             expectedRecords.addAll(Arrays.asList(
-                GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0),
-                GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId)
+                CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0),
+                CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId)
             ));
         }
 
@@ -225,14 +223,14 @@ public class GroupCoordinatorShardTest {
         when(offsetMetadataManager.deleteAllOffsets(anyString(), anyList())).thenAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<CoordinatorRecord> records = invocation.getArgument(1);
-            records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0));
+            records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0));
             return 1;
         });
         // Mockito#when only stubs method returning non-void value, so we use Mockito#doAnswer instead.
         doAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<CoordinatorRecord> records = invocation.getArgument(1);
-            records.add(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId));
+            records.add(CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
         }).when(groupMetadataManager).createGroupTombstoneRecords(anyString(), anyList());
 
@@ -276,10 +274,10 @@ public class GroupCoordinatorShardTest {
                     .setGroupId("group-id-3")
             ).iterator());
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
-            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id-1", "topic-name", 0),
-            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id-1"),
-            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id-3", "topic-name", 0),
-            GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id-3")
+            CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id-1", "topic-name", 0),
+            CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id-1"),
+            CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id-3", "topic-name", 0),
+            CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id-3")
         );
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, CoordinatorRecord> expectedResult = new CoordinatorResult<>(
             expectedRecords,
@@ -292,13 +290,13 @@ public class GroupCoordinatorShardTest {
         doAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<CoordinatorRecord> records = invocation.getArgument(1);
-            records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0));
+            records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, "topic-name", 0));
             return null;
         }).when(offsetMetadataManager).deleteAllOffsets(anyString(), anyList());
         doAnswer(invocation -> {
             String groupId = invocation.getArgument(0);
             List<CoordinatorRecord> records = invocation.getArgument(1);
-            records.add(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId));
+            records.add(CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
         }).when(groupMetadataManager).createGroupTombstoneRecords(anyString(), anyList());
 
@@ -965,8 +963,8 @@ public class GroupCoordinatorShardTest {
             mock(CoordinatorMetricsShard.class)
         );
 
-        CoordinatorRecord offsetCommitTombstone = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic", 0);
-        CoordinatorRecord groupMetadataTombstone = GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id");
+        CoordinatorRecord offsetCommitTombstone = CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic", 0);
+        CoordinatorRecord groupMetadataTombstone = CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CoordinatorRecord>> recordsCapture = ArgumentCaptor.forClass(List.class);
@@ -1048,7 +1046,7 @@ public class GroupCoordinatorShardTest {
             metricsShard
         );
 
-        List<CoordinatorRecord> records = Collections.singletonList(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
+        List<CoordinatorRecord> records = Collections.singletonList(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
             "group",
             "foo",
             0

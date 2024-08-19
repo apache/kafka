@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
@@ -162,10 +162,10 @@ public class TargetAssignmentBuilder<T extends ModernGroupMember> {
     }
 
     private TargetAssignmentRecordBuilder targetAssignmentRecordBuilder =
-        GroupCoordinatorRecordHelpers::newConsumerGroupTargetAssignmentRecord;
+        CoordinatorRecordHelpers::newConsumerGroupTargetAssignmentRecord;
 
     private TargetAssignmentEpochRecordBuilder targetAssignmentEpochRecordBuilder =
-        GroupCoordinatorRecordHelpers::newConsumerGroupTargetAssignmentEpochRecord;
+        CoordinatorRecordHelpers::newConsumerGroupTargetAssignmentEpochRecord;
 
     /**
      * Constructs the object.
