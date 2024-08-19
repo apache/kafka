@@ -75,6 +75,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                                 " print.timestamp=true|false\n" +
                                 " print.key=true|false\n" +
                                 " print.offset=true|false\n" +
+                                " print.delivery=true|false\n" +
                                 " print.partition=true|false\n" +
                                 " print.headers=true|false\n" +
                                 " print.value=true|false\n" +
