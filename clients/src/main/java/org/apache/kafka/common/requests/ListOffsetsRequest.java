@@ -110,7 +110,6 @@ public class ListOffsetsRequest extends AbstractRequest {
         public String toString() {
             return data.toString();
         }
-
     }
 
     /**

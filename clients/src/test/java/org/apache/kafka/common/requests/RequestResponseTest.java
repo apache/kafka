@@ -2354,10 +2354,9 @@ public class RequestResponseTest {
                             .setTimestamp(1000000L)
                             .setMaxNumOffsets(10)
                             .setCurrentLeaderEpoch(5)));
-            List<ListOffsetsTopic> topics = singletonList(topic);
             return ListOffsetsRequest.Builder
                     .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-                    .setTargetTimes(topics)
+                    .setTargetTimes(singletonList(topic))
                     .build(version);
         } else if (version == 1) {
             ListOffsetsTopic topic = new ListOffsetsTopic()
@@ -2366,10 +2365,9 @@ public class RequestResponseTest {
                             .setPartitionIndex(0)
                             .setTimestamp(1000000L)
                             .setCurrentLeaderEpoch(5)));
-            List<ListOffsetsTopic> topics = singletonList(topic);
             return ListOffsetsRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
-                    .setTargetTimes(topics)
+                    .setTargetTimes(singletonList(topic))
                     .build(version);
         } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
             ListOffsetsPartition partition = new ListOffsetsPartition()
@@ -2380,10 +2378,9 @@ public class RequestResponseTest {
             ListOffsetsTopic topic = new ListOffsetsTopic()
                     .setName("test")
                     .setPartitions(singletonList(partition));
-            List<ListOffsetsTopic> topics = singletonList(topic);
             return ListOffsetsRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_COMMITTED)
-                    .setTargetTimes(topics)
+                    .setTargetTimes(singletonList(topic))
                     .build(version);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);

@@ -287,14 +287,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createListOffsetsRequest = {
-    val topics = List(new ListOffsetsTopic()
-      .setName(tp.topic)
-      .setPartitions(List(new ListOffsetsPartition()
-        .setPartitionIndex(tp.partition)
-        .setTimestamp(0L)
-        .setCurrentLeaderEpoch(27)).asJava)).asJava
     requests.ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-      .setTargetTimes(topics)
+      .setTargetTimes(List(new ListOffsetsTopic()
+        .setName(tp.topic)
+        .setPartitions(List(new ListOffsetsPartition()
+          .setPartitionIndex(tp.partition)
+          .setTimestamp(0L)
+          .setCurrentLeaderEpoch(27)).asJava)).asJava)
       .build()
   }
 
