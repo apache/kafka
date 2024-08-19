@@ -21,36 +21,59 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Collections;
 import java.util.Set;
+import java.util.function.Consumer;
 
 @Timeout(value = 40)
-public class TrieAuthorizerTest extends AbstractClusterMetadataAuthorizerTest {
-
-    TestingWrapper testingWrapper = new TestingWrapper() {
-
-        @Override
-        public ClusterMetadataAuthorizer getAuthorizer() {
-            return new NameTrieAuthorizer();
-        }
-
-        @Override
-        public Set<String> superUsers(ClusterMetadataAuthorizer authorizer) {
-            return ((NameTrieAuthorizer) authorizer).getData().superUsers();
-        }
-
-        @Override
-        public AuthorizationResult defaultResult(ClusterMetadataAuthorizer authorizer) {
-            return ((NameTrieAuthorizer) authorizer).defaultResult();
-        }
-
-        @Override
-        public boolean supportsWildcards() {
-            return true;
-        }
-    };
+public class TrieAuthorizerTest extends AbstractClusterMetadataAuthorizerTest<TrieAuthorizer> {
 
     @Override
-    protected TestingWrapper getTestingWrapper() {
-        return testingWrapper;
+    protected Builder getTestingWrapperBuilder() {
+        return new Builder() {
+
+            @Override
+            public TestingWrapper<TrieAuthorizer> get() {
+
+                return new TestingWrapper<TrieAuthorizer>() {
+
+                    @Override
+                    public TrieAuthorizer getUnconfiguredAuthorizer() {
+                        return new TrieAuthorizer();
+                    }
+
+                    @Override
+                    public TrieAuthorizer configure(TrieAuthorizer authorizer) {
+                        applyConfigs(authorizer::configure);
+                        return authorizer;
+                    }
+
+                    @Override
+                    public TrieAuthorizer addAcls(TrieAuthorizer authorizer) {
+                        applyAcls(authorizer::addAcl);
+                        return authorizer;
+                    }
+
+                    @Override
+                    public TrieAuthorizer getAuthorizer() {
+                        TrieAuthorizer authorizer = configure(getUnconfiguredAuthorizer());
+                        authorizer.start(new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
+                        addAcls(authorizer).completeInitialLoad();
+                        return authorizer;
+                    }
+
+                    @Override
+                    public Set<String> superUsers(TrieAuthorizer authorizer) {
+                        return authorizer.getData().superUsers();
+                    }
+
+                    @Override
+                    public AuthorizationResult defaultResult(TrieAuthorizer authorizer) {
+                        return authorizer.defaultResult();
+                    }
+                };
+            }
+        };
     }
+
 }

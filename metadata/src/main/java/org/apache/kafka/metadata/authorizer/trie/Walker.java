@@ -49,6 +49,9 @@ public class Walker<T> {
      *
      */
     static <T> Node<T> depthFirst(Predicate<Node<T>> predicate, Node<T> data) {
+        if (data == null) {
+            return null;
+        }
         if (data.getChildren() != null) {
             for (Node<T> child : data.getChildren()) {
                 Node<T> candidate = depthFirst(predicate, child);
@@ -68,7 +71,7 @@ public class Walker<T> {
      *
      */
     public static <T> Matcher.SearchResult<T>  depthFirst(Predicate<Node<T>> predicate, Trie<T> data) {
-        return new Matcher.SearchResult<>(depthFirst(predicate, data.getRoot()));
+        return new Matcher.SearchResult<>(data == null ? null : depthFirst(predicate, data.getRoot()));
     }
 
     /**
@@ -79,14 +82,16 @@ public class Walker<T> {
      * @return The node on which the predicate returned {@code true} or null if that did not occur.
      */
     static <T> Node<T> preOrder(Predicate<Node<T>> predicate, Node<T> data) {
-        if (predicate.test(data)) {
-            return data;
-        }
-        if (data.getChildren() != null) {
-            for (Node<T> child : data.getChildren()) {
-                Node<T> candidate = preOrder(predicate, child);
-                if (candidate != null) {
-                    return candidate;
+        if (data != null) {
+            if (predicate.test(data)) {
+                return data;
+            }
+            if (data.getChildren() != null) {
+                for (Node<T> child : data.getChildren()) {
+                    Node<T> candidate = preOrder(predicate, child);
+                    if (candidate != null) {
+                        return candidate;
+                    }
                 }
             }
         }
@@ -101,7 +106,7 @@ public class Walker<T> {
      * @return The node on which the predicate returned {@code true} or null if that did not occur.
      */
     public static <T> Matcher.SearchResult<T> preOrder(Predicate<Node<T>> predicate, Trie<T> data) {
-        return new Matcher.SearchResult<>(preOrder(predicate, data.getRoot()));
+        return new Matcher.SearchResult<>(data == null ? null : preOrder(predicate, data.getRoot()));
     }
 
     public Walker() {

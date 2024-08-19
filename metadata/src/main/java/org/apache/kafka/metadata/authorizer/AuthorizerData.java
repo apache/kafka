@@ -289,7 +289,12 @@ public interface AuthorizerData {
     /**
      * The definition of a matching rule.
      */
+    @FunctionalInterface
     interface MatchingRule {
+        MatchingRule DENY = () -> DENIED;
+
+        MatchingRule ALLOW = () -> ALLOWED;
+
         /**
          * Get the result of the rule.
          * @return the result of the rule.
@@ -321,7 +326,9 @@ public interface AuthorizerData {
 
     /**
      * The defalt rule definition.
+     * @deprecated use {@link MatchingRule#DENY} or {@link MatchingRule#ALLOW}.
      */
+    @Deprecated
     class DefaultRule implements MatchingRule {
         /** The default result */
         private final AuthorizationResult result;
@@ -379,10 +386,12 @@ public interface AuthorizerData {
      * A builder for matching rules.
      */
     class MatchingRuleBuilder {
-        /** a single instance of the deny rule */
-        static final DefaultRule DENY_RULE = new DefaultRule(DENIED);
+        /** a single instance of the deny rule
+         * @deprecated use {@link MatchingRule#DENY} */
+        @Deprecated
+        static final MatchingRule DENY_RULE = MatchingRule.DENY;
         /** the default mathing rule if no ACL is found */
-        private final DefaultRule noAclRule;
+        private final MatchingRule noAclRule;
         /** set if a deny ACL was located */
         StandardAcl denyAcl;
         /** set if an allow ACL was located */
@@ -394,7 +403,7 @@ public interface AuthorizerData {
          * Creates a builder with the default rule.
          * @param noAclRule the default rule if no matches were found.
          */
-        public MatchingRuleBuilder(DefaultRule noAclRule) {
+        public MatchingRuleBuilder(MatchingRule noAclRule) {
             this.noAclRule = noAclRule;
         }
 
@@ -418,7 +427,7 @@ public interface AuthorizerData {
             } else if (!hasResourceAcls) {
                 return noAclRule;
             } else {
-                return DENY_RULE;
+                return MatchingRule.DENY;
             }
         }
     }

@@ -618,7 +618,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <Class name="org.apache.kafka.metadata.authorizer.NameTrieAuthorizerData$TrieData"/>
+        <Class name="org.apache.kafka.metadata.authorizer.TrieAuthorizerData$TrieData"/>
         <Method name="acls"/>"
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
     </Match>

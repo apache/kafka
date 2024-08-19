@@ -62,7 +62,7 @@ public interface Matcher<T> extends Predicate<Node<T>>, FragmentHolder {
         /**
          * Retrieve the internal Node representation.
          * NOTE: Visible for testing.
-         * @return the internal Node, may  be {@code null}
+         * @return the internal Node, may be {@code null}
          */
         Node<T> getNode() {
             return node;

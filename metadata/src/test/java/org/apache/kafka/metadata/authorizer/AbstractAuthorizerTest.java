@@ -54,6 +54,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -143,8 +145,16 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
     }
 
     abstract class Builder implements Supplier<TestingWrapper<T>> {
-        protected final List<StandardAclWithId> acls = new ArrayList<>();
-        protected final HashMap<String, Object> configs = new HashMap<>();
+        private final List<StandardAclWithId> acls = new ArrayList<>();
+        private final Map<String, Object> configs = new HashMap<>();
+
+        protected void  applyConfigs(Consumer<Map<String, ?>> consumer) {
+            consumer.accept(Collections.unmodifiableMap(configs));
+        }
+
+        protected  void applyAcls(BiConsumer<Uuid, StandardAcl> consumer) {
+            acls.forEach( a -> consumer.accept(a.id(), a.acl()));
+        }
 
         public final Builder addAcls(Stream<StandardAcl> acls) {
             acls.forEach(this::addAcl);
@@ -445,7 +455,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 .addAcl(new StandardAcl(TOPIC, "foo", PREFIXED, "User:bob", WILDCARD, READ, ALLOW));
 
         T authorizer = builder.get().getAuthorizer();
-        AuthorizableRequestContext requestContext = newRequestContext("User:alice");
+        AuthorizableRequestContext requestContext = newRequestContext("alice");
 
         for (AclOperation op : AclOperation.values()) {
             for (ResourceType type : ResourceType.values()) {
@@ -567,10 +577,6 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
     }
 
-
-
-
-
     protected Builder addManyAcls(Builder builder) {
         return builder.addAcl(new StandardAcl(TOPIC, "green2", LITERAL, "User:*", "*", READ, ALLOW))
                 .addAcl(new StandardAcl(TOPIC, "green", PREFIXED, "User:bob", "*", READ, ALLOW))
@@ -582,8 +588,6 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 .addAcl(new StandardAcl(GROUP, "*", LITERAL, "User:bob", "*", WRITE, ALLOW))
                 .addAcl(new StandardAcl(GROUP, "wheel", LITERAL, "User:*", "*", WRITE, DENY));
     }
-
-
 
     @Test
     public void testListAcls() throws Exception {
@@ -629,13 +633,17 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
     @Test
     public void testAllowEveryoneIfNoAclFoundConfigEnabled() throws Exception {
-        T authorizer = getTestingWrapperBuilder().superUser("User:alice;User:chris")
+        Builder builder = getTestingWrapperBuilder().superUser("User:alice;User:chris")
                 .addAcl(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
-                .config(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true").get().getAuthorizer();
+                .config(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
+        T authorizer = builder.get().getAuthorizer();
         AuthorizableRequestContext ctxt = newRequestContext("Bob");
 
-        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled", authorizer, ctxt, newAction(READ, TOPIC, "topic1"), DENIED);
+        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled - other ACLs for topic 1 exist", authorizer, ctxt, newAction(READ, TOPIC, "topic1"), DENIED);
         execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled", authorizer, ctxt, newAction(READ, TOPIC, "topic2"), ALLOWED);
+
+        authorizer = builder.addAcl(new StandardAcl(TOPIC, "top", PREFIXED, "User:Alice", WILDCARD, READ, ALLOW)).get().getAuthorizer();
+        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled - with prefixed ACL for 'top'", authorizer, ctxt, newAction(READ, TOPIC, "topic3"), DENIED);
     }
 
     @Test
@@ -776,6 +784,14 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
         T authorizer = addManyAcls(getTestingWrapperBuilder().superUser("User:superman")).get().getAuthorizer();
         AuthorizableRequestContext ctxt = newRequestContext("bob");
+
+        execAuthorize(() -> "Test authorize with many ACLs : bob read green1", authorizer, ctxt, newAction(READ, TOPIC, "green1"), ALLOWED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob write wheel", authorizer, ctxt, newAction(WRITE, TOPIC, "wheel"), DENIED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob read alpha", authorizer, ctxt, newAction(READ, TOPIC, "alpha"), DENIED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob write arbitrary", authorizer, ctxt, newAction(WRITE, GROUP, "arbitrary"), ALLOWED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob read ala", authorizer, ctxt, newAction(READ, TOPIC, "ala"), DENIED);
+
+        // the same set in groups.
 
         assertEquals(Arrays.asList(ALLOWED, DENIED),
                 authorizer.authorize(ctxt,

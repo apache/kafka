@@ -23,7 +23,7 @@ import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.PLAINT
 public class TrieAuthorizerPropertyTest extends AbstractAuthorizerPropertyTest {
 
     protected StandardAuthorizer buildAuthorizer() {
-        NameTrieAuthorizer authorizer = new NameTrieAuthorizer();
+        TrieAuthorizer authorizer = new TrieAuthorizer();
         authorizer.start(new StandardAuthorizerTest.AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
         authorizer.completeInitialLoad();
         return authorizer;

@@ -34,17 +34,17 @@ import static org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
  * {@link #authorizeByResourceType(AuthorizableRequestContext, AclOperation, ResourceType)}
  * method and providing a Radix Tree implementation for the {@link AuthorizerData}.
  * <p>
- *     All implementation details are described in the {@link NameTrieAuthorizerData} javadoc.
+ *     All implementation details are described in the {@link TrieAuthorizerData} javadoc.
  * </p>
  * @see <a href="https://en.wikipedia.org/wiki/Radix_tree">Radix Tree (Wikipedia)</a>
  */
-public class NameTrieAuthorizer extends StandardAuthorizer {
+public class TrieAuthorizer extends StandardAuthorizer {
 
     /**
      * Constructor.
      */
-    public NameTrieAuthorizer() {
-        super(NameTrieAuthorizerData.createEmpty());
+    public TrieAuthorizer() {
+        super(TrieAuthorizerData.createEmpty());
     }
 
 

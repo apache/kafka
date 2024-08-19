@@ -83,7 +83,7 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
     /**
      * The result to return if no ACLs match.
      */
-    private final DefaultRule noAclRule;
+    private final MatchingRule noAclRule;
 
     /**
      * Contains all of the current ACLs
@@ -115,7 +115,7 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         this.aclMutator = aclMutator;
         this.loadingComplete = loadingComplete;
         this.superUsers = superUsers;
-        this.noAclRule = new DefaultRule(defaultResult);
+        this.noAclRule = () -> defaultResult;
         this.aclCache = aclCache;
     }
 
@@ -398,7 +398,8 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         Predicate<String> principalFilter = s -> SecurityUtils.parseKafkaPrincipal(s).equals(principal)
                 || s.equals("User:*");
 
-        Predicate<AccessControlEntry> operationFilter = ace -> ace.operation() == operation || ace.operation() != AclOperation.ALL;
+
+        Predicate<AccessControlEntry> operationFilter = ace -> ace.operation() == operation || ace.operation() == AclOperation.ALL;
 
         aclFilter = aclFilter.and(binding -> hostFilter.test(binding.entry().host()) && principalFilter.test(binding.entry().principal())
                 && operationFilter.test(binding.entry()));

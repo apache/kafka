@@ -18,6 +18,8 @@ package org.apache.kafka.metadata.authorizer.trie;
 
 import java.util.Collections;
 import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public class ReadOnlyNode<T> implements NodeData<T> {
     public static <T> ReadOnlyNode<T> create(NodeData<T> data) {
@@ -50,12 +52,15 @@ public class ReadOnlyNode<T> implements NodeData<T> {
     }
 
     public ReadOnlyNode<T> getParent() {
-        return create(delegate.getParent());
+        NodeData<T> parent = delegate.getParent();
+        return parent == null ? null : create(parent);
     }
 
     @Override
-    public SortedSet<? extends NodeData> getChildren() {
-        return Collections.unmodifiableSortedSet(delegate.getChildren());
+    public SortedSet<ReadOnlyNode<T>> getChildren() {
+        TreeSet<ReadOnlyNode<T>> result = new TreeSet<>();
+        delegate.getChildren().stream().map(ReadOnlyNode::create).forEach(result::add);
+        return result;
     }
 
     @Override

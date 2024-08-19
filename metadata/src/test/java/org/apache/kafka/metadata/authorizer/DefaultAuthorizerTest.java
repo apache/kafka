@@ -50,16 +50,13 @@ public class DefaultAuthorizerTest extends AbstractAuthorizerTest<DefaultAuthori
 
                     @Override
                     public DefaultAuthorizer configure(DefaultAuthorizer authorizer) {
-
-                        authorizer.delegate.configure(configs);
+                        applyConfigs(authorizer::configure);
                         return authorizer;
                     }
 
                     @Override
                     public DefaultAuthorizer addAcls(DefaultAuthorizer authorizer) {
-                        acls.forEach(aclWithId -> {
-                            authorizer.delegate.addAcl(aclWithId.id(), aclWithId.acl());
-                        });
+                        applyAcls(authorizer::addAcl);
                         return authorizer;
                     }
 

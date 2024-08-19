@@ -56,7 +56,7 @@
  *     a node with a matching ACL is located or the root is reached.  If the root is reached</p>
  * <p>
  *     In order to quickly search the ACLs on associated with the node the ACLs are stored in a
- *     NameTrieAuthorizerData.AclContainer.  This container sorts the enclosed ACLs by permission type (with DENY first)
+ *     TrieAuthorizerData.AclContainer.  This container sorts the enclosed ACLs by permission type (with DENY first)
  *     and then pattern type, operation, principal, and host.  This order enables rapid search for DENY on descent and
  *     for ALLOW on later ascent.
  * </p>

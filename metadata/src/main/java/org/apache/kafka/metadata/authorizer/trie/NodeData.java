@@ -28,6 +28,6 @@ public interface NodeData<T> extends FragmentHolder {
     String getName();
     NodeData<T> getParent();
 
-    SortedSet<? extends NodeData> getChildren();
+    SortedSet<? extends NodeData<T>> getChildren();
 
 }

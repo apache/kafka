@@ -231,13 +231,10 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     public AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation operation, ResourceType resourceType) {
         SecurityUtils.authorizeByResourceTypeCheckArgs(operation, resourceType);
         // super users are granted access regardless of DENY ACLs.
-        KafkaPrincipal principal = new KafkaPrincipal(
-                requestContext.principal().getPrincipalType(),
-                requestContext.principal().getName());
-        if (data.superUsers().contains(principal.toString())) {
+        if (data.superUsers().contains(requestContext.principal().toString())) {
             return AuthorizationResult.ALLOWED;
         }
         String host = requestContext.clientAddress().getHostAddress();
-        return this.data.authorizeByResourceType(principal, host, operation, resourceType);
+        return this.data.authorizeByResourceType(requestContext.principal(), host, operation, resourceType);
     }
 }

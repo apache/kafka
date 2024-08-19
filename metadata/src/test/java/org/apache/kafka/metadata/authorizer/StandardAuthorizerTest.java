@@ -22,6 +22,7 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 
@@ -44,15 +45,13 @@ public class StandardAuthorizerTest extends AbstractClusterMetadataAuthorizerTes
 
                     @Override
                     public StandardAuthorizer configure(StandardAuthorizer authorizer) {
-                        authorizer.configure(configs);
+                        applyConfigs(authorizer::configure);
                         return authorizer;
                     }
 
                     @Override
                     public StandardAuthorizer addAcls(StandardAuthorizer authorizer) {
-                        acls.forEach(aclWithId -> {
-                            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-                        });
+                        applyAcls(authorizer::addAcl);
                         return authorizer;
                     }
 
