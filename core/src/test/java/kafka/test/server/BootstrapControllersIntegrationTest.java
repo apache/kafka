@@ -247,7 +247,7 @@ public class BootstrapControllersIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTest(brokers = 3)
     public void testAlterReassignmentsWithBootstrapControllers(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String topicName = "foo";
         try (Admin admin = Admin.create(adminConfig(clusterInstance, false))) {
