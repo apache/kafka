@@ -43,7 +43,7 @@ jobs:
       env:
         GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
       with:
-        gradle-version: current
+        gradle-version: wrapper
         # Only write to the cache from trunk
         #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
         cache-read-only: false
@@ -80,7 +80,7 @@ jobs:
         env:
           GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
         with:
-          gradle-version: current
+          gradle-version: wrapper
           # Only write to the cache from trunk
           #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
           cache-read-only: false
