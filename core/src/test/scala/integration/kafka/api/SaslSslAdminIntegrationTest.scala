@@ -199,7 +199,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       assertTrue(createResult1.delegationToken().get().tokenInfo().maxTimestamp() > expireResult1.expiryTimestamp().get())
 
       // expireDelegationToken will decrease the value of expiryTimestamp, since this token is not expired,
-      // expiryTimestamp will be set to min(expiryTimestamp, maxTimestamp),
+      // expiryTimestamp will be set to min(now + expiryTimePeriodMs, maxTimestamp),
       // in this case, maxTimestamp is smaller, so expiryTimestamp will not be modified
       val (createResult2, expireResult2) = generateTokenResult(50000, 100000, 1)
       assert(createResult2.delegationToken().get().tokenInfo().expiryTimestamp() == expireResult2.expiryTimestamp().get())
@@ -588,7 +588,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic1).get())
     assertEquals(topicIds(topic1), createResult.topicId(topic1).get())
     assertFutureExceptionTypeEquals(createResult.topicId(topic2), classOf[TopicAuthorizationException])
-    
+
     val createResponseConfig = createResult.config(topic1).get().entries.asScala
 
     val describeResponseConfig = describeConfigs(topic1)
