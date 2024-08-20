@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -731,7 +733,8 @@ public class ConsumerConfig extends AbstractConfig {
     private void checkPartitionAssigmentStrategy() {
         List<String> assignmentStrategies = getList(PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
         if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CONSUMER.name())) {
-            if (assignmentStrategies != null && !assignmentStrategies.isEmpty()) {
+            List<Class<? extends AbstractPartitionAssignor>> defaultValue = Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class);
+            if (!new HashSet<>(assignmentStrategies).containsAll(defaultValue) || assignmentStrategies.size() != defaultValue.size()) {
                 throw new ConfigException(PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
             }
         }
