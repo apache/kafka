@@ -1590,19 +1590,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                                       defined
      */
     private boolean updateFetchPositions(final Timer timer) {
-        UpdateFetchPositionsEvent updateFetchPositionsEvent = null;
         try {
-            updateFetchPositionsEvent = new UpdateFetchPositionsEvent(calculateDeadlineMs(timer),
-                calculateDeadlineMs(time, defaultApiTimeoutMs));
+            long eventDeadline = calculateDeadlineMs(timer);
+            long offsetFetchDeadline = calculateDeadlineMs(time, defaultApiTimeoutMs);
+            UpdateFetchPositionsEvent updateFetchPositionsEvent = new UpdateFetchPositionsEvent(eventDeadline, offsetFetchDeadline);
             wakeupTrigger.setActiveTask(updateFetchPositionsEvent.future());
-
-            if (Thread.interrupted()) {
-                // Ensure we propagate the interrupted exception if the thread was interrupted
-                // before the updateFetchPositions event is processed. Otherwise, this exception
-                // could be swallowed if event is processed fast enough in the background after
-                // being added, so that it's already completed when getting the result
-                throw new InterruptException("Interrupted while updating fetch positions");
-            }
             cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(updateFetchPositionsEvent);
         } catch (TimeoutException e) {
             return false;

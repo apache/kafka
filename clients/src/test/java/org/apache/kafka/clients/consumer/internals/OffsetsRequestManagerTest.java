@@ -21,8 +21,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -59,10 +57,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -91,7 +87,6 @@ public class OffsetsRequestManagerTest {
     private SubscriptionState subscriptionState;
     private MockTime time;
     private ApiVersions apiVersions;
-    private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private static final String TEST_TOPIC = "t1";
     private static final TopicPartition TEST_PARTITION_1 = new TopicPartition(TEST_TOPIC, 1);
     private static final TopicPartition TEST_PARTITION_2 = new TopicPartition(TEST_TOPIC, 2);
@@ -104,8 +99,6 @@ public class OffsetsRequestManagerTest {
     @BeforeEach
     public void setup() {
         LogContext logContext = new LogContext();
-        backgroundEventQueue = new LinkedBlockingQueue<>();
-        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         time = new MockTime(0);
@@ -119,7 +112,6 @@ public class OffsetsRequestManagerTest {
                 REQUEST_TIMEOUT_MS,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
-                backgroundEventHandler,
                 logContext
         );
     }

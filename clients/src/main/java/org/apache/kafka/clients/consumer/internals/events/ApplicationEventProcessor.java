@@ -272,7 +272,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     *
      * Fetch committed offsets and use them to update positions in the subscription state. If no
      * committed offsets available, fetch offsets from the leader.
      */
@@ -318,7 +317,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             } else {
                 initWithPartitionOffsetsIfNeeded(updateFetchPositionsEvent);
             }
-
         } catch (Exception e) {
             updateFetchPositionsEvent.future().completeExceptionally(maybeWrapAsKafkaException(e));
         }

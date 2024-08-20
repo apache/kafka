@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.LogTruncationException;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
@@ -95,7 +94,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final long requestTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
-                                 final BackgroundEventHandler backgroundEventHandler,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -103,7 +101,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         requireNonNull(time);
         requireNonNull(apiVersions);
         requireNonNull(networkClientDelegate);
-        requireNonNull(backgroundEventHandler);
         requireNonNull(logContext);
 
         this.metadata = metadata;
