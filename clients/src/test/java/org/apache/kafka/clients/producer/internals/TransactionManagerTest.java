@@ -876,7 +876,9 @@ public class TransactionManagerTest {
         client.prepareUnsupportedVersionResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
             assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), CoordinatorType.TRANSACTION);
-            assertEquals(findCoordinatorRequest.data().key(), transactionalId);
+            assertTrue(findCoordinatorRequest.data().key().isEmpty());
+            assertEquals(1, findCoordinatorRequest.data().coordinatorKeys().size());
+            assertTrue(findCoordinatorRequest.data().coordinatorKeys().contains(transactionalId));
             return true;
         });
 

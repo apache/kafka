@@ -690,6 +690,54 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcknowledgeOutOfRangeCachedDataFirstBatch() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        // Create data for the batch with offsets 0-4.
+        MemoryRecords records = memoryRecords(5, 0);
+        CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(1, result.join().size());
+
+        // Create data for the batch with offsets 20-24.
+        records = memoryRecords(5, 20);
+        result = sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(1, result.join().size());
+
+        // Acknowledge a batch when first batch violates the range.
+        List<ShareAcknowledgementBatch> acknowledgeBatches = Arrays.asList(
+            new ShareAcknowledgementBatch(0, 10, Collections.singletonList((byte) 1)),
+            new ShareAcknowledgementBatch(20, 24, Collections.singletonList((byte) 1)));
+        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge(
+            MEMBER_ID, acknowledgeBatches);
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertTrue(ackResult.join().isPresent());
+        assertEquals(InvalidRequestException.class, ackResult.join().get().getClass());
+
+        // Create data for the batch with offsets 5-10.
+        records = memoryRecords(6, 5);
+        result = sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(1, result.join().size());
+
+        // Previous failed acknowledge request should succeed now.
+        ackResult = sharePartition.acknowledge(
+            MEMBER_ID, acknowledgeBatches);
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertFalse(ackResult.join().isPresent());
+    }
+
+    @Test
     public void testAcknowledgeWithAnotherMember() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(5, 5);

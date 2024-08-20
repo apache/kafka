@@ -36,8 +36,9 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupConfigManager, CoordinatorRecord, CoordinatorRecordSerde, GroupCoordinator, GroupCoordinatorService}
+import org.apache.kafka.coordinator.group.{GroupCoordinatorRecordSerde, GroupConfigManager, GroupCoordinator, GroupCoordinatorService}
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.security.CredentialProvider
@@ -593,7 +594,7 @@ class BrokerServer(
     // to fix the underlying issue.
     if (config.isNewGroupCoordinatorEnabled) {
       val time = Time.SYSTEM
-      val serde = new CoordinatorRecordSerde
+      val serde = new GroupCoordinatorRecordSerde
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
         new SystemTimer("group-coordinator")
