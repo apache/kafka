@@ -264,7 +264,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         @Override
         public boolean hasNext() {
             if (!iteratorOpen) {
-                throw new IllegalStateException("Iterator has already been closed.");
+                throw new IllegalStateException(String.format("Iterator for store %s has already been closed.", name));
             }
             if (currentKey != null) {
                 if (map.containsKey(currentKey)) {

@@ -53,7 +53,7 @@ public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator
     @Override
     public synchronized boolean hasNext() {
         if (!open) {
-            throw new IllegalStateException("Iterator has already been closed.");
+            throw new IllegalStateException(String.format("Iterator for store %s has already been closed.", storeName));
         }
         if (next != null) {
             return true;
