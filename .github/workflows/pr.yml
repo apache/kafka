@@ -49,19 +49,16 @@ jobs:
           GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
         with:
           gradle-version: wrapper
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
           # Only write to the cache from trunk
-          #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
-          cache-read-only: false
+          cache-read-only: true
           # Cache downloaded JDKs in addition to the default directories.
           gradle-home-cache-includes: |
             caches
             notifications
             jdks
           cache-cleanup: on-success
-          cache-overwrite-existing: true
       - name: Compile and validate
-        run: ./gradlew --build-cache --info --scan check -x test
+        run: ./gradlew --build-cache --info check -x test
 
   test:
     needs: validate
@@ -70,7 +67,7 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 11, 17 ]
-    if: contains(github.ref, 'gh-')
+    if: contains(github.ref, 'gh-')  # For now, only run tests on "gh-*" PRs
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -88,17 +85,15 @@ jobs:
           GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
         with:
           gradle-version: wrapper
+          # Only PRs from apache/kafka will publish build scans. Include this temporarily to generate some data.
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
-          # Only write to the cache from trunk
-          #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
-          cache-read-only: false
+          cache-read-only: true
           # Cache downloaded JDKs in addition to the default directories.
           gradle-home-cache-includes: |
             caches
             notifications
             jdks
           cache-cleanup: on-success
-          cache-overwrite-existing: true
       - name: Test
         timeout-minutes: 180  # 3 hours
         run: |
