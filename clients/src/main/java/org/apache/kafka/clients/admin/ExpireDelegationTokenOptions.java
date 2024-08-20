@@ -25,17 +25,19 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class ExpireDelegationTokenOptions extends AbstractOptions<ExpireDelegationTokenOptions> {
+public class ExpireDelegationTokenOptions
+    extends AbstractOptions<ExpireDelegationTokenOptions> {
+
     private long expiryTimePeriodMs = -1L;
 
     /**
      * @param expiryTimePeriodMs the time period until we should expire this token.
-     * {@code expiryTimestamp} is the time we actually expire the token.
-     * If {@code expiryTimePeriodMs} < 0, token will be expired immediately.
-     * If {@code expiryTimePeriodMs} >= 0 and {@code expiryTimestamp} is not due,
-     * {@code expiryTimestamp} will be set to {@code min(expiryTimestamp, maxTimestamp)}.
+     * {@code expiryTimePeriodMs} >= 0: the token will update the `expiration timestamp` if the current expiration timestamp is small than (now + expiryTimePeriodMs).
+     * {@code expiryTimePeriodMs} < 0: token will be expired immediately.
      */
-    public ExpireDelegationTokenOptions expiryTimePeriodMs(long expiryTimePeriodMs) {
+    public ExpireDelegationTokenOptions expiryTimePeriodMs(
+        long expiryTimePeriodMs
+    ) {
         this.expiryTimePeriodMs = expiryTimePeriodMs;
         return this;
     }
