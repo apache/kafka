@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -252,7 +251,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> iter;
         private Bytes currentKey;
-        private volatile Boolean open = true;
+        private Boolean iteratorOpen = true;
 
         private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean forward) {
             if (forward) {
@@ -264,8 +263,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         @Override
         public boolean hasNext() {
-            if (!open) {
-                throw new InvalidStateStoreException(String.format("Store %s has closed", name));
+            if (!iteratorOpen) {
+                throw new IllegalStateException("Iterator has already been closed.");
             }
             if (currentKey != null) {
                 if (map.containsKey(currentKey)) {
@@ -294,7 +293,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         @Override
         public void close() {
-            open = false;
+            iteratorOpen = false;
         }
 
         @Override

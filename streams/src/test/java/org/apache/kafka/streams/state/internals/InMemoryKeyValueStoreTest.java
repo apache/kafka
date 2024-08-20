@@ -424,6 +424,17 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertEquals(bytesKey("key2"), iter.peekNextKey());
     }
 
+    @Test
+    public void iteratorShouldThrowIllegalStateExceptionIfAlreadyClosed() {
+        inMemoryKeyValueStore.init((StateStoreContext) context, inMemoryKeyValueStore);
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        iter.close();
+        assertThrows(IllegalStateException.class, iter::hasNext);
+        assertThrows(IllegalStateException.class, iter::next);
+        assertThrows(IllegalStateException.class, iter::peekNextKey);
+    }
+
     private byte[] bytesValue(final String value) {
         return value.getBytes();
     }
