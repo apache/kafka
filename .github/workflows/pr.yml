@@ -34,6 +34,10 @@ jobs:
         java: [ 8, 11, 17, 21 ]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
@@ -53,6 +57,10 @@ jobs:
     if: contains(github.ref, 'gh-')  # For now, only run tests on "gh-*" PRs
     name: JUnit tests Java ${{ matrix.java }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:

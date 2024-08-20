@@ -33,6 +33,10 @@ jobs:
         java: [8, 11, 17, 21]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
@@ -50,6 +54,10 @@ jobs:
         java: [ 11, 17 ]
     name: JUnit tests Java ${{ matrix.java }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
