@@ -351,7 +351,7 @@ public class SharePartition {
         String memberId,
         FetchPartitionData fetchPartitionData
     ) {
-        log.trace("Received acquire request for share partition: {}-{}", memberId, topicIdPartition);
+        log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
         if (lastBatch == null) {
             // Nothing to acquire.
