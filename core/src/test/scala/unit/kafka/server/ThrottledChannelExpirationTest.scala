@@ -23,6 +23,7 @@ import java.util.concurrent.{DelayQueue, TimeUnit}
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
+import org.apache.kafka.server.{ThrottledChannel, ThrottleCallback}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
