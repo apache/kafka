@@ -19,7 +19,7 @@ package kafka.coordinator.group
 
 import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
-import kafka.server.{ActionQueue, DelayedOperationPurgatory, HostedPartition, KafkaConfig, KafkaRequestHandler, MetadataCache, ReplicaManager, RequestLocal}
+import kafka.server.{ActionQueue, DelayedOperationPurgatory, HostedPartition, KafkaConfig, KafkaRequestHandler, ReplicaManager, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -107,12 +107,6 @@ class GroupCoordinatorTest {
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
     ret += (Topic.GROUP_METADATA_TOPIC_NAME -> Map(0 -> Seq(1), 1 -> Seq(1)))
-
-    replicaManager = mock(classOf[ReplicaManager])
-    when(replicaManager.metadataCache)
-      .thenReturn(mock(classOf[MetadataCache]))
-    when(replicaManager.metadataCache.metadataVersion())
-      .thenReturn(MetadataVersion.latestProduction())
 
     zkClient = mock(classOf[KafkaZkClient])
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator

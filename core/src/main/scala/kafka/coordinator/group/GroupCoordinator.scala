@@ -1793,7 +1793,7 @@ object GroupCoordinator {
       groupMaxSize = config.groupCoordinatorConfig.classicGroupMaxSize,
       groupInitialRebalanceDelayMs = config.groupCoordinatorConfig.classicGroupInitialRebalanceDelayMs)
 
-    val groupMetadataManager = new GroupMetadataManager(config.brokerId, replicaManager.metadataCache.metadataVersion(),
+    val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, time, metrics)
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory,
       rebalancePurgatory, time, metrics)

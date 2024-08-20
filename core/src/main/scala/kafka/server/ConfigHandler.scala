@@ -166,12 +166,12 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
   private def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
     Option(topicConfig.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).flatMap { versionString =>
-      val messageFormatVersion = new MessageFormatVersion(versionString, replicaManager.metadataCache.metadataVersion().version)
+      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
       if (messageFormatVersion.shouldIgnore) {
         if (messageFormatVersion.shouldWarn)
           warn(messageFormatVersion.topicWarningMessage(topic))
         Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-      } else if (replicaManager.metadataCache.metadataVersion().isLessThan(messageFormatVersion.messageFormatVersion)) {
+      } else if (kafkaConfig.interBrokerProtocolVersion.isLessThan(messageFormatVersion.messageFormatVersion)) {
         warn(s"Topic configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG} is ignored for `$topic` because `$versionString` " +
           s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
         Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)

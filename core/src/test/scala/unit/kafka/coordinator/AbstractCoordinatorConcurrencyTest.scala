@@ -62,9 +62,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
     when(mockLogMger.liveLogDirs).thenReturn(Seq.empty)
     val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
     val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
-    replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), 
-      time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], 
-      withSettings().stubOnly()), producePurgatory, watchKeys, mock(classOf[MetadataCache]))
+    replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
     zkClient = mock(classOf[KafkaZkClient], withSettings().stubOnly())
   }
 
