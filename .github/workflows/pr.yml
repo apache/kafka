@@ -55,7 +55,7 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 11, 17 ]
-    if: contains(github.ref, 'gh-')  # For now, only run tests on "gh-*" PRs
+    if: contains(github.head_ref, 'gh-')  # For now, only run tests on "gh-*" PRs
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
