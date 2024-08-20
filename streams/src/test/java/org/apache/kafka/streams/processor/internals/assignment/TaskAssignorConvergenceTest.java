@@ -472,8 +472,8 @@ public class TaskAssignorConvergenceTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-//        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-//        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY
     })
     public void randomClusterPerturbationsShouldConverge(final String rackAwareStrategy) {

@@ -1215,7 +1215,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     protected void updateMemberEpoch(int newEpoch) {
         boolean newEpochReceived = this.memberEpoch != newEpoch;
-        log.info("Updating member epoch to {}", newEpoch);
         this.memberEpoch = newEpoch;
         // Simply notify based on epoch change only, given that the member will never receive a
         // new member ID without an epoch (member ID is only assigned when it joins the group).
