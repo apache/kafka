@@ -235,6 +235,8 @@ class KafkaRaftManager[T](
       time,
       expirationService,
       logContext,
+      // Controllers should always flush the log on replication because they may become voters
+      config.processRoles.contains(ProcessRole.ControllerRole),
       clusterId,
       bootstrapServers,
       localListeners,
