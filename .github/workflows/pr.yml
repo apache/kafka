@@ -16,12 +16,12 @@
 name: Pull Requests
 
 on:
-  push:
-    branches: 'gh-*'
-
   pull_request:
-    types: [opened, synchronize, reopened]
-    branches: 'gh-*'
+    branches:
+      - trunk
+  push:
+    branches:
+      - trunk
 
 jobs:
   validate:
@@ -100,6 +100,6 @@ jobs:
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
+          -PignoreFailures=true \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           test
