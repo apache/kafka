@@ -363,7 +363,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
         }
 
         if (config.schemasEnabled()) {
-            if (this.schema != null){
+            if (this.schema != null) {
                 return new SchemaAndValue(schema, convertToConnect(schema, jsonValue, config));
             } else if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)) {
                 throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +

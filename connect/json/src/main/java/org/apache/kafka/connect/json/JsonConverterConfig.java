@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.connect.storage.ConverterConfig;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
 
@@ -103,7 +104,7 @@ public class JsonConverterConfig extends ConverterConfig {
         this.decimalFormat = DecimalFormat.valueOf(getString(DECIMAL_FORMAT_CONFIG).toUpperCase(Locale.ROOT));
         this.replaceNullWithDefault = getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
         String schemaContentStr = getString(SCHEMA_CONTENT_CONFIG);
-        this.schemaContent = schemaContentStr == null ? null : schemaContentStr.getBytes();
+        this.schemaContent = schemaContentStr == null ? null : schemaContentStr.getBytes(StandardCharsets.UTF_8);
     }
 
     /**
