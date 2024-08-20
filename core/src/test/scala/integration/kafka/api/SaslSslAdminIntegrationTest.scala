@@ -334,24 +334,28 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testCreateDelegationTokenWithOptions(quorum: String): Unit = {
-    val owner = new KafkaPrincipal("User", "client2")
-    val renewers = List(new KafkaPrincipal("User", "client")).asJava
+  def testCreateDelegationTokenWithLargeTimeout(quorum: String): Unit = {
     client = createAdminClient
-    val timeout = 1000
-    val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout).owner(owner).renewers(renewers)
+    val timeout = Long.MaxValue
+    assertTrue(timeout > DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_DEFAULT)
+    val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
     val token = client.createDelegationToken(options).delegationToken().get()
-    assertEquals(timeout, token.tokenInfo.maxTimestamp - token.tokenInfo.issueTimestamp)
-    assertEquals(owner, token.tokenInfo.owner)
-    assertEquals(renewers, token.tokenInfo.renewers)
+
+    assertEquals(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_MS_DEFAULT, token.tokenInfo.maxTimestamp - token.tokenInfo.issueTimestamp)
+    assertTrue(token.tokenInfo.maxTimestamp >= token.tokenInfo.expiryTimestamp)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testCreateDelegationTokenWithoutOptions(quorum: String): Unit = {
+  def testCreateDelegationTokenWithNegativeTimeout(quorum: String): Unit = {
     client = createAdminClient
-    val token = client.createDelegationToken().delegationToken().get()
+    val timeout = -1
+    assertTrue(timeout < 0)
+    val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
+    val token = client.createDelegationToken(options).delegationToken().get()
+
     assertEquals(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_MS_DEFAULT, token.tokenInfo.maxTimestamp - token.tokenInfo.issueTimestamp)
+    assertTrue(token.tokenInfo.maxTimestamp >= token.tokenInfo.expiryTimestamp)
   }
 
   private def verifyCauseIsClusterAuth(e: Throwable): Unit = assertEquals(classOf[ClusterAuthorizationException], e.getCause.getClass)
