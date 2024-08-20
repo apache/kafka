@@ -25,6 +25,9 @@ inputs:
   gradle-cache-read-only:
     description: "Should the Gradle cache be read-only?"
     default: "true"
+  develocity-access-key:
+    description: "Optional access key for uploading build scans to Develocity"
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -39,7 +42,7 @@ runs:
         GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
       with:
         gradle-version: wrapper
-        develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+        develocity-access-key: ${{ inputs.develocity-access-key }}
         cache-read-only: ${{ inputs.gradle-cache-read-only }}
         # Cache downloaded JDKs in addition to the default directories.
         gradle-home-cache-includes: |
