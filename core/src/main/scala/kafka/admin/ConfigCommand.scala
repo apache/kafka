@@ -25,8 +25,7 @@ import kafka.server.{DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListConsumerGroupsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
-import org.apache.kafka.common.GroupType
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -58,7 +57,7 @@ import scala.collection._
  *     <li> broker-logger: --broker-logger <broker-id> OR --entity-type broker-loggers --entity-name <broker-id>
  *     <li> ip: --ip <ip> OR --entity-type ips --entity-name <ip>
  *     <li> client-metrics: --client-metrics <name> OR --entity-type client-metrics --entity-name <name>
- *     <li> group: --group <group> OR --entiry-type groups --entity-name <group>
+ *     <li> group: --group <group> OR --entity-type groups --entity-name <group>
  * </ul>
  * --entity-type <users|clients|brokers|ips> --entity-default may be specified in place of --entity-type <users|clients|brokers|ips> --entity-name <entityName>
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
@@ -544,7 +543,7 @@ object ConfigCommand extends Logging {
         case ConfigType.CLIENT_METRICS =>
           adminClient.listClientMetricsResources().all().get().asScala.map(_.name).toSeq
         case ConfigType.GROUP =>
-          adminClient.listConsumerGroups(new ListConsumerGroupsOptions().withTypes(Seq(GroupType.CONSUMER).toSet.asJava)).all.get.asScala.map(_.groupId).toSeq
+          adminClient.listConsumerGroups().all.get.asScala.map(_.groupId).toSeq
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 
@@ -702,6 +701,7 @@ object ConfigCommand extends Logging {
         case ConfigType.USER => "user-principal"
         case ConfigType.CLIENT => "client-id"
         case ConfigType.TOPIC => "topic"
+        case ConfigType.GROUP => "group"
         case t => t
       }
       sanitizedName match {
@@ -793,7 +793,7 @@ object ConfigCommand extends Logging {
     }
 
     val entities = entityTypes.map(t => Entity(t, if (sortedNames.hasNext) Some(sanitizeName(t, sortedNames.next())) else None))
-    ConfigEntity(entities.head, if (entities.size > 1) Some(entities(1)) else None)
+    ConfigEntity(entities.head, entities.lift(1))
   }
 
   class ConfigCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
@@ -871,6 +871,9 @@ object ConfigCommand extends Logging {
     val ip: OptionSpec[String] = parser.accepts("ip", "The IP address.")
       .withRequiredArg
       .ofType(classOf[String])
+    val group: OptionSpec[String] = parser.accepts("group", "The group's name.")
+      .withRequiredArg
+      .ofType(classOf[String])
     val zkTlsConfigFile: OptionSpec[String] = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
         ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.sorted.mkString(", ") + " are ignored.")
@@ -882,7 +885,8 @@ object ConfigCommand extends Logging {
       (user, ConfigType.USER),
       (broker, ConfigType.BROKER),
       (brokerLogger, BrokerLoggerConfigType),
-      (ip, ConfigType.IP))
+      (ip, ConfigType.IP),
+      (group, ConfigType.GROUP))
 
     private val entityDefaultsFlags = List((clientDefaults, ConfigType.CLIENT),
       (userDefaults, ConfigType.USER),

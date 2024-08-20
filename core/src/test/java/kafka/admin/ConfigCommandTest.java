@@ -128,6 +128,13 @@ public class ConfigCommandTest {
     }
 
     @Test
+    public void shouldExitWithNonZeroStatusOnZkCommandWithGroupsEntity() {
+        assertNonZeroStatusExit(toArray(ZOOKEEPER_BOOTSTRAP, Arrays.asList(
+            "--entity-type", "groups",
+            "--describe")));
+    }
+
+    @Test
     public void shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName() {
         assertNonZeroStatusExit(toArray(BROKER_BOOTSTRAP, Arrays.asList(
             "--entity-type", "users",
@@ -259,6 +266,21 @@ public class ConfigCommandTest {
     @Test
     public void shouldParseArgumentsForIpEntityTypeWithControllerBootstrap() {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "ips");
+    }
+
+    @Test
+    public void shouldFailParseArgumentsForGroupEntityTypeUsingZookeeper() {
+        assertThrows(IllegalArgumentException.class, () -> testArgumentParse(ZOOKEEPER_BOOTSTRAP, "groups"));
+    }
+
+    @Test
+    public void shouldParseArgumentsForGroupEntityTypeWithBrokerBootstrap() {
+        testArgumentParse(BROKER_BOOTSTRAP, "groups");
+    }
+
+    @Test
+    public void shouldParseArgumentsForGroupEntityTypeWithControllerBootstrap() {
+        testArgumentParse(CONTROLLER_BOOTSTRAP, "groups");
     }
 
     public void testArgumentParse(List<String> bootstrapArguments, String entityType) {
@@ -437,18 +459,21 @@ public class ConfigCommandTest {
         if (!zkConfig) {
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.singletonList("A"), connectOpts, "--entity-type", "topics", "--entity-name", "A");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.singletonList("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
+            testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.singletonList("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
             testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER, ConfigType.CLIENT), Arrays.asList("A", ""), connectOpts,
                 "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default");
             testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER, ConfigType.CLIENT), Arrays.asList("", "B"), connectOpts,
                 "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.singletonList("A"), connectOpts, "--topic", "A");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.singletonList("1.2.3.4"), connectOpts, "--ip", "1.2.3.4");
+            testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.singletonList("A"), connectOpts, "--group", "A");
             testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT, ConfigType.USER), Arrays.asList("B", "A"), connectOpts, "--client", "B", "--user", "A");
             testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT, ConfigType.USER), Arrays.asList("B", ""), connectOpts, "--client", "B", "--user-defaults");
             testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT, ConfigType.USER), Collections.singletonList("A"), connectOpts,
                 "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.emptyList(), connectOpts, "--entity-type", "topics");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.emptyList(), connectOpts, "--entity-type", "ips");
+            testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.emptyList(), connectOpts, "--entity-type", "groups");
         }
 
         testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER), Collections.singletonList("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
