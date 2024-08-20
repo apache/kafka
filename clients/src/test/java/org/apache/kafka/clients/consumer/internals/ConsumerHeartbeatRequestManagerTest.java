@@ -749,33 +749,47 @@ public class ConsumerHeartbeatRequestManagerTest {
     
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
-    public void testConsumerAcksReconciledAssignmentWithFirstHeartBeatAckLost(final short version) {
-        // 1. complete reconciliation
-        createHeartbeatStatAndRequestManager();
+    public void testConsumerAcksReconciledAssignmentAfterAckLost(final short version) {
         String topic = "topic1";
-        int exceededTimeMs = 5;
-        Set<String> set = Collections.singleton(topic);
-        when(subscriptions.subscription()).thenReturn(set);
-        subscriptions.subscribe(set, Optional.empty());
-        mockReconcilingMemberData();
-        // 2. send heartbeat1 to ack assignment tp0
+        Set<String> topics = Collections.singleton(topic);
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+        Map<Uuid, SortedSet<Integer>> testAssignment = Collections.singletonMap(
+                topicId, mkSortedSet(partition)
+        );
+        
+        // complete reconciliation
+        createHeartbeatStateAndRequestManager();
+        when(subscriptions.subscription()).thenReturn(topics);
+        subscriptions.subscribe(topics, Optional.empty());
+        mockReconcilingMemberData(testAssignment);
+        
+        // send heartbeat1 to ack assignment tp0
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        // 3. HB1 times out
+        
+        // HB1 times out
         result.unsentRequests.get(0)
                 .handler()
                 .onFailure(time.milliseconds(), new TimeoutException("timeout"));
-        // 4. heartbeat request manager resets the sentFields to null HeartbeatState.reset()
-        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS + exceededTimeMs);
+        
+        // heartbeat request manager resets the sentFields to null HeartbeatState.reset()
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
         assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
         verify(heartbeatRequestState).reset();
-        // 5. following HB will include tp0 (and act as ack), tp0 != null
+        
+        // following HB will include tp0 (and act as ack), tp0 != null
         result = heartbeatRequestManager.poll(time.milliseconds());
         NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
         ConsumerGroupHeartbeatRequest heartbeatRequest =
                 (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
-        
+
         assertEquals(Collections.singletonList(topic), heartbeatRequest.data().subscribedTopicNames());
+        assertEquals(testAssignment.size(), heartbeatRequest.data().topicPartitions().size());
+        ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions = 
+                heartbeatRequest.data().topicPartitions().get(0);
+        assertEquals(topicId, topicPartitions.topicId());
+        assertEquals(Collections.singletonList(partition), topicPartitions.partitions());
     }
 
     @Test
@@ -923,13 +937,12 @@ public class ConsumerHeartbeatRequestManagerTest {
         when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
     }
     
-    private void mockReconcilingMemberData() {
+    private void mockReconcilingMemberData(Map<Uuid, SortedSet<Integer>> assignment) {
         when(membershipManager.state()).thenReturn(MemberState.RECONCILING);
-        when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
+        when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, assignment));
         when(membershipManager.memberId()).thenReturn(DEFAULT_MEMBER_ID);
         when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
-        when(membershipManager.currentAssignment()).thenReturn(new LocalAssignment(0, Collections.emptyMap()));
         when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
     }
 }
