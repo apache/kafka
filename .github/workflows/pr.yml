@@ -16,8 +16,10 @@
 name: Pull Requests
 
 on:
-  push:
-    branches: 'gh-*'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - 'trunk'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -68,6 +70,7 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 11, 17 ]
+    if: contains(github.ref, 'gh-')
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
