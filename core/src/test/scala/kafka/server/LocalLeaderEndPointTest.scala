@@ -19,7 +19,6 @@ package kafka.server
 
 import kafka.cluster.BrokerEndPoint
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
@@ -33,6 +32,7 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
+import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -74,7 +74,7 @@ class LocalLeaderEndPointTest extends Logging {
       alterPartitionManager = alterPartitionManager)
     val partition = replicaManager.createPartition(topicPartition)
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-      new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+      new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
     // Make this replica the leader.
     val leaderAndIsrRequest = buildLeaderAndIsrRequest(leaderEpoch = 0)
     replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())

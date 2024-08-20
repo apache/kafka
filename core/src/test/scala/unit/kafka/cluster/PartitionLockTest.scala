@@ -17,13 +17,13 @@
 
 package kafka.cluster
 
+import java.lang.{Long => JLong}
 import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
 import kafka.log._
 import kafka.server._
-import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.TopicIdPartition
@@ -38,6 +38,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, LogSegments, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -335,7 +336,7 @@ class PartitionLockTest extends Logging {
     when(offsetCheckpoints.fetch(
       ArgumentMatchers.anyString,
       ArgumentMatchers.eq(topicPartition)
-    )).thenReturn(None)
+    )).thenReturn(Optional.empty[JLong])
     when(alterIsrManager.submit(
       ArgumentMatchers.eq(topicIdPartition),
       ArgumentMatchers.any[LeaderAndIsr],

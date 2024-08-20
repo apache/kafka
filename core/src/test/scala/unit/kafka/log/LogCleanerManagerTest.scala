@@ -33,6 +33,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFa
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.lang.{Long => JLong}
 import java.util
 import scala.collection.mutable
 import scala.compat.java8.OptionConverters._
@@ -66,7 +67,7 @@ class LogCleanerManagerTest extends Logging {
       cleanerCheckpoints.toMap
     }
 
-    override def updateCheckpoints(dataDir: File, partitionToUpdateOrAdd: Option[(TopicPartition,Long)] = None,
+    override def updateCheckpoints(dataDir: File, partitionToUpdateOrAdd: Option[(TopicPartition, JLong)] = None,
                                    partitionToRemove: Option[TopicPartition] = None): Unit = {
       assert(partitionToRemove.isEmpty, "partitionToRemove argument with value not yet handled")
       val (tp, offset) = partitionToUpdateOrAdd.getOrElse(

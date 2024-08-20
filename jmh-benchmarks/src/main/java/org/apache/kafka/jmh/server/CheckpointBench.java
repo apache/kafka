@@ -26,7 +26,6 @@ import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.TestUtils;
 
@@ -39,6 +38,7 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
@@ -59,6 +59,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -146,7 +147,7 @@ public class CheckpointBench {
             }
         }
 
-        OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Option.apply(0L);
+        OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Optional.of(0L);
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition = this.replicaManager.createPartition(topicPartition);
             partition.createLogIfNotExists(true, false, checkpoints, Option.apply(Uuid.randomUuid()), Option.empty());

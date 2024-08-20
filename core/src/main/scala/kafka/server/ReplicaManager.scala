@@ -25,7 +25,6 @@ import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult}
-import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Implicits._
 import kafka.utils._
@@ -60,9 +59,11 @@ import org.apache.kafka.server.common.DirectoryEventHandler
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
+import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpoints, OffsetCheckpointFile}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, VerificationGuard}
 
 import java.io.File
+import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
@@ -1202,7 +1203,7 @@ class ReplicaManager(val config: KafkaConfig,
           //   start ReplicaAlterDirThread to move data of this partition from the current log to the future log
           // - Otherwise, return KafkaStorageException. We do not create the future log while there is offline log directory
           //   so that we can avoid creating future log for the same partition in multiple log directories.
-          val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
+          val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints.asJava)
           if (partition.maybeCreateFutureReplica(destinationDir, highWatermarkCheckpoints)) {
             val futureLog = futureLocalLogOrException(topicPartition)
             logManager.abortAndPauseCleaning(topicPartition)
@@ -2039,7 +2040,7 @@ class ReplicaManager(val config: KafkaConfig,
             }
           }
 
-          val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
+          val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints.asJava)
           val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
             makeLeaders(controllerId, controllerEpoch, partitionsToBeLeader, correlationId, responseMap,
               highWatermarkCheckpoints, topicIdFromRequest)
@@ -2137,8 +2138,8 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   protected[server] def maybeAddLogDirFetchers(partitions: Set[Partition],
-                                       offsetCheckpoints: OffsetCheckpoints,
-                                       topicIds: String => Option[Uuid]): Unit = {
+                                               offsetCheckpoints: OffsetCheckpoints,
+                                               topicIds: String => Option[Uuid]): Unit = {
     val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
     for (partition <- partitions) {
       val topicPartition = partition.topicPartition
@@ -2429,14 +2430,14 @@ class ReplicaManager(val config: KafkaConfig,
 
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks(): Unit = {
-    def putHw(logDirToCheckpoints: mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]],
+    def putHw(logDirToCheckpoints: mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, JLong]],
               log: UnifiedLog): Unit = {
       val checkpoints = logDirToCheckpoints.getOrElseUpdate(log.parentDir,
-        new mutable.AnyRefMap[TopicPartition, Long]())
+        new mutable.AnyRefMap[TopicPartition, JLong]())
       checkpoints.put(log.topicPartition, log.highWatermark)
     }
 
-    val logDirToHws = new mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, Long]](
+    val logDirToHws = new mutable.AnyRefMap[String, mutable.AnyRefMap[TopicPartition, JLong]](
       allPartitions.size)
     onlinePartitionsIterator.foreach { partition =>
       partition.log.foreach(putHw(logDirToHws, _))
@@ -2444,7 +2445,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     for ((logDir, hws) <- logDirToHws) {
-      try highWatermarkCheckpoints.get(logDir).foreach(_.write(hws))
+      try highWatermarkCheckpoints.get(logDir).foreach(_.write(hws.asJava))
       catch {
         case e: KafkaStorageException =>
           error(s"Error while writing to highwatermark file in directory $logDir", e)
@@ -2749,7 +2750,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       // Handle partitions which we are now the leader or follower for.
       if (!localChanges.leaders.isEmpty || !localChanges.followers.isEmpty) {
-        val lazyOffsetCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
+        val lazyOffsetCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints.asJava)
         val leaderChangedPartitions = new mutable.HashSet[Partition]
         val followerChangedPartitions = new mutable.HashSet[Partition]
         if (!localChanges.leaders.isEmpty) {

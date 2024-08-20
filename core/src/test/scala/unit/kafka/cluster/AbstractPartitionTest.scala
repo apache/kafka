@@ -18,7 +18,6 @@ package kafka.cluster
 
 import kafka.log.LogManager
 import kafka.server.MetadataCache
-import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.MockAlterPartitionManager
@@ -29,6 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -36,7 +36,8 @@ import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
 import java.io.File
-import java.util.Properties
+import java.lang.{Long => JLong}
+import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 
@@ -93,7 +94,7 @@ class AbstractPartitionTest {
       alterPartitionManager)
 
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
-      .thenReturn(None)
+      .thenReturn(Optional.empty[JLong])
   }
 
   protected def interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting

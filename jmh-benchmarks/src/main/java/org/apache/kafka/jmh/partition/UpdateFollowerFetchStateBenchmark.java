@@ -26,7 +26,6 @@ import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 
 import org.apache.kafka.common.TopicPartition;
@@ -35,6 +34,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
@@ -109,7 +109,7 @@ public class UpdateFollowerFetchStateBenchmark {
             setKeepPartitionMetadataFile(true).
             build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Option.apply(0L));
+        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Optional.of(0L));
         DelayedOperations delayedOperations = new DelayedOperationsMock();
 
         // one leader, plus two followers

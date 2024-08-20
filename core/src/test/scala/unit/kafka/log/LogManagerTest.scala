@@ -18,7 +18,6 @@
 package kafka.log
 
 import com.yammer.metrics.core.{Gauge, MetricName}
-import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.server.BrokerTopicStats
 import kafka.utils._
@@ -42,13 +41,15 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify}
 
 import java.io._
+import java.lang.{Long => JLong}
 import java.nio.file.Files
+import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache}
-import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
+import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.junit.jupiter.api.function.Executable
 
 import java.time.Duration
@@ -262,7 +263,7 @@ class LogManagerTest {
       Thread.sleep(5000)
       invocation.callRealMethod().asInstanceOf[UnifiedLog]
       loadLogCalled = loadLogCalled + 1
-    }.when(logManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
+    }.when(logManager).loadLog(any[File], any[Boolean], any[util.Map[TopicPartition, JLong]], any[util.Map[TopicPartition, JLong]],
       any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[UnifiedLog => Boolean]())
 
     val t = new Thread() {
@@ -538,7 +539,7 @@ class LogManagerTest {
       true
     }
 
-    logManager.loadLog(log.dir, hadCleanShutdown = true, Map.empty, Map.empty, logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
+    logManager.loadLog(log.dir, hadCleanShutdown = true, Collections.emptyMap[TopicPartition, JLong], Collections.emptyMap[TopicPartition, JLong], logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
     assertEquals(1, invokedCount)
     assertTrue(
       logDir.listFiles().toSet
@@ -594,10 +595,10 @@ class LogManagerTest {
     }
 
     logManager.checkpointLogRecoveryOffsets()
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile), null).read()
 
     topicPartitions.zip(logs).foreach { case (tp, log) =>
-      assertEquals(checkpoints(tp), log.recoveryPoint, "Recovery point should equal checkpoint")
+      assertEquals(checkpoints.get(tp), log.recoveryPoint, "Recovery point should equal checkpoint")
     }
   }
 
@@ -674,10 +675,10 @@ class LogManagerTest {
 
     logManager.checkpointRecoveryOffsetsInDir(logDir)
 
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile), null).read()
 
     tps.zip(allLogs).foreach { case (tp, log) =>
-      assertEquals(checkpoints(tp), log.recoveryPoint,
+      assertEquals(checkpoints.get(tp), log.recoveryPoint,
         "Recovery point should equal checkpoint")
     }
   }
@@ -976,7 +977,7 @@ class LogManagerTest {
         // pass mock map for verification later
         numRemainingSegments = mockMap)
 
-    }.when(spyLogManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
+    }.when(spyLogManager).loadLog(any[File], any[Boolean], any[util.Map[TopicPartition, JLong]], any[util.Map[TopicPartition, JLong]],
       any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any[UnifiedLog => Boolean]())
 
     // do nothing for removeLogRecoveryMetrics for metrics verification
@@ -1163,7 +1164,7 @@ class LogManagerTest {
     )
 
     val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
-    val checkpoint = new OffsetCheckpointFile(checkpointFile)
+    val checkpoint = new OffsetCheckpointFile(checkpointFile, null)
     val topicPartition = new TopicPartition("test", 0)
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     var offset = 0L
@@ -1188,13 +1189,13 @@ class LogManagerTest {
     logManager.checkpointLogStartOffsets()
 
     assertEquals(logStartOffset, log.logStartOffset)
-    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, -1L))
+    assertEquals(logStartOffset, checkpoint.read().getOrDefault(topicPartition, -1L))
   }
 
   @Test
   def testCheckpointLogStartOffsetForNormalTopic(): Unit = {
     val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
-    val checkpoint = new OffsetCheckpointFile(checkpointFile)
+    val checkpoint = new OffsetCheckpointFile(checkpointFile, null)
     val topicPartition = new TopicPartition("test", 0)
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     var offset = 0L
@@ -1212,7 +1213,7 @@ class LogManagerTest {
     log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
     logManager.checkpointLogStartOffsets()
     assertEquals(5, log.logSegments.size())
-    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, -1L))
+    assertEquals(logStartOffset, checkpoint.read().getOrDefault(topicPartition, -1L))
 
     log.deleteOldSegments()
     assertEquals(2, log.logSegments.size())
@@ -1220,7 +1221,7 @@ class LogManagerTest {
 
     // When you checkpoint log-start-offset after removing the segments, then there should not be any checkpoint
     logManager.checkpointLogStartOffsets()
-    assertEquals(-1L, checkpoint.read().getOrElse(topicPartition, -1L))
+    assertEquals(-1L, checkpoint.read().getOrDefault(topicPartition, -1L))
   }
 
   def writeMetaProperties(dir: File, directoryId: Optional[Uuid] = Optional.empty()): Unit = {

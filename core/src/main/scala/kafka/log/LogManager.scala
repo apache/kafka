@@ -17,15 +17,16 @@
 
 package kafka.log
 
-import java.io._
+import java.lang.{Long => JLong}
+import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
-import kafka.server._
+import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRaftServer}
 import kafka.server.metadata.BrokerMetadataPublisher.info
-import kafka.utils._
+import kafka.utils.threadsafe
+import kafka.utils.{CoreUtils, Logging, Pool}
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
@@ -40,13 +41,13 @@ import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrReq
 import org.apache.kafka.image.TopicsImage
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 
-import java.util.{OptionalLong, Properties}
+import java.util.{Collections, OptionalLong, Properties}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{FileLock, Scheduler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
-import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
+import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 
 import java.util
 import scala.annotation.nowarn
@@ -322,16 +323,16 @@ class LogManager(logDirs: Seq[File],
 
   private[log] def loadLog(logDir: File,
                            hadCleanShutdown: Boolean,
-                           recoveryPoints: Map[TopicPartition, Long],
-                           logStartOffsets: Map[TopicPartition, Long],
+                           recoveryPoints: util.Map[TopicPartition, JLong],
+                           logStartOffsets: util.Map[TopicPartition, JLong],
                            defaultConfig: LogConfig,
                            topicConfigOverrides: Map[String, LogConfig],
                            numRemainingSegments: ConcurrentMap[String, Int],
                            isStray: UnifiedLog => Boolean): UnifiedLog = {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val config = topicConfigOverrides.getOrElse(topicPartition.topic, defaultConfig)
-    val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
-    val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
+    val logRecoveryPoint = recoveryPoints.getOrDefault(topicPartition, 0L)
+    val logStartOffset = logStartOffsets.getOrDefault(topicPartition, 0L)
 
     val log = UnifiedLog(
       dir = logDir,
@@ -444,22 +445,22 @@ class LogManager(logDirs: Seq[File],
         }
         hadCleanShutdownFlags.put(logDirAbsolutePath, hadCleanShutdown)
 
-        var recoveryPoints = Map[TopicPartition, Long]()
-        try {
-          recoveryPoints = this.recoveryPointCheckpoints(dir).read()
+        val recoveryPoints: util.Map[TopicPartition, JLong] = try {
+          this.recoveryPointCheckpoints(dir).read()
         } catch {
           case e: Exception =>
             warn(s"Error occurred while reading recovery-point-offset-checkpoint file of directory " +
               s"$logDirAbsolutePath, resetting the recovery checkpoint to 0", e)
+            Collections.emptyMap[TopicPartition, JLong]
         }
 
-        var logStartOffsets = Map[TopicPartition, Long]()
-        try {
-          logStartOffsets = this.logStartOffsetCheckpoints(dir).read()
+        val logStartOffsets: util.Map[TopicPartition, JLong] = try {
+          this.logStartOffsetCheckpoints(dir).read()
         } catch {
           case e: Exception =>
             warn(s"Error occurred while reading log-start-offset-checkpoint file of directory " +
               s"$logDirAbsolutePath, resetting to the base offset of the first segment", e)
+            Collections.emptyMap[TopicPartition, JLong]
         }
 
         val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>
@@ -844,10 +845,10 @@ class LogManager(logDirs: Seq[File],
   private def checkpointRecoveryOffsetsInDir(logDir: File, logsToCheckpoint: Map[TopicPartition, UnifiedLog]): Unit = {
     try {
       recoveryPointCheckpoints.get(logDir).foreach { checkpoint =>
-        val recoveryOffsets = logsToCheckpoint.map { case (tp, log) => tp -> log.recoveryPoint }
+        val recoveryOffsets: Map[TopicPartition, JLong] = logsToCheckpoint.map { case (tp, log) => tp -> long2Long(log.recoveryPoint) }
         // checkpoint.write calls Utils.atomicMoveWithFallback, which flushes the parent
         // directory and guarantees crash consistency.
-        checkpoint.write(recoveryOffsets)
+        checkpoint.write(recoveryOffsets.asJava)
       }
     } catch {
       case e: KafkaStorageException =>
@@ -867,11 +868,11 @@ class LogManager(logDirs: Seq[File],
   private def checkpointLogStartOffsetsInDir(logDir: File, logsToCheckpoint: Map[TopicPartition, UnifiedLog]): Unit = {
     try {
       logStartOffsetCheckpoints.get(logDir).foreach { checkpoint =>
-        val logStartOffsets = logsToCheckpoint.collect {
+        val logStartOffsets: Map[TopicPartition, JLong] = logsToCheckpoint.collect {
           case (tp, log) if log.remoteLogEnabled() || log.logStartOffset > log.logSegments.asScala.head.baseOffset =>
-            tp -> log.logStartOffset
+            tp -> long2Long(log.logStartOffset)
         }
-        checkpoint.write(logStartOffsets)
+        checkpoint.write(logStartOffsets.asJava)
       }
     } catch {
       case e: KafkaStorageException =>

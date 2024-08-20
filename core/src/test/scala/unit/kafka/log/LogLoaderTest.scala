@@ -46,6 +46,8 @@ import org.mockito.{ArgumentMatchers, Mockito}
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 
+import java.lang.{Long => JLong}
+import java.util
 import java.util.concurrent.ConcurrentMap
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
@@ -131,8 +133,8 @@ class LogLoaderTest {
         remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
         initialTaskDelayMs = config.logInitialTaskDelayMs) {
 
-        override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
-                             logStartOffsets: Map[TopicPartition, Long], defaultConfig: LogConfig,
+        override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: util.Map[TopicPartition, JLong],
+                             logStartOffsets: util.Map[TopicPartition, JLong], defaultConfig: LogConfig,
                              topicConfigs: Map[String, LogConfig], numRemainingSegments: ConcurrentMap[String, Int],
                              shouldBeStrayKraftLog: UnifiedLog => Boolean): UnifiedLog = {
           if (simulateError.hasError) {
@@ -150,8 +152,8 @@ class LogLoaderTest {
           cleanShutdownInterceptedValue = hadCleanShutdown
           val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
           val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
-          val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
-          val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
+          val logRecoveryPoint = recoveryPoints.getOrDefault(topicPartition, 0L)
+          val logStartOffset = logStartOffsets.getOrDefault(topicPartition, 0L)
           val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
           val segments = new LogSegments(topicPartition)
           val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(

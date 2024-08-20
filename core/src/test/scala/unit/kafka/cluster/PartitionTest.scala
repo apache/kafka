@@ -21,7 +21,6 @@ import com.yammer.metrics.core.Metric
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log._
 import kafka.server._
-import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, InvalidTxnStateException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
@@ -42,6 +41,7 @@ import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong, anyString
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 
+import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
@@ -59,6 +59,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1353,7 +1354,7 @@ class PartitionTest extends AbstractPartitionTest {
       alterPartitionManager))
 
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
-      .thenReturn(None)
+      .thenReturn(Optional.empty[JLong])
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 6, leaderEpoch = 4)
 
@@ -2748,7 +2749,7 @@ class PartitionTest extends AbstractPartitionTest {
     seedLogData(log, numRecords = 6, leaderEpoch = 5)
 
     when(offsetCheckpoints.fetch(logDir1.getAbsolutePath, topicPartition))
-      .thenReturn(Some(4L))
+      .thenReturn(Optional.of(long2Long(4L)))
 
     val controllerEpoch = 3
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
