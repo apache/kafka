@@ -61,6 +61,7 @@ public class OffsetCheckpointFile {
         checkpoint.write(list);
     }
 
+    // The returned Map must be mutable
     public Map<TopicPartition, Long> read() {
         List<TopicPartitionOffset> list = checkpoint.read();
         Map<TopicPartition, Long> result = new HashMap<>(list.size());
