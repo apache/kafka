@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -154,12 +153,9 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
      */
     public void appendInitialRecords(List<ApiMessageAndVersion> records) {
         int initialLeaderEpoch = 1;
-        shared.append(OptionalLong.empty(), new LeaderChangeBatch(
-            new LeaderAndEpoch(OptionalInt.empty(), initialLeaderEpoch + 1)));
-        shared.append(OptionalLong.empty(),
-            new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
-        shared.append(OptionalLong.empty(),
-            new LeaderChangeBatch(new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
+        shared.append(new LeaderChangeBatch(new LeaderAndEpoch(OptionalInt.empty(), initialLeaderEpoch + 1)));
+        shared.append(new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
+        shared.append(new LeaderChangeBatch(new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
     }
 
     public String clusterId() {
@@ -199,6 +195,15 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
 
     public List<LocalLogManager> logManagers() {
         return logManagers;
+    }
+
+    public Optional<LocalLogManager> activeLogManager() {
+        OptionalInt leader = shared.leaderAndEpoch().leaderId();
+        if (leader.isPresent()) {
+            return Optional.of(logManagers.get(leader.getAsInt()));
+        } else {
+            return Optional.empty();
+        }
     }
 
     public RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
