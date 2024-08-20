@@ -26,9 +26,9 @@ import java.util.Objects;
  * various modules.
  */
 public class SharePartitionKey {
-    public final String groupId;
-    public final Uuid topicId;
-    public final int partition;
+    private final String groupId;
+    private final Uuid topicId;
+    private final int partition;
 
     public SharePartitionKey(String groupId, Uuid topicId, int partition) {
         this.groupId = groupId;
