@@ -13,17 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Pull Requests
+name: CI
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
     branches:
       - 'trunk'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false  # Let each trunk commit finish a build
 
 jobs:
   validate:
@@ -31,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 8, 11, 17, 21 ]
+        java: [8, 11, 17, 21]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -42,10 +41,9 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          gradle-cache-read-only: true
+          gradle-cache-read-only: false
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
-        # Publish build scans for now. This will only work on PRs from apache/kafka, not public forks.
         run: ./gradlew --build-cache --info --scan check -x test
 
   test:
@@ -55,7 +53,6 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 11, 17 ]
-    if: contains(github.head_ref, 'gh-')  # For now, only run tests on "gh-*" PRs
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -66,10 +63,9 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          gradle-cache-read-only: true
+          gradle-cache-read-only: false
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Test
-        # Publish build scans for now. This will only work on PRs from apache/kafka, not public forks.
         timeout-minutes: 180  # 3 hours
         run: |
           ./gradlew --build-cache --scan --continue \
