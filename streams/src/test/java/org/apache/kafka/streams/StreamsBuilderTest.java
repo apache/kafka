@@ -895,21 +895,6 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public void shouldUseSpecifiedNameForBranchOperation() {
-        builder.stream(STREAM_TOPIC)
-               .branch(Named.as("branch-processor"), (k, v) -> true, (k, v) -> false);
-
-        builder.build();
-        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
-        assertNamesForOperation(topology,
-                                "KSTREAM-SOURCE-0000000000",
-                                "branch-processor",
-                                "branch-processor-predicate-0",
-                                "branch-processor-predicate-1");
-    }
-
-    @Test
     public void shouldUseSpecifiedNameForSplitOperation() {
         builder.stream(STREAM_TOPIC)
                 .split(Named.as("branch-processor"))

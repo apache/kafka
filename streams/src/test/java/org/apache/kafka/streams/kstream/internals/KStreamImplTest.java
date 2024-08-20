@@ -41,7 +41,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.StreamJoined;
@@ -71,7 +70,6 @@ import org.apache.kafka.test.MockApiFixedKeyProcessorSupplier;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
@@ -491,60 +489,6 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.peek((k, v) -> { }, null));
         assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings({"rawtypes", "unchecked", "deprecation"})
-    public void shouldNotAllowNullPredicatedOnBranch() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.branch((Predicate[]) null));
-        assertThat(exception.getMessage(), equalTo("predicates can't be a null array"));
-    }
-
-    @Test
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public void shouldHaveAtLeastOnPredicateWhenBranching() {
-        final IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> testStream.branch());
-        assertThat(exception.getMessage(), equalTo("branch() requires at least one predicate"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Test
-    public void shouldHaveAtLeastOnPredicateWhenBranchingWithNamed() {
-        final IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> testStream.branch(Named.as("branch")));
-        assertThat(exception.getMessage(), equalTo("branch() requires at least one predicate"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Test
-    public void shouldNotAllowNullNamedOnBranch() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.branch((Named) null, (k, v) -> true));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Test
-    public void shouldCantHaveNullPredicate() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.branch((Predicate<Object, Object>) null));
-        assertThat(exception.getMessage(), equalTo("predicates can't be null"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Test
-    public void shouldCantHaveNullPredicateWithNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.branch(Named.as("branch"), (Predicate<Object, Object>) null));
-        assertThat(exception.getMessage(), equalTo("predicates can't be null"));
     }
 
     @Test
@@ -1286,62 +1230,6 @@ public class KStreamImplTest {
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     Named.as("name")));
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"}) // specifically testing the deprecated variant
-    @Test
-    public void testNumProcesses() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
-
-        final KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
-
-        final KStream<String, String> stream1 = source1.filter((key, value) -> true)
-            .filterNot((key, value) -> false);
-
-        final KStream<String, Integer> stream2 = stream1.mapValues((ValueMapper<String, Integer>) Integer::valueOf);
-
-        final KStream<String, Integer> stream3 = source2.flatMapValues((ValueMapper<String, Iterable<Integer>>)
-            value -> Collections.singletonList(Integer.valueOf(value)));
-
-        final KStream<String, Integer>[] streams2 = stream2.branch(
-            (key, value) -> (value % 2) == 0,
-            (key, value) -> true
-        );
-
-        final KStream<String, Integer>[] streams3 = stream3.branch(
-            (key, value) -> (value % 2) == 0,
-            (key, value) -> true
-        );
-
-        final int anyWindowSize = 1;
-        final StreamJoined<String, Integer, Integer> joined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
-        final KStream<String, Integer> stream4 = streams2[0].join(streams3[0],
-            Integer::sum, JoinWindows.of(ofMillis(anyWindowSize)), joined);
-
-        streams2[1].join(streams3[1], Integer::sum,
-            JoinWindows.of(ofMillis(anyWindowSize)), joined);
-
-        stream4.to("topic-5");
-
-        streams2[1].through("topic-6").process(new MockProcessorSupplier<>());
-
-        streams2[1].repartition().process(new MockProcessorSupplier<>());
-
-        assertEquals(2 + // sources
-                2 + // stream1
-                1 + // stream2
-                1 + // stream3
-                1 + 2 + // streams2
-                1 + 2 + // streams3
-                5 * 2 + // stream2-stream3 joins
-                1 + // to
-                2 + // through
-                1 + // process
-                3 + // repartition
-                1, // process
-            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology().processors().size());
     }
 
     @SuppressWarnings({"rawtypes", "deprecation"})  // specifically testing the deprecated variant

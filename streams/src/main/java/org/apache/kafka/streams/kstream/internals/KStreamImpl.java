@@ -450,22 +450,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
-    @Deprecated
-    @Override
-    @SuppressWarnings("unchecked")
-    public KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates) {
-        return doBranch(NamedInternal.empty(), predicates);
-    }
-
-    @Deprecated
-    @Override
-    @SuppressWarnings("unchecked")
-    public KStream<K, V>[] branch(final Named named,
-                                  final Predicate<? super K, ? super V>... predicates) {
-        Objects.requireNonNull(named, "named can't be null");
-        return doBranch(new NamedInternal(named), predicates);
-    }
-
     @SuppressWarnings({"unchecked", "rawtypes"})
     private KStream<K, V>[] doBranch(final NamedInternal named,
                                      final Predicate<? super K, ? super V>... predicates) {
