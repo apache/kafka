@@ -242,7 +242,7 @@ class BrokerServer(
         retryTimeoutMs = 60000
       )
       clientToControllerChannelManager.start()
-      forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
+      forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
       clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
       val apiVersionManager = ApiVersionManager(

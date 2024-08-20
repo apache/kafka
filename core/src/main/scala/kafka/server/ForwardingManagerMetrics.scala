@@ -17,50 +17,82 @@
 
 package kafka.server
 
-import com.yammer.metrics.core.{Gauge, Histogram, MetricName}
-import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.common.MetricName
+import org.apache.kafka.common.metrics.{Gauge, MetricConfig, Metrics}
+import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
+import org.apache.kafka.common.metrics.stats.{Percentile, Percentiles}
 
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
-final class ForwardingManagerMetrics private
-  extends AutoCloseable {
+final class ForwardingManagerMetrics private (
+  metrics: Metrics
+) extends AutoCloseable {
   import ForwardingManagerMetrics._
-
-  private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup("kafka.server","ForwardingManager")
 
   /**
    * A histogram describing the amount of time in milliseconds each admin request spends in the broker's forwarding manager queue, waiting to be sent to the controller.
    * This does not include the time that the request spends waiting for a response from the controller.
    */
-  val queueTimeMsName: MetricName = metricsGroup.metricName("QueueTimeMs", Collections.emptyMap())
-  val queueTimeMsHist: Histogram = KafkaYammerMetrics.defaultRegistry().newHistogram(queueTimeMsName, true)
+  val queueTimeMsHist: LatencyHistogram = new LatencyHistogram(metrics, queueTimeMsName, metricGroupName)
 
   /**
-   * The current number of RPCs that are waiting in the broker's forwarding manager queue, waiting to be sent to the controller.
+   * A histogram describing the amount of time in milliseconds each request sent by the ForwardingManager spends waiting for a response.
+   * This does not include the time spent in the queue.
    */
-  val queueLengthName: MetricName = metricsGroup.metricName("QueueLength", Collections.emptyMap())
+  val remoteTimeMsHist: LatencyHistogram = new LatencyHistogram(metrics, remoteTimeMsName, metricGroupName)
+
+  val queueLengthName: MetricName = metrics.metricName(
+    "QueueLength",
+    metricGroupName,
+    "The current number of RPCs that are waiting in the broker's forwarding manager queue, waiting to be sent to the controller."
+  )
   val queueLength: AtomicInteger = new AtomicInteger(0)
-  val queueLengthGauge: Gauge[Int] = KafkaYammerMetrics.defaultRegistry().newGauge(queueLengthName, new FuncGauge[Int](queueLength.get))
-
-  /**
-   * A histogram describing the amount of time in milliseconds each request sent by the ForwardingManager spends waiting for a response. " +
-   *  "This does not include the time spent in the queue.
-   */
-  val remoteTimeMsName: MetricName = metricsGroup.metricName("RemoteTimeMs", Collections.emptyMap())
-  val remoteTimeMsHist: Histogram = KafkaYammerMetrics.defaultRegistry().newHistogram(remoteTimeMsName, true)
+  metrics.addMetric(queueLengthName, new FuncGauge(_ => queueLength.get()))
 
   override def close(): Unit = {
-    KafkaYammerMetrics.defaultRegistry().removeMetric(queueTimeMsName)
-    KafkaYammerMetrics.defaultRegistry().removeMetric(queueLengthName)
-    KafkaYammerMetrics.defaultRegistry().removeMetric(remoteTimeMsName)
+    queueTimeMsHist.close()
+    remoteTimeMsHist.close()
+    metrics.removeMetric(queueLengthName)
   }
 }
 
 object ForwardingManagerMetrics {
-  private final class FuncGauge[T](func: T) extends Gauge[T] {
-    override def value(): T = func
+
+  val metricGroupName = "ForwardingManager"
+  val queueTimeMsName = "QueueTimeMs"
+  val remoteTimeMsName = "RemoteTimeMs"
+
+  final class LatencyHistogram (
+    metrics: Metrics,
+    name: String,
+    group: String
+  ) extends AutoCloseable {
+    private val sensor = metrics.sensor(name)
+    val latencyP99Name: MetricName = metrics.metricName(s"$name.p99", group)
+    val latencyP999Name: MetricName = metrics.metricName(s"$name.p999", group)
+
+    sensor.add(new Percentiles(
+      4000,
+      5000,
+      BucketSizing.CONSTANT,
+      new Percentile(latencyP99Name, 99),
+      new Percentile(latencyP999Name, 99.9)
+    ))
+
+    override def close(): Unit = {
+      metrics.removeSensor(name)
+      metrics.removeMetric(latencyP99Name)
+      metrics.removeMetric(latencyP999Name)
+    }
+
+    def record(latencyMs: Long): Unit = sensor.record(latencyMs)
   }
 
-  def apply(): ForwardingManagerMetrics = new ForwardingManagerMetrics
+  private final class FuncGauge[T](func: Long => T) extends Gauge[T] {
+    override def value(config: MetricConfig, now: Long): T = {
+      func(now)
+    }
+  }
+
+  def apply(metrics: Metrics): ForwardingManagerMetrics = new ForwardingManagerMetrics(metrics)
 }

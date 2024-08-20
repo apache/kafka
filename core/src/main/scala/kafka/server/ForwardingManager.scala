@@ -22,6 +22,7 @@ import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
@@ -89,9 +90,10 @@ trait ForwardingManager {
 
 object ForwardingManager {
   def apply(
-    channelManager: NodeToControllerChannelManager
+    channelManager: NodeToControllerChannelManager,
+    metrics: Metrics
   ): ForwardingManager = {
-    new ForwardingManagerImpl(channelManager)
+    new ForwardingManagerImpl(channelManager, metrics)
   }
 
   private[server] def buildEnvelopeRequest(context: RequestContext,
@@ -110,10 +112,11 @@ object ForwardingManager {
 }
 
 class ForwardingManagerImpl(
-  channelManager: NodeToControllerChannelManager
+  channelManager: NodeToControllerChannelManager,
+  metrics: Metrics
 ) extends ForwardingManager with AutoCloseable with Logging {
 
-  val forwardingManagerMetrics: ForwardingManagerMetrics = ForwardingManagerMetrics()
+  val forwardingManagerMetrics: ForwardingManagerMetrics = ForwardingManagerMetrics(metrics)
 
   override def forwardRequest(
     requestContext: RequestContext,
@@ -130,8 +133,8 @@ class ForwardingManagerImpl(
       override def onComplete(clientResponse: ClientResponse): Unit = {
 
         forwardingManagerMetrics.queueLength.getAndDecrement()
-        forwardingManagerMetrics.remoteTimeMsHist.update(clientResponse.requestLatencyMs())
-        forwardingManagerMetrics.queueTimeMsHist.update(clientResponse.receivedTimeMs() - clientResponse.requestLatencyMs() - requestCreationTimeMs)
+        forwardingManagerMetrics.remoteTimeMsHist.record(clientResponse.requestLatencyMs())
+        forwardingManagerMetrics.queueTimeMsHist.record(clientResponse.receivedTimeMs() - clientResponse.requestLatencyMs() - requestCreationTimeMs)
 
         if (clientResponse.versionMismatch != null) {
           debug(s"Returning `UNKNOWN_SERVER_ERROR` in response to ${requestToString()} " +

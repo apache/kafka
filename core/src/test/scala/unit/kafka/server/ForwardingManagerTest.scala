@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{AlterConfigsResponseData, ApiVersionsResponseData}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AlterConfigsRequest, AlterConfigsResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader, RequestTestUtils}
@@ -47,7 +48,7 @@ class ForwardingManagerTest {
   private val controllerNodeProvider = Mockito.mock(classOf[ControllerNodeProvider])
   private val brokerToController = new MockNodeToControllerChannelManager(
     client, time, controllerNodeProvider, controllerApiVersions)
-  private val forwardingManager = new ForwardingManagerImpl(brokerToController)
+  private val forwardingManager = new ForwardingManagerImpl(brokerToController, new Metrics())
   private val principalBuilder = new DefaultKafkaPrincipalBuilder(null, null)
 
   private def controllerApiVersions: NodeApiVersions = {
