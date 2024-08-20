@@ -173,8 +173,7 @@ object AbstractCoordinatorConcurrencyTest {
                            val delayedFetchPurgatoryParam: DelayedOperationPurgatory[DelayedFetch],
                            val delayedDeleteRecordsPurgatoryParam: DelayedOperationPurgatory[DelayedDeleteRecords],
                            val delayedElectLeaderPurgatoryParam: DelayedOperationPurgatory[DelayedElectLeader],
-                           val delayedRemoteFetchPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteFetch],
-                           metadataCache: MetadataCache = null)
+                           val delayedRemoteFetchPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteFetch])
     extends ReplicaManager(
       config,
       metrics = null,
@@ -183,7 +182,7 @@ object AbstractCoordinatorConcurrencyTest {
       logManager,
       None,
       quotaManagers,
-      metadataCache,
+      null,
       null,
       null,
       delayedProducePurgatoryParam = Some(producePurgatory),
@@ -282,8 +281,7 @@ object AbstractCoordinatorConcurrencyTest {
               logManager: LogManager,
               quotaManagers: QuotaManagers,
               producePurgatory: DelayedOperationPurgatory[DelayedProduce],
-              watchKeys: mutable.Set[TopicPartitionOperationKey],
-              metadataCache: MetadataCache): TestReplicaManager = {
+              watchKeys: mutable.Set[TopicPartitionOperationKey]): TestReplicaManager = {
       val mockRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
         purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
       val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
@@ -293,7 +291,7 @@ object AbstractCoordinatorConcurrencyTest {
       val mockElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", timer, reaperEnabled = false)
       new TestReplicaManager(config, time, scheduler, logManager, quotaManagers, watchKeys, producePurgatory,
-        mockFetchPurgatory, mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, mockRemoteFetchPurgatory, metadataCache = metadataCache)
+        mockFetchPurgatory, mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, mockRemoteFetchPurgatory)
     }
   }
 }
