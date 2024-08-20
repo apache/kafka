@@ -97,6 +97,7 @@ jobs:
           cache-cleanup: on-success
           cache-overwrite-existing: true
       - name: Test
+        timeout-minutes: 180  # 3 hours
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
