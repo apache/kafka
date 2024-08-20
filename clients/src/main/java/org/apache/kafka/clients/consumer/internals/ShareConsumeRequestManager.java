@@ -266,15 +266,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             return Optional.empty();
         } else if (!acknowledgeRequestState.maybeExpire()) {
             if (acknowledgeRequestState.canSendRequest(currentTimeMs)) {
-                acknowledgeRequestState.onSendAttempt(currentTimeMs);
-                if (onCommitAsync) {
-                    isAsyncDone.set(true);
-                }
-                return Optional.of(acknowledgeRequestState.buildRequest(currentTimeMs));
-            } else {
-                // We wait for the backoff before we can send this request.
-                if (onCommitAsync) {
-                    isAsyncDone.set(false);
+                UnsentRequest request = acknowledgeRequestState.buildRequest(currentTimeMs);
+                if (request != null) {
+                    acknowledgeRequestState.onSendAttempt(currentTimeMs);
+                    if (onCommitAsync) {
+                        isAsyncDone.set(true);
+                    }
+                    return Optional.of(request);
+                } else {
+                    if (onCommitAsync) {
+                        isAsyncDone.set(false);
+                    }
                 }
             }
         } else {
