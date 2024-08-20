@@ -114,7 +114,6 @@ import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -168,8 +167,6 @@ import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1082,115 +1079,6 @@ public class QuorumControllerTest {
             electLeadersFuture.get();
             alterReassignmentsFuture.get();
             countDownLatch.countDown();
-
-            testToImages(logEnv.allRecords());
-        }
-    }
-
-    @Disabled // TODO: need to fix leader election in LocalLog.
-    @Test
-    public void testMissingInMemorySnapshot() throws Exception {
-        int numBrokers = 3;
-        int numPartitions = 3;
-        String topicName = "topic-name";
-
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
-                build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
-                build()
-        ) {
-            QuorumController controller = controlEnv.activeController();
-
-            Map<Integer, Long> brokerEpochs = registerBrokersAndUnfence(controller, numBrokers);
-
-            // Create a lot of partitions
-            List<CreatableReplicaAssignment> partitions = IntStream
-                .range(0, numPartitions)
-                .mapToObj(partitionIndex -> new CreatableReplicaAssignment()
-                    .setPartitionIndex(partitionIndex)
-                    .setBrokerIds(Arrays.asList(0, 1, 2))
-                )
-                .collect(Collectors.toList());
-
-            Uuid topicId = controller.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData()
-                    .setTopics(new CreatableTopicCollection(Collections.singleton(new CreatableTopic()
-                        .setName(topicName)
-                        .setNumPartitions(-1)
-                        .setReplicationFactor((short) -1)
-                        .setAssignments(new CreatableReplicaAssignmentCollection(partitions.iterator()))
-                    ).iterator())),
-                Collections.singleton("foo")).get().topics().find(topicName).topicId();
-
-            // Create a lot of alter isr
-            List<AlterPartitionRequestData.PartitionData> alterPartitions = IntStream
-                .range(0, numPartitions)
-                .mapToObj(partitionIndex -> {
-                    PartitionRegistration partitionRegistration = controller.replicationControl().getPartition(
-                        topicId,
-                        partitionIndex
-                    );
-
-                    return new AlterPartitionRequestData.PartitionData()
-                        .setPartitionIndex(partitionIndex)
-                        .setLeaderEpoch(partitionRegistration.leaderEpoch)
-                        .setPartitionEpoch(partitionRegistration.partitionEpoch)
-                        .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(0, 1)));
-                })
-                .collect(Collectors.toList());
-
-            AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
-                .setTopicName(topicName);
-            topicData.partitions().addAll(alterPartitions);
-
-            int leaderId = 0;
-            AlterPartitionRequestData alterPartitionRequest = new AlterPartitionRequestData()
-                .setBrokerId(leaderId)
-                .setBrokerEpoch(brokerEpochs.get(leaderId));
-            alterPartitionRequest.topics().add(topicData);
-
-            logEnv.logManagers().get(0).resignAfterNonAtomicCommit();
-
-            int oldClaimEpoch = controller.curClaimEpoch();
-            assertThrows(ExecutionException.class,
-                () -> controller.alterPartition(ANONYMOUS_CONTEXT, new AlterPartitionRequest
-                    .Builder(alterPartitionRequest, false).build((short) 0).data()).get());
-
-            // Wait for the controller to become active again
-            assertSame(controller, controlEnv.activeController());
-            assertTrue(
-                oldClaimEpoch < controller.curClaimEpoch(),
-                String.format("oldClaimEpoch = %s, newClaimEpoch = %s", oldClaimEpoch, controller.curClaimEpoch())
-            );
-
-            // Since the alterPartition partially failed we expect to see
-            // some partitions to still have 2 in the ISR.
-            int partitionsWithReplica2 = Utils.toList(
-                controller
-                    .replicationControl()
-                    .brokersToIsrs()
-                    .partitionsWithBrokerInIsr(2)
-            ).size();
-            int partitionsWithReplica0 = Utils.toList(
-                controller
-                    .replicationControl()
-                    .brokersToIsrs()
-                    .partitionsWithBrokerInIsr(0)
-            ).size();
-
-            assertEquals(numPartitions, partitionsWithReplica0);
-            assertNotEquals(0, partitionsWithReplica2);
-            assertTrue(
-                partitionsWithReplica0 > partitionsWithReplica2,
-                String.format(
-                    "partitionsWithReplica0 = %s, partitionsWithReplica2 = %s",
-                    partitionsWithReplica0,
-                    partitionsWithReplica2
-                )
-            );
 
             testToImages(logEnv.allRecords());
         }
