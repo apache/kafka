@@ -684,7 +684,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         fetchPurgatory.completeAllExceptionally(
             Errors.NOT_LEADER_OR_FOLLOWER.exception("Not handling request since this node is resigning"));
         quorum.transitionToResigned(preferredSuccessors);
-        maybeFireLeaderChange();
         resetConnections();
     }
 
@@ -3178,7 +3177,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Optional<LeaderState<T>> leaderState = quorum.maybeLeaderState();
         if (leaderState.isPresent()) {
             maybeFireLeaderChange(leaderState.get());
-        } else {
+        } else if (!quorum.isResigned()) {
+            /* Should not fire leader change while in the resigned state for two reasons.
+             * 1. The epoch start offset is not tracked but the leader is the local replica.
+             *    Listener cannot be notify of leadership until they have caught to the latest
+             *    epoch.
+             * 2. It is not pratical to notify of local leadership since any write operation
+             *    (prepareAppend and schedulePreparedAppend) will fail with NotLeaderException
+             */
             maybeFireLeaderChange();
         }
     }
@@ -3706,6 +3712,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // to have consumed up to that new high-watermark.
             if (shouldFireLeaderChange(leaderAndEpoch) && nextOffset() > epochStartOffset) {
                 lastFiredLeaderChange = leaderAndEpoch;
+                logger.debug("Notifying listener {} of new leadership {}", listenerName(), leaderAndEpoch);
                 listener.handleLeaderChange(leaderAndEpoch);
             }
         }
