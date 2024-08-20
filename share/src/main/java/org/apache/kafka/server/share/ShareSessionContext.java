@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server.share;
+package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -27,22 +27,17 @@ import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchRequest.SharePartitionData;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
-import org.apache.kafka.server.share.CachedSharePartition;
-import org.apache.kafka.server.share.ShareSession;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
-
-import scala.Tuple2;
 
 /**
  * The context for a share session fetch request.
@@ -229,8 +224,8 @@ public class ShareSessionContext extends ShareFetchContext {
         if (!isSubsequent) {
             return new ErroneousAndValidPartitionData(shareFetchData);
         }
-        List<Tuple2<TopicIdPartition, PartitionData>> erroneous = new ArrayList<>();
-        List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> valid = new ArrayList<>();
+        Map<TopicIdPartition, PartitionData> erroneous = new HashMap<>();
+        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> valid = new HashMap<>();
         // Take the session lock and iterate over all the cached partitions.
         synchronized (session) {
             session.partitionMap().forEach(cachedSharePartition -> {
@@ -238,9 +233,9 @@ public class ShareSessionContext extends ShareFetchContext {
                         TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()));
                 ShareFetchRequest.SharePartitionData reqData = cachedSharePartition.reqData();
                 if (topicIdPartition.topic() == null) {
-                    erroneous.add(new Tuple2<>(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)));
+                    erroneous.put(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID));
                 } else {
-                    valid.add(new Tuple2<>(topicIdPartition, reqData));
+                    valid.put(topicIdPartition, reqData);
                 }
             });
             return new ErroneousAndValidPartitionData(erroneous, valid);
