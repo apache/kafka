@@ -16,12 +16,12 @@
 name: Pull Requests
 
 on:
-  push:
-    branches: 'gh-*'
-
   pull_request:
-    types: [opened, synchronize, reopened]
-    branches: 'gh-*'
+    branches:
+      - trunk
+  push:
+    branches:
+      - trunk
 
 jobs:
   validate:
@@ -47,7 +47,6 @@ jobs:
           GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
         with:
           gradle-version: wrapper
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
           # Only write to the cache from trunk
           #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
           cache-read-only: false
@@ -85,7 +84,6 @@ jobs:
           GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
         with:
           gradle-version: wrapper
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
           # Only write to the cache from trunk
           #cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
           cache-read-only: false
@@ -100,6 +98,6 @@ jobs:
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
+          -PignoreFailures=true \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           test
