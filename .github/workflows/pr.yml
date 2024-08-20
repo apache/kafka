@@ -16,12 +16,12 @@
 name: Pull Requests
 
 on:
-  push:
-    branches: 'gh-*'
-
   pull_request:
-    types: [opened, synchronize, reopened]
-    branches: 'gh-*'
+    branches:
+      - trunk
+  push:
+    branches:
+      - trunk
 
 jobs:
   validate:
