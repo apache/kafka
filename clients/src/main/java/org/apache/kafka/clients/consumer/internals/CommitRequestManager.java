@@ -999,7 +999,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 // Re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
                 future.completeExceptionally(exception);
-            } else if (exception instanceof RetriableException && !(exception instanceof TimeoutException)) {
+            } else if (exception instanceof RetriableException) {
                 // If fail with a retriable KafkaException, then retry (except for timeout)
                 future.completeExceptionally(exception);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {

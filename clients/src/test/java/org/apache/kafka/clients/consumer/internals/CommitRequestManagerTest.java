@@ -651,7 +651,7 @@ public class CommitRequestManagerTest {
             error);
         // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
         ApiException exception = error.exception();
-        if (exception instanceof RetriableException && !(exception instanceof TimeoutException))
+        if (exception instanceof RetriableException)
             testRetriable(commitRequestManager, futures, error);
         else {
             testNonRetriable(futures);
@@ -674,7 +674,7 @@ public class CommitRequestManagerTest {
                 error);
 
         ApiException exception = error.exception();
-        if (exception instanceof RetriableException && !(exception instanceof TimeoutException)) {
+        if (exception instanceof RetriableException) {
             futures.forEach(f -> assertFalse(f.isDone()));
 
             // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
