@@ -141,7 +141,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     // Generate client security properties before starting the brokers in case certs are needed
     producerConfig ++= clientSecurityProps("producer")
     consumerConfig ++= clientSecurityProps("consumer")
-    shareConsumerConfig ++= clientSecurityProps("consumer")
+    shareConsumerConfig ++= clientSecurityProps("shareConsumer")
     adminClientConfig ++= clientSecurityProps("adminClient")
     superuserClientConfig ++= superuserSecurityProps("superuserClient")
 
