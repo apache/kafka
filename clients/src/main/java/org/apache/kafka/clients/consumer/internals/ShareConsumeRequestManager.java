@@ -278,6 +278,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         isAsyncDone.set(false);
                     }
                 }
+            } else {
+                // We wait for the backoff before we can send this request.
+                if (onCommitAsync) {
+                    isAsyncDone.set(false);
+                }
             }
         } else {
             // Fill in TimeoutException
