@@ -31,6 +31,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.time.Duration
 import java.util.concurrent.ExecutionException
 import java.util.{Collections, Properties}
 import scala.collection.Seq
@@ -122,7 +123,7 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
       val e = assertThrows(classOf[ExecutionException], () => adminClient.fenceProducers(Collections.singletonList(txnId),
         new FenceProducersOptions().timeoutMs(0)).all().get())
       assertInstanceOf(classOf[TimeoutException], e.getCause)
-    } finally adminClient.close()
+    } finally adminClient.close(Duration.ofSeconds(0))
   }
 
   @ParameterizedTest

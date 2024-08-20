@@ -23,6 +23,18 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -35,6 +47,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -43,22 +56,11 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.telemetry.ClientTelemetry;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
-
 import org.junit.jupiter.api.extension.ExtendWith;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
@@ -74,7 +76,7 @@ public class ClientTelemetryTest {
             String testTopicName = "test_topic";
             admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));
             clusterInstance.waitForTopic(testTopicName, 1);
-            
+
             Map<String, Object> producerConfigs = new HashMap<>();
             producerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
             producerConfigs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
@@ -83,6 +85,9 @@ public class ClientTelemetryTest {
             try (Producer<String, String> producer = new KafkaProducer<>(producerConfigs)) {
                 producer.send(new ProducerRecord<>(testTopicName, 0, null, "bar")).get();
                 producer.flush();
+                Uuid producerClientId = producer.clientInstanceId(Duration.ofSeconds(3));
+                assertNotNull(producerClientId);
+                assertEquals(producerClientId, producer.clientInstanceId(Duration.ofSeconds(3)));
             }
 
             Map<String, Object> consumerConfigs = new HashMap<>();
@@ -94,13 +99,19 @@ public class ClientTelemetryTest {
             try (Consumer<String, String> consumer = new KafkaConsumer<>(consumerConfigs)) {
                 consumer.assign(Collections.singletonList(new TopicPartition(testTopicName, 0)));
                 consumer.seekToBeginning(Collections.singletonList(new TopicPartition(testTopicName, 0)));
+                Uuid consumerClientId = consumer.clientInstanceId(Duration.ofSeconds(5));
+                //  before poll, the clientInstanceId will return null
+                assertNull(consumerClientId);
                 List<String> values = new ArrayList<>();
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMinutes(1));
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(1));
                 for (ConsumerRecord<String, String> record : records) {
                     values.add(record.value());
                 }
                 assertEquals(1, values.size());
                 assertEquals("bar", values.get(0));
+                consumerClientId = consumer.clientInstanceId(Duration.ofSeconds(3));
+                assertNotNull(consumerClientId);
+                assertEquals(consumerClientId, consumer.clientInstanceId(Duration.ofSeconds(3)));
             }
             Uuid uuid = admin.clientInstanceId(Duration.ofSeconds(3));
             assertNotNull(uuid);
@@ -114,15 +125,15 @@ public class ClientTelemetryTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         List<String> expectedMetricsName = Arrays.asList("request-size-max", "io-wait-ratio", "response-total",
-                "version",
-                "io-time-ns-avg", "network-io-rate");
+                "version", "io-time-ns-avg", "network-io-rate");
         try (Admin admin = Admin.create(configs)) {
-            List<String> actual = new ArrayList<>();
-            admin.metrics().forEach((metricName, metric) -> {
-                actual.add(metricName.name());
-                assertSame(metricName, metric.metricName());
-            });
-            assertTrue(actual.containsAll(expectedMetricsName));
+            Set<String> actualMetricsName = admin.metrics().keySet().stream()
+                    .map(MetricName::name)
+                    .collect(Collectors.toSet());
+            expectedMetricsName.forEach(expectedName -> assertTrue(actualMetricsName.contains(expectedName),
+                    String.format("actual metrics name: %s dont contains expected: %s", actualMetricsName,
+                            expectedName)));
+            assertTrue(actualMetricsName.containsAll(expectedMetricsName));
         }
     }
 

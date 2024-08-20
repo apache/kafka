@@ -3006,8 +3006,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("quorum=kraft"))
-  def testListClientMetricsResources(ignored: String): Unit = {
+  @ValueSource(strings = Array("kraft"))
+  def testListClientMetricsResources(quorum: String): Unit = {
     client = createAdminClient
     client.createTopics(Collections.singleton(new NewTopic(topic, partition, 0.toShort)))
     assertTrue(client.listClientMetricsResources().all().get().isEmpty)
@@ -3016,10 +3016,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val configEntry = new ConfigEntry("interval.ms", "111")
     val configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
     client.incrementalAlterConfigs(Collections.singletonMap(configResource, Collections.singletonList(configOp))).all().get()
-    def result = client.listClientMetricsResources().all().get()
-    TestUtils.waitUntilTrue(() => result != null, "metadata time out")
-    def expected = Collections.singletonList(new ClientMetricsResourceListing(name))
-    assertEquals(new util.HashSet(expected), new util.HashSet(result))
+    TestUtils.waitUntilTrue(() => {
+      val results = client.listClientMetricsResources().all().get()
+      results.size() == 1 && results.iterator().next().equals(new ClientMetricsResourceListing(name))
+    }, "metadata timeout")
   }
 
   @ParameterizedTest
