@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -650,8 +649,7 @@ public class CommitRequestManagerTest {
             1,
             error);
         // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
-        ApiException exception = error.exception();
-        if (exception instanceof RetriableException)
+        if (error.exception() instanceof RetriableException)
             testRetriable(commitRequestManager, futures, error);
         else {
             testNonRetriable(futures);
@@ -673,8 +671,7 @@ public class CommitRequestManagerTest {
                 1,
                 error);
 
-        ApiException exception = error.exception();
-        if (exception instanceof RetriableException) {
+        if (error.exception() instanceof RetriableException) {
             futures.forEach(f -> assertFalse(f.isDone()));
 
             // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
