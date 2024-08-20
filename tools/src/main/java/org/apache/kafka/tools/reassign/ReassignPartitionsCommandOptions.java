@@ -35,6 +35,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<String> reassignmentJsonFileOpt;
     final OptionSpec<String> topicsToMoveJsonFileOpt;
     final OptionSpec<String> brokerListOpt;
+    final OptionSpec<String> bootstrapControllerOpt;
     final OptionSpec<?> disableRackAware;
     final OptionSpec<Long> interBrokerThrottleOpt;
     final OptionSpec<Long> replicaAlterLogDirsThrottleOpt;
@@ -83,6 +84,13 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("brokerlist")
             .ofType(String.class);
+        
+        bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The controller to use for reassignment. " +
+                        "By default, the tool will get the controller from the broker.")
+            .withRequiredArg()
+            .describedAs("bootstrap controller")
+            .ofType(String.class);
+        
         disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment");
         interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). " +
                 "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
