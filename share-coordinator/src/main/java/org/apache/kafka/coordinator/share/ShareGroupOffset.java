@@ -22,6 +22,7 @@ import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.group.share.PersisterStateBatch;
 
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -68,7 +69,7 @@ public class ShareGroupOffset {
     }
 
     public List<? extends PersisterStateBatch> stateBatches() {
-        return stateBatches;
+        return Collections.unmodifiableList(stateBatches);
     }
 
     private static PersisterStateBatch toPersisterStateBatch(ShareSnapshotValue.StateBatch stateBatch) {

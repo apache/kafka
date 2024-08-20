@@ -72,8 +72,6 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
                 return new ConsumerGroupTargetAssignmentMemberKey();
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentKey();
-            // the following share group api messages are handled by
-            // group-coordinator exclusively, hence created here.
             case 9:
                 return new ShareGroupPartitionMetadataKey();
             case 10:
@@ -113,8 +111,6 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
                 return new ConsumerGroupTargetAssignmentMemberValue();
             case 8:
                 return new ConsumerGroupCurrentMemberAssignmentValue();
-            // the following share group api messages are handled by
-            // group-coordinator exclusively, hence created here.
             case 9:
                 return new ShareGroupPartitionMetadataValue();
             case 10:

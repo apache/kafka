@@ -17,7 +17,6 @@
 
 package org.apache.kafka.coordinator.share;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
@@ -29,7 +28,6 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntSupplier;
 
-@InterfaceStability.Evolving
 public interface ShareCoordinator {
     short SHARE_SNAPSHOT_RECORD_KEY_VERSION = 0;
     short SHARE_SNAPSHOT_RECORD_VALUE_VERSION = 0;
