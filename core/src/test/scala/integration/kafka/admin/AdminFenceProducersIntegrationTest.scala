@@ -18,17 +18,20 @@
 package integration.kafka.admin
 
 import kafka.api.IntegrationTestHarness
+import kafka.security.minikdc.MiniKdc.createConfig
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException}
+import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.server.config.ServerLogConfigs
-import org.junit.jupiter.api.Assertions.{assertInstanceOf, assertThrows, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.time.Duration
 import java.util.concurrent.ExecutionException
 import java.util.{Collections, Properties}
 import scala.collection.Seq
@@ -105,6 +108,22 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
     }
 
     assertThrows(classOf[ProducerFencedException], () => producer.commitTransaction())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  @Timeout(value = 30)
+  def testFenceProducerTimeoutMs(quorum: String): Unit = {
+    adminClient = {
+      val config = createConfig
+      config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
+      Admin.create(config)
+    }
+    try {
+      val e = assertThrows(classOf[ExecutionException], () => adminClient.fenceProducers(Collections.singletonList(txnId),
+        new FenceProducersOptions().timeoutMs(0)).all().get())
+      assertInstanceOf(classOf[TimeoutException], e.getCause)
+    } finally adminClient.close(Duration.ofSeconds(0))
   }
 
   @ParameterizedTest
