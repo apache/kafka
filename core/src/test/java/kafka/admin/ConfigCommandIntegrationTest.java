@@ -63,8 +63,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG;
@@ -143,7 +141,7 @@ public class ConfigCommandIntegrationTest {
     public void testNullStatusOnKraftCommandAlterGroup() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "groups",
-            "--entity-name", "admin",
+            "--entity-name", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
         String message = captureStandardMsg(run(command));
 
@@ -281,8 +279,8 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-        @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-        @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+        @ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+        @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
     })
     public void testGroupConfigUpdateUsingKraft() throws Exception {
         alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "groups", "--alter");
