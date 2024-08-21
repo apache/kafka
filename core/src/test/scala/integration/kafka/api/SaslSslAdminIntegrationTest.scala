@@ -358,6 +358,26 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     assertTrue(token.tokenInfo.maxTimestamp >= token.tokenInfo.expiryTimestamp)
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testExpiredTimeStampLargerThanMaxLifeStamp(quorum: String): Unit = {
+    client = createAdminClient
+    val timeout = -1
+
+    val createOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
+    val token = client.createDelegationToken(createOptions).delegationToken().get()
+
+    assertEquals(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_MS_DEFAULT, token.tokenInfo.maxTimestamp - token.tokenInfo.issueTimestamp)
+    assertTrue(token.tokenInfo.maxTimestamp >= token.tokenInfo.expiryTimestamp)
+
+    TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),
+      "Timed out waiting for token to propagate to all servers")
+
+    val ExpiredOptions = new ExpireDelegationTokenOptions().expiryTimePeriodMs(Long.MaxValue)
+    client.expireDelegationToken(token.hmac, ExpiredOptions)
+    assertTrue(token.tokenInfo.maxTimestamp >= token.tokenInfo.expiryTimestamp)
+  }
+
   private def verifyCauseIsClusterAuth(e: Throwable): Unit = assertEquals(classOf[ClusterAuthorizationException], e.getCause.getClass)
 
   private def testAclCreateGetDelete(expectAuth: Boolean): Unit = {
