@@ -52,12 +52,12 @@ jobs:
         run: ./gradlew --build-cache --info --scan check -x test
       - name: Parse checkstyle
         if: always()
-        run: python .github/scripts/checkstyle.py >> $GITHUB_STEP_SUMMARY
+        run: python .github/scripts/checkstyle.py
         env:
           GITHUB: 1
           GITHUB_WORKSPACE: ${{ github.workspace }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_BRANCH: ${{ github.ref_name }}
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4

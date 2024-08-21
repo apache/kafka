@@ -51,7 +51,7 @@ def get_url(filename: str, line: Optional[int]) -> str:
     github_repo_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
     rel_path = os.path.relpath(filename, github_repo_path)
     repo = get_env("GITHUB_REPOSITORY") # apache/kafka
-    branch = get_env("GITHUB_BASE_REF") # my-branch
+    branch = get_env("GITHUB_BRANCH") # my-branch
 
     url = f"https://github.com/{repo}/blob/{branch}/{rel_path}"
     if line is not None:
@@ -78,11 +78,16 @@ def parse_report(fp) -> Tuple[int, int]:
         else:
             # end
             if elem.tag == "file" and len(errors) > 0:
-                filename = os.path.basename(elem.get("name"))
+                filename = elem.get("name")
+                github_repo_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
+                rel_path = os.path.relpath(filename, github_repo_path)
                 logger.debug(f"Printing errors for: {elem.attrib}")
                 for error in errors:
-                    url = get_url(elem.get("name"), error.get("line"))
-                    print(f"| [{filename}]({url}) | {error.get('severity')} | ❌ {error.get('message')} |")
+                    line = error.get("line")
+                    col = error.get("column")
+                    severity = error.get("severity")
+                    message = error.get('message')
+                    print(f"::notice file={rel_path},line={line},col={col}::{message}")
             stack.pop()
     return file_count, error_count
 
@@ -97,9 +102,6 @@ if __name__ == "__main__":
     total_file_count = 0
     total_error_count = 0
 
-    print("## Checkstyle summary")
-    print("| File | Severity | Message | ")
-    print("| ---- | -------- | ------- |")
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing report file: {report}")
@@ -110,5 +112,3 @@ if __name__ == "__main__":
                 logger.debug(f"Checked {file_count} files from {report} and found {error_count} errors")
             total_file_count += file_count
             total_error_count += error_count
-    if total_error_count == 0:
-        print(f"| - | - | ✅ Checked {total_file_count} files, no errors")
