@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 21, 8, 11, 17 ]
+        java: [ 21, 17, 11, 8 ]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -78,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 11, 17 ]
+        java: [ 17, 11 ]
     if: contains(github.head_ref, 'gh-')  # For now, only run tests on "gh-*" PRs
     name: JUnit tests Java ${{ matrix.java }}
     steps:
