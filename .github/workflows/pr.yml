@@ -69,8 +69,6 @@ jobs:
         env:
           GITHUB: 1
           GITHUB_WORKSPACE: ${{ github.workspace }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_BRANCH: ${{ github.ref_name }}
 
   test:
     needs: validate
