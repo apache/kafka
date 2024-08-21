@@ -48,8 +48,13 @@ jobs:
           gradle-cache-read-only: true
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
-        # Publish build scans for now. This will only work on PRs from apache/kafka, not public forks.
-        run: ./gradlew --build-cache --info --scan check -x test
+        # Gradle flags
+        # --build-cache:  Let Gradle restore the build cache
+        # --info:         For now, we'll generate lots of logs while setting up the GH Actions
+        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
+        # spotlessCheck:  Skip spotless. While it is faster than checkstyle, it does not produce a report
+        #                 which makes it a bit less useful when running on CI.
+        run: ./gradlew --build-cache --info --scan check -x test -x spotlessCheck
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -59,7 +64,8 @@ jobs:
             **/build/**/*.html
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
-        if: ${{ failure() && matrix.java == '21' }}  # Avoid duplicate annotations, only process java 21
+        # Avoid duplicate annotations, only run on java 21
+        if: ${{ failure() && matrix.java == '21' }}
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB: 1
