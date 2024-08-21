@@ -45,7 +45,7 @@ develocity {
 
 buildCache {
     local {
-        enabled = !isCI
+        enabled = !isJenkins
     }
 
     remote(develocity.buildCache) {
