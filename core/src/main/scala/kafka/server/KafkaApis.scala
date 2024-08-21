@@ -24,7 +24,7 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
-import kafka.server.share.{ErroneousAndValidPartitionData, ShareFetchContext, SharePartitionManager}
+import kafka.server.share.SharePartitionManager
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.AdminUtils
@@ -75,7 +75,7 @@ import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 import org.apache.kafka.server.record.BrokerCompressionType
-import org.apache.kafka.server.share.ShareAcknowledgementBatch
+import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch, ShareFetchContext}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
 
 import java.lang.{Long => JLong}
@@ -2994,6 +2994,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val error = resource.`type` match {
       case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER => Errors.CLUSTER_AUTHORIZATION_FAILED
       case ConfigResource.Type.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
+      case ConfigResource.Type.GROUP => Errors.GROUP_AUTHORIZATION_FAILED
       case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
     }
     new ApiError(error, null)
@@ -3058,6 +3059,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           authHelper.authorize(originalRequest.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
         case ConfigResource.Type.TOPIC =>
           authHelper.authorize(originalRequest.context, ALTER_CONFIGS, TOPIC, resource.name)
+        case ConfigResource.Type.GROUP =>
+          authHelper.authorize(originalRequest.context, ALTER_CONFIGS, GROUP, resource.name)
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
     }
@@ -3972,6 +3975,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleShareGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val shareGroupDescribeRequest = request.body[ShareGroupDescribeRequest]
+    val includeAuthorizedOperations = shareGroupDescribeRequest.data.includeAuthorizedOperations
 
     if (!isShareGroupProtocolEnabled) {
       requestHelper.sendMaybeThrottle(request, shareGroupDescribeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
@@ -3998,6 +4002,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, shareGroupDescribeRequest.getErrorResponse(exception))
         } else {
+          if (includeAuthorizedOperations) {
+            results.forEach { groupResult =>
+              if (groupResult.errorCode == Errors.NONE.code) {
+                groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
+                  request,
+                  new Resource(ResourceType.GROUP, groupResult.groupId)
+                ))
+              }
+            }
+          }
+
           if (response.groups.isEmpty) {
             // If the response is empty, we can directly reuse the results.
             response.setGroups(results)
@@ -4054,7 +4069,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val shareFetchData = shareFetchRequest.shareFetchData(topicIdNames)
     val forgottenTopics = shareFetchRequest.forgottenTopics(topicIdNames)
 
-    val newReqMetadata: ShareFetchMetadata = new ShareFetchMetadata(Uuid.fromString(memberId), shareSessionEpoch)
+    val newReqMetadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.fromString(memberId), shareSessionEpoch)
     var shareFetchContext: ShareFetchContext = null
 
     try {
@@ -4094,7 +4109,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Initial ShareFetch Request, otherwise the request would have been invalid.
     if (isAcknowledgeDataPresent) {
       val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
-      val acknowledgementDataFromRequest = getAcknowledgeBatchesFromShareFetchRequest(request.body[ShareFetchRequest], topicIdNames, erroneous)
+      val acknowledgementDataFromRequest = getAcknowledgeBatchesFromShareFetchRequest(shareFetchRequest, topicIdNames, erroneous)
       acknowledgeResult = handleAcknowledgements(
         acknowledgementDataFromRequest,
         erroneous,
@@ -4177,7 +4192,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             shareFetchResponse.data.responses.add(topicData)
           }
 
-          if (shareSessionEpoch == ShareFetchMetadata.FINAL_EPOCH) {
+          if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
             sharePartitionManagerInstance.releaseAcquiredRecords(groupId, memberId).
               whenComplete((releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
@@ -4210,7 +4225,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                       ): CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] = {
 
     val erroneous = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
-    erroneousAndValidPartitionData.erroneous.forEach { erroneousData => erroneous += erroneousData }
+    erroneousAndValidPartitionData.erroneous.forEach { (topicIdPartition, partitionData) => erroneous.put(topicIdPartition, partitionData) }
 
     val interestedWithMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
 
@@ -4290,6 +4305,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     erroneousTopicIdPartitions.foreach(tp => acknowledgementData.remove(tp))
 
     val interested = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
+    val emptyAcknowledgements = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
     acknowledgementData.foreach{
       case (topicIdPartition: TopicIdPartition, acknowledgeBatches: util.List[ShareAcknowledgementBatch]) =>
@@ -4299,6 +4315,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         else if (!metadataCache.contains(topicIdPartition.topicPartition))
           erroneous += topicIdPartition ->
             ShareAcknowledgeResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+        else if (acknowledgeBatches.size() == 0)
+          emptyAcknowledgements += topicIdPartition ->
+            ShareAcknowledgeResponse.partitionResponse(topicIdPartition, Errors.NONE)
         else {
           interested += topicIdPartition -> acknowledgeBatches
         }
@@ -4314,10 +4333,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         interested.asJava
       ).thenApply{ result =>
         val combinedResult = mutable.Map.empty[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
-        result.asScala.foreach { case (tp, data) =>
+        result.asScala.foreach{ case (tp, data) =>
           combinedResult += (tp -> data)
         }
-        erroneous.foreach { case (tp, data) =>
+        erroneous.foreach{ case (tp, data) =>
+          combinedResult += (tp -> data)
+        }
+        emptyAcknowledgements.foreach{ case (tp, data) =>
           combinedResult += (tp -> data)
         }
         combinedResult.toMap
@@ -4327,9 +4349,85 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleShareAcknowledgeRequest(request: RequestChannel.Request): Unit = {
     val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
-    // TODO: Implement the ShareAcknowledgeRequest handling
-    requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!isShareGroupProtocolEnabled) {
+      requestHelper.sendMaybeThrottle(request,
+        shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
+      return
+    }
+
+    val sharePartitionManagerInstance: SharePartitionManager = sharePartitionManager match {
+      case Some(manager) => manager
+      case None =>
+        // The API is not supported when the SharePartitionManager is not defined on the broker
+        info("Received share acknowledge request for zookeeper based cluster")
+        requestHelper.sendMaybeThrottle(request,
+          shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
+        return
+    }
+    val groupId = shareAcknowledgeRequest.data.groupId
+
+    // Share Acknowledge needs permission to perform READ action on the named group resource (groupId)
+    if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
+      requestHelper.sendMaybeThrottle(request,
+        shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      return
+    }
+
+    val memberId = shareAcknowledgeRequest.data.memberId
+    val shareSessionEpoch = shareAcknowledgeRequest.data.shareSessionEpoch
+    val newReqMetadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.fromString(memberId), shareSessionEpoch)
+
+    try {
+      // Updating the cache for Share Session Handling
+      sharePartitionManagerInstance.acknowledgeSessionUpdate(groupId, newReqMetadata)
+    } catch {
+      case e: Exception =>
+        requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))
+        return
+    }
+
+    val topicIdPartitionSeq: mutable.Set[TopicIdPartition] = mutable.Set()
+    val shareAcknowledgeData = shareAcknowledgeRequest.data
+
+    val topicIdNames = metadataCache.topicIdsToNames()
+
+    shareAcknowledgeData.topics.forEach{ topic =>
+      topic.partitions.forEach{ partition =>
+        val topicIdPartition = new TopicIdPartition(topic.topicId,
+          new TopicPartition(topicIdNames.get(topic.topicId), partition.partitionIndex))
+        topicIdPartitionSeq += topicIdPartition
+      }
+    }
+
+    val authorizedTopics = authHelper.filterByAuthorized(
+      request.context,
+      READ,
+      TOPIC,
+      topicIdPartitionSeq
+    )(_.topicPartition.topic)
+
+    val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
+    val acknowledgementDataFromRequest = getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest, topicIdNames, erroneous)
+    handleAcknowledgements(acknowledgementDataFromRequest, erroneous, sharePartitionManagerInstance, authorizedTopics, groupId, memberId)
+      .handle[Unit] {(result, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+        } else {
+          if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
+            sharePartitionManagerInstance.releaseAcquiredRecords(groupId, memberId).
+              whenComplete{ (releaseAcquiredRecordsData, throwable) =>
+                if (throwable != null) {
+                  debug(s"Release acquired records on share session close with correlation from client ${request.header.clientId}  " +
+                    s"failed with error ${throwable.getMessage}")
+                } else {
+                  info(s"Release acquired records on share session close $releaseAcquiredRecordsData succeeded")
+                }
+              }
+          }
+          requestHelper.sendMaybeThrottle(request, processShareAcknowledgeResponse(result, request))
+        }
+      }
   }
 
   def handleInitializeShareGroupStateRequest(request: RequestChannel.Request): Unit = {
@@ -4367,10 +4465,47 @@ class KafkaApis(val requestChannel: RequestChannel,
     CompletableFuture.completedFuture[Unit](())
   }
 
-  private def getAcknowledgeBatchesFromShareFetchRequest(shareFetchRequest: ShareFetchRequest,
-                                                         topicIdNames: util.Map[Uuid, String],
-                                                         erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
-                                                        ): mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]] = {
+  // Visible for Testing
+  def getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest: ShareAcknowledgeRequest,
+                                                       topicIdNames: util.Map[Uuid, String],
+                                                       erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
+                                                      ): mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]] = {
+    val acknowledgeBatchesMap = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
+    shareAcknowledgeRequest.data().topics().forEach{ topic =>
+      if (!topicIdNames.containsKey(topic.topicId)) {
+        topic.partitions.forEach{ case partition: ShareAcknowledgeRequestData.AcknowledgePartition =>
+          val topicIdPartition = new TopicIdPartition(
+            topic.topicId,
+            new TopicPartition(null, partition.partitionIndex))
+          erroneous +=
+            topicIdPartition -> ShareAcknowledgeResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)
+        }
+      } else {
+        topic.partitions().forEach{ partition =>
+          val topicIdPartition = new TopicIdPartition(
+            topic.topicId(),
+            new TopicPartition(topicIdNames.get(topic.topicId()), partition.partitionIndex())
+          )
+          val acknowledgeBatches = new util.ArrayList[ShareAcknowledgementBatch]()
+          partition.acknowledgementBatches().forEach{ batch =>
+            acknowledgeBatches.add(new ShareAcknowledgementBatch(
+              batch.firstOffset(),
+              batch.lastOffset(),
+              batch.acknowledgeTypes()
+            ))
+          }
+          acknowledgeBatchesMap += topicIdPartition -> acknowledgeBatches
+        }
+      }
+    }
+    acknowledgeBatchesMap
+  }
+
+  // Visible for Testing
+  def getAcknowledgeBatchesFromShareFetchRequest(shareFetchRequest: ShareFetchRequest,
+                                                 topicIdNames: util.Map[Uuid, String],
+                                                 erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
+                                                ): mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]] = {
 
     val acknowledgeBatchesMap = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
     shareFetchRequest.data().topics().forEach{ topic =>
@@ -4403,7 +4538,36 @@ class KafkaApis(val requestChannel: RequestChannel,
     acknowledgeBatchesMap
   }
 
-  private def validateAcknowledgementBatches(acknowledgementDataFromRequest: mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]],
+  // the callback for processing a share acknowledge response, invoked before throttling
+  def processShareAcknowledgeResponse(responseAcknowledgeData: Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
+                                      request: RequestChannel.Request): ShareAcknowledgeResponse = {
+    val partitions = new util.LinkedHashMap[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
+    val nodeEndpoints = new mutable.HashMap[Int, Node]
+    responseAcknowledgeData.foreach{ case(tp, partitionData) =>
+      partitionData.errorCode() match {
+        case errCode if errCode == Errors.NOT_LEADER_OR_FOLLOWER.code | errCode == Errors.FENCED_LEADER_EPOCH.code =>
+          val leaderNode = getCurrentLeader(tp.topicPartition(), request.context.listenerName)
+          leaderNode.node.foreach { node =>
+            nodeEndpoints.put(node.id(), node)
+          }
+          partitionData.currentLeader()
+            .setLeaderId(leaderNode.leaderId)
+            .setLeaderEpoch(leaderNode.leaderEpoch)
+        case _ =>
+      }
+      partitions.put(tp, partitionData)
+    }
+
+    ShareAcknowledgeResponse.of(
+      Errors.NONE,
+      0,
+      partitions,
+      nodeEndpoints.values.toList.asJava
+    )
+  }
+
+  // Visible for Testing
+  def validateAcknowledgementBatches(acknowledgementDataFromRequest: mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]],
                                      erroneous: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
                                     ): mutable.Set[TopicIdPartition] = {
     val erroneousTopicIdPartitions: mutable.Set[TopicIdPartition] = mutable.Set.empty[TopicIdPartition]

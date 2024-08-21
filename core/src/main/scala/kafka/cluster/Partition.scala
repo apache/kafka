@@ -25,7 +25,6 @@ import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.log.remote.RemoteLogManager
 import kafka.server._
-import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -46,6 +45,8 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
+import org.slf4j.event.Level
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -93,9 +94,9 @@ class DelayedOperations(topicPartition: TopicPartition,
 
   def checkAndCompleteAll(): Unit = {
     val requestKey = TopicPartitionOperationKey(topicPartition)
-    fetch.checkAndComplete(requestKey)
-    produce.checkAndComplete(requestKey)
-    deleteRecords.checkAndComplete(requestKey)
+    CoreUtils.swallow(() -> fetch.checkAndComplete(requestKey), fetch, Level.ERROR)
+    CoreUtils.swallow(() -> produce.checkAndComplete(requestKey), produce, Level.ERROR)
+    CoreUtils.swallow(() -> deleteRecords.checkAndComplete(requestKey), deleteRecords, Level.ERROR)
   }
 
   def numDelayedDelete: Int = deleteRecords.numDelayed
@@ -478,10 +479,10 @@ class Partition(val topicPartition: TopicPartition,
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints,
                                  topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): UnifiedLog = {
     def updateHighWatermark(log: UnifiedLog): Unit = {
-      val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
+      val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).orElseGet(() => {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
         0L
-      }
+      })
       val initialHighWatermark = log.updateHighWatermark(checkpointHighWatermark)
       info(s"Log loaded for partition $topicPartition with initial high watermark $initialHighWatermark")
     }
@@ -1239,12 +1240,7 @@ class Partition(val topicPartition: TopicPartition,
    * Try to complete any pending requests. This should be called without holding the leaderIsrUpdateLock.
    */
   def tryCompleteDelayedRequests(): Unit = {
-    try {
-      delayedOperations.checkAndCompleteAll()
-    } catch {
-      case e: Exception =>
-        error(s"Unexpected exception while completing delayed requests for ${topicPartition}", e)
-    }
+    delayedOperations.checkAndCompleteAll()
   }
 
   def maybeShrinkIsr(): Unit = {

@@ -73,8 +73,7 @@ object ZkMigrationIntegrationTest {
       MetadataVersion.IBP_3_7_IV2,
       MetadataVersion.IBP_3_7_IV4,
       MetadataVersion.IBP_3_8_IV0,
-      MetadataVersion.IBP_3_9_IV0,
-      MetadataVersion.IBP_3_9_IV1
+      MetadataVersion.IBP_3_9_IV0
       // Note: ZK Migration is not supported in Apache Kafka 4.0 and beyond.
     ).map { mv =>
       val serverProperties = new util.HashMap[String, String]()
@@ -494,7 +493,7 @@ class ZkMigrationIntegrationTest {
     }
   }
 
-  @ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_9_IV1, serverProperties = Array(
+  @ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_9_IV0, serverProperties = Array(
     new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
     new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
     new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
@@ -516,7 +515,7 @@ class ZkMigrationIntegrationTest {
     val clusterId = zkCluster.clusterId()
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.IBP_3_9_IV1).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_9_IV0).
         setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())

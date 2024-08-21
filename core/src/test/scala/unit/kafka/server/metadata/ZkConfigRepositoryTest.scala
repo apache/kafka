@@ -49,7 +49,7 @@ class ZkConfigRepositoryTest {
   def testUnsupportedTypes(): Unit = {
     val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
     val zkConfigRepository = ZkConfigRepository(zkClient)
-    Type.values().foreach(value => if (value != Type.BROKER && value != Type.TOPIC && value != Type.CLIENT_METRICS)
+    Type.values().foreach(value => if (value != Type.BROKER && value != Type.TOPIC && value != Type.CLIENT_METRICS && value != Type.GROUP)
       assertThrows(classOf[IllegalArgumentException], () => zkConfigRepository.config(new ConfigResource(value, value.toString))))
     // Validate exception for CLIENT_METRICS.
     assertThrows(classOf[InvalidRequestException], () => zkConfigRepository.config(new ConfigResource(Type.CLIENT_METRICS, Type.CLIENT_METRICS.toString)))
