@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server.share;
+package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;

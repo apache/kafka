@@ -24,7 +24,7 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
-import kafka.server.share.{ErroneousAndValidPartitionData, ShareFetchContext, SharePartitionManager}
+import kafka.server.share.SharePartitionManager
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.AdminUtils
@@ -75,7 +75,7 @@ import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 import org.apache.kafka.server.record.BrokerCompressionType
-import org.apache.kafka.server.share.ShareAcknowledgementBatch
+import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch, ShareFetchContext}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
 
 import java.lang.{Long => JLong}
@@ -4225,7 +4225,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                       ): CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] = {
 
     val erroneous = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
-    erroneousAndValidPartitionData.erroneous.forEach { erroneousData => erroneous += erroneousData }
+    erroneousAndValidPartitionData.erroneous.forEach { (topicIdPartition, partitionData) => erroneous.put(topicIdPartition, partitionData) }
 
     val interestedWithMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
 

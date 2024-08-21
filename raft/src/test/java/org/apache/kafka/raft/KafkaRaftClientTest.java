@@ -3397,6 +3397,38 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
+    @CsvSource({ "true, true", "true, false", "false, true", "false, false" })
+    public void testObserverReplication(boolean withKip853Rpc, boolean alwaysFlush) throws Exception {
+        int localId = randomReplicaId();
+        int otherNodeId = localId + 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .withKip853Rpc(withKip853Rpc)
+            .withAlwaysFlush(alwaysFlush)
+            .build();
+        context.assertElectedLeader(epoch, otherNodeId);
+
+        context.pollUntilRequest();
+
+        RaftRequest.Outbound fetchQuorumRequest = context.assertSentFetchRequest(epoch, 0L, 0);
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        FetchResponseData response = context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE);
+        context.deliverResponse(
+            fetchQuorumRequest.correlationId(),
+            fetchQuorumRequest.destination(),
+            response
+        );
+
+        context.client.poll();
+        assertEquals(2L, context.log.endOffset().offset());
+        long firstUnflushedOffset = alwaysFlush ? 2L : 0L;
+        assertEquals(firstUnflushedOffset, context.log.firstUnflushedOffset());
+    }
+
+    @ParameterizedTest
     @ValueSource(booleans = { true, false })
     public void testEmptyRecordSetInFetchResponse(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
@@ -4196,6 +4228,36 @@ public class KafkaRaftClientTest {
 
         LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(otherNodeId), epoch);
         assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testHandleLeaderChangeFiresAfterResignRegistration(boolean withKip853Rpc) throws Exception {
+        // When registering a listener while the replica is resigned, it should not get notified with
+        // the current leader and epoch
+        int localId = randomReplicaId();
+        int otherNodeId = localId + 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, localId)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.client.poll();
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(LeaderAndEpoch.UNKNOWN, context.listener.currentLeaderAndEpoch());
+
+        // Register another listener and verify that it is not notified of latest leader and epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(LeaderAndEpoch.UNKNOWN, secondListener.currentLeaderAndEpoch());
     }
 
     @ParameterizedTest
