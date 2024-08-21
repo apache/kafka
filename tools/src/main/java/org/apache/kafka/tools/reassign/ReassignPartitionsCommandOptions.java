@@ -56,7 +56,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
 
         // Arguments
         bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping.")
-            .withRequiredArg()
+            .withOptionalArg()
             .describedAs("Server(s) to use for bootstrapping")
             .ofType(String.class);
 
@@ -84,11 +84,12 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("brokerlist")
             .ofType(String.class);
-        
-        bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The controller to use for reassignment. " +
-                        "By default, the tool will get the controller from the broker.")
-            .withRequiredArg()
-            .describedAs("bootstrap controller")
+
+        bootstrapControllerOpt = parser.accepts("bootstrap-controller", "A comma-separated list of bootstrap.controllers " +
+                        "that can be supplied instead of bootstrap-servers.\n" +
+                        "This is useful for administrators who wish to bypass the brokers.")
+            .withOptionalArg()
+            .describedAs("controller to connect to")
             .ofType(String.class);
         
         disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment");

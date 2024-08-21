@@ -1405,9 +1405,15 @@ public class ReassignPartitionsCommand {
         }
 
         OptionSpec<?> action = allActions.get(0);
-
-        if (!opts.options.has(opts.bootstrapServerOpt))
-            CommandLineUtils.printUsageAndExit(opts.parser, "Please specify --bootstrap-server");
+        
+        OptionSpec<String> bootstrapOpt = null;
+        
+        if(opts.options.has(opts.bootstrapServerOpt) && opts.options.has(opts.bootstrapControllerOpt)) 
+            CommandLineUtils.printUsageAndExit(opts.parser, "Please specify either --bootstrap-server or --bootstrap-controller");
+        else if (!opts.options.has(opts.bootstrapServerOpt) && !opts.options.has(opts.bootstrapControllerOpt))
+            CommandLineUtils.printUsageAndExit(opts.parser, "Please specify --bootstrap-server or --bootstrap-controller");
+        else 
+            bootstrapOpt = opts.options.has(opts.bootstrapServerOpt) ? opts.bootstrapServerOpt : opts.bootstrapControllerOpt;
 
         // Make sure that we have all the required arguments for our action.
         Map<OptionSpec<?>, List<OptionSpec<?>>> requiredArgs = new HashMap<>();
@@ -1432,32 +1438,32 @@ public class ReassignPartitionsCommand {
         Map<OptionSpec<?>, List<OptionSpec<?>>> permittedArgs = new HashMap<>();
 
         permittedArgs.put(opts.verifyOpt, Arrays.asList(
-            opts.bootstrapServerOpt,
+            bootstrapOpt,
             opts.commandConfigOpt,
             opts.preserveThrottlesOpt
         ));
         permittedArgs.put(opts.generateOpt, Arrays.asList(
-            opts.bootstrapServerOpt,
+            bootstrapOpt,
             opts.brokerListOpt,
             opts.commandConfigOpt,
             opts.disableRackAware
         ));
         permittedArgs.put(opts.executeOpt, Arrays.asList(
             opts.additionalOpt,
-            opts.bootstrapServerOpt,
+            bootstrapOpt,
             opts.commandConfigOpt,
             opts.interBrokerThrottleOpt,
             opts.replicaAlterLogDirsThrottleOpt,
             opts.timeoutOpt
         ));
         permittedArgs.put(opts.cancelOpt, Arrays.asList(
-            opts.bootstrapServerOpt,
+            bootstrapOpt,
             opts.commandConfigOpt,
             opts.preserveThrottlesOpt,
             opts.timeoutOpt
         ));
         permittedArgs.put(opts.listOpt, Arrays.asList(
-            opts.bootstrapServerOpt,
+            bootstrapOpt,
             opts.commandConfigOpt
         ));
 
