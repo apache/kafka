@@ -33,6 +33,13 @@ develocity {
             // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
             ipAddresses { addresses -> addresses.collect { address -> "0.0.0.0"} }
         }
+        if (isJenkins) {
+            tag "jenkins"
+        } else if (isGithubActions) {
+            tag "github"
+        } else {
+            tag "local"
+        }
     }
 }
 
@@ -68,6 +75,7 @@ include 'clients',
     'raft',
     'server',
     'server-common',
+    'share',
     'share-coordinator',
     'shell',
     'storage',

@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server.share;
-
-import kafka.server.FetchSession;
+package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -40,7 +38,7 @@ public abstract class ShareFetchContext {
      * @return - A string representation of the partitions requested.
      */
     String partitionsToLogString(Collection<TopicIdPartition> partitions) {
-        return FetchSession.partitionsToLogString(partitions, isTraceEnabled());
+        return ShareSession.partitionsToLogString(partitions, isTraceEnabled());
     }
 
     /**

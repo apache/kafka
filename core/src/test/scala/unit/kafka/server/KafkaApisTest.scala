@@ -25,7 +25,7 @@ import kafka.log.UnifiedLog
 import kafka.network.{RequestChannel, RequestMetrics}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
-import kafka.server.share.{ErroneousAndValidPartitionData, FinalContext, SharePartitionManager, ShareSessionContext}
+import kafka.server.share.SharePartitionManager
 import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -86,7 +86,7 @@ import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_I
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareGroupConfig}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
-import org.apache.kafka.server.share.{CachedSharePartition, ShareAcknowledgementBatch, ShareSession, ShareSessionKey}
+import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, FinalContext, ShareAcknowledgementBatch, ShareSession, ShareSessionContext, ShareSessionKey}
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
 import org.junit.jupiter.api.Assertions._
@@ -5984,26 +5984,20 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    val erroneousPartitions: util.List[(TopicIdPartition, ShareFetchResponseData.PartitionData)] = new util.ArrayList()
+    val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
 
-    val validPartitions: util.List[(TopicIdPartition, ShareFetchRequest.SharePartitionData)] = new util.ArrayList()
-    validPartitions.add(
-      (
-        tp1,
-        new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
-      )
+    val validPartitions: util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
+    validPartitions.put(
+      tp1,
+      new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
     )
-    validPartitions.add(
-      (
-        tp2,
-        new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-      )
+    validPartitions.put(
+      tp2,
+      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
     )
-    validPartitions.add(
-      (
-        tp3,
-        new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-      )
+    validPartitions.put(
+      tp3,
+      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
     )
 
     val erroneousAndValidPartitionData: ErroneousAndValidPartitionData =
@@ -6133,30 +6127,24 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    val erroneousPartitions: util.List[(TopicIdPartition, ShareFetchResponseData.PartitionData)] = new util.ArrayList()
-    erroneousPartitions.add(
-      (
-        tp2,
-        new ShareFetchResponseData.PartitionData()
-          .setPartitionIndex(1)
-          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-      )
+    val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
+    erroneousPartitions.put(
+      tp2,
+      new ShareFetchResponseData.PartitionData()
+        .setPartitionIndex(1)
+        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
     )
-    erroneousPartitions.add(
-      (
-        tp3,
-        new ShareFetchResponseData.PartitionData()
-          .setPartitionIndex(0)
-          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-      )
+    erroneousPartitions.put(
+      tp3,
+      new ShareFetchResponseData.PartitionData()
+        .setPartitionIndex(0)
+        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
     )
 
-    val validPartitions: util.List[(TopicIdPartition, ShareFetchRequest.SharePartitionData)] = new util.ArrayList()
-    validPartitions.add(
-      (
-        tp1,
-        new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
-      )
+    val validPartitions: util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
+    validPartitions.put(
+      tp1,
+      new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
     )
 
     val erroneousAndValidPartitionData: ErroneousAndValidPartitionData =
@@ -6287,26 +6275,20 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    val erroneousPartitions: util.List[(TopicIdPartition, ShareFetchResponseData.PartitionData)] = new util.ArrayList()
+    val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
 
-    val validPartitions: util.List[(TopicIdPartition, ShareFetchRequest.SharePartitionData)] = new util.ArrayList()
-    validPartitions.add(
-      (
-        tp1,
-        new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
-      )
+    val validPartitions: util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
+    validPartitions.put(
+      tp1,
+      new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
     )
-    validPartitions.add(
-      (
-        tp2,
-        new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-      )
+    validPartitions.put(
+      tp2,
+      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
     )
-    validPartitions.add(
-      (
-        tp3,
-        new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-      )
+    validPartitions.put(
+      tp3,
+      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
     )
 
     val erroneousAndValidPartitionData: ErroneousAndValidPartitionData =
@@ -6452,32 +6434,24 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    val erroneousPartitions: util.List[(TopicIdPartition, ShareFetchResponseData.PartitionData)] = new util.ArrayList()
+    val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
 
-    val validPartitions: util.List[(TopicIdPartition, ShareFetchRequest.SharePartitionData)] = new util.ArrayList()
-    validPartitions.add(
-      (
-        tp1,
-        new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
-      )
+    val validPartitions: util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
+    validPartitions.put(
+      tp1,
+      new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
     )
-    validPartitions.add(
-      (
-        tp2,
-        new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-      )
+    validPartitions.put(
+      tp2,
+      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
     )
-    validPartitions.add(
-      (
-        tp3,
-        new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-      )
+    validPartitions.put(
+      tp3,
+      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
     )
-    validPartitions.add(
-      (
-        tp4,
-        new ShareFetchRequest.SharePartitionData(topicId3, partitionMaxBytes)
-      )
+    validPartitions.put(
+      tp4,
+      new ShareFetchRequest.SharePartitionData(topicId3, partitionMaxBytes)
     )
 
     val erroneousAndValidPartitionData: ErroneousAndValidPartitionData =
