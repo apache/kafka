@@ -22,8 +22,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
-import org.apache.kafka.raft.internals.ReplicaKey;
-import org.apache.kafka.raft.internals.VoterSet;
 
 import org.slf4j.Logger;
 
@@ -579,6 +577,7 @@ public class QuorumState {
     }
 
     private void durableTransitionTo(EpochState newState) {
+        log.info("Attempting durable transition to {} from {}", newState, state);
         store.writeElectionState(newState.election(), partitionState.lastKraftVersion());
         memoryTransitionTo(newState);
     }

@@ -47,7 +47,7 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
@@ -300,6 +300,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
 
     var transactionId = "foo"
+    val stateAbnormalMsg = "The transaction state is abnormal"
 
     def describeTransactions(): TransactionDescription = {
       client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get()
@@ -331,7 +332,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "k1".getBytes, "v1".getBytes()))
       producer.flush()
-      assertEquals(TransactionState.ONGOING, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.ONGOING, stateAbnormalMsg)
 
       TestUtils.waitUntilTrue(() => describeTransactions().topicPartitions().size() == 1, "Describe transactions timeout")
       val transactionResult = describeTransactions()
@@ -341,13 +342,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(Collections.singleton(topicPartition), transactionResult.topicPartitions())
 
       producer.commitTransaction()
-      val state = transactionState()
-      // Either PREPARE_COMMIT or COMPLETE_COMMIT is expected
-      assertTrue(state == TransactionState.PREPARE_COMMIT || state == TransactionState.COMPLETE_COMMIT)
-      // producer commit transaction, but maybe transaction coordinator has not been submitted mark msg
-      // so we start up a consumer and consume the expected number of msg, to ensure transaction committed
-      consumeToExpectedNumber(1)
-      assertEquals(TransactionState.COMPLETE_COMMIT, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
     } finally producer.close()
 
     // abort case
@@ -376,14 +371,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(Collections.singleton(topicPartition), transactionSendMsgResult.topicPartitions())
       assertEquals(topicPartition, transactionSendMsgResult.topicPartitions().asScala.head)
 
-      assertEquals(TransactionState.ONGOING, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.ONGOING, stateAbnormalMsg)
+
       abortProducer.abortTransaction()
-      val state = transactionState()
-      assertTrue(state == TransactionState.PREPARE_ABORT || state == TransactionState.COMPLETE_ABORT)
-      // producer commit transaction, but maybe transaction coordinator has not been submitted mark msg
-      // so we start up a consumer and consume the expected number of msg, to ensure transaction committed
-      consumeToExpectedNumber(1)
-      assertEquals(TransactionState.COMPLETE_ABORT, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_ABORT, stateAbnormalMsg)
     } finally abortProducer.close()
   }
 
@@ -424,7 +415,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       client = createAdminClient
       client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
 
-      val producer = TestUtils.createTransactionalProducer("foo", brokers)
+      val stateAbnormalMsg = "The transaction state is abnormal"
+      def transactionState(transactionId: String): TransactionState = {
+        client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get().state()
+      }
+
+      val transactionId1 = "foo"
+      val producer = TestUtils.createTransactionalProducer(transactionId1, brokers)
       try {
         producer.initTransactions()
         producer.beginTransaction()
@@ -432,8 +429,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer.flush()
         producer.commitTransaction()
       } finally producer.close()
+      TestUtils.waitUntilTrue(() => transactionState(transactionId1) == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
 
-      val producer2 = TestUtils.createTransactionalProducer("foo2", brokers)
+      val transactionId2 = "foo2"
+      val producer2 = TestUtils.createTransactionalProducer(transactionId2, brokers)
       try {
         producer2.initTransactions()
         producer2.beginTransaction()
@@ -441,8 +440,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer2.flush()
         producer2.abortTransaction()
       } finally producer2.close()
+      TestUtils.waitUntilTrue(() => transactionState(transactionId2) == TransactionState.COMPLETE_ABORT, stateAbnormalMsg)
 
-      val producer3 = TestUtils.createTransactionalProducer("foo3", brokers)
+      val transactionId3 = "foo3"
+      val producer3 = TestUtils.createTransactionalProducer(transactionId3, brokers)
       try {
         producer3.initTransactions()
         producer3.beginTransaction()
@@ -450,8 +451,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer3.flush()
         producer3.commitTransaction()
       } finally producer3.close()
-
-      consumeToExpectedNumber(2)
+      TestUtils.waitUntilTrue(() => transactionState(transactionId3) == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
     }
 
     createTransactionList()
@@ -923,6 +923,68 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       configs.get(brokerResource2).get(CleanerConfig.LOG_CLEANER_THREADS_PROP).value)
 
     checkValidAlterConfigs(client, this, topicResource1, topicResource2)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testIncrementalAlterAndDescribeGroupConfigs(quorum: String): Unit = {
+    client = createAdminClient
+    val group = "describe-alter-configs-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, group)
+
+    // Alter group configs
+    var groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+
+    var alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava)
+
+    assertEquals(Set(groupResource).asJava, alterResult.values.keySet)
+    alterResult.all.get(15, TimeUnit.SECONDS)
+
+    ensureConsistentKRaftMetadata()
+
+    // Describe group config, verify that group config was updated correctly
+    var describeResult = client.describeConfigs(Seq(groupResource).asJava)
+    var configs = describeResult.all.get(15, TimeUnit.SECONDS)
+
+    assertEquals(1, configs.size)
+
+    assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).value)
+    assertEquals(ConfigSource.DEFAULT_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).source)
+
+    // Alter group with validateOnly=true
+    groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "60000"), AlterConfigOp.OpType.SET)
+    ).asJava
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+    alterResult.all.get(15, TimeUnit.SECONDS)
+
+    // Verify that group config was not updated due to validateOnly = true
+    describeResult = client.describeConfigs(Seq(groupResource).asJava)
+    configs = describeResult.all.get(15, TimeUnit.SECONDS)
+
+    assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+
+    // Alter group with validateOnly=true with invalid configs
+    groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "5"), AlterConfigOp.OpType.SET)
+    ).asJava
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+
+    assertFutureExceptionTypeEquals(alterResult.values.get(groupResource), classOf[InvalidConfigurationException],
+      Some("consumer.session.timeout.ms must be greater than or equals to group.consumer.min.session.timeout.ms"))
   }
 
   @ParameterizedTest
@@ -3005,6 +3067,36 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(expected, config.value())
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testListClientMetricsResources(quorum: String): Unit = {
+    client = createAdminClient
+    client.createTopics(Collections.singleton(new NewTopic(topic, partition, 0.toShort)))
+    assertTrue(client.listClientMetricsResources().all().get().isEmpty)
+    val name = "name"
+    val configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name)
+    val configEntry = new ConfigEntry("interval.ms", "111")
+    val configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
+    client.incrementalAlterConfigs(Collections.singletonMap(configResource, Collections.singletonList(configOp))).all().get()
+    TestUtils.waitUntilTrue(() => {
+      val results = client.listClientMetricsResources().all().get()
+      results.size() == 1 && results.iterator().next().equals(new ClientMetricsResourceListing(name))
+    }, "metadata timeout")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("quorum=kraft"))
+  @Timeout(30)
+  def testListClientMetricsResourcesTimeoutMs(ignored: String): Unit = {
+    client = createInvalidAdminClient()
+    try {
+      val timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
+      val exception = assertThrows(classOf[ExecutionException], () =>
+        client.listClientMetricsResources(timeoutOption).all().get())
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
+  }
+  
   /**
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *

@@ -119,6 +119,7 @@ import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -817,9 +818,10 @@ public final class QuorumController implements Controller {
                         // succeed; if it does not, that's a fatal error. It is important to do this before
                         // scheduling the record for Raft replication.
                         int recordIndex = 0;
-                        long nextWriteOffset = offsetControl.nextWriteOffset();
+                        long lastOffset = raftClient.prepareAppend(controllerEpoch, records);
+                        long baseOffset = lastOffset - records.size() + 1;
                         for (ApiMessageAndVersion message : records) {
-                            long recordOffset = nextWriteOffset + recordIndex;
+                            long recordOffset = baseOffset + recordIndex;
                             try {
                                 replay(message.message(), Optional.empty(), recordOffset);
                             } catch (Throwable e) {
@@ -827,17 +829,14 @@ public final class QuorumController implements Controller {
                                     "record at offset %d on active controller, from the " +
                                     "batch with baseOffset %d",
                                     message.message().getClass().getSimpleName(),
-                                    recordOffset, nextWriteOffset);
+                                    recordOffset, baseOffset);
                                 throw fatalFaultHandler.handleFault(failureMessage, e);
                             }
                             recordIndex++;
                         }
-                        long nextEndOffset = nextWriteOffset - 1 + recordIndex;
-                        raftClient.scheduleAtomicAppend(controllerEpoch,
-                            OptionalLong.of(nextWriteOffset),
-                            records);
-                        offsetControl.handleScheduleAtomicAppend(nextEndOffset);
-                        return nextEndOffset;
+                        raftClient.schedulePreparedAppend();
+                        offsetControl.handleScheduleAppend(lastOffset);
+                        return lastOffset;
                     }
                 );
                 op.processBatchEndOffset(offset);
@@ -2174,11 +2173,14 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerRegistrationRequestData request
     ) {
+        // populate finalized features map with latest known kraft version for validation
+        Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+        controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
         return appendWriteEvent("registerBroker", context.deadlineNs(),
             () -> {
                 ControllerResult<BrokerRegistrationReply> result = clusterControl.
-                    registerBroker(request, offsetControl.nextWriteOffset(), featureControl.
-                        finalizedFeatures(Long.MAX_VALUE));
+                    registerBroker(request, offsetControl.nextWriteOffset(),
+                        new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE));
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
@@ -2344,13 +2346,6 @@ public final class QuorumController implements Controller {
     // VisibleForTesting
     QuorumControllerMetrics controllerMetrics() {
         return controllerMetrics;
-    }
-
-    // VisibleForTesting
-    void setNewNextWriteOffset(long newNextWriteOffset) {
-        appendControlEvent("setNewNextWriteOffset", () -> {
-            offsetControl.setNextWriteOffset(newNextWriteOffset);
-        });
     }
 
     void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {

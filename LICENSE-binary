@@ -255,7 +255,6 @@ netty-transport-native-epoll-4.1.111.Final
 netty-transport-native-unix-common-4.1.111.Final
 opentelemetry-proto-1.0.0-alpha
 plexus-utils-3.5.1
-reflections-0.10.2
 reload4j-1.2.25
 rocksdbjni-7.9.2
 scala-collection-compat_2.12-2.10.0
@@ -319,6 +318,7 @@ activation-1.1.1
 MIT License
 
 argparse4j-0.7.0, see: licenses/argparse-MIT
+classgraph-4.8.173, see: licenses/classgraph-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 slf4j-api-1.7.36, see: licenses/slf4j-MIT
 slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
@@ -336,9 +336,3 @@ jline-3.25.1, see: licenses/jline-BSD-3-clause
 jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 protobuf-java-3.23.4, see: licenses/protobuf-java-BSD-3-clause
-
----------------------------------------
-Do What The F*ck You Want To Public License
-see: licenses/DWTFYWTPL
-
-reflections-0.10.2

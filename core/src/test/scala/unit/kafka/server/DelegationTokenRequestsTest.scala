@@ -16,19 +16,18 @@
   */
 package kafka.server
 
-import kafka.api.IntegrationTestHarness
-import kafka.api.{KafkaSasl, SaslSetup}
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
+import kafka.security.JaasTestUtils
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
-import org.apache.kafka.common.errors.InvalidPrincipalTypeException
-import org.apache.kafka.common.errors.DelegationTokenNotFoundException
+import org.apache.kafka.common.errors.{DelegationTokenNotFoundException, InvalidPrincipalTypeException}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import java.util
 import scala.concurrent.ExecutionException
@@ -52,7 +51,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KafkaServerContextName))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
   }
 

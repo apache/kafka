@@ -446,7 +446,10 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
     assertFalse(isValidKafkaConfig(props))
-    assertBadConfigContainingMessage(props, "There must be at least one advertised listener. Perhaps all listeners appear in controller.listener.names?")
+    assertBadConfigContainingMessage(
+      props,
+      "There must be at least one broker advertised listener. Perhaps all listeners appear in controller.listener.names?"
+    )
 
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
     KafkaConfig.fromProps(props)
@@ -979,7 +982,6 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.OFFSETS_RETENTION_MINUTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-2")
         case TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case TransactionStateManagerConfigs.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
         case TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0", "-2")
@@ -1832,8 +1834,11 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
     props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
     assertEquals(
-      "If using zookeeper.metadata.migration.enable, controller.quorum.voters must contain a parseable set of voters.",
-      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage)
+      """If using zookeeper.metadata.migration.enable, either controller.quorum.bootstrap.servers
+      |must contain the set of bootstrap controllers or controller.quorum.voters must contain a
+      |parseable set of controllers.""".stripMargin.replace("\n", " "),
+      assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage
+    )
 
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
     assertEquals(
@@ -1941,7 +1946,7 @@ class KafkaConfigTest {
     // Setting KRaft's properties.
     props.putAll(kraftProps())
 
-    // Only classic and consumer are supported.
+    // Only classic, consumer and share are supported.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
@@ -1951,9 +1956,21 @@ class KafkaConfigTest {
 
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    val config = KafkaConfig.fromProps(props)
+    var config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
+    assertFalse(config.shareGroupConfig.isShareGroupEnabled)
+
+    // This is OK.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
+    config = KafkaConfig.fromProps(props)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
+    assertTrue(config.isNewGroupCoordinatorEnabled)
+    assertTrue(config.shareGroupConfig.isShareGroupEnabled)
+
+    // If you set share, you must also set consumer.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
