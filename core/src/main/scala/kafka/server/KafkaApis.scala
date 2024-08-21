@@ -3809,7 +3809,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isConsumerGroupProtocolEnabled(): Boolean = {
-    config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
+    config.isNewGroupCoordinatorEnabled && config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
   }
 
   def handleConsumerGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
