@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 8, 11, 17, 21 ]
+        java: [ 21, 8, 11, 17 ]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -59,7 +59,7 @@ jobs:
             **/build/**/*.html
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
-        if: ${{ failure() && matrix.java == '21' }}
+        if: ${{ failure() && matrix.java == '21' }}  # Avoid duplicate annotations, only process java 21
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB: 1

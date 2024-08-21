@@ -35,32 +35,7 @@ def get_env(key: str) -> str:
     return value
 
 
-def get_url(filename: str, line: Optional[int]) -> str:
-    """
-    filename will be a full path like:
-
-    /Users/davidarthur/Code/Apache/kafka/metadata/src/main/java/org/apache/kafka/controller/QuorumController.java
-    
-    or on Github, 
-
-    /home/runner/work/apache/kafka/metadata/src/main/java/org/apache/kafka/controller/QuorumController.java
-
-    we just want the relative part in the source tree.
-    """
-
-    github_repo_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
-    rel_path = os.path.relpath(filename, github_repo_path)
-    repo = get_env("GITHUB_REPOSITORY") # apache/kafka
-    branch = get_env("GITHUB_BRANCH") # my-branch
-
-    url = f"https://github.com/{repo}/blob/{branch}/{rel_path}"
-    if line is not None:
-        return f"{url}#L{line}"
-    else:
-        return url
-
-
-def parse_report(fp) -> Tuple[int, int]:
+def parse_report(workspace_path, fp) -> Tuple[int, int]:
     stack = []
     errors = []
     file_count = 0
@@ -75,13 +50,11 @@ def parse_report(fp) -> Tuple[int, int]:
                 logger.debug(f"Found checkstyle error: {elem.attrib}")
                 errors.append(elem)
                 error_count += 1
-        else:
-            # end
+        elif event == "end":
             if elem.tag == "file" and len(errors) > 0:
                 filename = elem.get("name")
-                github_repo_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
-                rel_path = os.path.relpath(filename, github_repo_path)
-                logger.debug(f"Printing errors for: {elem.attrib}")
+                rel_path = os.path.relpath(filename, workspace_path)
+                logger.debug(f"Outputting errors for file: {elem.attrib}")
                 for error in errors:
                     line = error.get("line")
                     col = error.get("column")
@@ -90,10 +63,17 @@ def parse_report(fp) -> Tuple[int, int]:
                     title = f"Checkstyle {severity}"
                     print(f"::notice file={rel_path},line={line},col={col},title={title}::{message}")
             stack.pop()
+        else:
+            logger.error(f"Unhandled xml event {event}: {elem}")
     return file_count, error_count
 
 
 if __name__ == "__main__":
+    """
+    Parse checkstyle XML reports and generate GitHub annotations.
+
+    See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#setting-a-notice-message
+    """
     if not os.getenv("GITHUB"):
         print("This script is intended to by run by GitHub Actions.")
         exit(1)
@@ -103,13 +83,16 @@ if __name__ == "__main__":
     total_file_count = 0
     total_error_count = 0
 
+    workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
+
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing report file: {report}")
-            file_count, error_count = parse_report(fp)
+            file_count, error_count = parse_report(workspace_path, fp)
             if error_count == 1:
                 logger.debug(f"Checked {file_count} files from {report} and found 1 error")
             else:
                 logger.debug(f"Checked {file_count} files from {report} and found {error_count} errors")
             total_file_count += file_count
             total_error_count += error_count
+    exit(0)
