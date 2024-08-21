@@ -86,6 +86,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -95,6 +96,7 @@ import scala.Tuple2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -315,11 +317,11 @@ public class SharePartitionManagerTest {
         assertEquals(Errors.NONE, resp7.error());
         assertEquals(100, resp7.throttleTimeMs());
 
-        // Close the subsequent share session.
+        // Get the final share session.
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareRequestMetadata(reqMetadata2.memberId(), ShareRequestMetadata.FINAL_EPOCH), true);
         assertEquals(FinalContext.class, context8.getClass());
-        assertEquals(0, cache.size());
+        assertEquals(1, cache.size());
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> respData8 = new LinkedHashMap<>();
         respData8.put(tp2, new ShareFetchResponseData.PartitionData().setPartitionIndex(0));
@@ -327,6 +329,13 @@ public class SharePartitionManagerTest {
 
         ShareFetchResponse resp8 = context8.updateAndGenerateResponseData(groupId, reqMetadata2.memberId(), respData8);
         assertEquals(Errors.NONE, resp8.error());
+
+        // Close the session.
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseResponse =
+            sharePartitionManager.releaseSession(groupId, reqMetadata2.memberId().toString());
+        assertTrue(releaseResponse.isDone());
+        assertFalse(releaseResponse.isCompletedExceptionally());
+        assertEquals(0, cache.size());
     }
 
     @Test
@@ -705,18 +714,24 @@ public class SharePartitionManagerTest {
 
         assertErroneousAndValidTopicIdPartitions(context7.getErroneousAndValidTopicIdPartitions(), Arrays.asList(tpNull1, tpNull2), Arrays.asList(tp0, tp1));
 
-        // Close the subsequent share session.
+        // Get the final share session.
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareRequestMetadata(reqMetadata2.memberId(), ShareRequestMetadata.FINAL_EPOCH), true);
         assertEquals(FinalContext.class, context8.getClass());
-        assertEquals(0, cache.size());
-
+        assertEquals(1, cache.size());
 
         assertErroneousAndValidTopicIdPartitions(context8.getErroneousAndValidTopicIdPartitions(), Collections.emptyList(), Collections.emptyList());
         // Check for throttled response
         ShareFetchResponse resp8 = context8.throttleResponse(100);
         assertEquals(Errors.NONE, resp8.error());
         assertEquals(100, resp8.throttleTimeMs());
+
+        // Close the session.
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseResponse =
+            sharePartitionManager.releaseSession(groupId, reqMetadata2.memberId().toString());
+        assertTrue(releaseResponse.isDone());
+        assertFalse(releaseResponse.isCompletedExceptionally());
+        assertEquals(0, cache.size());
     }
 
     @Test
@@ -806,11 +821,11 @@ public class SharePartitionManagerTest {
         // We add 4 here in response to 4 being added in sizeOf() method in ShareFetchResponse class.
         assertEquals(4 + new ShareFetchResponseData().size(objectSerializationCache, version), respSize7);
 
-        // Close the subsequent share session.
+        // Get the final share session.
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareRequestMetadata(reqMetadata2.memberId(), ShareRequestMetadata.FINAL_EPOCH), true);
         assertEquals(FinalContext.class, context8.getClass());
-        assertEquals(0, cache.size());
+        assertEquals(1, cache.size());
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> respData8 = new LinkedHashMap<>();
         respData8.put(tp3, new ShareFetchResponseData.PartitionData().setPartitionIndex(1));
@@ -921,7 +936,7 @@ public class SharePartitionManagerTest {
 
         assertEquals(Collections.singletonList(tp3), sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, memberId2));
 
-        // Close the first share session.
+        // Get the final share session.
         ShareFetchContext context5 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareRequestMetadata(reqMetadata1.memberId(), ShareRequestMetadata.FINAL_EPOCH), true);
         assertEquals(FinalContext.class, context5.getClass());
@@ -930,6 +945,10 @@ public class SharePartitionManagerTest {
         ShareFetchResponse resp5 = context5.updateAndGenerateResponseData(groupId, reqMetadata1.memberId(), respData5);
         assertEquals(Errors.NONE, resp5.error());
 
+        assertFalse(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, memberId1).isEmpty());
+
+        // Close the first session.
+        sharePartitionManager.releaseSession(groupId, reqMetadata1.memberId().toString());
         assertTrue(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, memberId1).isEmpty());
 
         // Continue the second share session .
@@ -1338,7 +1357,7 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testReleaseAcquiredRecordsSuccess() {
+    public void testReleaseSessionSuccess() {
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
 
@@ -1356,6 +1375,7 @@ public class SharePartitionManagerTest {
         ShareSessionCache cache = mock(ShareSessionCache.class);
         ShareSession shareSession = mock(ShareSession.class);
         when(cache.get(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
+        when(cache.remove(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
 
         ImplicitLinkedHashCollection<CachedSharePartition> partitionMap = new ImplicitLinkedHashCollection<>(3);
         partitionMap.add(new CachedSharePartition(tp1));
@@ -1373,7 +1393,7 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
-                sharePartitionManager.releaseAcquiredRecords(groupId, memberId.toString());
+                sharePartitionManager.releaseSession(groupId, memberId.toString());
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
         assertEquals(3, result.size());
         assertTrue(result.containsKey(tp1));
@@ -1389,7 +1409,7 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testReleaseAcquiredRecordsWithIncorrectGroupId() {
+    public void testReleaseSessionWithIncorrectGroupId() {
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
 
@@ -1407,15 +1427,17 @@ public class SharePartitionManagerTest {
             .withCache(cache)
             .build();
 
-        // Calling releaseAcquiredRecords with incorrect groupId.
+        // Calling releaseSession with incorrect groupId.
         CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
-                sharePartitionManager.releaseAcquiredRecords("grp-2", memberId.toString());
-        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
-        assertTrue(result.isEmpty());
+                sharePartitionManager.releaseSession("grp-2", memberId.toString());
+        assertTrue(resultFuture.isDone());
+        assertTrue(resultFuture.isCompletedExceptionally());
+        Throwable exception = assertThrows(ExecutionException.class, resultFuture::get);
+        assertInstanceOf(ShareSessionNotFoundException.class, exception.getCause());
     }
 
     @Test
-    public void testReleaseAcquiredRecordsWithIncorrectMemberId() {
+    public void testReleaseSessionWithIncorrectMemberId() {
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
 
@@ -1435,34 +1457,52 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
-                sharePartitionManager.releaseAcquiredRecords(groupId, memberId.toString());
-        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
-        assertTrue(result.isEmpty());
+                sharePartitionManager.releaseSession(groupId, memberId.toString());
+        assertTrue(resultFuture.isDone());
+        assertTrue(resultFuture.isCompletedExceptionally());
+        Throwable exception = assertThrows(ExecutionException.class, resultFuture::get);
+        assertInstanceOf(ShareSessionNotFoundException.class, exception.getCause());
     }
 
     @Test
-    public void testReleaseAcquiredRecordsWithEmptyTopicPartitions() {
+    public void testReleaseSessionWithEmptyTopicPartitions() {
         String groupId = "grp";
-        String memberId = Uuid.randomUuid().toString();
+        Uuid memberId = Uuid.randomUuid();
 
-        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 2));
-
-        SharePartition sp1 = mock(SharePartition.class);
-        SharePartition sp2 = mock(SharePartition.class);
-        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
-        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
-
-        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
-        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
-        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+        ShareSessionCache cache = mock(ShareSessionCache.class);
+        ShareSession shareSession = mock(ShareSession.class);
+        when(cache.get(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
+        when(cache.remove(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
+        when(shareSession.partitionMap()).thenReturn(new ImplicitLinkedHashCollection<>());
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
-                .withPartitionCacheMap(partitionCacheMap).build();
+            .withCache(cache)
+            .build();
 
-        // Pass an empty list of TopicIdPartitions to releaseAcquiredRecords. This should return an empty map.
+        // Empty list of TopicIdPartitions to releaseSession. This should return an empty map.
         CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
-                sharePartitionManager.releaseAcquiredRecords(groupId, memberId);
+                sharePartitionManager.releaseSession(groupId, memberId.toString());
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    public void testReleaseSessionWithNullShareSession() {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+
+        ShareSessionCache cache = mock(ShareSessionCache.class);
+        // Null share session in get response so empty topic partitions should be returned.
+        when(cache.get(new ShareSessionKey(groupId, memberId))).thenReturn(null);
+        // Make the response not null for remove so can further check for the return value from topic partitions.
+        when(cache.remove(new ShareSessionKey(groupId, memberId))).thenReturn(mock(ShareSession.class));
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withCache(cache)
+            .build();
+
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+            sharePartitionManager.releaseSession(groupId, memberId.toString());
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
         assertEquals(0, result.size());
     }
