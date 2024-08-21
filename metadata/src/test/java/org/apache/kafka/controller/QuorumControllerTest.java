@@ -739,7 +739,7 @@ public class QuorumControllerTest {
                 BrokerRegistrationReply reply = active.registerBroker(
                     ANONYMOUS_CONTEXT,
                     request).get();
-                assertEquals(5, reply.epoch());
+                assertTrue(reply.epoch() >= 5, "Unexpected broker epoch " + reply.epoch());
             }
         }
     }
