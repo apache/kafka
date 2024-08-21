@@ -461,7 +461,7 @@ public class SharePartitionManager implements AutoCloseable {
                     if (shareSession.epoch != reqMetadata.epoch()) {
                         log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
                                 shareSession.epoch, reqMetadata.epoch());
-                        throw  Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+                        throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
                     } else {
                         cache.touch(shareSession, time.milliseconds());
                         shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
