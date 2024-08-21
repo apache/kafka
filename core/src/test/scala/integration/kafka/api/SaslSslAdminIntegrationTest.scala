@@ -337,7 +337,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   def testCreateDelegationTokenWithLargeTimeout(quorum: String): Unit = {
     client = createAdminClient
     val timeout = Long.MaxValue
-    assertTrue(timeout > DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_DEFAULT)
+
     val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
     val token = client.createDelegationToken(options).delegationToken().get()
 
@@ -350,7 +350,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   def testCreateDelegationTokenWithNegativeTimeout(quorum: String): Unit = {
     client = createAdminClient
     val timeout = -1
-    assertTrue(timeout < 0)
+
     val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
     val token = client.createDelegationToken(options).delegationToken().get()
 
