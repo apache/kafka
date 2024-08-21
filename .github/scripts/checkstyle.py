@@ -87,7 +87,8 @@ def parse_report(fp) -> Tuple[int, int]:
                     col = error.get("column")
                     severity = error.get("severity")
                     message = error.get('message')
-                    print(f"::notice file={rel_path},line={line},col={col}::{message}")
+                    title = f"Checkstyle {severity}"
+                    print(f"::notice file={rel_path},line={line},col={col},title={title}::{message}")
             stack.pop()
     return file_count, error_count
 
