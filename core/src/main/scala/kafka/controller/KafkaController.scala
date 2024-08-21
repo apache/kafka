@@ -50,7 +50,6 @@ import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
-import java.util.stream.Collectors
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -2367,9 +2366,7 @@ class KafkaController(val config: KafkaConfig,
         case Some(topicName) =>
           topicReq.partitions.forEach { partitionReq =>
             val isr = if (alterPartitionRequestVersion >= 3) {
-              partitionReq.newIsrWithEpochs.stream()
-                .map(brokerState => Integer.valueOf(brokerState.brokerId()))
-                .collect(Collectors.toList[Integer])
+              partitionReq.newIsrWithEpochs.asScala.toList.map(brokerState => Integer.valueOf(brokerState.brokerId())).asJava
             } else {
               partitionReq.newIsr
             }
