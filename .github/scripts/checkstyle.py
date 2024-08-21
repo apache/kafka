@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
     See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#setting-a-notice-message
     """
-    if not os.getenv("GITHUB"):
+    if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")
         exit(1)
     
