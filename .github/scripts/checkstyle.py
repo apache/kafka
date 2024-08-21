@@ -32,6 +32,8 @@ logger.addHandler(handler)
 def get_env(key: str) -> str:
     value = os.getenv(key)
     logger.debug(f"Read env {key}: {value}")
+    return value
+
 
 def get_url(filename: str, line: Optional[int]) -> str:
     """
@@ -80,7 +82,7 @@ def parse_report(fp) -> Tuple[int, int]:
                 logger.debug(f"Printing errors for: {elem.attrib}")
                 for error in errors:
                     url = get_url(elem.get("name"), error.get("line"))
-                    print(f"|[{filename}]({url})|{error.get('message')}|")
+                    print(f"| [{filename}]({url}) | {error.get('severity')} | ❌ {error.get('message')} |")
             stack.pop()
     return file_count, error_count
 
@@ -96,7 +98,8 @@ if __name__ == "__main__":
     total_error_count = 0
 
     print("## Checkstyle summary")
-    print("|----|----|")
+    print("| File | Severity | Message | ")
+    print("| ---- | -------- | ------- |")
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing report file: {report}")
@@ -107,5 +110,5 @@ if __name__ == "__main__":
                 logger.debug(f"Checked {file_count} files from {report} and found {error_count} errors")
             total_file_count += file_count
             total_error_count += error_count
-    print("|----|----|")
-
+    if total_error_count == 0:
+        print(f"| - | - | ✅ Checked {total_file_count} files, no errors")
