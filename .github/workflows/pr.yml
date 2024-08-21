@@ -38,6 +38,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
@@ -49,7 +52,7 @@ jobs:
         run: ./gradlew --build-cache --info --scan check -x test
       - name: Parse checkstyle
         if: always()
-        run: .github/scripts/checkstyle.py >> $GITHUB_STEP_SUMMARY
+        run: python .github/scripts/checkstyle.py >> $GITHUB_STEP_SUMMARY
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
