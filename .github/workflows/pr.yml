@@ -63,7 +63,8 @@ jobs:
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
         # Avoid duplicate annotations, only run on java 21
-        if: ${{ failure() && matrix.java == '21' }}
+        # For now, limit to "gh-" PRs
+        if: ${{ contains(github.head_ref, 'gh-') && failure() && matrix.java == '21' }}
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB: 1
