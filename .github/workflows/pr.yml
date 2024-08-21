@@ -47,6 +47,8 @@ jobs:
       - name: Compile and validate
         # Publish build scans for now. This will only work on PRs from apache/kafka, not public forks.
         run: ./gradlew --build-cache --info --scan check -x test
+      - name: Parse checkstyle
+        run: .github/scripts/checkstyle.py >> $GITHUB_STEP_SUMMARY
       - name: Archive check reports
         uses: actions/upload-artifact@v4
         with:
