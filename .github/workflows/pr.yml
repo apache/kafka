@@ -52,9 +52,7 @@ jobs:
         # --build-cache:  Let Gradle restore the build cache
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
-        # spotlessCheck:  Skip spotless. While it is faster than checkstyle, it does not produce a report
-        #                 which makes it a bit less useful when running on CI.
-        run: ./gradlew --build-cache --info --scan check -x test -x spotlessCheck
+        run: ./gradlew --build-cache --info --scan check -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
