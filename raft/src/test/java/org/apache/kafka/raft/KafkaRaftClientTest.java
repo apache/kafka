@@ -69,6 +69,9 @@ import java.util.stream.Stream;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.in;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -793,7 +796,7 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
 
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destination().id()));
+        assertThat(fetchRequest.destination().id(), is(in(voters)));
         context.assertFetchRequestData(fetchRequest, 0, 0L, 0);
 
         context.deliverResponse(
@@ -1784,7 +1787,7 @@ public class KafkaRaftClientTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destination().id()));
+        assertThat(fetchRequest.destination().id(), is(in(voters)));
         context.assertFetchRequestData(fetchRequest, 0, 0L, 0);
 
         context.deliverResponse(
@@ -1810,7 +1813,7 @@ public class KafkaRaftClientTest {
             .collect(Collectors.toList());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
+            .withBootstrapServers(Optional.of(bootstrapServers))
             .withKip853Rpc(withKip853Rpc)
             .build();
 
@@ -1857,7 +1860,7 @@ public class KafkaRaftClientTest {
             .collect(Collectors.toList());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
+            .withBootstrapServers(Optional.of(bootstrapServers))
             .withKip853Rpc(withKip853Rpc)
             .build();
 
@@ -1900,7 +1903,7 @@ public class KafkaRaftClientTest {
             .collect(Collectors.toList());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
+            .withBootstrapServers(Optional.of(bootstrapServers))
             .withKip853Rpc(withKip853Rpc)
             .build();
 
@@ -1974,7 +1977,7 @@ public class KafkaRaftClientTest {
             .collect(Collectors.toList());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
+            .withBootstrapServers(Optional.of(bootstrapServers))
             .withKip853Rpc(withKip853Rpc)
             .build();
 
@@ -2631,7 +2634,7 @@ public class KafkaRaftClientTest {
             .collect(Collectors.toList());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
+            .withBootstrapServers(Optional.of(bootstrapServers))
             .withKip853Rpc(withKip853Rpc)
             .build();
 
@@ -2682,7 +2685,7 @@ public class KafkaRaftClientTest {
             .collect(Collectors.toList());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
+            .withBootstrapServers(Optional.of(bootstrapServers))
             .withKip853Rpc(withKip853Rpc)
             .build();
 
@@ -3391,6 +3394,38 @@ public class KafkaRaftClientTest {
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset());
         assertEquals(2L, context.log.firstUnflushedOffset());
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "true, true", "true, false", "false, true", "false, false" })
+    public void testObserverReplication(boolean withKip853Rpc, boolean alwaysFlush) throws Exception {
+        int localId = randomReplicaId();
+        int otherNodeId = localId + 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .withKip853Rpc(withKip853Rpc)
+            .withAlwaysFlush(alwaysFlush)
+            .build();
+        context.assertElectedLeader(epoch, otherNodeId);
+
+        context.pollUntilRequest();
+
+        RaftRequest.Outbound fetchQuorumRequest = context.assertSentFetchRequest(epoch, 0L, 0);
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        FetchResponseData response = context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE);
+        context.deliverResponse(
+            fetchQuorumRequest.correlationId(),
+            fetchQuorumRequest.destination(),
+            response
+        );
+
+        context.client.poll();
+        assertEquals(2L, context.log.endOffset().offset());
+        long firstUnflushedOffset = alwaysFlush ? 2L : 0L;
+        assertEquals(firstUnflushedOffset, context.log.firstUnflushedOffset());
     }
 
     @ParameterizedTest
@@ -4197,6 +4232,36 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
+    public void testHandleLeaderChangeFiresAfterResignRegistration(boolean withKip853Rpc) throws Exception {
+        // When registering a listener while the replica is resigned, it should not get notified with
+        // the current leader and epoch
+        int localId = randomReplicaId();
+        int otherNodeId = localId + 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, localId)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.client.poll();
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(LeaderAndEpoch.UNKNOWN, context.listener.currentLeaderAndEpoch());
+
+        // Register another listener and verify that it is not notified of latest leader and epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(LeaderAndEpoch.UNKNOWN, secondListener.currentLeaderAndEpoch());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     public void testObserverFetchWithNoLocalId(boolean withKip853Rpc) throws Exception {
         // When no `localId` is defined, the client will behave as an observer.
         // This is designed for tooling/debugging use cases.
@@ -4208,7 +4273,7 @@ public class KafkaRaftClientTest {
             .collect(Collectors.toList());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.empty(), voters)
-            .withBootstrapServers(bootstrapServers)
+            .withBootstrapServers(Optional.of(bootstrapServers))
             .withKip853Rpc(withKip853Rpc)
             .build();
 

@@ -33,9 +33,9 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
@@ -925,7 +925,7 @@ public class ClassicGroup implements Group {
      */
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
-        records.add(CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 
     @Override
@@ -1442,7 +1442,7 @@ public class ClassicGroup implements Group {
             assignments.put(classicGroupMember.memberId(), classicGroupMember.assignment())
         );
 
-        records.add(CoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
+        records.add(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
     }
 
     /**

@@ -26,7 +26,6 @@ import kafka.log.remote.RemoteLogManager
 import kafka.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS
 import kafka.log.remote.quota.RLMQuotaMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{Pool, TestUtils}
@@ -34,7 +33,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.{TopicConfig}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -68,7 +67,7 @@ import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
+import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.log._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -81,6 +80,7 @@ import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 
 import java.io.{ByteArrayInputStream, File}
+import java.lang.{Long => JLong}
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
@@ -179,7 +179,7 @@ class ReplicaManagerTest {
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       rm.checkpointHighWatermarks()
       config.logDirs.map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
         .foreach(checkpointFile => assertTrue(Files.exists(checkpointFile),
@@ -208,7 +208,7 @@ class ReplicaManagerTest {
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       rm.checkpointHighWatermarks()
       config.logDirs.map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
         .foreach(checkpointFile => assertTrue(Files.exists(checkpointFile),
@@ -289,7 +289,7 @@ class ReplicaManagerTest {
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
 
       rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
@@ -309,12 +309,12 @@ class ReplicaManagerTest {
       logManager.maybeUpdatePreferredLogDir(new TopicPartition(topic, 0), dir2.getAbsolutePath)
 
       partition.createLogIfNotExists(isNew = true, isFutureReplica = true,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       // remove cache to disable OffsetsForLeaderEpoch API
       partition.futureLog.get.leaderEpochCache = None
 
       // this method should use hw of future log to create log dir fetcher. Otherwise, it causes offset mismatch error
-      rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), _ => None)
+      rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), _ => None)
       rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.fetchState(new TopicPartition(topic, 0)).foreach(s => assertEquals(0L, s.fetchOffset)))
       // make sure alter log dir thread has processed the data
       rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.doWork())
@@ -355,7 +355,7 @@ class ReplicaManagerTest {
     try {
       val partition = rm.createPartition(tp0)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), Option.apply(uuid))
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), Option.apply(uuid))
 
       val response = rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
@@ -379,7 +379,7 @@ class ReplicaManagerTest {
       if (futureLogCreated) {
         // create future log before maybeAddLogDirFetchers invoked
         partition.createLogIfNotExists(isNew = false, isFutureReplica = true,
-          new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+          new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       } else {
         val mockLog = mock(classOf[UnifiedLog])
         when(spyLogManager.getLog(tp0, isFuture = true)).thenReturn(Option.apply(mockLog))
@@ -388,7 +388,7 @@ class ReplicaManagerTest {
       }
 
       val topicIdMap: Map[String, Option[Uuid]] = Map(topic -> Option.apply(uuid))
-      rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), topicIdMap)
+      rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), topicIdMap)
       if (futureLogCreated) {
         // since the futureLog is already created, we don't have to abort and pause the cleaning
         verify(spyLogManager, never).abortAndPauseCleaning(any[TopicPartition])
@@ -429,7 +429,7 @@ class ReplicaManagerTest {
 
       val partition = rm.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
@@ -527,7 +527,7 @@ class ReplicaManagerTest {
       val topicPartition = new TopicPartition(topic, 0)
       replicaManager.createPartition(topicPartition)
         .createLogIfNotExists(isNew = false, isFutureReplica = false,
-          new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+          new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       def leaderAndIsrRequest(epoch: Int): LeaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
@@ -588,7 +588,7 @@ class ReplicaManagerTest {
 
       val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -649,10 +649,10 @@ class ReplicaManagerTest {
       // Create a couple partition for the topic.
       val partition0 = replicaManager.createPartition(new TopicPartition(topic, 0))
       partition0.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
       val partition1 = replicaManager.createPartition(new TopicPartition(topic, 1))
       partition1.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader for the partitions.
       Seq(0, 1).foreach { partition =>
@@ -738,7 +738,7 @@ class ReplicaManagerTest {
 
       val partition = replicaManager.createPartition(topicPartition)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader.
       val brokerList = Seq[Integer](0, 1, 2).asJava
@@ -799,7 +799,7 @@ class ReplicaManagerTest {
 
       val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -920,7 +920,7 @@ class ReplicaManagerTest {
       val brokerList = Seq[Integer](0, 1).asJava
       val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -1005,7 +1005,7 @@ class ReplicaManagerTest {
 
       val partition = rm.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -1292,7 +1292,7 @@ class ReplicaManagerTest {
       val topicId = Uuid.randomUuid()
       val tidp0 = new TopicIdPartition(topicId, tp0)
       val tidp1 = new TopicIdPartition(topicId, tp1)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       replicaManager.createPartition(tp1).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
@@ -1422,7 +1422,7 @@ class ReplicaManagerTest {
       // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
       val tp = new TopicPartition(topic, topicPartition)
       val partition = replicaManager.createPartition(tp)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       partition.makeFollower(
         leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds),
@@ -1472,7 +1472,7 @@ class ReplicaManagerTest {
       val tp = new TopicPartition(topic, topicPartition)
       val partition = replicaManager.createPartition(tp)
 
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       partition.makeLeader(
         leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds),
@@ -1915,7 +1915,7 @@ class ReplicaManagerTest {
     try {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val becomeFollowerRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -1959,7 +1959,7 @@ class ReplicaManagerTest {
     try {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
 
@@ -2008,7 +2008,7 @@ class ReplicaManagerTest {
     try {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
 
@@ -2061,7 +2061,7 @@ class ReplicaManagerTest {
     try {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
 
@@ -2120,7 +2120,7 @@ class ReplicaManagerTest {
     try {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
 
@@ -2166,7 +2166,7 @@ class ReplicaManagerTest {
     try {
       val tp0 = new TopicPartition(topic, 0)
       val tidp0 = new TopicIdPartition(topicId, tp0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
 
@@ -2212,7 +2212,7 @@ class ReplicaManagerTest {
 
     try {
       val tp0 = new TopicPartition(topic, 0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
 
@@ -2851,7 +2851,7 @@ class ReplicaManagerTest {
       val topicPartition = new TopicPartition(name, i)
       val partition = replicaManager.createPartition(topicPartition)
       partition.createLogIfNotExists(isNew = true, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), topicId = Some(new Uuid(name.hashCode, name.hashCode)))
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava), topicId = Some(new Uuid(name.hashCode, name.hashCode)))
       partition.log.get
     }
   }
@@ -3782,7 +3782,7 @@ class ReplicaManagerTest {
 
     try {
       val tp0 = new TopicPartition(topic, 0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
       val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 10, brokerEpoch,
@@ -3818,7 +3818,7 @@ class ReplicaManagerTest {
 
     try {
       val tp0 = new TopicPartition(topic, 0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
       val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -3990,7 +3990,7 @@ class ReplicaManagerTest {
     // create a replicaManager with remoteLog enabled
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false))
     try {
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val topicIds = Map(tp0.topic -> topicId).asJava
@@ -4045,7 +4045,7 @@ class ReplicaManagerTest {
     // create a replicaManager with remoteLog enabled
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog= true, remoteFetchQuotaExceeded = Some(false))
     try {
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val topicIds = Map(tp0.topic -> topicId).asJava
@@ -4132,7 +4132,7 @@ class ReplicaManagerTest {
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
     try {
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val topicIds = Map(tp0.topic -> topicId).asJava
@@ -4240,7 +4240,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(timer, aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
 
     try {
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val topicIds = Map(tp0.topic -> topicId).asJava
@@ -4340,7 +4340,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
     try {
 
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val topicIds = Map(tp0.topic -> topicId).asJava
@@ -4391,7 +4391,7 @@ class ReplicaManagerTest {
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
     try {
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val topicIds = Map(tp0.topic -> topicId).asJava
@@ -4450,7 +4450,7 @@ class ReplicaManagerTest {
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
     try {
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val topicIds = Map(tp0.topic -> topicId).asJava
@@ -4531,19 +4531,19 @@ class ReplicaManagerTest {
 
     try {
       val tp0 = new TopicPartition(topic, 0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       val partition = replicaManager.createPartition(tp0)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
       val logDirFailureChannel = new LogDirFailureChannel(replicaManager.config.logDirs.size)
       val logDir = partition.log.get.parentDirFile
 
-      def readRecoveryPointCheckpoint(): Map[TopicPartition, Long] = {
+      def readRecoveryPointCheckpoint(): util.Map[TopicPartition, JLong] = {
         new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile),
           logDirFailureChannel).read()
       }
 
-      def readLogStartOffsetCheckpoint(): Map[TopicPartition, Long] = {
+      def readLogStartOffsetCheckpoint(): util.Map[TopicPartition, JLong] = {
         new OffsetCheckpointFile(new File(logDir, LogManager.LogStartOffsetCheckpointFile),
           logDirFailureChannel).read()
       }
@@ -4564,8 +4564,8 @@ class ReplicaManagerTest {
       partition.log.get.maybeIncrementLogStartOffset(1L, LogStartOffsetIncrementReason.LeaderOffsetIncremented)
       replicaManager.logManager.checkpointLogRecoveryOffsets()
       replicaManager.logManager.checkpointLogStartOffsets()
-      assertEquals(Some(1L), readRecoveryPointCheckpoint().get(tp0))
-      assertEquals(Some(1L), readLogStartOffsetCheckpoint().get(tp0))
+      assertEquals(1L, readRecoveryPointCheckpoint().get(tp0))
+      assertEquals(1L, readLogStartOffsetCheckpoint().get(tp0))
 
       if (throwIOException) {
         // Replace underlying PartitionMetadataFile with a mock which throws
@@ -4587,8 +4587,8 @@ class ReplicaManagerTest {
 
       if (expectedOutput == Errors.NONE && deletePartition) {
         assertEquals(HostedPartition.None, replicaManager.getPartition(tp0))
-        assertFalse(readRecoveryPointCheckpoint().contains(tp0))
-        assertFalse(readLogStartOffsetCheckpoint().contains(tp0))
+        assertFalse(readRecoveryPointCheckpoint().containsKey(tp0))
+        assertFalse(readLogStartOffsetCheckpoint().containsKey(tp0))
         if (enableRemoteStorage) {
           val stopPartition = StopPartition(tp0,
             deleteLocalLog = deletePartition,
@@ -5057,7 +5057,7 @@ class ReplicaManagerTest {
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
       val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
       partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints),
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava),
         None)
 
       assertTrue(isNewWhenCreatedForFirstTime)
@@ -6421,7 +6421,7 @@ class ReplicaManagerTest {
       replicaManager.createPartition(tp).createLogIfNotExists(
         isNew = false,
         isFutureReplica = false,
-        offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints),
+        offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava),
         topicId = None
       )
 
@@ -6545,7 +6545,7 @@ class ReplicaManagerTest {
 
     try {
       val tp0 = new TopicPartition(topic, 0)
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       val partition = replicaManager.createPartition(tp0)
       // The unified log created is not tiered because `defaultTopicRemoteLogStorageEnable` is set to false
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
@@ -6780,7 +6780,7 @@ class ReplicaManagerTest {
   private def readFromLogWithOffsetOutOfRange(tp: TopicPartition): Seq[(TopicIdPartition, LogReadResult)] = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true)
     try {
-      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       replicaManager.createPartition(tp).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints = offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val topicIds = Map(tp.topic -> topicId).asJava

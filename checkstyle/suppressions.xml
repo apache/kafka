@@ -231,9 +231,12 @@
               files="group-coordinator[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
               files="transaction-coordinator[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
+              files="share-coordinator[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
     <suppress checks="ImportControl" files="FetchResponseData.java"/>
     <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
+    <suppress checks="ImportControl" files="ClientTelemetryTest.java"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
@@ -341,16 +344,18 @@
               files="(ConsumerGroupMember|GroupMetadataManager|GeneralUniformAssignmentBuilder).java"/>
     <suppress checks="(NPathComplexity|MethodLength)"
               files="(GroupMetadataManager|ConsumerGroupTest|ShareGroupTest|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GeneralUniformAssignmentBuilder).java"/>
-    <suppress checks="NPathComplexity"
-              files="CoordinatorRuntime.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GroupCoordinatorService|GroupCoordinatorServiceTest).java"/>
     <suppress checks="ParameterNumber"
               files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorConfig).java"/>
     <suppress checks="ClassDataAbstractionCouplingCheck"
-              files="(RecordHelpersTest|CoordinatorRecordHelpers|GroupMetadataManager|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest).java"/>
+              files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest).java"/>
     <suppress checks="JavaNCSS"
               files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
+
+    <!-- coordinator-common -->
+    <suppress checks="NPathComplexity"
+              files="CoordinatorRuntime.java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
