@@ -34,16 +34,16 @@ final class ForwardingManagerMetricsTest {
 
     val expectedMetrics = Set(
       new MetricName("QueueTimeMs.p99", expectedGroup, "", Collections.emptyMap()),
-    new MetricName("QueueTimeMs.p999", expectedGroup, "", Collections.emptyMap()),
+      new MetricName("QueueTimeMs.p999", expectedGroup, "", Collections.emptyMap()),
       new MetricName("QueueLength", expectedGroup, "", Collections.emptyMap()),
       new MetricName("RemoteTimeMs.p99", expectedGroup, "", Collections.emptyMap()),
       new MetricName("RemoteTimeMs.p999", expectedGroup, "", Collections.emptyMap())
     )
 
     Using(ForwardingManagerMetrics(metrics)) { _ =>
-      val metricsMap = metrics.metrics().asScala.filter{ case (name, _) => name.group == expectedGroup }
+      val metricsMap = metrics.metrics().asScala.filter { case (name, _) => name.group == expectedGroup }
       assertEquals(metricsMap.size, expectedMetrics.size)
-      metricsMap.foreach {case (name, _) =>
+      metricsMap.foreach { case (name, _) =>
         assertTrue(expectedMetrics.contains(name))
       }
     }
