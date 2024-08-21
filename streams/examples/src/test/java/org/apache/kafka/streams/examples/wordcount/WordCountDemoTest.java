@@ -58,7 +58,7 @@ public class WordCountDemoTest {
         final StreamsBuilder builder = new StreamsBuilder();
         //Create Actual Stream Processing pipeline
         WordCountDemo.createWordCountStream(builder);
-        testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.getStreamsConfig(null));
+        testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.streamsConfig(null));
         inputTopic = testDriver.createInputTopic(WordCountDemo.INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         outputTopic = testDriver.createOutputTopic(WordCountDemo.OUTPUT_TOPIC, new StringDeserializer(), new LongDeserializer());
     }
@@ -111,13 +111,13 @@ public class WordCountDemoTest {
     }
 
     @Test
-    public void testGetStreamsConfig() throws IOException {
+    public void testStreamsConfig() throws IOException {
         final File tmp = TestUtils.tempFile("bootstrap.servers=localhost:1234");
         try {
-            Properties config = WordCountDemo.getStreamsConfig(new String[] {tmp.getPath()});
+            Properties config = WordCountDemo.streamsConfig(new String[] {tmp.getPath()});
             assertThat("localhost:1234", equalTo(config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)));
 
-            config = WordCountDemo.getStreamsConfig(new String[] {tmp.getPath(), "extra", "args"});
+            config = WordCountDemo.streamsConfig(new String[] {tmp.getPath(), "extra", "args"});
             assertThat("localhost:1234", equalTo(config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)));
         } finally {
             Files.deleteIfExists(tmp.toPath());

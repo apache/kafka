@@ -567,7 +567,7 @@ public class StreamsMetadataState {
     }
 
     public String getStoreForChangelogTopic(final String topicName) {
-        return topologyMetadata.getStoreForChangelogTopic(topicName);
+        return topologyMetadata.storeForChangelogTopic(topicName);
     }
 
     private class SourceTopicsInfo {

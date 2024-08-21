@@ -152,7 +152,7 @@ class StandbyTaskCreator {
             taskId,
             inputPartitions,
             topology,
-            topologyMetadata.getTaskConfigFor(taskId),
+            topologyMetadata.taskConfig(taskId),
             streamsMetrics,
             stateManager,
             stateDirectory,

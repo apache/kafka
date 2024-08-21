@@ -189,7 +189,7 @@ public class TopologyMetadata {
     public void maybeNotifyTopologyVersionListeners() {
         try {
             lock();
-            final long minThreadVersion = getMinimumThreadVersion();
+            final long minThreadVersion = minimumThreadVersion();
             final Iterator<TopologyVersionListener> iterator = version.activeTopologyUpdateListeners.listIterator();
             TopologyVersionListener topologyVersionListener;
             while (iterator.hasNext()) {
@@ -207,7 +207,7 @@ public class TopologyMetadata {
     }
 
     // Return the minimum version across all live threads, or Long.MAX_VALUE if there are no threads running
-    private long getMinimumThreadVersion() {
+    private long minimumThreadVersion() {
         final Optional<Long> minVersion = threadVersions.values().stream().min(Long::compare);
         return minVersion.orElse(Long.MAX_VALUE);
     }
@@ -312,7 +312,7 @@ public class TopologyMetadata {
         return removeTopologyFuture;
     }
 
-    public TaskConfig getTaskConfigFor(final TaskId taskId) {
+    public TaskConfig taskConfig(final TaskId taskId) {
         final InternalTopologyBuilder builder = lookupBuilderForTask(taskId);
         return builder.topologyConfigs().getTaskConfig();
     }
@@ -360,7 +360,7 @@ public class TopologyMetadata {
         allInputTopics.addAll(newInputTopics);
     }
 
-    public int getNumStreamThreads(final StreamsConfig config) {
+    public int numStreamThreads(final StreamsConfig config) {
         final int configuredNumStreamThreads = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
 
         // If there are named topologies but some are empty, this indicates a bug in user code
@@ -531,7 +531,7 @@ public class TopologyMetadata {
         return stateStoreNameToSourceTopics;
     }
 
-    public String getStoreForChangelogTopic(final String topicName) {
+    public String storeForChangelogTopic(final String topicName) {
         for (final InternalTopologyBuilder builder : builders.values()) {
             final String store = builder.getStoreForChangelogTopic(topicName);
             if (store != null) {
@@ -614,7 +614,7 @@ public class TopologyMetadata {
         }
     }
 
-    public Collection<NamedTopology> getAllNamedTopologies() {
+    public Collection<NamedTopology> allNamedTopologies() {
         return builders.values()
             .stream()
             .map(InternalTopologyBuilder::namedTopology)

@@ -75,7 +75,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 return false;
             }
 
-            switch (UpgradeFromValues.getValueFromString((String) upgradeFrom)) {
+            switch (UpgradeFromValues.fromString((String) upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                 case UPGRADE_FROM_0101:
                 case UPGRADE_FROM_0102:

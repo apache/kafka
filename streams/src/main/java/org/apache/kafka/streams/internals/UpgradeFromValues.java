@@ -48,7 +48,7 @@ public enum UpgradeFromValues {
         this.value = value;
     }
 
-    public static UpgradeFromValues getValueFromString(final String upgradeFrom) {
+    public static UpgradeFromValues fromString(final String upgradeFrom) {
         return UpgradeFromValues.valueOf("UPGRADE_FROM_" + upgradeFrom.replace(".", ""));
     }
     public String toString() {

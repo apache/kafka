@@ -1782,7 +1782,7 @@ public class InternalTopicManagerTest {
             topicName,
             topicConfig.numberOfPartitions(),
             Optional.of(streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue())
-        ).configs(topicConfig.getProperties(
+        ).configs(topicConfig.properties(
             Collections.emptyMap(),
             streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG))
         );

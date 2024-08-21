@@ -66,24 +66,23 @@ public class ClientUtils {
     }
 
 
-    // currently admin client is shared among all threads
-    public static String getSharedAdminClientId(final String clientId) {
+    public static String adminClientId(final String clientId) {
         return clientId + "-admin";
     }
 
-    public static String getConsumerClientId(final String threadClientId) {
+    public static String consumerClientId(final String threadClientId) {
         return threadClientId + "-consumer";
     }
 
-    public static String getRestoreConsumerClientId(final String threadClientId) {
+    public static String restoreConsumerClientId(final String threadClientId) {
         return threadClientId + "-restore-consumer";
     }
 
-    public static String getThreadProducerClientId(final String threadClientId) {
+    public static String threadProducerClientId(final String threadClientId) {
         return threadClientId + "-producer";
     }
 
-    public static String getTaskProducerClientId(final String threadClientId, final TaskId taskId) {
+    public static String taskProducerClientId(final String threadClientId, final TaskId taskId) {
         return threadClientId + "-" + taskId + "-producer";
     }
 

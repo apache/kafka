@@ -104,7 +104,7 @@ public class RocksDBBlockCacheMetricsTest {
     }
 
     public <T> void assertMetric(final StateStoreContext context, final String group, final String metricName, final T expected) {
-        final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
+        final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
         final MetricName name = metrics.metricsRegistry().metricName(
                 metricName,
                 group,
