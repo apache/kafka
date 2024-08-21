@@ -79,7 +79,7 @@ object TransactionLog {
     // Serialize with version 0 (highest non-flexible version) until transaction.version 1 is enabled
     // which enables flexible fields in records.
     val version: Short =
-      if (transactionVersionLevel > 1) 1 else 0
+      if (transactionVersionLevel >= 1) 1 else 0
     MessageUtil.toVersionPrefixedBytes(version,
       new TransactionLogValue()
         .setProducerId(txnMetadata.producerId)

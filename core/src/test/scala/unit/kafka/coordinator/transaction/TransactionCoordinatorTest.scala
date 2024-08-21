@@ -512,15 +512,13 @@ class TransactionCoordinatorTest {
 
   @ParameterizedTest
   @ValueSource(shorts = Array(0, 2))
-  def shouldReturnCorrectErrorOnEndTxnRequestWhenStatusIsPrepareCommit(clientTransactionVersion: Short): Unit = {
+  def shouldReturnConcurrentTransactionsOnEndTxnRequestWhenStatusIsPrepareCommit(clientTransactionVersion: Short): Unit = {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, (producerEpoch - 1).toShort, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
 
-    val isAtLeastTransactionsV2 = clientTransactionVersion >= 2
     coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
-    val expectedError = if (isAtLeastTransactionsV2) Errors.NONE else Errors.CONCURRENT_TRANSACTIONS
-    assertEquals(expectedError, error)
+    assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -543,14 +541,14 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 2)))))
 
-    // Return since the retry is recognized
+    // Return CONCURRENT_TRANSACTIONS as the transaction is still completing
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, 1, endTxnCallback)
-    assertEquals(Errors.NONE, error)
-    assertEquals(producerId, newProducerId)
-    assertEquals((producerEpoch + 1).toShort, newEpoch)
+    assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
+    assertEquals(RecordBatch.NO_PRODUCER_ID, newProducerId)
+    assertEquals(RecordBatch.NO_PRODUCER_EPOCH, newEpoch)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
 
-    // Same behavior for CompleteCommit
+    // Recognize the retry and return NONE
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 2)))))
@@ -599,7 +597,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 2)))))
 
-    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest, so same behavior.
+    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest.
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, 2, endTxnCallback)
     assertEquals(Errors.INVALID_TXN_STATE, error)
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -611,8 +609,9 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         producerId2, Short.MaxValue, (Short.MaxValue - 1).toShort, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 2)))))
 
+    // Return CONCURRENT_TRANSACTIONS while transaction is still completing
     coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort, TransactionResult.COMMIT, 2, endTxnCallback)
-    assertEquals(Errors.NONE, error)
+    assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
