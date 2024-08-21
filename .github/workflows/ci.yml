@@ -44,7 +44,7 @@ jobs:
           gradle-cache-read-only: false
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
-        run: ./gradlew --build-cache --info --scan check -x test
+        run: ./gradlew --build-cache --scan check -x test
 
   test:
     needs: validate
