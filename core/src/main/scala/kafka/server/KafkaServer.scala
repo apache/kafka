@@ -474,18 +474,19 @@ class KafkaServer(
               setSecurityProtocol(ep.securityProtocol.id))
           }
 
-          // Even though ZK brokers don't use "metadata.version" feature, we send our IBP here as part of the broker registration
+          val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(config.unstableFeatureVersionsEnabled))
+
+          // Even though ZK brokers don't use "metadata.version" feature, we need to overwrite it with our IBP as part of registration
           // so the KRaft controller can verify that all brokers are on the same IBP before starting the migration.
-          val ibpAsFeature =
-           java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
-             VersionRange.of(config.interBrokerProtocolVersion.featureLevel(), config.interBrokerProtocolVersion.featureLevel()))
+          val featuresRemapped = features + (MetadataVersion.FEATURE_NAME ->
+            VersionRange.of(config.interBrokerProtocolVersion.featureLevel(), config.interBrokerProtocolVersion.featureLevel()))
 
           lifecycleManager.start(
             () => listener.highestOffset,
             brokerToQuorumChannelManager,
             clusterId,
             networkListeners,
-            ibpAsFeature,
+            featuresRemapped.asJava,
             OptionalLong.empty()
           )
           logger.debug("Start RaftManager")

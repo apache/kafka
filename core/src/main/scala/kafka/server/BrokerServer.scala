@@ -27,7 +27,6 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -38,7 +37,7 @@ import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{CoordinatorRecord, GroupCoordinator, GroupCoordinatorService, CoordinatorRecordSerde}
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
-import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
+import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -357,10 +356,7 @@ class BrokerServer(
         ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
         ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager))
 
-      val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
-        case (k: String, v: SupportedVersionRange) =>
-          k -> VersionRange.of(v.min, v.max)
-      }.asJava
+      val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures).asJava
 
       val brokerLifecycleChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,

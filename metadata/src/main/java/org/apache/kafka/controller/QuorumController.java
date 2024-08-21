@@ -119,6 +119,7 @@ import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -2171,11 +2172,14 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerRegistrationRequestData request
     ) {
+        // populate finalized features map with latest known kraft version for validation
+        Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+        controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
         return appendWriteEvent("registerBroker", context.deadlineNs(),
             () -> {
                 ControllerResult<BrokerRegistrationReply> result = clusterControl.
-                    registerBroker(request, offsetControl.nextWriteOffset(), featureControl.
-                        finalizedFeatures(Long.MAX_VALUE));
+                    registerBroker(request, offsetControl.nextWriteOffset(),
+                        new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE));
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
