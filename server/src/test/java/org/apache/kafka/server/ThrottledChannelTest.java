@@ -17,6 +17,7 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.server.quota.ThrottleCallback;
 
 import org.junit.jupiter.api.Test;
 

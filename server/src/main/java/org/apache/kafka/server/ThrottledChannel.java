@@ -17,6 +17,7 @@
 package org.apache.kafka.server;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.quota.ThrottleCallback;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,10 +26,9 @@ import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
 
 public class ThrottledChannel implements Delayed {
-
-    private final Logger log = LoggerFactory.getLogger(getClass().getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(ThrottledChannel.class);
     private final Time time;
-    private final long throttleTimeMs;
+    private final int throttleTimeMs;
     private final ThrottleCallback callback;
     private final long endTimeNanos;
 
@@ -48,9 +48,11 @@ public class ThrottledChannel implements Delayed {
         callback.startThrottling();
     }
 
-    // Notify the socket server that throttling has been done for this channel.
+    /**
+     * Notify the socket server that throttling has been done for this channel.
+     */
     public void notifyThrottlingDone() {
-        log.trace(String.format("Channel throttled for: %d ms", throttleTimeMs));
+        LOGGER.trace("Channel throttled for: {} ms", throttleTimeMs);
         callback.endThrottling();
     }
 
@@ -65,7 +67,7 @@ public class ThrottledChannel implements Delayed {
         return Long.compare(this.endTimeNanos, otherChannel.endTimeNanos);
     }
 
-    public long throttleTimeMs() {
+    public int throttleTimeMs() {
         return throttleTimeMs;
     }
 }

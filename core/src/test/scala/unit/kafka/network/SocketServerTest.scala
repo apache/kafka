@@ -40,7 +40,8 @@ import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.{ThrottledChannel, ThrottleCallback}
+import org.apache.kafka.server.ThrottledChannel
+import org.apache.kafka.server.quota.ThrottleCallback
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
