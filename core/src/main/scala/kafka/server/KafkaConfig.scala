@@ -1067,11 +1067,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     require(principalBuilderClass != null, s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
       s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must implement KafkaPrincipalSerde")
-
-
-    if (originals.containsKey(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG)) {
-      warn(s"${GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG} is deprecated and it will be removed in Apache Kafka 4.0.")
-    }
   }
 
   /**
