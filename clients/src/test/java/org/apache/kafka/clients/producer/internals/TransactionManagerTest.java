@@ -80,7 +80,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -182,8 +181,8 @@ public class TransactionManagerTest {
                 false,
                 Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                     .setName("transaction.version")
-                    .setMaxVersionLevel((short) 2)
-                    .setMinVersionLevel((short) 2)),
+                    .setMaxVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)
+                    .setMinVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)),
                 0));
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
                 transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);

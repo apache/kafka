@@ -73,6 +73,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
+import static org.apache.kafka.common.utils.Utils.min;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -910,7 +911,7 @@ public class Sender implements Runnable {
         if (transactionManager != null && transactionManager.isTransactional()) {
             transactionalId = transactionManager.transactionalId();
             if (!transactionManager.isTransactionV2Enabled()) {
-                maxProduceRequestVersion = ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION;
+                maxProduceRequestVersion = min(maxProduceRequestVersion, ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION);
             }
         }
 

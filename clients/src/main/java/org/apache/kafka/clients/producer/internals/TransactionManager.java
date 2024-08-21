@@ -62,7 +62,6 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
-import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -70,7 +69,6 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
-
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -188,8 +186,6 @@ public class TransactionManager {
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
     private boolean coordinatorSupportsBumpingEpoch;
-    private boolean coordinatorSupportsTransactionV2;
-
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
@@ -371,7 +367,7 @@ public class TransactionManager {
         }
 
         TxnRequestHandler handler;
-        if (coordinatorSupportsTransactionV2) {
+        if (isTransactionV2Enabled()) {
             log.debug("Begin adding offsets {} for consumer group {} to transaction with transaction protocol V2", offsets, groupMetadata);
             handler = txnOffsetCommitHandler(null, offsets, groupMetadata, ApiKeys.TXN_OFFSET_COMMIT.latestVersion());
         } else {
@@ -403,7 +399,7 @@ public class TransactionManager {
                     " to transaction while in state  " + currentState);
             } else if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition)) {
                 return;
-            } else if (coordinatorSupportsTransactionV2) {
+            } else if (isTransactionV2Enabled()) {
                 txnPartitionMap.getOrCreate(topicPartition);
             } else {
                 log.debug("Begin adding new partition {} to transaction", topicPartition);
@@ -414,7 +410,7 @@ public class TransactionManager {
     }
 
     public synchronized void maybeHandlePartitionAdded(TopicPartition topicPartition) {
-        if (isTransactional() && coordinatorSupportsTransactionV2) {
+        if (isTransactional() && isTransactionV2Enabled()) {
             if (isPartitionAdded(topicPartition)) return;
             log.debug("A new partition {} has been added to transaction", topicPartition);
             partitionsInTransaction.add(topicPartition);
@@ -428,7 +424,7 @@ public class TransactionManager {
     synchronized boolean isSendToPartitionAllowed(TopicPartition tp) {
         if (hasFatalError())
             return false;
-        return !isTransactional() || partitionsInTransaction.contains(tp) || coordinatorSupportsTransactionV2;
+        return !isTransactional() || partitionsInTransaction.contains(tp) || isTransactionV2Enabled();
     }
 
     public String transactionalId() {
@@ -443,8 +439,22 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
-    public boolean isTransactionV2Enabled() {
-        return coordinatorSupportsTransactionV2;
+    // Check all the finalized features from apiVersions to whether the transaction V2 is enabled.
+    public synchronized boolean isTransactionV2Enabled() {
+        long latestFeatureEpoch = -1;
+        boolean isTransactionV2Enabled = false;
+        List<String> nodes = apiVersions.getNodes();
+        for (String node : nodes) {
+            NodeApiVersions nodeApiVersions = apiVersions.get(node);
+            if (nodeApiVersions != null) {
+                if (nodeApiVersions.finalizedFeaturesEpoch() > latestFeatureEpoch) {
+                    Short transactionVersion = nodeApiVersions.finalizedFeatures().get("transaction.version");
+                    isTransactionV2Enabled = transactionVersion != null && transactionVersion >= 2;
+                    latestFeatureEpoch = nodeApiVersions.finalizedFeaturesEpoch();
+                }
+            }
+        }
+        return isTransactionV2Enabled;
     }
 
     synchronized boolean hasPartitionsToAdd() {
@@ -1002,28 +1012,6 @@ public class TransactionManager {
                 null;
         this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
                 initProducerIdVersion.maxVersion() >= 3;
-
-        if (nodeApiVersions == null) return;
-
-        if (nodeApiVersions.finalizedFeatures() != null) {
-            /*
-                To enable the transaction V2, it requires:
-                1. transaction.version finalized version >= 2
-                2. The ProduceRequest max version > ProducerRequest.LAST_BEFORE_TRANSACTION_V2_VERSION
-                3. The TxnOffsetCommitRequest max version > TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION
-            */
-            ApiVersion produceVersion = nodeApiVersions.apiVersion(ApiKeys.PRODUCE);
-            ApiVersion txnOffsetCommitVersion = nodeApiVersions.apiVersion(ApiKeys.TXN_OFFSET_COMMIT);
-            Short transactionVersion = nodeApiVersions.finalizedFeatures().get("transaction.version");
-            if (produceVersion != null &&
-                    produceVersion.maxVersion() > ProduceRequest.LAST_BEFORE_TRANSACTION_V2_VERSION &&
-                    txnOffsetCommitVersion != null &&
-                    txnOffsetCommitVersion.maxVersion() > TxnOffsetCommitRequest.LAST_BEFORE_TRANSACTION_V2_VERSION &&
-                    transactionVersion != null &&
-                    transactionVersion >= (short) 2) {
-                this.coordinatorSupportsTransactionV2 = true;
-            }
-        }
     }
 
     private void transitionTo(State target) {

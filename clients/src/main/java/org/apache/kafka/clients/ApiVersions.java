@@ -21,8 +21,10 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.ProduceRequest;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Maintains node api versions for access outside of NetworkClient (which is where the information is derived).
@@ -47,6 +49,10 @@ public class ApiVersions {
 
     public synchronized NodeApiVersions get(String nodeId) {
         return this.nodeApiVersions.get(nodeId);
+    }
+
+    public synchronized List<String> getNodes() {
+        return nodeApiVersions.keySet().stream().collect(Collectors.toList());
     }
 
     private byte computeMaxUsableProduceMagic() {

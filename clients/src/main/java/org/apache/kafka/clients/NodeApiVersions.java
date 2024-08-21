@@ -141,11 +141,10 @@ public class NodeApiVersions {
             return;
         }
 
-        Map<String, Short> finalizedFeaturesBuilder = new HashMap<>();
+        this.finalizedFeatures = new HashMap<>();
         for (FinalizedFeatureKey finalizedFeature : nodeFinalizedFeatures) {
-            finalizedFeaturesBuilder.put(finalizedFeature.name(), finalizedFeature.maxVersionLevel());
+            this.finalizedFeatures.put(finalizedFeature.name(), finalizedFeature.maxVersionLevel());
         }
-        this.finalizedFeatures = finalizedFeaturesBuilder;
     }
 
     /**
