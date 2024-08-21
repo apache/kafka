@@ -17,7 +17,7 @@
 package kafka.log.remote.quota;
 
 public class RLMQuotaManagerConfig {
-    public static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
+    public final static int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
 
     private final long quotaBytesPerSecond;
     private final int numQuotaSamples;
