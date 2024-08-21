@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static org.apache.kafka.controller.ClusterControlManagerTest.CONTROLLER_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -57,7 +56,6 @@ public class ProducerIdControlManagerTest {
             setSessionTimeoutNs(1000).
             setFeatureControlManager(featureControl).
             setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
-            setNodeId(CONTROLLER_ID).
             build();
 
         clusterControl.activate();

@@ -1664,14 +1664,14 @@ public class ReplicationControlManager {
                 ApiError result = electLeader(topic.name, topicIdPartition.partitionId(),
                         ElectionType.UNCLEAN, records);
                 if (result.error().equals(Errors.NONE)) {
-                    log.error("Triggered unclean leader election for offline partition {}-{}.",
+                    log.error("Triggering unclean leader election for offline partition {}-{}.",
                             topic.name, topicIdPartition.partitionId());
-                } else if (result.error().equals(Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE)) {
+                } else {
                     log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}",
-                            topic.name, topicIdPartition.partitionId(), Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE);
+                            topic.name, topicIdPartition.partitionId(), result.error());
                 }
             } else if (log.isTraceEnabled()) {
-                log.info("Cannot trigger unclean leader election for offline partition {}-{} " +
+                log.trace("Cannot trigger unclean leader election for offline partition {}-{} " +
                         "because of configuration.", topic.name, topicIdPartition.partitionId());
             }
         }
