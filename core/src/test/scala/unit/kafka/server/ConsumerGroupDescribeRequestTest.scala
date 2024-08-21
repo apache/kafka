@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Timeout
@@ -40,7 +41,9 @@ import scala.jdk.CollectionConverters._
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1)
 class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(types = Array(Type.ZK))
+  @ClusterTest(types = Array(Type.ZK), serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+  ))
   def testConsumerGroupDescribeWithZookeeperCluster(): Unit = {
     val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
       new ConsumerGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
@@ -65,9 +68,10 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
   def testConsumerGroupDescribeWithNewGroupCoordinator(): Unit = {

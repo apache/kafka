@@ -64,8 +64,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.config.serverProperties.get("group.coordinator.new.enable") == "true" ||
-      cluster.config.serverProperties.get("group.coordinator.rebalance.protocols").contains("consumer")
+    cluster.config.serverProperties.get("group.coordinator.new.enable") == "true"
   }
 
   protected def commitOffset(
