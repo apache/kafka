@@ -293,7 +293,9 @@ public class ConfigCommandIntegrationTest {
             alterAndVerifyGroupConfig(client, defaultGroupName, configs);
 
             // Delete config
-            deleteAndVerifyGroupConfigValue(client, defaultGroupName, singleton("consumer.session.timeout.ms"));
+            configs.put("consumer.session.timeout.ms", "45000");
+            configs.put("consumer.heartbeat.interval.ms", "5000");
+            deleteAndVerifyGroupConfigValue(client, defaultGroupName, configs);
 
             // Unknown config configured should fail
             assertThrows(ExecutionException.class,
@@ -589,12 +591,12 @@ public class ConfigCommandIntegrationTest {
 
     private void deleteAndVerifyGroupConfigValue(Admin client,
                                                  String groupName,
-                                                 Set<String> config) throws Exception {
+                                                 Map<String, String> defaultConfigs) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
             new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", groupName),
-                asList("--delete-config", String.join(",", config))));
+                asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
         ConfigCommand.alterConfig(client, deleteOpts);
-        verifyDeletedGroupConfig(client, groupName, config);
+        verifyGroupConfig(client, groupName, defaultConfigs);
     }
 
     private void verifyPerBrokerConfigValue(Admin client,
@@ -612,18 +614,6 @@ public class ConfigCommandIntegrationTest {
                 return getConfigEntryStream(client, configResource)
                         .noneMatch(configEntry -> config.contains(configEntry.name()));
             }
-        }, 5000, config + " are not updated");
-    }
-
-    private void verifyDeletedGroupConfig(Admin client,
-                                          String groupName,
-                                          Set<String> config) throws Exception {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupName);
-        TestUtils.waitForCondition(() -> {
-            Map<String, String> current = getConfigEntryStream(client, configResource)
-                .filter(configEntry -> Objects.nonNull(configEntry.value()))
-                .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
-            return config.stream().allMatch(current::containsKey);
         }, 5000, config + " are not updated");
     }
 

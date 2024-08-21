@@ -92,6 +92,7 @@ public class MockAdminClient extends AdminClient {
     private final List<Map<String, String>> brokerConfigs;
     private final Map<String, Map<String, String>> clientMetricsConfigs;
     private final Map<String, Map<String, String>> groupConfigs;
+    private final Map<String, String> defaultGroupConfigs;
 
     private Node controller;
     private int timeoutNextRequests = 0;
@@ -245,6 +246,7 @@ public class MockAdminClient extends AdminClient {
         this.brokerConfigs = new ArrayList<>();
         this.clientMetricsConfigs = new HashMap<>();
         this.groupConfigs = new HashMap<>();
+        this.defaultGroupConfigs = generateDefaultGroupConfigs();
         for (int i = 0; i < brokers.size(); i++) {
             final Map<String, String> config = new HashMap<>();
             config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
@@ -833,7 +835,9 @@ public class MockAdminClient extends AdminClient {
                 if (resourceName.isEmpty()) {
                     throw new InvalidRequestException("Empty resource name");
                 }
-                return toConfigObject(groupConfigs.get(resourceName));
+                Map<String, String> groupConfig = groupConfigs.getOrDefault(resourceName, new HashMap<>());
+                defaultGroupConfigs.forEach(groupConfig::putIfAbsent);
+                return toConfigObject(groupConfig);
             }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
@@ -1470,5 +1474,12 @@ public class MockAdminClient extends AdminClient {
 
     public synchronized Node broker(int index) {
         return brokers.get(index);
+    }
+
+    private Map<String, String> generateDefaultGroupConfigs() {
+        Map<String, String> defaultGroupConfigs = new HashMap<>();
+        defaultGroupConfigs.put("consumer.session.timeout.ms", "45000");
+        defaultGroupConfigs.put("consumer.heartbeat.interval.ms", "5000");
+        return defaultGroupConfigs;
     }
 }
