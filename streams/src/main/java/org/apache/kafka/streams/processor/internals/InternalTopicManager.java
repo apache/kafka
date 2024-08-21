@@ -317,7 +317,7 @@ public class InternalTopicManager {
             final long brokerSideRetentionMs =
                 Long.parseLong(getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.RETENTION_MS_CONFIG, topicName));
             final Map<String, String> streamsSideConfig =
-                topicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
+                topicConfig.properties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
             final long streamsSideRetentionMs = Long.parseLong(streamsSideConfig.get(TopicConfig.RETENTION_MS_CONFIG));
             if (brokerSideRetentionMs < streamsSideRetentionMs) {
                 validationResult.addMisconfiguration(
@@ -356,7 +356,7 @@ public class InternalTopicManager {
         final long brokerSideCompactionLagMs =
             Long.parseLong(getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, topicName));
         final Map<String, String> streamsSideConfig =
-            topicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
+            topicConfig.properties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
         final long streamsSideCompactionLagMs = Long.parseLong(streamsSideConfig.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
         if (brokerSideCompactionLagMs < streamsSideCompactionLagMs) {
             validationResult.addMisconfiguration(
@@ -482,7 +482,7 @@ public class InternalTopicManager {
                         continue;
                     }
                     final InternalTopicConfig internalTopicConfig = Objects.requireNonNull(topics.get(topicName));
-                    final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
+                    final Map<String, String> topicConfig = internalTopicConfig.properties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
 
                     log.debug("Going to create topic {} with {} partitions and config {}.",
                         internalTopicConfig.name(),
@@ -696,7 +696,7 @@ public class InternalTopicManager {
         final Map<String, Map<String, String>> streamsSideTopicConfigs = topicConfigs.values().stream()
             .collect(Collectors.toMap(
                 InternalTopicConfig::name,
-                topicConfig -> topicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention)
+                topicConfig -> topicConfig.properties(defaultTopicConfigs, windowChangeLogAdditionalRetention)
             ));
         final Set<String> createdTopics = new HashSet<>();
         final Set<String> topicStillToCreate = new HashSet<>(topicConfigs.keySet());
