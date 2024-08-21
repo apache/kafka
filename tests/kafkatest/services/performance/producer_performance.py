@@ -33,6 +33,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "producer_performance_heap_dump.bin")
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=DEV_BRANCH, settings=None,
                  intermediate_stats=False, client_id="producer-performance"):
@@ -48,7 +49,10 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
                 "collect_default": True},
             "producer_performance_log": {
                 "path": ProducerPerformanceService.LOG_FILE,
-                "collect_default": True}
+                "collect_default": True},
+            "producer_performance_heap_dump_file": {
+                "path": ProducerPerformanceService.HEAP_DUMP_FILE,
+                "collect_default": False}
         }
 
         self.kafka = kafka
@@ -94,7 +98,9 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
             cmd += "export CLASSPATH; "
 
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
-        cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
+        cmd += "KAFKA_OPTS=%(kafka_opts)s"
+        cmd += "KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s\"" %self.logs['producer_performance_heap_dump_file']['path']
+        cmd += "%(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
               "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s %(metrics_props)s" % args
 
         self.security_config.setup_node(node)
