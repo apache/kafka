@@ -45,7 +45,9 @@ develocity {
 
 buildCache {
     local {
-        enabled = !isCI
+        // This allows the build cache to be used locally or on GitHub Actions.
+        // Using the cache on GH should be safe since each job is run on a new VM
+        enabled = !isJenkins
     }
 
     remote(develocity.buildCache) {
