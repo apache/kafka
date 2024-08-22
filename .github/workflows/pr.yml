@@ -31,13 +31,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 8, 11, 17, 21 ]
+        java: [ 21, 17, 11, 8 ]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
@@ -45,8 +48,26 @@ jobs:
           gradle-cache-read-only: true
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
-        # Publish build scans for now. This will only work on PRs from apache/kafka, not public forks.
+        # Gradle flags
+        # --build-cache:  Let Gradle restore the build cache
+        # --info:         For now, we'll generate lots of logs while setting up the GH Actions
+        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
         run: ./gradlew --build-cache --info --scan check -x test
+      - name: Archive check reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-reports-${{ matrix.java }}
+          path: |
+            **/build/**/*.html
+          if-no-files-found: ignore
+      - name: Annotate checkstyle errors
+        # Avoid duplicate annotations, only run on java 21
+        # For now, limit to "gh-" PRs
+        if: ${{ contains(github.head_ref, 'gh-') && failure() && matrix.java == '21' }}
+        run: python .github/scripts/checkstyle.py
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
 
   test:
     needs: validate
@@ -54,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 11, 17 ]
+        java: [ 17, 11 ]
     if: contains(github.head_ref, 'gh-')  # For now, only run tests on "gh-*" PRs
     name: JUnit tests Java ${{ matrix.java }}
     steps:

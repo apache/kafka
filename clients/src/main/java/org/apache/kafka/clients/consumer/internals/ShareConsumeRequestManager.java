@@ -259,36 +259,41 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                       long currentTimeMs,
                                                       boolean onCommitAsync,
                                                       AtomicBoolean isAsyncDone) {
-        if (acknowledgeRequestState == null || (!acknowledgeRequestState.onClose() && acknowledgeRequestState.isEmpty())) {
-            if (onCommitAsync) {
-                isAsyncDone.set(true);
+        boolean asyncDone = true;
+        try {
+            if (acknowledgeRequestState == null || (!acknowledgeRequestState.onClose() && acknowledgeRequestState.isEmpty())) {
+                return Optional.empty();
             }
-            return Optional.empty();
-        } else if (!acknowledgeRequestState.maybeExpire()) {
-            if (acknowledgeRequestState.canSendRequest(currentTimeMs)) {
-                acknowledgeRequestState.onSendAttempt(currentTimeMs);
-                if (onCommitAsync) {
-                    isAsyncDone.set(true);
+
+            if (acknowledgeRequestState.maybeExpire()) {
+                // Fill in TimeoutException
+                for (TopicIdPartition tip : acknowledgeRequestState.incompleteAcknowledgements.keySet()) {
+                    metricsManager.recordFailedAcknowledgements(acknowledgeRequestState.getIncompleteAcknowledgementsCount(tip));
+                    acknowledgeRequestState.handleAcknowledgeTimedOut(tip);
                 }
-                return Optional.of(acknowledgeRequestState.buildRequest(currentTimeMs));
-            } else {
+                acknowledgeRequestState.incompleteAcknowledgements.clear();
+                return Optional.empty();
+            }
+
+            if (!acknowledgeRequestState.canSendRequest(currentTimeMs)) {
                 // We wait for the backoff before we can send this request.
-                if (onCommitAsync) {
-                    isAsyncDone.set(false);
-                }
+                asyncDone = false;
+                return Optional.empty();
             }
-        } else {
-            // Fill in TimeoutException
-            for (TopicIdPartition tip : acknowledgeRequestState.incompleteAcknowledgements.keySet()) {
-                metricsManager.recordFailedAcknowledgements(acknowledgeRequestState.getIncompleteAcknowledgementsCount(tip));
-                acknowledgeRequestState.handleAcknowledgeTimedOut(tip);
+
+            UnsentRequest request = acknowledgeRequestState.buildRequest(currentTimeMs);
+            if (request == null) {
+                asyncDone = false;
+                return Optional.empty();
             }
-            acknowledgeRequestState.incompleteAcknowledgements.clear();
+
+            acknowledgeRequestState.onSendAttempt(currentTimeMs);
+            return Optional.of(request);
+        } finally {
             if (onCommitAsync) {
-                isAsyncDone.set(true);
+                isAsyncDone.set(asyncDone);
             }
         }
-        return Optional.empty();
     }
 
     /**

@@ -14,29 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package kafka.testkit;
 
-import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicLong;
 
-public class InternalTopicProperties {
-    private final Integer numberOfPartitions;
+public class KafkaClusterThreadFactory implements ThreadFactory {
+    private final String prefix;
+    private final Set<Long> threadIds = ConcurrentHashMap.newKeySet();
+    private final AtomicLong threadEpoch = new AtomicLong(0);
 
-    public InternalTopicProperties(final Integer numberOfPartitions) {
-        this.numberOfPartitions = numberOfPartitions;
-    }
-
-    public Optional<Integer> numberOfPartitions() {
-        return Optional.ofNullable(numberOfPartitions);
-    }
-
-    public static InternalTopicProperties empty() {
-        return new InternalTopicProperties(null);
+    KafkaClusterThreadFactory(String prefix) {
+        this.prefix = prefix;
     }
 
     @Override
-    public String toString() {
-        return "InternalTopicProperties{" +
-               "numberOfPartitions=" + numberOfPartitions +
-               '}';
+    public Thread newThread(Runnable r) {
+        String threadName = prefix + threadEpoch.addAndGet(1);
+        Thread thread = new Thread(r, threadName);
+
+        threadIds.add(thread.getId());
+        return thread;
+    }
+
+    public Set<Long> getThreadIds() {
+        return threadIds;
     }
 }
