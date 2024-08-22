@@ -22,7 +22,7 @@ import java.util.concurrent.ExecutionException
 import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import kafka.server.{KRaftQuorumImplementation, KafkaBroker, KafkaConfig, MetadataCache, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfig, MetadataCache, QuorumTestHarness}
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
@@ -98,14 +98,12 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-
-  override def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
-    // Enable unclean.leader.election.enable when controller startup for "testUncleanLeaderElectionEnabled" test
-    val overridingProps = new Properties()
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
+    val properties = new Properties()
     if (testInfo.getTestMethod.get().getName.contains("testUncleanLeaderElectionEnabled")) {
-      overridingProps.put("unclean.leader.election.enable", "true")
+      properties.setProperty("unclean.leader.election.enable", "true")
     }
-    newKRaftQuorum(overridingProps)
+    Seq(properties)
   }
 
   private def startBrokers(cluster: Seq[Properties]): Unit = {
