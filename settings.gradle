@@ -13,6 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'io.harness:gradle-cache:0.0.4'
+    }
+}
+
 plugins {
     id 'com.gradle.develocity' version '3.17.6'
     id 'com.gradle.common-custom-user-data-gradle-plugin' version '2.0.2'
@@ -43,15 +52,16 @@ develocity {
     }
 }
 
+apply plugin: 'io.harness.gradle-cache'
+
 buildCache {
     local {
-        // This allows the build cache to be used locally or on GitHub Actions.
-        // Using the cache on GH should be safe since each job is run on a new VM
-        enabled = !isJenkins
-    }
-
-    remote(develocity.buildCache) {
+        // Local build cache is dangerous as it might produce inconsistent results
+        // in case developer modifies files while the build is running
         enabled = false
+    }
+    remote(io.harness.Cache) {
+        push = System.getenv('CI') == "true"
     }
 }
 
