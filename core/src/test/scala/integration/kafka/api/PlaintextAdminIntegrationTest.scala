@@ -868,17 +868,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testDescribeConfigsNonexistentForKraft(quorum: String): Unit = {
     client = createAdminClient
 
-    assertDoesNotThrow(() => client.describeConfigs(
-      Seq(new ConfigResource(ConfigResource.Type.GROUP, "none_group")).asJava).all().get())
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, "none_group")
+    val groupResult = client.describeConfigs(Seq(groupResource).asJava).all().get().get(groupResource)
+    assertNotEquals(0, groupResult.entries().size())
 
-    var result: util.Map[ConfigResource, Config] = null
-    val configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "none_metric")
-    assertDoesNotThrow(() => {
-      result = client.describeConfigs(Seq(configResource).asJava).all().get()
-      result
-    })
-    val config = result.get(configResource)
-    assertEquals(0, config.entries().size())
+    val metricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "none_metric")
+    val metricResult = client.describeConfigs(Seq(metricResource).asJava).all().get().get(metricResource)
+    assertEquals(0, metricResult.entries().size())
   }
 
   @ParameterizedTest
