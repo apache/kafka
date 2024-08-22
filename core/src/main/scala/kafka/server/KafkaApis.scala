@@ -1397,12 +1397,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
-    val controllerId = {
-      metadataCache.getControllerId.flatMap {
-        case ZkCachedControllerId(id) => Some(id)
-        case KRaftCachedControllerId(_) => metadataCache.getRandomAliveBrokerId
-      }
-    }
+    val controllerId = metadataCache.getControllerId.map(_.id).getOrElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
@@ -1410,7 +1405,7 @@ class KafkaApis(val requestChannel: RequestChannel,
          requestThrottleMs,
          brokers.toList.asJava,
          clusterId,
-         controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         controllerId,
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
@@ -3644,16 +3639,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         brokers
       },
-      () => {
-        metadataCache.getControllerId match {
-          case Some(value) =>
-            value match {
-              case ZkCachedControllerId (id) => id
-              case KRaftCachedControllerId (_) => metadataCache.getRandomAliveBrokerId.getOrElse(- 1)
-            }
-          case None => -1
-        }
-      }
+      () => metadataCache.getControllerId.map(_.id).getOrElse(MetadataResponse.NO_CONTROLLER_ID)
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))
