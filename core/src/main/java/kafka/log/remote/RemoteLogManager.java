@@ -183,6 +183,8 @@ public class RemoteLogManager implements Closeable {
     private final RLMScheduledThreadPool followerThreadPool;
 
     private final long delayInMs;
+    private final long delayInMs2;
+
 
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderCopyRLMTasks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderExpirationRLMTasks = new ConcurrentHashMap<>();
