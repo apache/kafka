@@ -219,7 +219,7 @@ public class KStreamKStreamJoinTest {
         assertThat(internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.size(), equalTo(2));
         for (final InternalTopicConfig config : internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.values()) {
             assertThat(
-                config.getProperties(Collections.emptyMap(), 0).get("test"),
+                config.properties(Collections.emptyMap(), 0).get("test"),
                 equalTo("property")
             );
         }

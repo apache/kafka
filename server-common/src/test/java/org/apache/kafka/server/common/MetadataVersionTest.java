@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server.common;
 
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordVersion;
 
 import org.junit.jupiter.api.Test;
@@ -464,6 +465,20 @@ class MetadataVersionTest {
         assertTrue(LATEST_PRODUCTION.ordinal() < MetadataVersion.latestTesting().ordinal(),
             "Expected LATEST_PRODUCTION " + LATEST_PRODUCTION +
             " to be less than the latest of " + MetadataVersion.latestTesting());
+    }
+
+    /**
+     * We need to ensure that the latest production MV doesn't inadvertently rely on an unstable
+     * request version. Currently, the broker selects the version for some inter-broker RPCs based on the MV 
+     * rather than using the supported version from the ApiResponse.
+     */
+    @Test
+    public void testProductionMetadataDontUseUnstableApiVersion() {
+        MetadataVersion mv = MetadataVersion.latestProduction();
+        assertTrue(mv.listOffsetRequestVersion() <= ApiKeys.LIST_OFFSETS.latestVersion(false));
+        assertTrue(mv.fetchRequestVersion() <= ApiKeys.FETCH.latestVersion(false));
+        assertTrue(mv.offsetForLeaderEpochRequestVersion() <= ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(false));
+        assertTrue(mv.writeTxnMarkersRequestVersion() <= ApiKeys.WRITE_TXN_MARKERS.latestVersion(false));
     }
 
     @Test

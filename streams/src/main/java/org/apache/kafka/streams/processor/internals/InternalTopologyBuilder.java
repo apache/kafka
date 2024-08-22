@@ -749,8 +749,8 @@ public class InternalTopologyBuilder {
             final Map<String, Integer> numberOfPartitionsPerTopic = new HashMap<>();
             copartition.forEach(topic -> {
                 final InternalTopicProperties prop = internalTopicNamesWithProperties.get(topic);
-                if (prop != null && prop.getNumberOfPartitions().isPresent()) {
-                    numberOfPartitionsPerTopic.put(topic, prop.getNumberOfPartitions().get());
+                if (prop != null && prop.numberOfPartitions().isPresent()) {
+                    numberOfPartitionsPerTopic.put(topic, prop.numberOfPartitions().get());
                 }
             });
             if (!numberOfPartitionsPerTopic.isEmpty() && copartition.equals(numberOfPartitionsPerTopic.keySet())) {
@@ -1199,7 +1199,7 @@ public class InternalTopologyBuilder {
 
                             final RepartitionTopicConfig repartitionTopicConfig = buildRepartitionTopicConfig(
                                 internalTopic,
-                                internalTopicNamesWithProperties.get(topic).getNumberOfPartitions()
+                                internalTopicNamesWithProperties.get(topic).numberOfPartitions()
                             );
 
                             repartitionTopics.put(repartitionTopicConfig.name(), repartitionTopicConfig);
