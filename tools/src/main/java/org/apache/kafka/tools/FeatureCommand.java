@@ -179,7 +179,7 @@ public class FeatureCommand {
         Subparser versionMappingParser = subparsers.addParser("version-mapping")
                 .help("Look up the corresponding features and their versions for a given release version. If no release version is specified the default stable version is used");
         versionMappingParser.addArgument("--release-version")
-                .help("The release version to use for the initial feature settings. The minimum is " +
+                .help("The release version to use for the feature version mapping. The minimum is " +
                         MetadataVersion.IBP_3_0_IV0 + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
                 .action(store());
     }
