@@ -173,6 +173,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 
 @Timeout(value = 40)
@@ -223,6 +224,13 @@ public class QuorumControllerTest {
                 singletonMap("baz", "123"))),
             controller.describeConfigs(ANONYMOUS_CONTEXT, Collections.singletonMap(
                 BROKER0, Collections.emptyList())).get());
+    }
+
+    @Test
+    public void testFailure() {
+        System.err.println("some stderr during this test");
+        System.out.println("some stdout during this test");
+        fail("This failed");
     }
 
     /**

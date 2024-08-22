@@ -98,3 +98,17 @@ jobs:
           -PignoreFailures=true -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           test
+      - name: Archive JUnit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-reports-${{ matrix.java }}
+          path: |
+            **/test-results/**/*.xml
+          if-no-files-found: ignore
+      - name: Parse JUnit tests
+        # For now, limit to "gh-" PRs
+        if: ${{ contains(github.head_ref, 'gh-') && failure() }}
+        run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
