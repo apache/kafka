@@ -50,10 +50,11 @@ import static java.util.Collections.unmodifiableList;
  * A stateful object tracking the state of a single member in relationship to a group:
  * <p/>
  * Responsible for:
- * <li>Keeping member state</li>
- * <li>Keeping assignment for the member</li>
- * <li>Computing assignment for the group if the member is required to do so<li/>
- * <p/>
+ * <ul>
+ *   <li>Keeping member state</li>
+ *   <li>Keeping assignment for the member</li>
+ *   <li>Computing assignment for the group if the member is required to do so</li>
+ * </ul>
  * The class variable R is the response data for the specific group's heartbeat RPC.
  */
 public abstract class AbstractMembershipManager<R> implements RequestManager {
@@ -267,6 +268,14 @@ public abstract class AbstractMembershipManager<R> implements RequestManager {
      */
     public int memberEpoch() {
         return memberEpoch;
+    }
+
+    /**
+     * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
+     * this is a static member.
+     */
+    public Optional<String> groupInstanceId() {
+        return Optional.empty();
     }
 
     /**

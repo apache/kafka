@@ -615,7 +615,7 @@ public class ShareHeartbeatRequestManagerTest {
                 Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, true),
                 Arguments.of(Errors.INVALID_REQUEST, true),
                 Arguments.of(Errors.UNKNOWN_MEMBER_ID, false),
-                Arguments.of(Errors.FENCED_MEMBER_EPOCH, true),
+                Arguments.of(Errors.FENCED_MEMBER_EPOCH, false),
                 Arguments.of(Errors.UNSUPPORTED_ASSIGNOR, true),
                 Arguments.of(Errors.UNSUPPORTED_VERSION, true),
                 Arguments.of(Errors.UNRELEASED_INSTANCE_ID, true),

@@ -194,6 +194,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
      * this is a static member.
      */
+    @Override
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
     }
