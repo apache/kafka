@@ -35,6 +35,10 @@ jobs:
         java: [ 21, 17, 11, 8 ]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
