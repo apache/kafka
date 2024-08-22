@@ -40,7 +40,6 @@ import scala.jdk.CollectionConverters._
  * failure paths is to use timeouts. See {@link unit.kafka.server.BrokerRegistrationRequestTest} for integration test
  * of just the broker registration path.
  */
-
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class KafkaServerKRaftRegistrationTest {
 
