@@ -57,7 +57,8 @@ public class ReadOnlyNode<T> implements NodeData<T> {
     @Override
     public SortedSet<ReadOnlyNode<T>> getChildren() {
         TreeSet<ReadOnlyNode<T>> result = new TreeSet<>();
-        delegate.getChildren().stream().map(ReadOnlyNode::create).forEach(result::add);
+        // do not use stream as the overhead is too great on the hot path.
+        delegate.getChildren().forEach(nodeData -> result.add(ReadOnlyNode.create(nodeData)));
         return result;
     }
 

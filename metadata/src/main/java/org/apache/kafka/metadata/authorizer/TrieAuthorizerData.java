@@ -36,7 +36,6 @@ import org.apache.kafka.metadata.authorizer.trie.ReadOnlyNode;
 import org.apache.kafka.metadata.authorizer.trie.StandardMatcher;
 import org.apache.kafka.metadata.authorizer.trie.Trie;
 import org.apache.kafka.metadata.authorizer.trie.Walker;
-import org.apache.kafka.metadata.authorizer.trie.WildcardRegistry;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
@@ -55,13 +54,10 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
 import static org.apache.kafka.common.acl.AclOperation.ALTER_CONFIGS;
-import static org.apache.kafka.common.acl.AclOperation.ANY;
 import static org.apache.kafka.common.acl.AclOperation.DELETE;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS;
@@ -301,13 +297,13 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
     }
 
     /**
-     * Creates a predicate that will match the resource pattern type requried by the action against the node.
+     * Creates a predicate that will match the resource pattern type required by the action against the node.
      * @param fragment The fragment that we are currently looking at.
      * @param action the action to find.
-     * @return either {@code literalPattern} or {@code prefixPattern} depending on whether or not the node fragment is a wildcard.
+     * @return either {@code literalPattern} or {@code prefixPattern} depending on whether the node fragment is a wildcard.
      */
     private Predicate<StandardAcl> resourcePatternFilter(String fragment, Action action) {
-        return WildcardRegistry.isWildcard(fragment) || action.resourcePattern().name().endsWith(fragment) ? LITERAL_PATTERN : PREFIXED_PATTERN;
+        return action.resourcePattern().name().endsWith(fragment) ? LITERAL_PATTERN : PREFIXED_PATTERN;
     }
 
     /**
@@ -609,8 +605,15 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
             return Optional.empty();
         }
 
-        public Stream<StandardAcl> findMatch(Predicate<StandardAcl> pattern) {
-            return partialAcls.stream().filter(pattern);
+        public List<StandardAcl> findMatch(Predicate<StandardAcl> pattern) {
+            // do not use stream() as the overhead is too great in the hot path.
+            List<StandardAcl> result = new ArrayList<>();
+            for (StandardAcl acl : partialAcls) {
+                if (pattern.test(acl)) {
+                    result.add(acl);
+                }
+            }
+            return result;
         }
     }
 
@@ -774,7 +777,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
                 log.debug("Found {}.", result.getName());
                 while (result != null && results.isEmpty()) {
                     if (result.hasContents()) {
-                        results =  result.getContents().findMatch(matchFilter).collect(Collectors.toList());
+                        results =  result.getContents().findMatch(matchFilter);
                     }
                     // no result so check parent.
                     if (results.isEmpty()) {

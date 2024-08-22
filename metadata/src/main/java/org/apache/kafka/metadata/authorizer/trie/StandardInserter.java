@@ -18,17 +18,6 @@ package org.apache.kafka.metadata.authorizer.trie;
 
 /**
  * An {@link Inserter} for String patterns.
- * <p>
- *     Wildcard patterns are inserted on their own child node and not combined with any other characters.  So inserting
- *     {@code AB*C?D} will yield the trie:
- *     <pre>
- *     AB
- *      *
- *      C
- *      ?
- *      D
- *      </pre>
- * </p>
  */
 public class StandardInserter extends AbstractInserter {
 
@@ -39,7 +28,7 @@ public class StandardInserter extends AbstractInserter {
     private int position;
 
     /**
-     * Crreatesa WildcardInserter starting at the beginning of the pattern.
+     * Creates StandardInserter starting at the beginning of the pattern.
      * @param pattern
      */
     public StandardInserter(String pattern) {
@@ -50,7 +39,7 @@ public class StandardInserter extends AbstractInserter {
 
     @Override
     public String getFragment() {
-        return WildcardRegistry.getSegment(pattern.substring(position));
+        return pattern.substring(position);
     }
 
     @Override

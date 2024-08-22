@@ -56,7 +56,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
@@ -155,7 +154,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
             acls.forEach(a -> consumer.accept(a.id(), a.acl()));
         }
 
-        public final Builder addAcls(Stream<StandardAcl> acls) {
+        public final Builder addAcls(Iterable<StandardAcl> acls) {
             acls.forEach(this::addAcl);
             return this;
         }
@@ -273,14 +272,14 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         assertEquals(expected, wrapper.defaultResult(authorizer));
     }
 
-    private static Stream<Arguments> configureData() {
+    private static Iterable<Arguments> configureData() {
         List<Arguments> lst = new ArrayList<>();
         lst.add(Arguments.of(Arrays.asList("User:bob"), null, DENIED));
         lst.add(Arguments.of(Arrays.asList("User:bob"), false, DENIED));
         lst.add(Arguments.of(Arrays.asList("User:bob"), true, ALLOWED));
         lst.add(Arguments.of(Arrays.asList("User:bob", "User:alice"), true, ALLOWED));
         lst.add(Arguments.of(Arrays.asList("Group:circus"), true, ALLOWED));
-        return lst.stream();
+        return lst;
     }
 
     @Test
@@ -494,7 +493,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 new StandardAcl(TOPIC, "foo", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, ALL, DENY),
                 new StandardAcl(TOPIC, "foo", PREFIXED, WILDCARD_PRINCIPAL, WILDCARD, DESCRIBE, ALLOW)
         );
-        builder.addAcls(acls.stream());
+        builder.addAcls(acls);
         T authorizer = builder.get().getAuthorizer();
 
         AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("alice");
@@ -648,7 +647,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, WRITE, ALLOW),
                 new StandardAcl(GROUP, "bar", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, DESCRIBE_CONFIGS, ALLOW),
                 new StandardAcl(GROUP, "bar", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, ALTER_CONFIGS, ALLOW));
-        T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls.stream()).get().getAuthorizer();
+        T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls).get().getAuthorizer();
 
         AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("bob");
         execAuthorize(() -> "testSimpleAuthorizations", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foo_"), ALLOWED);
@@ -665,7 +664,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 new StandardAcl(TOPIC, "baz", LITERAL, "User:bob", WILDCARD, ALL, ALLOW)
         );
 
-        T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls.stream()).get().getAuthorizer();
+        T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls).get().getAuthorizer();
 
 
         assertEquals(Arrays.asList(ALLOWED, ALLOWED, DENIED), authorizer.authorize(
@@ -701,7 +700,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 new StandardAcl(TOPIC, "bar", LITERAL, "User:bob", host2.getHostAddress(), READ, ALLOW),
                 new StandardAcl(TOPIC, "bar", LITERAL, WILDCARD_PRINCIPAL, InetAddress.getLocalHost().getHostAddress(), DESCRIBE, ALLOW)
         );
-        T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls.stream()).get().getAuthorizer();
+        T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls).get().getAuthorizer();
 
         List<Action> actions = Arrays.asList(
                 AuthorizerTestUtils.newAction(READ, TOPIC, "foo"),
@@ -785,7 +784,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 new StandardAcl(TOPIC, "foobar", LITERAL, "User:bob", WILDCARD, ALL, ALLOW),
                 new StandardAcl(TOPIC, "f", PREFIXED, "User:bob", WILDCARD, ALL, ALLOW)
         );
-        T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls.stream()).get().getAuthorizer();
+        T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls).get().getAuthorizer();
 
         assertEquals(Arrays.asList(ALLOWED, DENIED, ALLOWED), authorizer.authorize(
                 AuthorizerTestUtils.newRequestContext("bob"),
