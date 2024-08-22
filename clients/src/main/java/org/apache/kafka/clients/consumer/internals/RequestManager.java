@@ -59,7 +59,7 @@ public interface RequestManager {
      * <em>all</em> request managers is critical to ensure that we can complete as many of the consumer's shutdown
      * tasks as possible within the user-provided timeout.
      */
-    default PollResult pollOnClose() {
+    default PollResult pollOnClose(long currentTimeMs) {
         return EMPTY;
     }
 

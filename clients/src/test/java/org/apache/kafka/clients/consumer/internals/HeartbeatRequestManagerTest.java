@@ -48,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -156,7 +157,7 @@ public class HeartbeatRequestManagerTest {
                 backgroundEventHandler);
     }
 
-    private void createHeartbeatStatAndRequestManager() {
+    private void createHeartbeatStateAndRequestManager() {
         this.heartbeatState = new HeartbeatState(
                 subscriptions,
                 membershipManager,
@@ -248,7 +249,7 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
-        createHeartbeatStatAndRequestManager();
+        createHeartbeatStateAndRequestManager();
         createHeartbeatRequestStateWithZeroHeartbeatInterval();
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
@@ -406,7 +407,7 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequest(final short version) {
-        createHeartbeatStatAndRequestManager();
+        createHeartbeatStateAndRequestManager();
 
         // The initial heartbeatInterval is set to 0, but we're testing
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
@@ -443,7 +444,7 @@ public class HeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequestAssignmentSentWhenLocalEpochChanges(final short version) {
-        createHeartbeatStatAndRequestManager();
+        createHeartbeatStateAndRequestManager();
 
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
 
@@ -745,6 +746,20 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         NetworkClientDelegate.PollResult pollAgain = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, pollAgain.unsentRequests.size());
+    }
+
+    @ParameterizedTest
+    @EnumSource(MemberState.class)
+    public void testPollOnCloseGeneratesRequestOnlyIfLeaving(MemberState state) {
+        when(membershipManager.state()).thenReturn(state);
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
+        if (state == MemberState.LEAVING) {
+            assertEquals(1, pollResult.unsentRequests.size(),
+                "A request to leave the group should be generated");
+        } else {
+            assertTrue(pollResult.unsentRequests.isEmpty(),
+                "No requests should be generated on close if the member is not LEAVING");
+        }
     }
 
     private void assertHeartbeat(HeartbeatRequestManager hrm, int nextPollMs) {
