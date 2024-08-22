@@ -26,75 +26,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        java: [ 21, 17, 11, 8 ]
-    name: Compile and Check Java ${{ matrix.java }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Setup Gradle
-        uses: ./.github/actions/setup-gradle
-        with:
-          java-version: ${{ matrix.java }}
-          gradle-cache-read-only: true
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
-      - name: Compile and validate
-        # Gradle flags
-        # --build-cache:  Let Gradle restore the build cache
-        # --info:         For now, we'll generate lots of logs while setting up the GH Actions
-        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
-        run: ./gradlew --build-cache --info --scan check -x test
-      - name: Archive check reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: check-reports-${{ matrix.java }}
-          path: |
-            **/build/**/*.html
-          if-no-files-found: ignore
-      - name: Annotate checkstyle errors
-        # Avoid duplicate annotations, only run on java 21
-        # For now, limit to "gh-" PRs
-        if: ${{ contains(github.head_ref, 'gh-') && failure() && matrix.java == '21' }}
-        run: python .github/scripts/checkstyle.py
-        env:
-          GITHUB_WORKSPACE: ${{ github.workspace }}
-
-  test:
-    needs: validate
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        java: [ 17, 11 ]
-    if: contains(github.head_ref, 'gh-')  # For now, only run tests on "gh-*" PRs
-    name: JUnit tests Java ${{ matrix.java }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Setup Gradle
-        uses: ./.github/actions/setup-gradle
-        with:
-          java-version: ${{ matrix.java }}
-          gradle-cache-read-only: true
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
-      - name: Test
-        # Publish build scans for now. This will only work on PRs from apache/kafka, not public forks.
-        timeout-minutes: 180  # 3 hours
-        run: |
-          ./gradlew --build-cache --scan --continue \
-          -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
-          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
-          test
+  call-workflow:
+    uses: .github/workflows/build.yml
+    with:
+      gradle-cache-read-only: true
+    secrets:
+      GE_ACCESS_TOKEN: ${{ secrets.GE_ACCESS_TOKEN }}
