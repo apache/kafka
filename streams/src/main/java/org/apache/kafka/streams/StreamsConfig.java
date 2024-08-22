@@ -918,7 +918,17 @@ public class StreamsConfig extends AbstractConfig {
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
-                    (name, value) -> verifyTopologyOptimizationConfigs((String) value),
+                    new ConfigDef.Validator() {
+                        @Override
+                        public void ensureValid(final String name, final Object value) {
+                            verifyTopologyOptimizationConfigs((String) value);
+                        }
+
+                        @Override
+                        public String toString() {
+                            return TOPOLOGY_OPTIMIZATION_CONFIGS.toString();
+                        }
+                    },
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
 
