@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.group.share.PersisterStateBatch;
+import org.apache.kafka.server.group.share.StateBatch;
 
 import java.util.Objects;
 
@@ -29,9 +30,31 @@ import java.util.Objects;
  * methods to only focus on the first and last offset fields of the
  * state batch. This is useful when combining batches.
  */
-public class PersisterOffsetsStateBatch extends PersisterStateBatch {
+public class PersisterOffsetsStateBatch implements StateBatch {
+    private final PersisterStateBatch delegate;
+
     public PersisterOffsetsStateBatch(long firstOffset, long lastOffset, byte deliveryState, short deliveryCount) {
-        super(firstOffset, lastOffset, deliveryState, deliveryCount);
+        delegate = new PersisterStateBatch(firstOffset, lastOffset, deliveryState, deliveryCount);
+    }
+
+    @Override
+    public long firstOffset() {
+        return delegate.firstOffset();
+    }
+
+    @Override
+    public long lastOffset() {
+        return delegate.lastOffset();
+    }
+
+    @Override
+    public byte deliveryState() {
+        return delegate.deliveryState();
+    }
+
+    @Override
+    public short deliveryCount() {
+        return delegate.deliveryCount();
     }
 
     public static PersisterOffsetsStateBatch of(ShareSnapshotValue.StateBatch batch) {
@@ -62,5 +85,15 @@ public class PersisterOffsetsStateBatch extends PersisterStateBatch {
     @Override
     public int hashCode() {
         return Objects.hash(firstOffset(), lastOffset());
+    }
+
+    @Override
+    public String toString() {
+        return "PersisterOffsetsStateBatch(" +
+            "firstOffset=" + firstOffset() + "," +
+            "lastOffset=" + lastOffset() + "," +
+            "deliveryState=" + deliveryState() + "," +
+            "deliveryCount=" + deliveryCount() +
+            ")";
     }
 }

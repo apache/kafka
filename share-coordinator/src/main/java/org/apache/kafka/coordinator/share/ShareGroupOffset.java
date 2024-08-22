@@ -152,11 +152,26 @@ public class ShareGroupOffset {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ShareGroupOffset that = (ShareGroupOffset) o;
-        return snapshotEpoch == that.snapshotEpoch && stateEpoch == that.stateEpoch && leaderEpoch == that.leaderEpoch && startOffset == that.startOffset && Objects.equals(stateBatches, that.stateBatches);
+        return snapshotEpoch == that.snapshotEpoch &&
+            stateEpoch == that.stateEpoch &&
+            leaderEpoch == that.leaderEpoch &&
+            startOffset == that.startOffset &&
+            Objects.equals(stateBatches, that.stateBatches);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, stateBatches);
+    }
+
+    @Override
+    public String toString() {
+        return "ShareGroupOffset{" +
+            "snapshotEpoch=" + snapshotEpoch +
+            ", stateEpoch=" + stateEpoch +
+            ", leaderEpoch=" + leaderEpoch +
+            ", startOffset=" + startOffset +
+            ", stateBatches=" + stateBatches +
+            '}';
     }
 }

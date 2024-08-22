@@ -37,6 +37,18 @@ public class SharePartitionKey {
         this.partition = partition;
     }
 
+    public String groupId() {
+        return groupId;
+    }
+
+    public Uuid topicId() {
+        return topicId;
+    }
+
+    public int partition() {
+        return partition;
+    }
+
     public static SharePartitionKey getInstance(String groupId, TopicIdPartition topicIdPartition) {
         return getInstance(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
     }

@@ -25,7 +25,7 @@ import java.util.Objects;
 /**
  * This class contains the information for a single batch of state information for use by the {@link Persister}.
  */
-public class PersisterStateBatch {
+public class PersisterStateBatch implements StateBatch {
     private final long firstOffset;
     private final long lastOffset;
     private final byte deliveryState;
@@ -38,18 +38,22 @@ public class PersisterStateBatch {
         this.deliveryCount = deliveryCount;
     }
 
+    @Override
     public long firstOffset() {
         return firstOffset;
     }
 
+    @Override
     public long lastOffset() {
         return lastOffset;
     }
 
+    @Override
     public byte deliveryState() {
         return deliveryState;
     }
 
+    @Override
     public short deliveryCount() {
         return deliveryCount;
     }
@@ -75,7 +79,10 @@ public class PersisterStateBatch {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PersisterStateBatch that = (PersisterStateBatch) o;
-        return firstOffset == that.firstOffset && lastOffset == that.lastOffset && deliveryState == that.deliveryState && deliveryCount == that.deliveryCount;
+        return firstOffset == that.firstOffset &&
+            lastOffset == that.lastOffset &&
+            deliveryState == that.deliveryState &&
+            deliveryCount == that.deliveryCount;
     }
 
     @Override
