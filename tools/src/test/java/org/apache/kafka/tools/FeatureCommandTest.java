@@ -326,4 +326,70 @@ public class FeatureCommandTest {
             "Can not disable metadata.version. Can't downgrade below 4%n" +
             "quux can be disabled."), disableOutput);
     }
+
+    @Test
+    public void testHandleVersionMappingWithValidReleaseVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("release_version", "3.3-IV3");
+        String versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleVersionMapping(new Namespace(namespace));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        assertTrue(versionMappingOutput.contains("metadata.version=7 (3.3-IV3)"));
+        assertTrue(versionMappingOutput.contains("kraft.version=0"));
+        assertTrue(versionMappingOutput.contains("test.feature.version=0"));
+        assertTrue(versionMappingOutput.contains("transaction.version=0"));
+
+        namespace.put("release_version", "4.0-IV0");
+        versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleVersionMapping(new Namespace(namespace));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        assertTrue(versionMappingOutput.contains("metadata.version=22 (4.0-IV0)"));
+        assertTrue(versionMappingOutput.contains("kraft.version=1"));
+        assertTrue(versionMappingOutput.contains("test.feature.version=2"));
+        assertTrue(versionMappingOutput.contains("transaction.version=2"));
+    }
+
+    @Test
+    public void testHandleVersionMappingWithNoReleaseVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        String versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleVersionMapping(new Namespace(namespace));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+        assertTrue(versionMappingOutput.contains("No release version provided. Defaulting to the latest stable version"));
+        assertTrue(versionMappingOutput.contains("metadata.version=21 (3.9-IV0)"));
+        assertTrue(versionMappingOutput.contains("kraft.version=1"));
+        assertTrue(versionMappingOutput.contains("test.feature.version=1"));
+        assertTrue(versionMappingOutput.contains("transaction.version=0"));
+    }
+
+    @Test
+    public void testHandleVersionMappingWithInvalidReleaseVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("release_version", "2.9-IV2");
+
+        String versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
+            TerseException exception = assertThrows(TerseException.class, () ->
+                    FeatureCommand.handleVersionMapping(new Namespace(namespace))
+            );
+            assertTrue(exception.getMessage().contains("Unsupported release.version 2.9-IV2"));
+            assertTrue(exception.getMessage().contains("Supported release.version are"));
+        });
+
+        // Ensure that no other output is present except for the expected error message
+        assertTrue(versionMappingOutput.isEmpty());
+    }
 }

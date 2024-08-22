@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.raft.QuorumConfig
@@ -433,5 +433,91 @@ Found problem:
       contains("Formatting dynamic metadata voter directory %s".format(availableDirs.head)),
       "Failed to find content in output: " + stream.toString())
   }
-}
 
+  private def runVersionMappingCommand(
+    stream: ByteArrayOutputStream,
+    properties: Properties,
+    releaseVersion: String
+  ): Int = {
+    val tempDir = TestUtils.tempDir()
+    try {
+      // Write the properties to a temporary file
+      val configPathString = new File(tempDir.getAbsolutePath, "version-mapping.props").toString
+      PropertiesUtils.writePropertiesFile(properties, configPathString, true)
+
+      // Prepare the arguments list
+      val arguments = ListBuffer[String]("version-mapping")
+
+      // Add the release version argument
+      if (releaseVersion != null) {
+        arguments += "--release-version"
+        arguments += releaseVersion
+      }
+
+      arguments += "--config"
+      arguments += configPathString
+
+      // Execute the StorageTool with the arguments
+      StorageTool.execute(arguments.toArray, new PrintStream(stream))
+
+    } finally {
+      Utils.delete(tempDir)
+    }
+  }
+
+  @Test
+  def testVersionMappingWithValidReleaseVersion(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    // Test with a valid release version
+    assertEquals(0, runVersionMappingCommand(stream, properties, "3.3-IV3"))
+
+    val output = stream.toString()
+    assertTrue(output.contains("metadata.version=7 (3.3-IV3)"),
+      s"Output did not contain expected Metadata Version: $output")
+    assertTrue(output.contains("kraft.version=0"),
+      s"Output did not contain expected feature mapping: $output")
+    assertTrue(output.contains("test.feature.version=0"),
+      s"Output did not contain expected feature mapping: $output")
+    assertTrue(output.contains("transaction.version=0"),
+      s"Output did not contain expected feature mapping: $output")
+  }
+
+  @Test
+  def testVersionMappingWithNoReleaseVersion(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runVersionMappingCommand(stream, properties, null))
+
+    val output = stream.toString
+    assertTrue(output.contains("metadata.version=21 (3.9-IV0)"),
+      s"Output did not contain expected feature mapping: $output")
+    assertTrue(output.contains("kraft.version=1"),
+      s"Output did not contain expected feature mapping: $output")
+    assertTrue(output.contains("test.feature.version=1"),
+      s"Output did not contain expected feature mapping: $output")
+    assertTrue(output.contains("transaction.version=0"),
+      s"Output did not contain expected feature mapping: $output")
+  }
+
+  @Test
+  def testVersionMappingWithInvalidReleaseVersion(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    // Test with an invalid release version
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runVersionMappingCommand(stream, properties, "2.9-IV2")
+    })
+
+    assertEquals("Unsupported release version '2.9-IV2'." +
+      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
+    )
+  }
+}
