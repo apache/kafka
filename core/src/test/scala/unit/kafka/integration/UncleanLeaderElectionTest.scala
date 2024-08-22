@@ -103,6 +103,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     if (testInfo.getTestMethod.get().getName.contains("testUncleanLeaderElectionEnabled")) {
       properties.setProperty("unclean.leader.election.enable", "true")
     }
+    properties.setProperty("leader.imbalance.check.interval.seconds", "1")
     Seq(properties)
   }
 
@@ -393,8 +394,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
       newProps.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
       alterTopicConfigs(adminClient2, topic, newProps).all.get
     } finally {
-    adminClient2.close()
-      }
+      adminClient2.close()
+    }
 
     // wait until new leader is (uncleanly) elected
     awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(followerId), timeout = 30000)
