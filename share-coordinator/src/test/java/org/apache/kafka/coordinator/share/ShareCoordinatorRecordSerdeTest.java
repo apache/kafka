@@ -222,7 +222,6 @@ public class ShareCoordinatorRecordSerdeTest {
     }
 
     private static CoordinatorRecord getShareSnapshotRecord(String groupId, Uuid topicId, int partitionId) {
-        ShareCoordinatorRecordSerde serializer = new ShareCoordinatorRecordSerde();
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ShareSnapshotKey()

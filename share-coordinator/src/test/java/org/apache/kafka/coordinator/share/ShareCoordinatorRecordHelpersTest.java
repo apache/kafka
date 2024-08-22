@@ -38,13 +38,18 @@ public class ShareCoordinatorRecordHelpersTest {
         Uuid topicId = Uuid.randomUuid();
         int partitionId = 1;
         PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
-        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(groupId, topicId, partitionId, new ShareGroupOffset(
-            0,
-            1,
-            5,
-            0,
-            Collections.singletonList(batch)
-        ));
+        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            groupId,
+            topicId,
+            partitionId,
+            new ShareGroupOffset.Builder()
+                .setSnapshotEpoch(0)
+                .setStateEpoch(1)
+                .setLeaderEpoch(5)
+                .setStartOffset(0)
+                .setStateBatches(Collections.singletonList(batch))
+                .build()
+        );
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
             new ApiMessageAndVersion(
@@ -76,13 +81,18 @@ public class ShareCoordinatorRecordHelpersTest {
         Uuid topicId = Uuid.randomUuid();
         int partitionId = 1;
         PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
-        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(groupId, topicId, partitionId, new ShareGroupOffset(
-            0,
-            -1, // this is ignored for share update
-            5,
-            0,
-            Collections.singletonList(batch)
-        ));
+        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
+            groupId,
+            topicId,
+            partitionId,
+            new ShareGroupOffset.Builder()
+                .setSnapshotEpoch(0)
+                .setStateEpoch(-1)  // ignored for share update
+                .setLeaderEpoch(5)
+                .setStartOffset(0)
+                .setStateBatches(Collections.singletonList(batch))
+                .build()
+        );
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
             new ApiMessageAndVersion(

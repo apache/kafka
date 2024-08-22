@@ -37,7 +37,7 @@ public interface ShareCoordinator {
     /**
      * Return the partition index for the given key.
      *
-     * @param key key - groupId:topicId:partitionId.
+     * @param key - groupId:topicId:partitionId.
      * @return The partition index.
      */
     int partitionFor(String key);

@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Container class to represent data encapsulated in @link ShareSnapshotValue and @link ShareUpdateValue
+ * Container class to represent data encapsulated in {@link ShareSnapshotValue} and {@link ShareUpdateValue}
  * This class is effectively immutable (state batches is not modified out of context).
  */
 public class ShareGroupOffset {
@@ -40,7 +40,7 @@ public class ShareGroupOffset {
     private final long startOffset;
     private final List<? extends PersisterStateBatch> stateBatches;
 
-    public ShareGroupOffset(int snapshotEpoch,
+    private ShareGroupOffset(int snapshotEpoch,
                             int stateEpoch,
                             int leaderEpoch,
                             long startOffset,

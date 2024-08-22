@@ -50,7 +50,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 
-@SuppressWarnings({ "ClassDataAbstractionCoupling", "CyclomaticComplexity" })
 public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
     @Override
     protected ApiMessage apiMessageKeyFor(short recordType) {

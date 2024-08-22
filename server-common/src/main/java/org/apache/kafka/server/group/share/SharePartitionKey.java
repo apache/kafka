@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.group.share;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
@@ -30,35 +31,26 @@ public class SharePartitionKey {
     private final Uuid topicId;
     private final int partition;
 
-    public SharePartitionKey(String groupId, Uuid topicId, int partition) {
+    private SharePartitionKey(String groupId, Uuid topicId, int partition) {
         this.groupId = groupId;
         this.topicId = topicId;
         this.partition = partition;
     }
 
-    public static class Builder {
-        private String groupId;
-        private Uuid topicId;
-        private int partition;
+    public static SharePartitionKey getInstance(String groupId, TopicIdPartition topicIdPartition) {
+        return getInstance(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
+    }
 
-        public Builder setGroupId(String groupId) {
-            this.groupId = groupId;
-            return this;
-        }
+    public static SharePartitionKey getInstance(String groupId, Uuid topicId, int partition) {
+        return new SharePartitionKey(groupId, topicId, partition);
+    }
 
-        public Builder setTopicId(Uuid topicId) {
-            this.topicId = topicId;
-            return this;
-        }
+    public String asCoordinatorKey() {
+        return asCoordinatorKey(groupId, topicId, partition);
+    }
 
-        public Builder setPartition(int partition) {
-            this.partition = partition;
-            return this;
-        }
-
-        public SharePartitionKey build() {
-            return new SharePartitionKey(groupId, topicId, partition);
-        }
+    public static String asCoordinatorKey(String groupId, Uuid topicId, int partition) {
+        return String.format("%s:%s:%d", groupId, topicId, partition);
     }
 
     @Override
@@ -76,6 +68,10 @@ public class SharePartitionKey {
 
     @Override
     public String toString() {
-        return String.format("%s:%s:%d", groupId, topicId, partition);
+        return "SharePartitionKey{" +
+            "groupId=" + groupId +
+            ",topicId=" + topicId +
+            ",partition=" + partition +
+            "}";
     }
 }
