@@ -60,6 +60,7 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.maybeWrapAsKafkaException;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.hasUsableOffsetForLeaderEpochVersion;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.regroupFetchPositionsByLeader;
@@ -274,7 +275,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 initWithPartitionOffsetsIfNeeded(result);
             }
         } catch (Exception e) {
-            result.completeExceptionally(e);
+            result.completeExceptionally(maybeWrapAsKafkaException(e));
         }
         return result;
     }
