@@ -128,7 +128,7 @@ class KafkaApisTest extends Logging {
   private val metrics = new Metrics()
   private val brokerId = 1
   // KRaft tests should override this with a KRaftMetadataCache
-  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latestTesting())
+  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latestTesting)
   private val brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
@@ -208,7 +208,7 @@ class KafkaApisTest extends Logging {
       BrokerFeatures.defaultSupportedFeatures(true),
       true,
       false,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting, Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
 
     val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
 
@@ -336,7 +336,7 @@ class KafkaApisTest extends Logging {
         Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
 
-    val startTimeNanos = time.nanoseconds()
+    val startTimeNanos = time.nanoseconds
     val queueDurationNanos = 5 * 1000 * 1000
     val request = TestUtils.buildEnvelopeRequest(
       alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, startTimeNanos, startTimeNanos + queueDurationNanos)
@@ -355,7 +355,7 @@ class KafkaApisTest extends Logging {
     // the dequeue time of forwarded request should equals to envelop request
     assertEquals(request.requestDequeueTimeNanos, capturedRequest.getValue.requestDequeueTimeNanos)
     val innerResponse = capturedResponse.getValue
-    val responseMap = innerResponse.data.responses().asScala.map { resourceResponse =>
+    val responseMap = innerResponse.data.responses.asScala.map { resourceResponse =>
       resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
     }.toMap
 
@@ -375,14 +375,14 @@ class KafkaApisTest extends Logging {
     when(controller.isActive).thenReturn(true)
 
     val request = TestUtils.buildEnvelopeRequest(
-      leaveGroupRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds())
+      leaveGroupRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis(enableForwarding = true)
     kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[EnvelopeResponse](request)
-    assertEquals(Errors.INVALID_REQUEST, response.error())
+    assertEquals(Errors.INVALID_REQUEST, response.error)
   }
 
   @Test
@@ -429,7 +429,7 @@ class KafkaApisTest extends Logging {
       .build(requestHeader.apiVersion)
 
     val request = TestUtils.buildEnvelopeRequest(
-      alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds(), fromPrivilegedListener = fromPrivilegedListener)
+      alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds, fromPrivilegedListener = fromPrivilegedListener)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     kafkaApis = createKafkaApis(authorizer = Some(authorizer), enableForwarding = true)
@@ -714,7 +714,7 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[DescribeQuorumResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR.message(), response.data.errorMessage)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR.message, response.data.errorMessage)
   }
 
   @Test
@@ -812,7 +812,7 @@ class KafkaApisTest extends Logging {
 
   private def verifyAlterConfigResult(response: AlterConfigsResponse,
                                       expectedResults: Map[String, Errors]): Unit = {
-    val responseMap = response.data.responses().asScala.map { resourceResponse =>
+    val responseMap = response.data.responses.asScala.map { resourceResponse =>
       resourceResponse.resourceName -> Errors.forCode(resourceResponse.errorCode)
     }.toMap
 
@@ -925,7 +925,7 @@ class KafkaApisTest extends Logging {
     futures.foreach {
       case (entity, future) =>
         future.whenComplete((_, thrown) =>
-          assertEquals(thrown, expected(entity).exception())
+          assertEquals(thrown, expected(entity).exception)
         ).isDone
     }
   }
@@ -1025,7 +1025,7 @@ class KafkaApisTest extends Logging {
       .setReplicationFactor(1.toShort)
 
     val requestData = new CreateTopicsRequestData()
-    requestData.topics().add(topicToCreate)
+    requestData.topics.add(topicToCreate)
 
     val requestBuilder = new CreateTopicsRequest.Builder(requestData).build()
     val request = buildRequest(requestBuilder)
@@ -1034,7 +1034,7 @@ class KafkaApisTest extends Logging {
     val forwardCallback: ArgumentCaptor[Option[AbstractResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Option[AbstractResponse] => Unit])
 
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds()))
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds))
       .thenReturn(requestThrottleTimeMs)
 
     kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
@@ -1046,7 +1046,7 @@ class KafkaApisTest extends Logging {
 
     val responseData = new CreateTopicsResponseData()
       .setThrottleTimeMs(controllerThrottleTimeMs)
-    responseData.topics().add(new CreatableTopicResult()
+    responseData.topics.add(new CreatableTopicResult()
       .setErrorCode(Errors.THROTTLING_QUOTA_EXCEEDED.code))
 
     forwardCallback.getValue.apply(Some(new CreateTopicsResponse(responseData)))
@@ -1073,8 +1073,8 @@ class KafkaApisTest extends Logging {
       .setValidateOnly(false)
     val fooCreatePartitionsData = new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(2)
     val barCreatePartitionsData = new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(10)
-    requestData.topics().add(fooCreatePartitionsData)
-    requestData.topics().add(barCreatePartitionsData)
+    requestData.topics.add(fooCreatePartitionsData)
+    requestData.topics.add(barCreatePartitionsData)
 
     val fooResource = new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.LITERAL)
     val fooAction = new Action(AclOperation.ALTER, fooResource, 1, true, true)
@@ -1095,7 +1095,7 @@ class KafkaApisTest extends Logging {
       new util.ArrayList[AuthorizationResult](results.asJava)
     }
 
-    val request = buildRequest(new CreatePartitionsRequest.Builder(requestData).build())
+    val request = buildRequest(new CreatePartitionsRequest.Builder(requestData).build)
 
     when(controller.isActive).thenReturn(true)
     when(controller.isTopicQueuedForDeletion("foo")).thenReturn(false)
@@ -1152,7 +1152,7 @@ class KafkaApisTest extends Logging {
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]]
       actions.asScala.map { action =>
-        if (action.resourcePattern().name().equals(authorizedTopic))
+        if (action.resourcePattern.name.equals(authorizedTopic))
           AuthorizationResult.ALLOWED
         else
           AuthorizationResult.DENIED
@@ -1163,14 +1163,14 @@ class KafkaApisTest extends Logging {
   private def verifyCreateTopicsResult(response: CreateTopicsResponse,
                                        expectedErrorCodes: Map[String, Errors],
                                        expectedTopicConfigErrorCodes: Map[String, Errors]): Unit = {
-    val actualErrorCodes = response.data.topics().asScala.map { topicResponse =>
-      topicResponse.name() -> Errors.forCode(topicResponse.errorCode)
+    val actualErrorCodes = response.data.topics.asScala.map { topicResponse =>
+      topicResponse.name -> Errors.forCode(topicResponse.errorCode)
     }.toMap
 
     assertEquals(expectedErrorCodes, actualErrorCodes)
 
-    val actualTopicConfigErrorCodes = response.data.topics().asScala.map { topicResponse =>
-      topicResponse.name() -> Errors.forCode(topicResponse.topicConfigErrorCode())
+    val actualTopicConfigErrorCodes = response.data.topics.asScala.map { topicResponse =>
+      topicResponse.name -> Errors.forCode(topicResponse.topicConfigErrorCode)
     }.toMap
 
     assertEquals(expectedTopicConfigErrorCodes, actualTopicConfigErrorCodes)
@@ -1330,12 +1330,12 @@ class KafkaApisTest extends Logging {
     val findCoordinatorRequestBuilder = if (version >= 4) {
       new FindCoordinatorRequest.Builder(
         new FindCoordinatorRequestData()
-          .setKeyType(coordinatorType.id())
+          .setKeyType(coordinatorType.id)
           .setCoordinatorKeys(asList(groupId)))
     } else {
       new FindCoordinatorRequest.Builder(
         new FindCoordinatorRequestData()
-          .setKeyType(coordinatorType.id())
+          .setKeyType(coordinatorType.id)
           .setKey(groupId))
     }
     val request = buildRequest(findCoordinatorRequestBuilder.build(requestHeader.apiVersion))
@@ -1463,7 +1463,7 @@ class KafkaApisTest extends Logging {
       util.Collections.emptyList()
     ))
 
-    assertEquals(expectedMetadataResponse, response.topicMetadata())
+    assertEquals(expectedMetadataResponse, response.topicMetadata)
 
     if (enableAutoTopicCreation) {
       assertTrue(capturedRequest.getValue.isDefined)
@@ -1485,7 +1485,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(UnboundedControllerMutationQuota),
         capturedRequest.capture())).thenReturn(
         Seq(new MetadataResponseTopic()
-        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
         .setIsInternal(isInternal)
         .setName(topicName))
       )
@@ -1504,10 +1504,10 @@ class KafkaApisTest extends Logging {
   @Test
   def testInvalidMetadataRequestReturnsError(): Unit = {
     // Construct invalid MetadataRequestTopics. We will try each one separately and ensure the error is thrown.
-    val topics = List(new MetadataRequestData.MetadataRequestTopic().setName(null).setTopicId(Uuid.randomUuid()),
+    val topics = List(new MetadataRequestData.MetadataRequestTopic().setName(null).setTopicId(Uuid.randomUuid),
       new MetadataRequestData.MetadataRequestTopic().setName(null),
-      new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid()),
-      new MetadataRequestData.MetadataRequestTopic().setName("topic1").setTopicId(Uuid.randomUuid()))
+      new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid),
+      new MetadataRequestData.MetadataRequestTopic().setName("topic1").setTopicId(Uuid.randomUuid))
 
     // if version is 10 or 11, the invalid topic metadata should return an error
     val invalidVersions = Set(10, 11)
@@ -1837,7 +1837,7 @@ class KafkaApisTest extends Logging {
         kafkaApis.handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
         val response = verifyNoThrottling[TxnOffsetCommitResponse](request)
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors.get(invalidTopicPartition))
       } finally {
         kafkaApis.close()
       }
@@ -2142,9 +2142,9 @@ class KafkaApisTest extends Logging {
     val response = capturedResponse.getValue
 
     if (version < 2) {
-      assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors().get(topicPartition))
+      assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors.get(topicPartition))
     } else {
-      assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, response.errors().get(topicPartition))
+      assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, response.errors.get(topicPartition))
     }
   }
 
@@ -2328,9 +2328,9 @@ class KafkaApisTest extends Logging {
         val response = capturedResponse.getValue
 
         if (version < 2) {
-          assertEquals(Collections.singletonMap(topicPartition, Errors.INVALID_PRODUCER_EPOCH), response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
+          assertEquals(Collections.singletonMap(topicPartition, Errors.INVALID_PRODUCER_EPOCH), response.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
         } else {
-          assertEquals(Collections.singletonMap(topicPartition, Errors.PRODUCER_FENCED), response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
+          assertEquals(Collections.singletonMap(topicPartition, Errors.PRODUCER_FENCED), response.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
         }
       } finally {
         kafkaApis.close()
@@ -2409,7 +2409,7 @@ class KafkaApisTest extends Logging {
       transactionalId2 -> Collections.singletonMap(tp1, Errors.PRODUCER_FENCED)
     ).asJava
 
-    assertEquals(expectedErrors, response.errors())
+    assertEquals(expectedErrors, response.errors)
   }
 
   @ParameterizedTest
@@ -2460,9 +2460,9 @@ class KafkaApisTest extends Logging {
 
       val response = verifyNoThrottlingAndUpdateMetrics[AddPartitionsToTxnResponse](requestChannelRequest)
       val error = if (version < 4)
-        response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)
+        response.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)
       else
-        Errors.forCode(response.data().errorCode)
+        Errors.forCode(response.data.errorCode)
 
       val expectedError = if (version < 4) Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED else Errors.CLUSTER_AUTHORIZATION_FAILED
       assertEquals(expectedError, error)
@@ -2504,7 +2504,7 @@ class KafkaApisTest extends Logging {
             .setTopics(new AddPartitionsToTxnTopicCollection(
               Collections.singletonList(new AddPartitionsToTxnTopic()
                 .setName(tp0.topic)
-                .setPartitions(List[Integer](tp0.partition, tp1.partition()).asJava)
+                .setPartitions(List[Integer](tp0.partition, tp1.partition).asJava)
               ).iterator()))
           ).asJava.iterator())).build(version)
 
@@ -2519,9 +2519,9 @@ class KafkaApisTest extends Logging {
 
     def checkErrorForTp(tp: TopicPartition, expectedError: Errors): Unit = {
       val error = if (version < 4)
-        response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)
+        response.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)
       else
-        response.errors().get(transactionalId).get(tp)
+        response.errors.get(transactionalId).get(tp)
 
       assertEquals(expectedError, error)
     }
@@ -2703,8 +2703,8 @@ class KafkaApisTest extends Logging {
       assertEquals(1, topicProduceResponse.partitionResponses.size)
       val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
-      assertEquals(newLeaderId, partitionProduceResponse.currentLeader.leaderId())
-      assertEquals(newLeaderEpoch, partitionProduceResponse.currentLeader.leaderEpoch())
+      assertEquals(newLeaderId, partitionProduceResponse.currentLeader.leaderId)
+      assertEquals(newLeaderEpoch, partitionProduceResponse.currentLeader.leaderEpoch)
       assertEquals(1, response.data.nodeEndpoints.size)
       val node = response.data.nodeEndpoints.asScala.head
       assertEquals(2, node.nodeId)
@@ -2767,8 +2767,8 @@ class KafkaApisTest extends Logging {
       val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
       // LeaderId and epoch should be the same values inserted into the metadata cache
-      assertEquals(0, partitionProduceResponse.currentLeader.leaderId())
-      assertEquals(1, partitionProduceResponse.currentLeader.leaderEpoch())
+      assertEquals(0, partitionProduceResponse.currentLeader.leaderId)
+      assertEquals(1, partitionProduceResponse.currentLeader.leaderEpoch)
       assertEquals(1, response.data.nodeEndpoints.size)
       val node = response.data.nodeEndpoints.asScala.head
       assertEquals(0, node.nodeId)
@@ -2833,8 +2833,8 @@ class KafkaApisTest extends Logging {
       assertEquals(1, topicProduceResponse.partitionResponses.size)
       val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionProduceResponse.errorCode))
-      assertEquals(-1, partitionProduceResponse.currentLeader.leaderId())
-      assertEquals(-1, partitionProduceResponse.currentLeader.leaderEpoch())
+      assertEquals(-1, partitionProduceResponse.currentLeader.leaderId)
+      assertEquals(-1, partitionProduceResponse.currentLeader.leaderEpoch)
       assertEquals(0, response.data.nodeEndpoints.size)
     }
   }
@@ -2907,7 +2907,7 @@ class KafkaApisTest extends Logging {
         kafkaApis.handleAddPartitionsToTxnRequest(request, RequestLocal.withThreadConfinedCaching)
 
         val response = verifyNoThrottling[AddPartitionsToTxnResponse](request)
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(invalidTopicPartition))
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(invalidTopicPartition))
       } finally {
         kafkaApis.close()
       }
@@ -3127,7 +3127,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(request.context.correlationId),
       ArgumentMatchers.eq(controllerId),
       ArgumentMatchers.eq(controllerEpoch),
-      ArgumentMatchers.eq(stopReplicaRequest.partitionStates().asScala)
+      ArgumentMatchers.eq(stopReplicaRequest.partitionStates.asScala)
     )).thenReturn(
       (mutable.Map(
         groupMetadataPartition -> Errors.NONE,
@@ -3251,7 +3251,7 @@ class KafkaApisTest extends Logging {
     )
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion,
       List(
         new TxnMarkerEntry(
           1L,
@@ -3379,7 +3379,7 @@ class KafkaApisTest extends Logging {
     val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion,
       List(
         new TxnMarkerEntry(
           1L,
@@ -3403,7 +3403,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(Duration.ofMillis(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT))
-    )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
+    )).thenReturn(FutureUtils.failedFuture[Void](error.exception))
     kafkaApis = createKafkaApis(overrideProperties = Map(
       GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"
     ))
@@ -3438,7 +3438,7 @@ class KafkaApisTest extends Logging {
   private def normalize(
     response: WriteTxnMarkersResponseData
   ): WriteTxnMarkersResponseData = {
-    val copy = response.duplicate()
+    val copy = response.duplicate
     copy.markers.sort(
       Comparator.comparingLong[WriteTxnMarkersResponseData.WritableTxnMarkerResult](_.producerId)
     )
@@ -4063,7 +4063,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
 
     future.complete(new OffsetDeleteResponseData()
-      .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+      .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code)
     )
 
     val response = verifyNoThrottling[OffsetDeleteResponse](request)
@@ -4196,7 +4196,7 @@ class KafkaApisTest extends Logging {
     val response = sendMetadataRequestWithInconsistentListeners(requestListener)
 
     assertFalse(createTopicIsCalled)
-    val responseTopics = response.topicMetadata().asScala.map { metadata => metadata.topic() }
+    val responseTopics = response.topicMetadata.asScala.map { metadata => metadata.topic() }
     assertEquals(List("remaining-topic"), responseTopics)
     assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
@@ -4238,8 +4238,8 @@ class KafkaApisTest extends Logging {
     }
 
     // 3. Set up MetadataCache
-    val authorizedTopicId = Uuid.randomUuid()
-    val unauthorizedTopicId = Uuid.randomUuid()
+    val authorizedTopicId = Uuid.randomUuid
+    val unauthorizedTopicId = Uuid.randomUuid
 
     val topicIds = new util.HashMap[String, Uuid]()
     topicIds.put(authorizedTopic, authorizedTopicId)
@@ -4273,16 +4273,16 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleTopicMetadataRequest(repByTopicId)
     val metadataByTopicIdResp = verifyNoThrottling[MetadataResponse](repByTopicId)
 
-    val metadataByTopicId = metadataByTopicIdResp.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
+    val metadataByTopicId = metadataByTopicIdResp.data.topics.asScala.groupBy(_.topicId).map(kv => (kv._1, kv._2.head))
 
     metadataByTopicId.foreach { case (topicId, metadataResponseTopic) =>
       if (topicId == unauthorizedTopicId) {
         // Return an TOPIC_AUTHORIZATION_FAILED on unauthorized error regardless of leaking the existence of topic id
-        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), metadataResponseTopic.errorCode())
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, metadataResponseTopic.errorCode)
         // Do not return topic information on unauthorized error
         assertNull(metadataResponseTopic.name())
       } else {
-        assertEquals(Errors.NONE.code(), metadataResponseTopic.errorCode())
+        assertEquals(Errors.NONE.code, metadataResponseTopic.errorCode)
         assertEquals(authorizedTopic, metadataResponseTopic.name())
       }
     }
@@ -4296,16 +4296,16 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleTopicMetadataRequest(repByTopicName)
     val metadataByTopicNameResp = verifyNoThrottling[MetadataResponse](repByTopicName)
 
-    val metadataByTopicName = metadataByTopicNameResp.data().topics().asScala.groupBy(_.name()).map(kv => (kv._1, kv._2.head))
+    val metadataByTopicName = metadataByTopicNameResp.data.topics.asScala.groupBy(_.name()).map(kv => (kv._1, kv._2.head))
 
     metadataByTopicName.foreach { case (topicName, metadataResponseTopic) =>
       if (topicName == unauthorizedTopic) {
-        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), metadataResponseTopic.errorCode())
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, metadataResponseTopic.errorCode)
         // Do not return topic Id on unauthorized error
-        assertEquals(Uuid.ZERO_UUID, metadataResponseTopic.topicId())
+        assertEquals(Uuid.ZERO_UUID, metadataResponseTopic.topicId)
       } else {
-        assertEquals(Errors.NONE.code(), metadataResponseTopic.errorCode())
-        assertEquals(authorizedTopicId, metadataResponseTopic.topicId())
+        assertEquals(Errors.NONE.code, metadataResponseTopic.errorCode)
+        assertEquals(authorizedTopicId, metadataResponseTopic.topicId)
       }
     }
   }
@@ -4380,7 +4380,7 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ValueSource(ints = Array(-1, 0))
   def testFetchRequestErroneousPartitions(replicaId: Int): Unit = {
-    val foo = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val foo = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
     val unresolvedFoo = new TopicIdPartition(foo.topicId, new TopicPartition(null, foo.partition))
 
     addTopicToMetadataCache(foo.topic, 1, topicId = foo.topicId)
@@ -4431,7 +4431,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testFetchResponseContainsNewLeaderOnNotLeaderOrFollower(): Unit = {
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.randomUuid
     val tidp = new TopicIdPartition(topicId, new TopicPartition("foo", 0))
     val tp = tidp.topicPartition
     addTopicToMetadataCache(tp.topic, numPartitions = 1, numBrokers = 3, topicId)
@@ -4489,7 +4489,7 @@ class KafkaApisTest extends Logging {
 
     val partitionData = responseData.get(tp)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
-    assertEquals(newLeaderId, partitionData.currentLeader.leaderId())
+    assertEquals(newLeaderId, partitionData.currentLeader.leaderId)
     assertEquals(newLeaderEpoch, partitionData.currentLeader.leaderEpoch())
     val node = response.data.nodeEndpoints.asScala.head
     assertEquals(2, node.nodeId)
@@ -4499,7 +4499,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleShareFetchRequestSuccessWithoutAcknowledgements(): Unit = {
     val topicName = "foo"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.randomUuid
     val partitionIndex = 0
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
@@ -4556,8 +4556,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -4572,7 +4572,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleShareFetchRequestInvalidRequestOnInitialEpoch(): Unit = {
     val topicName = "foo"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.randomUuid
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
@@ -4603,7 +4603,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes), false))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenThrow(
-      Errors.INVALID_REQUEST.exception()
+      Errors.INVALID_REQUEST.exception
     ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2
     )))
@@ -4640,7 +4640,7 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
-    var responseData = response.data()
+    var responseData = response.data
 
     assertEquals(Errors.INVALID_REQUEST.code, responseData.errorCode)
 
@@ -4662,8 +4662,8 @@ class KafkaApisTest extends Logging {
     request = buildRequest(shareFetchRequest)
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
-    val topicResponses = responseData.responses()
+    responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -4678,7 +4678,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleShareFetchRequestInvalidRequestOnFinalEpoch(): Unit = {
     val topicName = "foo"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.randomUuid
     val partitionIndex = 0
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
@@ -4744,8 +4744,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
-    var responseData = response.data()
-    val topicResponses = responseData.responses()
+    var responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -4779,7 +4779,7 @@ class KafkaApisTest extends Logging {
     request = buildRequest(shareFetchRequest)
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
+    responseData = response.data
 
     assertEquals(Errors.INVALID_REQUEST.code, responseData.errorCode)
   }
@@ -4787,14 +4787,14 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleShareFetchRequestFetchThrowsException(): Unit = {
     val topicName = "foo"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.randomUuid
     val partitionIndex = 0
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception)
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
@@ -4828,7 +4828,7 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, responseData.errorCode)
   }
@@ -4836,7 +4836,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleShareFetchRequestAcknowledgeThrowsException(): Unit = {
     val topicName = "foo"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.randomUuid
     val partitionIndex = 0
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
@@ -4862,7 +4862,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception)
     )
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
@@ -4906,7 +4906,7 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, responseData.errorCode)
   }
@@ -4914,7 +4914,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleShareFetchRequestFetchAndAcknowledgeThrowsException(): Unit = {
     val topicName = "foo"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.randomUuid
     val partitionIndex = 0
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
@@ -4923,11 +4923,11 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception)
     )
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception)
     )
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
@@ -4971,7 +4971,7 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, responseData.errorCode)
   }
@@ -4979,7 +4979,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleShareFetchRequestErrorInReadingPartition(): Unit = {
     val topicName = "foo"
-    val topicId = Uuid.randomUuid()
+    val topicId = Uuid.randomUuid
     val partitionIndex = 0
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
@@ -5028,8 +5028,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -5100,8 +5100,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
-    var responseData = response.data()
-    val topicResponses = responseData.responses()
+    var responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -5130,7 +5130,7 @@ class KafkaApisTest extends Logging {
     request = buildRequest(shareFetchRequest)
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
+    responseData = response.data
 
     assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code, responseData.errorCode)
   }
@@ -5194,8 +5194,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
-    var responseData = response.data()
-    val topicResponses = responseData.responses()
+    var responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -5221,7 +5221,7 @@ class KafkaApisTest extends Logging {
     request = buildRequest(shareFetchRequest)
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
+    responseData = response.data
 
     assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code, responseData.errorCode)
   }
@@ -5342,8 +5342,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
-    var responseData = response.data()
-    var topicResponses = responseData.responses()
+    var responseData = response.data
+    var topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -5380,8 +5380,8 @@ class KafkaApisTest extends Logging {
 
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
-    topicResponses = responseData.responses()
+    responseData = response.data
+    topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -5418,8 +5418,8 @@ class KafkaApisTest extends Logging {
 
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
-    topicResponses = responseData.responses()
+    responseData = response.data
+    topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -5676,8 +5676,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
-    var responseData = response.data()
-    var topicResponses = responseData.responses()
+    var responseData = response.data
+    var topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(2, topicResponses.size())
@@ -5759,13 +5759,13 @@ class KafkaApisTest extends Logging {
     request = buildRequest(shareFetchRequest)
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
-    topicResponses = responseData.responses()
+    responseData = response.data
+    topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
-    assertEquals(1, topicResponses.size())
+    assertEquals(1, topicResponses.size)
     assertEquals(topicId3, topicResponses.get(0).topicId)
-    assertEquals(1, topicResponses.get(0).partitions.size())
+    assertEquals(1, topicResponses.get(0).partitions.size)
 
     compareResponsePartitions(
       0,
@@ -5802,8 +5802,8 @@ class KafkaApisTest extends Logging {
     request = buildRequest(shareFetchRequest)
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
-    topicResponses = responseData.responses()
+    responseData = response.data
+    topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(2, topicResponses.size())
@@ -5917,8 +5917,8 @@ class KafkaApisTest extends Logging {
     request = buildRequest(shareFetchRequest)
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
-    topicResponses = responseData.responses()
+    responseData = response.data
+    topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
   }
@@ -6677,8 +6677,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
-    var responseData = response.data()
-    var topicResponses = responseData.responses()
+    var responseData = response.data
+    var topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -6712,8 +6712,8 @@ class KafkaApisTest extends Logging {
     request = buildRequest(shareFetchRequest)
     kafkaApis.handleShareFetchRequest(request)
     response = verifyNoThrottling[ShareFetchResponse](request)
-    responseData = response.data()
-    topicResponses = responseData.responses()
+    responseData = response.data
+    topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -6765,7 +6765,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareFetchRequest(request)
 
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.errorCode)
   }
@@ -6809,7 +6809,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareFetchRequest(request)
 
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.errorCode)
   }
@@ -6863,7 +6863,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareFetchRequest(request)
 
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, responseData.errorCode)
   }
@@ -6893,7 +6893,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception)
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -6926,8 +6926,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -6994,8 +6994,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -7043,7 +7043,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.errorCode)
   }
@@ -7086,7 +7086,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.errorCode)
   }
@@ -7139,7 +7139,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, responseData.errorCode)
   }
@@ -7191,7 +7191,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.code, responseData.errorCode)
   }
@@ -7243,7 +7243,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code, responseData.errorCode)
   }
@@ -7293,8 +7293,8 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -7333,7 +7333,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
         new ShareAcknowledgeResponseData.PartitionData()
           .setPartitionIndex(partitionIndex)
-          .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
+          .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
     ).asJava))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -7369,8 +7369,8 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -7398,7 +7398,7 @@ class KafkaApisTest extends Logging {
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception)
     )
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
@@ -7432,7 +7432,7 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
+    val responseData = response.data
 
     assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, responseData.errorCode)
   }
@@ -7500,8 +7500,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -7537,7 +7537,7 @@ class KafkaApisTest extends Logging {
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
 
     when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception)
     )
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
@@ -7569,8 +7569,8 @@ class KafkaApisTest extends Logging {
       raftSupport = true)
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(1, topicResponses.size())
@@ -8274,8 +8274,8 @@ class KafkaApisTest extends Logging {
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
     val response = kafkaApis.processShareAcknowledgeResponse(responseAcknowledgeData, request)
-    val responseData = response.data()
-    val topicResponses = responseData.responses()
+    val responseData = response.data
+    val topicResponses = responseData.responses
 
     assertEquals(Errors.NONE.code, responseData.errorCode)
     assertEquals(2, topicResponses.size())
@@ -8324,7 +8324,7 @@ class KafkaApisTest extends Logging {
                                               ackErrorCode: Short,
                                               partitionData: ShareAcknowledgeResponseData.PartitionData
                                              ): Boolean = {
-    if (partitionIndex == partitionData.partitionIndex() && ackErrorCode == partitionData.errorCode()) {
+    if (partitionIndex == partitionData.partitionIndex() && ackErrorCode == partitionData.errorCode) {
       return true
     }
     false
@@ -9576,10 +9576,10 @@ class KafkaApisTest extends Logging {
     verify(replicaQuotaManager).record(anyLong)
 
     if (isReassigning)
-      assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
+      assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count)
     else
-      assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count())
-    assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count())
+      assertEquals(0, brokerTopicStats.allTopicsStats.reassignmentBytesOutPerSec.get.count)
+    assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.replicationBytesOutRate.get.count)
   }
 
   @Test
@@ -10846,7 +10846,7 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(raftSupport = true)
     kafkaApis.handleAlterConfigsRequest(request)
     val response = verifyNoThrottling[AlterConfigsResponse](request)
-    assertEquals(new AlterConfigsResponseData(), response.data())
+    assertEquals(new AlterConfigsResponseData(), response.data)
   }
 
   @Test
@@ -10856,7 +10856,7 @@ class KafkaApisTest extends Logging {
       setResources(new LAlterConfigsResourceCollection(asList(
         new LAlterConfigsResource().
           setResourceName(brokerId.toString).
-          setResourceType(BROKER.id()).
+          setResourceType(BROKER.id).
           setConfigs(new LAlterableConfigCollection(asList(new LAlterableConfig().
             setName("foo").
             setValue(null)).iterator()))).iterator())), 1.toShort))
@@ -10868,11 +10868,11 @@ class KafkaApisTest extends Logging {
     val response = verifyNoThrottling[AlterConfigsResponse](request)
     assertEquals(new AlterConfigsResponseData().setResponses(asList(
       new LAlterConfigsResourceResponse().
-        setErrorCode(Errors.INVALID_REQUEST.code()).
+        setErrorCode(Errors.INVALID_REQUEST.code).
         setErrorMessage("Null value not supported for : foo").
         setResourceName(brokerId.toString).
-        setResourceType(BROKER.id()))),
-      response.data())
+        setResourceType(BROKER.id))),
+      response.data)
   }
 
   @Test
@@ -10891,7 +10891,7 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis(raftSupport = true)
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
     val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
-    assertEquals(new IncrementalAlterConfigsResponseData(), response.data())
+    assertEquals(new IncrementalAlterConfigsResponseData(), response.data)
   }
 
   @Test
@@ -10900,7 +10900,7 @@ class KafkaApisTest extends Logging {
       setValidateOnly(true).
       setResources(new IAlterConfigsResourceCollection(asList(new IAlterConfigsResource().
         setResourceName(brokerId.toString).
-        setResourceType(BROKER_LOGGER.id()).
+        setResourceType(BROKER_LOGGER.id).
         setConfigs(new IAlterableConfigCollection(asList(new IAlterableConfig().
           setName(Log4jController.ROOT_LOGGER).
           setValue("TRACE")).iterator()))).iterator())),
@@ -10916,8 +10916,8 @@ class KafkaApisTest extends Logging {
         setErrorCode(0.toShort).
         setErrorMessage(null).
         setResourceName(brokerId.toString).
-        setResourceType(BROKER_LOGGER.id()))),
-      response.data())
+        setResourceType(BROKER_LOGGER.id))),
+      response.data)
   }
 
   @Test
@@ -11447,7 +11447,7 @@ class KafkaApisTest extends Logging {
     val response = getShareGroupDescribeResponse(groupIds, Map.empty, false, null, describedGroups)
     assertNotNull(response.data)
     assertEquals(2, response.data.groups.size)
-    response.data.groups.forEach(group => assertEquals(Errors.UNSUPPORTED_VERSION.code(), group.errorCode()))
+    response.data.groups.forEach(group => assertEquals(Errors.UNSUPPORTED_VERSION.code, group.errorCode))
   }
 
   @Test
@@ -11461,7 +11461,7 @@ class KafkaApisTest extends Logging {
       , false, authorizer, describedGroups)
     assertNotNull(response.data)
     assertEquals(2, response.data.groups.size)
-    response.data.groups.forEach(group => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), group.errorCode()))
+    response.data.groups.forEach(group => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, group.errorCode))
   }
 
   @Test
@@ -11480,8 +11480,8 @@ class KafkaApisTest extends Logging {
 
     assertNotNull(response.data)
     assertEquals(2, response.data.groups.size)
-    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), response.data.groups.get(0).errorCode())
-    assertEquals(Errors.NONE.code(), response.data.groups.get(1).errorCode())
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.groups.get(0).errorCode)
+    assertEquals(Errors.NONE.code, response.data.groups.get(1).errorCode)
   }
 
   def getShareGroupDescribeResponse(groupIds: util.List[String], configOverrides: Map[String, String] = Map.empty,
