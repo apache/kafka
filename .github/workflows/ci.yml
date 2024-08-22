@@ -25,8 +25,8 @@ concurrency:
   cancel-in-progress: false  # Let each trunk commit finish a build
 
 jobs:
-  call-workflow:
-    uses: .github/workflows/build.yml
+  build:
+    uses: ./.github/workflows/build.yml
     with:
       gradle-cache-read-only: false
     secrets:

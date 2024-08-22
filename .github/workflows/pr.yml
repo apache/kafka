@@ -26,8 +26,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  call-workflow:
-    uses: .github/workflows/build.yml
+  build:
+    uses: ./.github/workflows/build.yml
     with:
       gradle-cache-read-only: true
     secrets:
