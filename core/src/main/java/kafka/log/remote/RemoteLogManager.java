@@ -1237,6 +1237,7 @@ public class RemoteLogManager implements Closeable {
             Iterator<Integer> epochIterator = epochWithOffsets.navigableKeySet().iterator();
             boolean canProcess = true;
             List<RemoteLogSegmentMetadata> segmentsToDelete = new ArrayList<>();
+            List<RemoteLogSegmentMetadata> danglingSegments = new ArrayList<>();
             long sizeOfDeletableSegmentsBytes = 0L;
             while (canProcess && epochIterator.hasNext()) {
                 Integer epoch = epochIterator.next();
@@ -1252,6 +1253,13 @@ public class RemoteLogManager implements Closeable {
                         logger.debug("Copy for the segment {} is currently in process. Skipping cleanup for it and the remaining segments",
                                 metadata.remoteLogSegmentId());
                         canProcess = false;
+                        continue;
+                    }
+
+                    if (RemoteLogSegmentState.COPY_SEGMENT_STARTED.equals(metadata.state())) {
+                        // If the state is COPY_SEGMENT_STARTED and it's not under copying process, this must be the previously
+                        // failed copied state. We should clean it up directly.
+                        danglingSegments.add(metadata);
                         continue;
                     }
                     if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state())) {
@@ -1299,6 +1307,11 @@ public class RemoteLogManager implements Closeable {
             int segmentsLeftToDelete = segmentsToDelete.size();
             updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
             List<String> undeletedSegments = new ArrayList<>();
+            for (RemoteLogSegmentMetadata segmentMetadata : danglingSegments) {
+                if (!remoteLogRetentionHandler.deleteRemoteLogSegment(segmentMetadata, x -> !isCancelled())) {
+                    undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());
+                }
+            }
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
                 if (!remoteLogRetentionHandler.deleteRemoteLogSegment(segmentMetadata, x -> !isCancelled())) {
                     undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());
@@ -1374,10 +1387,17 @@ public class RemoteLogManager implements Closeable {
                     Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
                     while (segmentsIterator.hasNext()) {
                         RemoteLogSegmentMetadata segmentMetadata = segmentsIterator.next();
-                        RemoteLogSegmentId segmentId = segmentMetadata.remoteLogSegmentId();
-                        if (!visitedSegmentIds.contains(segmentId) && isRemoteSegmentWithinLeaderEpochs(segmentMetadata, logEndOffset, epochEntries)) {
-                            remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
-                            visitedSegmentIds.add(segmentId);
+                        // Only count the size of "COPY_SEGMENT_FINISHED" and "DELETE_SEGMENT_STARTED" state segments
+                        // because "COPY_SEGMENT_STARED" means copy didn't complete, and "DELETE_SEGMENT_FINISHED" means delete completed.
+                        // Note: there might be some "COPY_SEGMENT_STARED" segments not counted here, but become "COPY_SEGMENT_FINISHED" soon.
+                        // It's fine because the missed segment size will be count in next time, and it won't cause more segment deletion.
+                        if (segmentMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED) ||
+                                segmentMetadata.state().equals(RemoteLogSegmentState.DELETE_SEGMENT_STARTED)) {
+                            RemoteLogSegmentId segmentId = segmentMetadata.remoteLogSegmentId();
+                            if (!visitedSegmentIds.contains(segmentId) && isRemoteSegmentWithinLeaderEpochs(segmentMetadata, logEndOffset, epochEntries)) {
+                                remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
+                                visitedSegmentIds.add(segmentId);
+                            }
                         }
                     }
                 }
