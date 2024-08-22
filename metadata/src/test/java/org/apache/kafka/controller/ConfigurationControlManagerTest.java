@@ -56,7 +56,6 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)

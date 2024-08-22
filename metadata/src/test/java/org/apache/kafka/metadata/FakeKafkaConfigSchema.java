@@ -21,9 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.config.ConfigSynonym;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,8 +50,8 @@ public class FakeKafkaConfigSchema {
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
 
     static {
-         SYNONYMS.put("unclean.leader.election.enable",
-             Arrays.asList(new ConfigSynonym("unclean.leader.election.enable")));
+        SYNONYMS.put("unclean.leader.election.enable",
+            Arrays.asList(new ConfigSynonym("unclean.leader.election.enable")));
         SYNONYMS.put("min.insync.replicas",
             Arrays.asList(new ConfigSynonym("min.insync.replicas")));
     }

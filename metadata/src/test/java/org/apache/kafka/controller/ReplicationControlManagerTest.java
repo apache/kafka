@@ -51,7 +51,6 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
-import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitionsCollection;
@@ -2642,7 +2641,7 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(0, 1, 2, 3, 4);
         ctx.unfenceBrokers(0, 1, 2, 3, 4);
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{
-                new int[]{1, 2, 4}, new int[]{1, 3, 4}, new int[]{0, 2, 4}}).topicId();
+            new int[]{1, 2, 4}, new int[]{1, 3, 4}, new int[]{0, 2, 4}}).topicId();
         assertFalse(replication.shouldScheduleAdjustPartitionLeaders());
         ctx.fenceBrokers(0, 1, 2, 3, 4);
         assertTrue(replication.shouldScheduleAdjustPartitionLeaders());
