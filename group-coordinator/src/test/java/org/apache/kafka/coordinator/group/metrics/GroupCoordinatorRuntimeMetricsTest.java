@@ -51,30 +51,30 @@ public class GroupCoordinatorRuntimeMetricsTest {
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "loading"),
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "active"),
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "failed"),
-            metrics.metricName("event-queue-size", METRICS_GROUP),
-            metrics.metricName("partition-load-time-max", METRICS_GROUP),
-            metrics.metricName("partition-load-time-avg", METRICS_GROUP),
-            metrics.metricName("thread-idle-ratio-avg", METRICS_GROUP),
-            metrics.metricName("event-queue-time-ms-max", METRICS_GROUP),
-            metrics.metricName("event-queue-time-ms-p50", METRICS_GROUP),
-            metrics.metricName("event-queue-time-ms-p95", METRICS_GROUP),
-            metrics.metricName("event-queue-time-ms-p99", METRICS_GROUP),
-            metrics.metricName("event-queue-time-ms-p999", METRICS_GROUP),
-            metrics.metricName("event-processing-time-ms-max", METRICS_GROUP),
-            metrics.metricName("event-processing-time-ms-p50", METRICS_GROUP),
-            metrics.metricName("event-processing-time-ms-p95", METRICS_GROUP),
-            metrics.metricName("event-processing-time-ms-p99", METRICS_GROUP),
-            metrics.metricName("event-processing-time-ms-p999", METRICS_GROUP),
-            metrics.metricName("event-purgatory-time-ms-max", METRICS_GROUP),
-            metrics.metricName("event-purgatory-time-ms-p50", METRICS_GROUP),
-            metrics.metricName("event-purgatory-time-ms-p95", METRICS_GROUP),
-            metrics.metricName("event-purgatory-time-ms-p99", METRICS_GROUP),
-            metrics.metricName("event-purgatory-time-ms-p999", METRICS_GROUP),
-            metrics.metricName("batch-flush-time-ms-max", METRICS_GROUP),
-            metrics.metricName("batch-flush-time-ms-p50", METRICS_GROUP),
-            metrics.metricName("batch-flush-time-ms-p95", METRICS_GROUP),
-            metrics.metricName("batch-flush-time-ms-p99", METRICS_GROUP),
-            metrics.metricName("batch-flush-time-ms-p999", METRICS_GROUP)
+            kafkaMetricName(metrics, "event-queue-size"),
+            kafkaMetricName(metrics, "partition-load-time-max"),
+            kafkaMetricName(metrics, "partition-load-time-avg"),
+            kafkaMetricName(metrics, "thread-idle-ratio-avg"),
+            kafkaMetricName(metrics, "event-queue-time-ms-max"),
+            kafkaMetricName(metrics, "event-queue-time-ms-p50"),
+            kafkaMetricName(metrics, "event-queue-time-ms-p95"),
+            kafkaMetricName(metrics, "event-queue-time-ms-p99"),
+            kafkaMetricName(metrics, "event-queue-time-ms-p999"),
+            kafkaMetricName(metrics, "event-processing-time-ms-max"),
+            kafkaMetricName(metrics, "event-processing-time-ms-p50"),
+            kafkaMetricName(metrics, "event-processing-time-ms-p95"),
+            kafkaMetricName(metrics, "event-processing-time-ms-p99"),
+            kafkaMetricName(metrics, "event-processing-time-ms-p999"),
+            kafkaMetricName(metrics, "event-purgatory-time-ms-max"),
+            kafkaMetricName(metrics, "event-purgatory-time-ms-p50"),
+            kafkaMetricName(metrics, "event-purgatory-time-ms-p95"),
+            kafkaMetricName(metrics, "event-purgatory-time-ms-p99"),
+            kafkaMetricName(metrics, "event-purgatory-time-ms-p999"),
+            kafkaMetricName(metrics, "batch-flush-time-ms-max"),
+            kafkaMetricName(metrics, "batch-flush-time-ms-p50"),
+            kafkaMetricName(metrics, "batch-flush-time-ms-p95"),
+            kafkaMetricName(metrics, "batch-flush-time-ms-p99"),
+            kafkaMetricName(metrics, "batch-flush-time-ms-p999")
         ));
 
         try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
@@ -118,14 +118,12 @@ public class GroupCoordinatorRuntimeMetricsTest {
             runtimeMetrics.recordPartitionLoadSensor(startTimeMs, startTimeMs + 1000);
             runtimeMetrics.recordPartitionLoadSensor(startTimeMs, startTimeMs + 2000);
 
-            org.apache.kafka.common.MetricName metricName = metrics.metricName(
-                "partition-load-time-avg", METRICS_GROUP);
+            org.apache.kafka.common.MetricName metricName = kafkaMetricName(metrics, "partition-load-time-avg");
 
             KafkaMetric metric = metrics.metrics().get(metricName);
             assertEquals(1500.0, metric.metricValue());
 
-            metricName = metrics.metricName(
-                "partition-load-time-max", METRICS_GROUP);
+            metricName = kafkaMetricName(metrics, "partition-load-time-max");
             metric = metrics.metrics().get(metricName);
             assertEquals(2000.0, metric.metricValue());
         }
@@ -139,8 +137,7 @@ public class GroupCoordinatorRuntimeMetricsTest {
         GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics);
         IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordThreadIdleTime((i + 1) * 1000L));
 
-        org.apache.kafka.common.MetricName metricName = metrics.metricName(
-            "thread-idle-ratio-avg", METRICS_GROUP);
+        org.apache.kafka.common.MetricName metricName = kafkaMetricName(metrics, "thread-idle-ratio-avg");
         KafkaMetric metric = metrics.metrics().get(metricName);
         assertEquals(6 / 30.0, metric.metricValue()); // 'total_ms / window_ms'
     }
@@ -185,23 +182,23 @@ public class GroupCoordinatorRuntimeMetricsTest {
             }
         });
 
-        MetricName metricName = metrics.metricName(metricNamePrefix + "-max", METRICS_GROUP);
+        MetricName metricName = kafkaMetricName(metrics, metricNamePrefix + "-max");
         KafkaMetric metric = metrics.metrics().get(metricName);
         assertEquals(1000.0, metric.metricValue());
 
-        metricName = metrics.metricName(metricNamePrefix + "-p50", METRICS_GROUP);
+        metricName = kafkaMetricName(metrics, metricNamePrefix + "-p50");
         metric = metrics.metrics().get(metricName);
         assertEquals(500.0, metric.metricValue());
 
-        metricName = metrics.metricName(metricNamePrefix + "-p95", METRICS_GROUP);
+        metricName = kafkaMetricName(metrics, metricNamePrefix + "-p95");
         metric = metrics.metrics().get(metricName);
         assertEquals(950.0, metric.metricValue());
 
-        metricName = metrics.metricName(metricNamePrefix + "-p99", METRICS_GROUP);
+        metricName = kafkaMetricName(metrics, metricNamePrefix + "-p99");
         metric = metrics.metrics().get(metricName);
         assertEquals(990.0, metric.metricValue());
 
-        metricName = metrics.metricName(metricNamePrefix + "-p999", METRICS_GROUP);
+        metricName = kafkaMetricName(metrics, metricNamePrefix + "-p999");
         metric = metrics.metrics().get(metricName);
         assertEquals(999.0, metric.metricValue());
     }

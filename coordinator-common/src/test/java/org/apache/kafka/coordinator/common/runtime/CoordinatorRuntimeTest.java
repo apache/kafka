@@ -101,6 +101,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("checkstyle:JavaNCSS")
 public class CoordinatorRuntimeTest {
     private static final TopicPartition TP = new TopicPartition("__consumer_offsets", 0);
     private static final Duration DEFAULT_WRITE_TIMEOUT = Duration.ofMillis(5);

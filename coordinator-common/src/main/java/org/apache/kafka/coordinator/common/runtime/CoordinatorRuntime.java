@@ -750,6 +750,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         currentBatch.verificationGuard,
                         currentBatch.builder.build()
                     );
+                    runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                     coordinator.updateLastWrittenOffset(offset);
 
                     if (offset != currentBatch.nextOffset) {
@@ -772,7 +773,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     for (DeferredEvent event : currentBatch.deferredEvents) {
                         deferredEventQueue.add(offset, event);
                     }
-                    runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
 
                     // Free up the current batch.
                     freeCurrentBatch();
