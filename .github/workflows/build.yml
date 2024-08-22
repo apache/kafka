@@ -26,9 +26,6 @@ on:
         description: "Should we run the opt-in steps?"
         default: "false"
         type: string
-    secrets:
-      GE_ACCESS_TOKEN:
-        required: false
 
 jobs:
   validate:
