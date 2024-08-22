@@ -103,12 +103,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     /**
      * This holds the last OffsetFetch request triggered to retrieve committed offsets to update
      * fetch positions that hasn't completed yet. When a response is received, it's used to
-     * update the fetch positions and the pendingOffsetFetchEvent is cleared. While it hasn't
-     * completed, as long as it hasn't completed
-     * yet. If the update fetch positions attempt runs
-     * out of time before this request to fetch committed gets a response, it's kept
-     * it will be kept to be used on the next attempt to update fetch positions if partitions
-     * remain the same.
+     * update the fetch positions and the pendingOffsetFetchEvent is cleared. If the update fetch
+     * positions attempt runs out of time before this OffsetFetch gets a response, it will be
+     * kept to be used on the next attempt to update fetch positions (if partitions remain the same)
      */
     private PendingFetchCommittedRequest pendingOffsetFetchEvent;
 
