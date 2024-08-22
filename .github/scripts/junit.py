@@ -164,4 +164,9 @@ if __name__ == "__main__":
         for row in table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
-    exit(0)
+
+    if total_failures > 0:
+        logger.debug("Total Failures: {total_failures}")
+        exit(1)
+    else:
+        exit(0)

@@ -97,7 +97,7 @@ jobs:
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
-          test
+          :metadata:test
       - name: Archive JUnit reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -107,8 +107,7 @@ jobs:
             **/test-results/**/*.xml
           if-no-files-found: ignore
       - name: Parse JUnit tests
-        # For now, limit to "gh-" PRs
-        if: ${{ contains(github.head_ref, 'gh-') && failure() }}
+        if: always()
         run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
