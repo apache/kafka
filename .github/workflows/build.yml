@@ -22,6 +22,10 @@ on:
         description: "Should the Gradle cache be read-only?"
         default: "true"
         type: string
+      github-actions-opt-in:
+        description: "Should we run the opt-in steps?"
+        default: "false"
+        type: string
     secrets:
       GE_ACCESS_TOKEN:
         required: false
@@ -69,7 +73,7 @@ jobs:
       - name: Annotate checkstyle errors
         # Avoid duplicate annotations, only run on java 21
         # For now, limit to "gh-" PRs
-        if: ${{ contains(github.head_ref, 'gh-') && failure() && matrix.java == '21' }}
+        if: ${{ inputs.github-actions-opt-in && failure() && matrix.java == '21' }}
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
@@ -81,7 +85,7 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 17, 11 ]
-    if: contains(github.head_ref, 'gh-')  # For now, only run tests on "gh-*" PRs
+    if: ${{ inputs.github-actions-opt-in }}
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
