@@ -163,6 +163,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         } else {
             requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
         }
+
+        CompletableFuture<Integer> future = requestManagers.fetchRequestManager.requestFetch();
+        future.whenComplete(complete(event.future()));
     }
 
     private void process(final AsyncCommitEvent event) {

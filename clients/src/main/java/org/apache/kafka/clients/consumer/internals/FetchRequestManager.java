@@ -25,7 +25,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
@@ -42,7 +41,6 @@ import java.util.stream.Collectors;
  */
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
-    private final Logger log;
     private final NetworkClientDelegate networkClientDelegate;
     private final boolean requireEmptyFetchBuffer;
     private CompletableFuture<Integer> pendingFetchRequestFuture;
@@ -81,7 +79,6 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final ApiVersions apiVersions,
                         final boolean requireEmptyFetchBuffer) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
-        this.log = logContext.logger(FetchRequestManager.class);
         this.networkClientDelegate = networkClientDelegate;
         this.requireEmptyFetchBuffer = requireEmptyFetchBuffer;
     }
@@ -96,15 +93,29 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
         networkClientDelegate.maybeThrowAuthFailure(node);
     }
 
+    /**
+     * Request that a fetch request be issued to the cluster to pull down the next batch of records.
+     *
+     * <p/>
+     *
+     * The returned {@link CompletableFuture} is {@link CompletableFuture#complete(Object) completed} when the
+     * fetch request(s) have been created and enqueued into the network client's outgoing send buffer.
+     * It is <em>not completed</em> when the network client has received the data.
+     *
+     * @return Future for which the caller can wait to ensure that the requests have been enqueued
+     */
     public CompletableFuture<Integer> requestFetch() {
         CompletableFuture<Integer> future = new CompletableFuture<>();
 
         if (pendingFetchRequestFuture != null) {
+            // In this case, we have an outstanding fetch request, so chain the newly created future to be
+            // invoked when the outstanding fetch request is completed.
             pendingFetchRequestFuture.whenComplete((value, exception) -> {
-                if (exception != null)
+                if (exception != null) {
                     future.completeExceptionally(exception);
-                else
+                } else {
                     future.complete(value);
+                }
             });
         } else {
             pendingFetchRequestFuture = future;
@@ -118,14 +129,16 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      */
     @Override
     public PollResult poll(long currentTimeMs) {
-        if (pendingFetchRequestFuture == null)
+        if (pendingFetchRequestFuture == null) {
+            // If no explicit request for fetching has been issued, just short-circuit.
             return PollResult.EMPTY;
+        }
 
         final PollResult pollResult;
 
         if (requireEmptyFetchBuffer && !fetchBuffer.bufferedPartitions().isEmpty()) {
+            // No fetch should be issued because the fetch buffer contains data that the user can use immediately
             pollResult = PollResult.EMPTY;
-            log.warn("No fetch request will be issued because the fetch buffer contains the following partitions: {}", fetchBuffer.bufferedPartitions());
         } else {
             Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests();
             pollResult = pollInternal(
