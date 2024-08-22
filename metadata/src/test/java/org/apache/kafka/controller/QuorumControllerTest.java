@@ -191,9 +191,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
@@ -235,9 +232,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
@@ -282,9 +276,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
@@ -358,7 +349,7 @@ public class QuorumControllerTest {
             assertEquals(expectedIsr[0], fooLeader);
 
             // Check that there are imbalaned partitions
-            assertTrue(active.replicationControl().arePartitionLeadersImbalanced());
+            assertTrue(active.replicationControl().shouldScheduleAdjustPartitionLeaders());
 
             testToImages(logEnv.allRecords());
         }
@@ -374,9 +365,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
 
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV0, "test-provided bootstrap ELR enabled")).
@@ -509,9 +497,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setLeaderImbalanceCheckIntervalNs(OptionalLong.of(leaderImbalanceCheckIntervalNs)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
@@ -577,7 +562,7 @@ public class QuorumControllerTest {
             );
 
             // Check that there are imbalanced partitions
-            assertTrue(active.replicationControl().arePartitionLeadersImbalanced());
+            assertTrue(active.replicationControl().shouldScheduleAdjustPartitionLeaders());
 
             // Re-register all fenced brokers
             for (Integer brokerId : brokersToFence) {
@@ -628,7 +613,7 @@ public class QuorumControllerTest {
                         lastHeartbeatMs.set(currentMonotonicMs);
                         sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
                     }
-                    return !active.replicationControl().arePartitionLeadersImbalanced();
+                    return !active.replicationControl().shouldScheduleAdjustPartitionLeaders();
                 },
                 TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalNs * 10, TimeUnit.NANOSECONDS),
                 "Leaders were not balanced after unfencing all of the brokers"
@@ -651,7 +636,6 @@ public class QuorumControllerTest {
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setConfigSchema(SCHEMA);
                     controllerBuilder.setMaxIdleIntervalNs(OptionalLong.of(maxIdleIntervalNs));
                 }).
                 build()
@@ -697,8 +681,6 @@ public class QuorumControllerTest {
                 setLastKRaftVersion(KRaftVersion.fromFeatureLevel(finalizedKraftVersion)).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
@@ -750,9 +732,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -832,9 +811,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
@@ -1042,9 +1018,6 @@ public class QuorumControllerTest {
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
@@ -1107,9 +1080,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
@@ -1149,9 +1119,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             QuorumController active = controlEnv.activeController();
@@ -1320,9 +1287,6 @@ public class QuorumControllerTest {
                     initialSnapshot.tempDir.toPath(), new OffsetAndEpoch(0, 0))).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setBootstrapMetadata(COMPLEX_BOOTSTRAP).
                 build()
         ) {
@@ -1345,9 +1309,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setBootstrapMetadata(COMPLEX_BOOTSTRAP).
                 build()
         ) {

@@ -159,7 +159,6 @@ public class ReplicationControlManager {
         private short defaultReplicationFactor = (short) 3;
         private int defaultNumPartitions = 1;
 
-        private int defaultMinIsr = 1;
         private int maxElectionsPerImbalance = MAX_ELECTIONS_PER_IMBALANCE;
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
@@ -184,11 +183,6 @@ public class ReplicationControlManager {
 
         Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
-            return this;
-        }
-
-        Builder setDefaultMinIsr(int defaultMinIsr) {
-            this.defaultMinIsr = defaultMinIsr;
             return this;
         }
 
@@ -237,7 +231,6 @@ public class ReplicationControlManager {
                 logContext,
                 defaultReplicationFactor,
                 defaultNumPartitions,
-                defaultMinIsr,
                 maxElectionsPerImbalance,
                 eligibleLeaderReplicasEnabled,
                 configurationControl,
@@ -310,11 +303,6 @@ public class ReplicationControlManager {
      * not specify a number of partitions.
      */
     private final int defaultNumPartitions;
-
-    /**
-     * The default min ISR that is used if a CreateTopics request does not specify one.
-     */
-    private final int defaultMinIsr;
 
     /**
      * True if eligible leader replicas is enabled.
@@ -409,7 +397,6 @@ public class ReplicationControlManager {
         LogContext logContext,
         short defaultReplicationFactor,
         int defaultNumPartitions,
-        int defaultMinIsr,
         int maxElectionsPerImbalance,
         boolean eligibleLeaderReplicasEnabled,
         ConfigurationControlManager configurationControl,
@@ -421,7 +408,6 @@ public class ReplicationControlManager {
         this.log = logContext.logger(ReplicationControlManager.class);
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.defaultNumPartitions = defaultNumPartitions;
-        this.defaultMinIsr = defaultMinIsr;
         this.maxElectionsPerImbalance = maxElectionsPerImbalance;
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.configurationControl = configurationControl;
@@ -1627,8 +1613,8 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, null);
     }
 
-    boolean arePartitionLeadersImbalanced() {
-        return !imbalancedPartitions.isEmpty();
+    boolean shouldScheduleAdjustPartitionLeaders() {
+        return !imbalancedPartitions.isEmpty() || brokersToIsrs.partitionsWithNoLeader().hasNext();
     }
 
     /**
@@ -1657,8 +1643,8 @@ public class ReplicationControlManager {
         int maxElections
     ) {
         Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
-        for (TopicIdPartition topicIdPartition = iterator.next();
-             iterator.hasNext() && records.size() < maxElections; ) {
+        while (iterator.hasNext() && records.size() < maxElections) {
+            TopicIdPartition topicIdPartition = iterator.next();
             TopicControlInfo topic = topics.get(topicIdPartition.topicId());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 ApiError result = electLeader(topic.name, topicIdPartition.partitionId(),
@@ -1670,8 +1656,8 @@ public class ReplicationControlManager {
                     log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}",
                             topic.name, topicIdPartition.partitionId(), result.error());
                 }
-            } else if (log.isTraceEnabled()) {
-                log.trace("Cannot trigger unclean leader election for offline partition {}-{} " +
+            } else if (log.isDebugEnabled()) {
+                log.debug("Cannot trigger unclean leader election for offline partition {}-{} " +
                         "because of configuration.", topic.name, topicIdPartition.partitionId());
             }
         }
@@ -2257,14 +2243,8 @@ public class ReplicationControlManager {
 
     // Visible to test.
     int getTopicEffectiveMinIsr(String topicName) {
-        int currentMinIsr = defaultMinIsr;
-        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG);
-        if (minIsrConfig != null) {
-            currentMinIsr = Integer.parseInt(minIsrConfig);
-        } else {
-            log.debug("Can't find the min isr config for topic: " + topicName + ". Use default value " + defaultMinIsr);
-        }
-        
+        String minIsrConfig = configurationControl.getTopicConfig(topicName, MIN_IN_SYNC_REPLICAS_CONFIG).value();
+        int currentMinIsr = Integer.parseInt(minIsrConfig);
         Uuid topicId = topicsByName.get(topicName);
         int replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
         return Math.min(currentMinIsr, replicationFactor);

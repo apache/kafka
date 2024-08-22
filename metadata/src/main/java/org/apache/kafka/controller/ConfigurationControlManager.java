@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
@@ -71,7 +72,7 @@ public class ConfigurationControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
-        private KafkaConfigSchema configSchema = KafkaConfigSchema.EMPTY;
+        private KafkaConfigSchema configSchema = null;
         private Consumer<ConfigResource> existenceChecker = __ -> { };
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
@@ -121,6 +122,9 @@ public class ConfigurationControlManager {
         ConfigurationControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            if (configSchema == null) {
+                throw new RuntimeException("You must set the configSchema.");
+            }
             return new ConfigurationControlManager(
                 logContext,
                 snapshotRegistry,
@@ -453,16 +457,12 @@ public class ConfigurationControlManager {
      * @param configKey            The key for the config.
      * @return the config value for the provided config key in the topic
      */
-    String getTopicConfig(String topicName, String configKey) throws NoSuchElementException {
-        Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
-        if (map == null || !map.containsKey(configKey)) {
-            Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigs(Collections.emptyMap());
-            if (!effectiveConfigMap.containsKey(configKey)) {
-                return null;
-            }
-            return effectiveConfigMap.get(configKey).value();
-        }
-        return map.get(configKey);
+    ConfigEntry getTopicConfig(String topicName, String configKey) throws NoSuchElementException {
+        ConfigEntry result = configSchema.resolveEffectiveTopicConfig(configKey,
+            staticConfig,
+            clusterConfig(),
+            currentControllerConfig(), currentTopicConfig(topicName));
+        return result;
     }
 
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(
@@ -510,8 +510,8 @@ public class ConfigurationControlManager {
      * @return true if this topic has uncleanLeaderElection enabled
      */
     boolean uncleanLeaderElectionEnabledForTopic(String topicName) {
-        String uncleanLeaderElection = getTopicConfig(topicName, UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
-        if (uncleanLeaderElection != null) {
+        String uncleanLeaderElection = getTopicConfig(topicName, UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).value();
+        if (!uncleanLeaderElection.isEmpty()) {
             return Boolean.parseBoolean(uncleanLeaderElection);
         }
 
@@ -530,6 +530,11 @@ public class ConfigurationControlManager {
 
     Map<String, String> currentControllerConfig() {
         Map<String, String> result = configData.get(currentController);
+        return (result == null) ? Collections.emptyMap() : result;
+    }
+
+    Map<String, String> currentTopicConfig(String topicName) {
+        Map<String, String> result = configData.get(new ConfigResource(Type.TOPIC, topicName));
         return (result == null) ? Collections.emptyMap() : result;
     }
 }

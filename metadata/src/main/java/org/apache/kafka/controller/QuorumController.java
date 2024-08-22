@@ -206,7 +206,6 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
-        private int defaultMinIsr = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
@@ -282,11 +281,6 @@ public final class QuorumController implements Controller {
 
         public Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
-            return this;
-        }
-
-        public Builder setDefaultMinIsr(int defaultMinIsr) {
-            this.defaultMinIsr = defaultMinIsr;
             return this;
         }
 
@@ -419,7 +413,6 @@ public final class QuorumController implements Controller {
                     quorumFeatures,
                     defaultReplicationFactor,
                     defaultNumPartitions,
-                    defaultMinIsr,
                     replicaPlacer,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
@@ -1334,14 +1327,14 @@ public final class QuorumController implements Controller {
     private void maybeScheduleNextAdjustPartitionLeaders() {
         if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
             leaderImbalanceCheckIntervalNs.isPresent() &&
-            replicationControl.arePartitionLeadersImbalanced()) {
+            replicationControl.shouldScheduleAdjustPartitionLeaders()) {
 
             log.debug(
                 "Scheduling write event for {} because scheduled ({}), checkIntervalNs ({}) and isImbalanced ({})",
                 MAYBE_BALANCE_PARTITION_LEADERS,
                 imbalancedScheduled,
                 leaderImbalanceCheckIntervalNs,
-                replicationControl.arePartitionLeadersImbalanced()
+                replicationControl.shouldScheduleAdjustPartitionLeaders()
             );
 
             ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_BALANCE_PARTITION_LEADERS, () -> {
@@ -1781,7 +1774,6 @@ public final class QuorumController implements Controller {
         QuorumFeatures quorumFeatures,
         short defaultReplicationFactor,
         int defaultNumPartitions,
-        int defaultMinIsr,
         ReplicaPlacer replicaPlacer,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
@@ -1869,7 +1861,6 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
-            setDefaultMinIsr(defaultMinIsr).
             setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
