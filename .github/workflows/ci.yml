@@ -34,6 +34,6 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       gradle-cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
-      github-actions-opt-in: ${{ github.ref == 'refs/heads/trunk' || contains(github.head_ref, 'gh-') }}
+      github-actions-opt-in: ${{ vars.GH_ACTIONS_OPT_IN || github.ref == 'refs/heads/trunk' || contains(github.head_ref, 'gh-') }}
     secrets:
       inherit
