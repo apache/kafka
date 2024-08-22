@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 
+import org.apache.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -73,7 +74,7 @@ import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFI
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -1096,7 +1097,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
+            appender.setClassLogger(StreamsConfig.class, Level.DEBUG);
             new StreamsConfig(props);
 
             assertThat(
@@ -1116,7 +1117,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
+            appender.setClassLogger(StreamsConfig.class, Level.DEBUG);
             new StreamsConfig(props);
 
             assertThat(
@@ -1124,23 +1125,6 @@ public class StreamsConfigTest {
                 hasItem("Configuration parameter `" + StreamsConfig.EXACTLY_ONCE_BETA +
                             "` is deprecated and will be removed in the 4.0.0 release. " +
                             "Please use `" + StreamsConfig.EXACTLY_ONCE_V2 + "` instead.")
-            );
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldLogWarningWhenRetriesIsUsed() {
-        props.put(StreamsConfig.RETRIES_CONFIG, 0);
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
-            new StreamsConfig(props);
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.RETRIES_CONFIG +
-                            "` is deprecated and will be removed in the 4.0.0 release.")
             );
         }
     }
@@ -1298,7 +1282,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 100);
+        assertEquals(totalCacheSize(config), 100);
     }
 
     @Test
@@ -1306,20 +1290,20 @@ public class StreamsConfigTest {
     public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10);
+        assertEquals(totalCacheSize(config), 10);
     }
 
     @Test
     public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10);
+        assertEquals(totalCacheSize(config), 10);
     }
 
     @Test
     public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10 * 1024 * 1024);
+        assertEquals(totalCacheSize(config), 10 * 1024 * 1024);
     }
 
     @Test

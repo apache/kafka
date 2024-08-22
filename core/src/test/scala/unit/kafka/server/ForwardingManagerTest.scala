@@ -171,7 +171,8 @@ class ForwardingManagerTest {
 
     Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
 
-    client.prepareUnsupportedVersionResponse(req => req.apiKey == requestHeader.apiKey)
+    val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
+    client.prepareUnsupportedVersionResponse(isEnvelopeRequest)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))

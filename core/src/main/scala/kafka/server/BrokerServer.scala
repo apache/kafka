@@ -25,9 +25,9 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
+import kafka.server.share.SharePartitionManager
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -35,18 +35,21 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{CoordinatorRecord, GroupCoordinator, GroupCoordinatorService, CoordinatorRecordSerde}
+import org.apache.kafka.coordinator.group.{GroupCoordinatorRecordSerde, GroupConfigManager, GroupCoordinator, GroupCoordinatorService}
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
-import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
+import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.group.share.{NoOpShareStatePersister, Persister}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
+import org.apache.kafka.server.share.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
@@ -56,7 +59,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
-import java.util.concurrent.{CompletableFuture, ExecutionException, TimeoutException, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -149,6 +152,10 @@ class BrokerServer(
 
   var clientMetricsManager: ClientMetricsManager = _
 
+  var sharePartitionManager: SharePartitionManager = _
+
+  var persister: Persister = _
+
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
@@ -192,7 +199,7 @@ class BrokerServer(
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
-      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
+      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
 
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
@@ -296,9 +303,9 @@ class BrokerServer(
         time,
         assignmentsChannelManager,
         config.brokerId,
-        () => lifecycleManager.brokerEpoch,
-        (directoryId: Uuid) => logManager.directoryPath(directoryId).asJava,
-        (topicId: Uuid) => Optional.ofNullable(metadataCache.topicIdsToNames().get(topicId))
+        () => metadataCache.getImage(),
+        (directoryId: Uuid) => logManager.directoryPath(directoryId).
+          getOrElse("[unknown directory path]")
       )
       val directoryEventHandler = new DirectoryEventHandler {
         override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
@@ -355,12 +362,10 @@ class BrokerServer(
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
         ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager))
+        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
+        ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
 
-      val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
-        case (k: String, v: SupportedVersionRange) =>
-          k -> VersionRange.of(v.min, v.max)
-      }.asJava
+      val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures).asJava
 
       val brokerLifecycleChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
@@ -379,11 +384,6 @@ class BrokerServer(
         featuresRemapped,
         logManager.readBrokerEpochFromCleanShutdownFiles()
       )
-      // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
-      // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
-      lifecycleManager.initialCatchUpFuture.whenComplete((_, e) => {
-        if (e != null) brokerMetadataPublisher.firstPublishFuture.completeExceptionally(e)
-      })
 
       // Create and initialize an authorizer if one is configured.
       authorizer = config.createNewAuthorizer()
@@ -400,6 +400,23 @@ class BrokerServer(
           shardNum
         ))
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
+
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
+        config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize,
+        KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
+
+      persister = NoOpShareStatePersister.getInstance()
+
+      sharePartitionManager = new SharePartitionManager(
+        replicaManager,
+        time,
+        shareFetchSessionCache,
+        config.shareGroupConfig.shareGroupRecordLockDurationMs,
+        config.shareGroupConfig.shareGroupDeliveryCountLimit,
+        config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
+        persister,
+        new Metrics()
+      )
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
@@ -418,6 +435,7 @@ class BrokerServer(
         authorizer = authorizer,
         quotas = quotaManagers,
         fetchManager = fetchManager,
+        sharePartitionManager = Some(sharePartitionManager),
         brokerTopicStats = brokerTopicStats,
         clusterId = clusterId,
         time = time,
@@ -483,6 +501,11 @@ class BrokerServer(
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler
       )
+      // If the BrokerLifecycleManager's initial catch-up future fails, it means we timed out
+      // or are shutting down before we could catch up. Therefore, also fail the firstPublishFuture.
+      lifecycleManager.initialCatchUpFuture.whenComplete((_, e) => {
+        if (e != null) brokerMetadataPublisher.firstPublishFuture.completeExceptionally(e)
+      })
       metadataPublishers.add(brokerMetadataPublisher)
       brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
         () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
@@ -567,7 +590,7 @@ class BrokerServer(
     // to fix the underlying issue.
     if (config.isNewGroupCoordinatorEnabled) {
       val time = Time.SYSTEM
-      val serde = new CoordinatorRecordSerde
+      val serde = new GroupCoordinatorRecordSerde
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
         new SystemTimer("group-coordinator")
@@ -581,6 +604,7 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
+      val groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap())
       new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)
@@ -588,6 +612,7 @@ class BrokerServer(
         .withWriter(writer)
         .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
         .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
+        .withGroupConfigManager(groupConfigManager)
         .build()
     } else {
       GroupCoordinatorAdapter(
@@ -696,6 +721,8 @@ class BrokerServer(
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (brokerTopicStats != null)
         CoreUtils.swallow(brokerTopicStats.close(), this)
+      if (sharePartitionManager != null)
+        CoreUtils.swallow(sharePartitionManager.close(), this)
 
       isShuttingDown.set(false)
 

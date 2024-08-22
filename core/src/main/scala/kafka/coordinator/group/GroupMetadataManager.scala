@@ -24,6 +24,7 @@ import java.util.{Optional, OptionalInt}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.ConcurrentHashMap
+import java.util.function.Supplier
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupMetadataManager.maybeConvertOffsetCommitError
@@ -126,9 +127,9 @@ class GroupMetadataManager(brokerId: Int,
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
-  private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
+  private def recreateGauge[T](name: String, metric: Supplier[T]): Gauge[T] = {
     metricsGroup.removeMetric(name)
-    metricsGroup.newGauge(name, gauge)
+    metricsGroup.newGauge(name, metric)
   }
 
   recreateGauge("NumOffsets",
@@ -206,14 +207,6 @@ class GroupMetadataManager(brokerId: Int,
     isGroupLocal(groupId) && getGroup(groupId).forall { group =>
       group.inLock(group.is(Dead))
     }
-  }
-
-  // visible for testing
-  private[group] def isGroupOpenForProducer(producerId: Long, groupId: String) = openGroupsForProducer.get(producerId) match {
-    case Some(groups) =>
-      groups.contains(groupId)
-    case None =>
-      false
   }
 
   /**
@@ -337,7 +330,7 @@ class GroupMetadataManager(brokerId: Int,
     // call replica manager to append the group message
     replicaManager.appendRecords(
       timeout = config.offsetCommitTimeoutMs.toLong,
-      requiredAcks = config.offsetCommitRequiredAcks,
+      requiredAcks = -1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = records,
@@ -1242,6 +1235,7 @@ object GroupMetadataManager {
 
   // Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
   // (specify --formatter "kafka.coordinator.group.GroupMetadataManager\$OffsetsMessageFormatter" when consuming __consumer_offsets)
+  @Deprecated
   class OffsetsMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {
@@ -1263,6 +1257,7 @@ object GroupMetadataManager {
   }
 
   // Formatter for use with tools to read group metadata history
+  @Deprecated
   class GroupMetadataMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => GroupMetadataManager.readMessageKey(ByteBuffer.wrap(key))).foreach {

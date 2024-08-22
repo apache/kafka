@@ -20,8 +20,8 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.image.TopicsImage;
@@ -38,7 +38,7 @@ import java.util.Set;
  */
 public class ShareGroup extends ModernGroup<ShareGroupMember> {
 
-    private static final String PROTOCOL_TYPE = "share";
+    public static final String PROTOCOL_TYPE = "share";
 
     public enum ShareGroupState {
         EMPTY("Empty"),
@@ -144,7 +144,9 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
                 String.format("Member %s is not a member of group %s.", memberId, groupId));
         }
 
-        return new ShareGroupMember.Builder(memberId).build();
+        member = new ShareGroupMember.Builder(memberId).build();
+        updateMember(member);
+        return member;
     }
 
     /**
@@ -160,7 +162,6 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
 
         ShareGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
-        maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateGroupState();
     }
 
@@ -172,7 +173,6 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     public void removeMember(String memberId) {
         ShareGroupMember oldMember = members.remove(memberId);
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, null);
-        maybeRemovePartitionEpoch(oldMember);
         maybeUpdateGroupState();
     }
 
@@ -218,7 +218,21 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      */
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
-        records.add(CoordinatorRecordHelpers.newGroupEpochTombstoneRecord(groupId(), GroupType.SHARE));
+        members().forEach((memberId, member) ->
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord(groupId(), memberId))
+        );
+
+        members().forEach((memberId, member) ->
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
+        );
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+
+        members().forEach((memberId, member) ->
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
+        );
+
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId()));
     }
 
     @Override
@@ -247,33 +261,6 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         }
 
         state.set(newState);
-    }
-
-    /**
-     * Updates the partition epochs based on the old and the new member.
-     *
-     * @param oldMember The old member.
-     * @param newMember The new member.
-     */
-    private void maybeUpdatePartitionEpoch(
-        ShareGroupMember oldMember,
-        ShareGroupMember newMember
-    ) {
-        maybeRemovePartitionEpoch(oldMember);
-        addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-    }
-
-    /**
-     * Removes the partition epochs for the provided member.
-     *
-     * @param oldMember The old member.
-     */
-    private void maybeRemovePartitionEpoch(
-        ShareGroupMember oldMember
-    ) {
-        if (oldMember != null) {
-            removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
-        }
     }
 
     public ShareGroupDescribeResponseData.DescribedGroup asDescribedGroup(

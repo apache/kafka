@@ -182,6 +182,10 @@
         <subpackage name="migration">
             <allow pkg="org.apache.kafka.controller" />
         </subpackage>
+        <subpackage name="storage">
+            <allow pkg="org.apache.kafka.common.internals" />
+            <allow pkg="org.apache.kafka.snapshot" />
+        </subpackage>
         <subpackage name="util">
             <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
         </subpackage>

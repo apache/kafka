@@ -71,7 +71,6 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.ListSize.atMostOfSize;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.parseType;
 
@@ -429,6 +428,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_37 = UpgradeFromValues.UPGRADE_FROM_37.toString();
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.8.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_38 = UpgradeFromValues.UPGRADE_FROM_38.toString();
+
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -581,22 +587,6 @@ public class StreamsConfig extends AbstractConfig {
     static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
     static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
-    /** {@code default.windowed.key.serde.inner}
-     * @deprecated since 3.0.0  Use {@link #WINDOWED_INNER_CLASS_SERDE "windowed.inner.class.serde"} instead. */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
-    private static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed key. Must implement the " +
-        "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
-
-    /** {@code default.windowed.value.serde.inner}
-     * @deprecated since 3.0.0  Use {@link #WINDOWED_INNER_CLASS_SERDE "windowed.inner.class.serde"} instead. */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
-    private static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
-        "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
-
     public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
     private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface. Note that setting this config in KafkaStreams application would result " +
@@ -605,16 +595,12 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_KEY_SERDE_CLASS_CONFIG = "default.key.serde";
-    private static final String DEFAULT_KEY_SERDE_CLASS_DOC = "Default serializer / deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
-            + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
-            + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
+    private static final String DEFAULT_KEY_SERDE_CLASS_DOC = "Default serializer / deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. ";
 
     /** {@code default value.serde} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_VALUE_SERDE_CLASS_CONFIG = "default.value.serde";
-    private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
-            + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
-            + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
+    private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. ";
 
     /** {@code default.timestamp.extractor} */
     @SuppressWarnings("WeakerAccess")
@@ -732,17 +718,6 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
 
-    /**
-     * {@code retries}
-     * <p>
-     * This config is ignored by Kafka Streams. Note, that the internal clients (producer, admin) are still impacted by this config.
-     *
-     * @deprecated since 2.7
-     */
-    @SuppressWarnings("WeakerAccess")
-    @Deprecated
-    public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
-
     /** {@code retry.backoff.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
@@ -794,7 +769,8 @@ public class StreamsConfig extends AbstractConfig {
         UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
         UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
         UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\", \"" +
-        UPGRADE_FROM_35 + "\", \"" + UPGRADE_FROM_36 + "\", \"" + UPGRADE_FROM_37 + "(for upgrading from the corresponding old version).";
+        UPGRADE_FROM_35 + "\", \"" + UPGRADE_FROM_36 + "\", \"" + UPGRADE_FROM_37 + "\", \"" +
+        UPGRADE_FROM_38 + "(for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -834,6 +810,10 @@ public class StreamsConfig extends AbstractConfig {
     private static final String TASK_ASSIGNOR_CLASS_DOC = "A task assignor class or class name implementing the <code>" +
                                                           TaskAssignor.class.getName() + "</code> interface. Defaults to the <code>HighAvailabilityTaskAssignor</code> class.";
 
+    public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
+    private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "This configuration controls the output interval for summary information.\n" +
+            "If greater or equal to 0, the summary log will be output according to the set time interval;\n" +
+            "If less than 0, summary output is disabled.";
     /**
      * {@code topology.optimization}
      * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
@@ -1023,7 +1003,17 @@ public class StreamsConfig extends AbstractConfig {
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
-                    (name, value) -> verifyTopologyOptimizationConfigs((String) value),
+                    new ConfigDef.Validator() {
+                        @Override
+                        public void ensureValid(final String name, final Object value) {
+                            verifyTopologyOptimizationConfigs((String) value);
+                        }
+
+                        @Override
+                        public String toString() {
+                            return TOPOLOGY_OPTIMIZATION_CONFIGS.toString();
+                        }
+                    },
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
 
@@ -1148,12 +1138,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0L),
                     Importance.LOW,
                     CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
-            .define(RETRIES_CONFIG,
-                    Type.INT,
-                    0,
-                    between(0, Integer.MAX_VALUE),
-                    Importance.LOW,
-                    CommonClientConfigs.RETRIES_DOC)
             .define(RETRY_BACKOFF_MS_CONFIG,
                     Type.LONG,
                     100L,
@@ -1206,7 +1190,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(LOG_SUMMARY_INTERVAL_MS_CONFIG,
+                    Type.LONG,
+                    2 * 60 * 1000L,
+                    Importance.LOW,
+                    LOG_SUMMARY_INTERVAL_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -1273,14 +1262,14 @@ public class StreamsConfig extends AbstractConfig {
         // Private API to enable the state updater (i.e. state updating on a dedicated thread)
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
 
-        public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
+        public static boolean stateUpdaterEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
         }
         
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
-        public static boolean getProcessingThreadsEnabled(final Map<String, Object> configs) {
+        public static boolean processingThreadsEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
         }
 
@@ -1447,10 +1436,6 @@ public class StreamsConfig extends AbstractConfig {
         if (processingModeConfig.equals(EXACTLY_ONCE_BETA)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release. " +
                          "Please use `{}` instead.", EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2);
-        }
-
-        if (props.containsKey(RETRIES_CONFIG)) {
-            log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release.", RETRIES_CONFIG);
         }
 
         if (eosEnabled) {

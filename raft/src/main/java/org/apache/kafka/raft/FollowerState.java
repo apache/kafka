@@ -21,7 +21,6 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
 import org.slf4j.Logger;
@@ -34,7 +33,7 @@ public class FollowerState implements EpochState {
     private final int fetchTimeoutMs;
     private final int epoch;
     private final int leaderId;
-    private final Endpoints endpoints;
+    private final Endpoints leaderEndpoints;
     private final Set<Integer> voters;
     // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
@@ -43,6 +42,8 @@ public class FollowerState implements EpochState {
      * Fetch request are paused
      */
     private Optional<RawSnapshotWriter> fetchingSnapshot = Optional.empty();
+    // Used to throttle update voter request and allow for Fetch/FetchSnapshot requests
+    private final Timer updateVoterPeriodTimer;
 
     private final Logger log;
 
@@ -50,7 +51,7 @@ public class FollowerState implements EpochState {
         Time time,
         int epoch,
         int leaderId,
-        Endpoints endpoints,
+        Endpoints leaderEndpoints,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int fetchTimeoutMs,
@@ -59,9 +60,10 @@ public class FollowerState implements EpochState {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
         this.leaderId = leaderId;
-        this.endpoints = endpoints;
+        this.leaderEndpoints = leaderEndpoints;
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
+        this.updateVoterPeriodTimer = time.timer(updateVoterPeriodMs());
         this.highWatermark = highWatermark;
         this.log = logContext.logger(FollowerState.class);
     }
@@ -78,7 +80,7 @@ public class FollowerState implements EpochState {
 
     @Override
     public Endpoints leaderEndpoints() {
-        return endpoints;
+        return leaderEndpoints;
     }
 
     @Override
@@ -96,7 +98,7 @@ public class FollowerState implements EpochState {
     }
 
     public Node leaderNode(ListenerName listener) {
-        return endpoints
+        return leaderEndpoints
             .address(listener)
             .map(address -> new Node(leaderId, address.getHostString(), address.getPort()))
             .orElseThrow(() ->
@@ -105,7 +107,7 @@ public class FollowerState implements EpochState {
                         "Unknown endpoint for leader %d and listener %s, known endpoints are %s",
                         leaderId,
                         listener,
-                        endpoints
+                        leaderEndpoints
                     )
                 )
             );
@@ -124,6 +126,27 @@ public class FollowerState implements EpochState {
     public void overrideFetchTimeout(long currentTimeMs, long timeoutMs) {
         fetchTimer.update(currentTimeMs);
         fetchTimer.reset(timeoutMs);
+    }
+
+    private long updateVoterPeriodMs() {
+        // Allow for a few rounds of fetch request before attempting to update
+        // the voter state
+        return fetchTimeoutMs * 3;
+    }
+
+    public boolean hasUpdateVoterPeriodExpired(long currentTimeMs) {
+        updateVoterPeriodTimer.update(currentTimeMs);
+        return updateVoterPeriodTimer.isExpired();
+    }
+
+    public long remainingUpdateVoterPeriodMs(long currentTimeMs) {
+        updateVoterPeriodTimer.update(currentTimeMs);
+        return updateVoterPeriodTimer.remainingMs();
+    }
+
+    public void resetUpdateVoterPeriod(long currentTimeMs) {
+        updateVoterPeriodTimer.update(currentTimeMs);
+        updateVoterPeriodTimer.reset(updateVoterPeriodMs());
     }
 
     public boolean updateHighWatermark(OptionalLong newHighWatermark) {
@@ -192,12 +215,12 @@ public class FollowerState implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "FollowerState(fetchTimeoutMs=%d, epoch=%d, leader=%d, endpoints=%s, voters=%s, highWatermark=%s, " +
-            "fetchingSnapshot=%s)",
+            "FollowerState(fetchTimeoutMs=%d, epoch=%d, leader=%d, leaderEndpoints=%s, " +
+            "voters=%s, highWatermark=%s, fetchingSnapshot=%s)",
             fetchTimeoutMs,
             epoch,
             leaderId,
-            endpoints,
+            leaderEndpoints,
             voters,
             highWatermark,
             fetchingSnapshot

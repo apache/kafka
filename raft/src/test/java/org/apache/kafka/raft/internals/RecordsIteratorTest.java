@@ -40,6 +40,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.VoterSet;
+import org.apache.kafka.raft.VoterSetTest;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
@@ -162,10 +165,10 @@ public final class RecordsIteratorTest {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setTime(new MockTime())
-            .setKraftVersion((short) 0)
+            .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
             .setVoterSet(Optional.empty())
             .setRawSnapshotWriter(
-                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf))
+                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.append(Arrays.asList("a", "b", "c"));
@@ -207,15 +210,15 @@ public final class RecordsIteratorTest {
     @Test
     public void testControlRecordIterationWithKraftVersion1() {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
-        VoterSet voterSet = new VoterSet(
+        VoterSet voterSet = VoterSet.fromMap(
             VoterSetTest.voterMap(IntStream.of(1, 2, 3), true)
         );
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setTime(new MockTime())
-            .setKraftVersion((short) 1)
+            .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
             .setVoterSet(Optional.of(voterSet))
             .setRawSnapshotWriter(
-                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), snapshotBuf -> buffer.set(snapshotBuf))
+                new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
             snapshot.append(Arrays.asList("a", "b", "c"));
@@ -411,7 +414,6 @@ public final class RecordsIteratorTest {
                 compression,
                 batch.baseOffset,
                 batch.appendTimestamp,
-                false,
                 batch.epoch,
                 1024
             );

@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.CreateTopicsRequestData
-import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreateableTopicConfig, CreateableTopicConfigCollection}
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
@@ -252,11 +252,11 @@ class DefaultAutoTopicCreationManager(
     }
   }
 
-  private def convertToTopicConfigCollections(config: Properties): CreateableTopicConfigCollection = {
-    val topicConfigs = new CreateableTopicConfigCollection()
+  private def convertToTopicConfigCollections(config: Properties): CreatableTopicConfigCollection = {
+    val topicConfigs = new CreatableTopicConfigCollection()
     config.forEach {
       case (name, value) =>
-        topicConfigs.add(new CreateableTopicConfig()
+        topicConfigs.add(new CreatableTopicConfig()
           .setName(name.toString)
           .setValue(value.toString))
     }

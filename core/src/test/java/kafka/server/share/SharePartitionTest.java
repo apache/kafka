@@ -690,6 +690,54 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcknowledgeOutOfRangeCachedDataFirstBatch() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+
+        // Create data for the batch with offsets 0-4.
+        MemoryRecords records = memoryRecords(5, 0);
+        CompletableFuture<List<AcquiredRecords>> result = sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(1, result.join().size());
+
+        // Create data for the batch with offsets 20-24.
+        records = memoryRecords(5, 20);
+        result = sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(1, result.join().size());
+
+        // Acknowledge a batch when first batch violates the range.
+        List<ShareAcknowledgementBatch> acknowledgeBatches = Arrays.asList(
+            new ShareAcknowledgementBatch(0, 10, Collections.singletonList((byte) 1)),
+            new ShareAcknowledgementBatch(20, 24, Collections.singletonList((byte) 1)));
+        CompletableFuture<Optional<Throwable>> ackResult = sharePartition.acknowledge(
+            MEMBER_ID, acknowledgeBatches);
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertTrue(ackResult.join().isPresent());
+        assertEquals(InvalidRequestException.class, ackResult.join().get().getClass());
+
+        // Create data for the batch with offsets 5-10.
+        records = memoryRecords(6, 5);
+        result = sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 0, records,
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(1, result.join().size());
+
+        // Previous failed acknowledge request should succeed now.
+        ackResult = sharePartition.acknowledge(
+            MEMBER_ID, acknowledgeBatches);
+        assertFalse(ackResult.isCompletedExceptionally());
+        assertFalse(ackResult.join().isPresent());
+    }
+
+    @Test
     public void testAcknowledgeWithAnotherMember() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
         MemoryRecords records = memoryRecords(5, 5);
@@ -4454,6 +4502,29 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(21L, new InFlightState(RecordState.ACQUIRED, (short) 1, "member-1"));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
+    }
+
+    @Test
+    public void testInitializeWhenReadStateRpcReturnsZeroAvailableRecords() {
+        List<PersisterStateBatch> stateBatches = new ArrayList<>();
+        for (int i = 0; i < 500; i++) {
+            stateBatches.add(new PersisterStateBatch(234L + i, 234L + i, RecordState.ACKNOWLEDGED.id, (short) 1));
+        }
+        stateBatches.add(new PersisterStateBatch(232L, 232L, RecordState.ARCHIVED.id, (short) 1));
+
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+                new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                        PartitionFactory.newPartitionAllData(0, 3, 232L, Errors.NONE.code(), Errors.NONE.message(),
+                                stateBatches)))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        assertTrue(sharePartition.cachedState().isEmpty());
+        assertEquals(734, sharePartition.nextFetchOffset());
+        assertEquals(734, sharePartition.startOffset());
+        assertEquals(734, sharePartition.endOffset());
     }
 
     private MemoryRecords memoryRecords(int numOfRecords) {

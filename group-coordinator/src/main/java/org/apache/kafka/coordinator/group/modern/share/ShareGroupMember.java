@@ -18,6 +18,8 @@ package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
+import org.apache.kafka.coordinator.group.Utils;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
@@ -81,6 +83,13 @@ public class ShareGroupMember extends ModernGroupMember {
             this.assignedPartitions = member.assignedPartitions;
         }
 
+        public Builder updateMemberEpoch(int memberEpoch) {
+            int currentMemberEpoch = this.memberEpoch;
+            this.memberEpoch = memberEpoch;
+            this.previousMemberEpoch = currentMemberEpoch;
+            return this;
+        }
+
         public Builder setMemberEpoch(int memberEpoch) {
             this.memberEpoch = memberEpoch;
             return this;
@@ -136,6 +145,14 @@ public class ShareGroupMember extends ModernGroupMember {
             setClientId(record.clientId());
             setClientHost(record.clientHost());
             setSubscribedTopicNames(record.subscribedTopicNames());
+            return this;
+        }
+
+        public Builder updateWith(ShareGroupCurrentMemberAssignmentValue record) {
+            setMemberEpoch(record.memberEpoch());
+            setPreviousMemberEpoch(record.previousMemberEpoch());
+            setState(MemberState.fromValue(record.state()));
+            setAssignedPartitions(Utils.assignmentFromShareGroupTopicPartitions(record.assignedPartitions()));
             return this;
         }
 
