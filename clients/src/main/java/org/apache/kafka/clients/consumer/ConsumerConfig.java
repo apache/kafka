@@ -45,6 +45,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.clients.consumer.RangeAssignor.RANGE_ASSIGNOR_NAME;
@@ -386,7 +387,9 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
-
+    private static final List<Class<? extends AbstractPartitionAssignor>> PARTITION_ASSIGNOR_DEFAULT_VALUE = 
+            Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class);
+    
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -420,7 +423,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         HEARTBEAT_INTERVAL_MS_DOC)
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
-                                        Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class),
+                                        PARTITION_ASSIGNOR_DEFAULT_VALUE,
                                         new ConfigDef.NonNullValidator(),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
@@ -732,9 +735,12 @@ public class ConsumerConfig extends AbstractConfig {
 
     private void checkPartitionAssigmentStrategy() {
         List<String> assignmentStrategies = getList(PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
+        Set<String> defaultAssignmentStrategiesClassNames = PARTITION_ASSIGNOR_DEFAULT_VALUE.stream()
+                .map(Class::getName).collect(Collectors.toSet());
         if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CONSUMER.name())) {
-            List<Class<? extends AbstractPartitionAssignor>> defaultValue = Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class);
-            if (!new HashSet<>(assignmentStrategies).containsAll(defaultValue) || assignmentStrategies.size() != defaultValue.size()) {
+            if ((!new HashSet<>(assignmentStrategies).containsAll(defaultAssignmentStrategiesClassNames) &&
+                    !new HashSet<>(assignmentStrategies).containsAll(PARTITION_ASSIGNOR_DEFAULT_VALUE)) ||
+                    assignmentStrategies.size() != PARTITION_ASSIGNOR_DEFAULT_VALUE.size()) {
                 throw new ConfigException(PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
             }
         }
