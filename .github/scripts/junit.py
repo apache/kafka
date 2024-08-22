@@ -153,13 +153,13 @@ if __name__ == "__main__":
                 for test_failure in suite.test_failures:
                     logger.debug(f"Found test failure: {test_failure}")
                     simple_class_name = test_failure.class_name.split(".")[-1]
-                    table.append(("❌", simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}"))
+                    table.append(("❌", simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
                 for skipped_test in suite.skipped_tests:
                     simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
-                    table.append(("⚠️", skipped_test.class_name, skipped_test.test_name, "Skipped", ""))
+                    table.append(("⚠️", simple_class_name, skipped_test.test_name, "Skipped", ""))
     duration = pretty_time_duration(total_time)
-    print(f"{total_tests} tests run in {duration}, {total_failures} failed, {total_skipped} skipped, {total_errors} errors.")
+    print(f"{total_tests} tests run in {duration}, {total_failures} failed ❌, {total_skipped} skipped ⚠️, {total_errors} errors.")
     if len(table) > 0:
         print(f"|   | Module | Test | Message | Time |")
         print(f"| - | ------ | ---- | ------- | ---- |")
@@ -168,7 +168,10 @@ if __name__ == "__main__":
             print(f"| {row_joined} |")
 
     if total_failures > 0:
-        logger.debug(f"Total Failures: {total_failures}")
+        logger.debug(f"Failing this step due to {total_failures} test failures")
+        exit(1)
+    elif total_errors > 0:
+        logger.debug(f"Failing this step due to {total_errors} test errors")
         exit(1)
     else:
         exit(0)
