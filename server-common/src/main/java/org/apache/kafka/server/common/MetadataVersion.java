@@ -646,6 +646,14 @@ public enum MetadataVersion {
         return version != lowVersion;
     }
 
+    public short writeTxnMarkersRequestVersion() {
+        if (isAtLeast(IBP_2_8_IV0)) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
     public boolean isAtLeast(MetadataVersion otherVersion) {
         return this.compareTo(otherVersion) >= 0;
     }
