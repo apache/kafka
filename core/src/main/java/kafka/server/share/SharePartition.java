@@ -881,6 +881,7 @@ public class SharePartition {
 
         TopicData<PartitionAllData> state = response.topicsData().get(0);
         if (state.topicId() != topicIdPartition.topicId() || state.partitions().size() != 1
+            || state.partitions().get(0).errorCode() != Errors.NONE.code()
             || state.partitions().get(0).partition() != topicIdPartition.partition()) {
             log.error("Failed to initialize the share partition: {}-{}. Invalid topic partition response: {}.",
                 groupId, topicIdPartition, response);
