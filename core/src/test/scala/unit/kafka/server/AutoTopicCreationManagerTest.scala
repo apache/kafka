@@ -38,6 +38,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
@@ -58,6 +59,7 @@ class AutoTopicCreationManagerTest {
   private val controller = Mockito.mock(classOf[KafkaController])
   private val groupCoordinator = Mockito.mock(classOf[GroupCoordinator])
   private val transactionCoordinator = Mockito.mock(classOf[TransactionCoordinator])
+  private val shareCoordinator = Mockito.mock(classOf[ShareCoordinator])
   private var autoTopicCreationManager: AutoTopicCreationManager = _
 
   private val internalTopicPartitions = 2
@@ -109,7 +111,8 @@ class AutoTopicCreationManagerTest {
       Some(adminManager),
       Some(controller),
       groupCoordinator,
-      transactionCoordinator)
+      transactionCoordinator,
+      shareCoordinator)
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor))
@@ -137,7 +140,8 @@ class AutoTopicCreationManagerTest {
       Some(adminManager),
       Some(controller),
       groupCoordinator,
-      transactionCoordinator)
+      transactionCoordinator,
+      shareCoordinator)
 
     val topicName = "topic"
 
@@ -320,7 +324,8 @@ class AutoTopicCreationManagerTest {
       Some(adminManager),
       Some(controller),
       groupCoordinator,
-      transactionCoordinator)
+      transactionCoordinator,
+      shareCoordinator)
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName))
@@ -350,7 +355,8 @@ class AutoTopicCreationManagerTest {
       Some(adminManager),
       Some(controller),
       groupCoordinator,
-      transactionCoordinator)
+      transactionCoordinator,
+      shareCoordinator)
 
     Mockito.when(controller.isActive).thenReturn(false)
     val newTopic = if (isInternal) {

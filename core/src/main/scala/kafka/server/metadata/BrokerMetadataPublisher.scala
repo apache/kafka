@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
@@ -66,6 +67,7 @@ class BrokerMetadataPublisher(
   replicaManager: ReplicaManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
+  shareCoordinator: ShareCoordinator,
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
   scramPublisher: ScramPublisher,
@@ -157,6 +159,17 @@ class BrokerMetadataPublisher(
             txnCoordinator.onResignation)
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating txn " +
+            s"coordinator with local changes in $deltaName", t)
+        }
+        try {
+          updateCoordinator(newImage,
+            delta,
+            Topic.SHARE_GROUP_STATE_TOPIC_NAME,
+            shareCoordinator.onElection,
+            (partitionIndex, leaderEpochOpt) => shareCoordinator.onResignation(partitionIndex, toOptionalInt(leaderEpochOpt))
+          )
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
             s"coordinator with local changes in $deltaName", t)
         }
         try {
@@ -311,6 +324,15 @@ class BrokerMetadataPublisher(
         Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
+    }
+    if (config.shareGroupConfig.isShareGroupEnabled && shareCoordinator != null) {
+      try {
+        // Start the share coordinator.
+        shareCoordinator.startup(() => metadataCache.numPartitions(
+          Topic.SHARE_GROUP_STATE_TOPIC_NAME).getOrElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
+      } catch {
+        case t: Throwable => fatalFaultHandler.handleFault("Error starting Share coordinator", t)
+      }
     }
   }
 

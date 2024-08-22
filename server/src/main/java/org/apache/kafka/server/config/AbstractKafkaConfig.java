@@ -57,6 +57,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             CleanerConfig.CONFIG_DEF,
             LogConfig.SERVER_CONFIG_DEF,
             ShareGroupConfig.CONFIG_DEF,
+            ShareCoordinatorConfig.CONFIG_DEF,
             TransactionLogConfigs.CONFIG_DEF,
             TransactionStateManagerConfigs.CONFIG_DEF,
             QuorumConfig.CONFIG_DEF,
