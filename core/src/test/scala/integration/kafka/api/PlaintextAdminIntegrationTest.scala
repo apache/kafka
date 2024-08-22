@@ -844,6 +844,41 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeConfigsNonexistent(quorum: String): Unit = {
+    client = createAdminClient
+
+    val brokerException = assertThrows(classOf[ExecutionException], () => {
+      client.describeConfigs(Seq(new ConfigResource(ConfigResource.Type.BROKER, "-1")).asJava).all().get()
+    })
+    assertInstanceOf(classOf[TimeoutException], brokerException.getCause)
+
+    val topicException = assertThrows(classOf[ExecutionException], () => {
+      client.describeConfigs(Seq(new ConfigResource(ConfigResource.Type.TOPIC, "none_topic")).asJava).all().get()
+    })
+    assertInstanceOf(classOf[UnknownTopicOrPartitionException], topicException.getCause)
+
+    val brokerLoggerException = assertThrows(classOf[ExecutionException], () => {
+      client.describeConfigs(Seq(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "-1")).asJava).all().get()
+    })
+    assertInstanceOf(classOf[TimeoutException], brokerLoggerException.getCause)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testDescribeConfigsNonexistentForKraft(quorum: String): Unit = {
+    client = createAdminClient
+
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, "none_group")
+    val groupResult = client.describeConfigs(Seq(groupResource).asJava).all().get().get(groupResource)
+    assertNotEquals(0, groupResult.entries().size())
+
+    val metricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "none_metric")
+    val metricResult = client.describeConfigs(Seq(metricResource).asJava).all().get().get(metricResource)
+    assertEquals(0, metricResult.entries().size())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeAndAlterConfigs(quorum: String): Unit = {
     client = createAdminClient
 
