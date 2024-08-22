@@ -310,7 +310,7 @@ abstract class QuorumTestHarness extends Logging {
 
   def addFormatterSettings(formatter: Formatter): Unit = {}
 
-  protected def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
+  private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
     newKRaftQuorum(new Properties())
   }
 

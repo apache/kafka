@@ -181,7 +181,7 @@ public final class QuorumController implements Controller {
     /**
      * The maximum records that the controller will write in a single batch.
      */
-    static final int MAX_RECORDS_PER_BATCH = 10000;
+    private static final int MAX_RECORDS_PER_BATCH = 10000;
 
     /**
      * The maximum records any user-initiated operation is allowed to generate.
