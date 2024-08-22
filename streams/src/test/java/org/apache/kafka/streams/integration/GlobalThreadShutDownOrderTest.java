@@ -145,7 +145,8 @@ public class GlobalThreadShutDownOrderTest {
             storeBuilder,
             globalStoreTopic,
             Consumed.with(Serdes.String(), Serdes.Long()),
-            processorSupplier
+            processorSupplier,
+            true
         );
 
         builder

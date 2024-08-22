@@ -397,7 +397,8 @@ public abstract class TopologyTestDriverTest {
                     public void process(final Record<Object, Object> record) {
                         store.put(record.key(), record.value());
                     }
-                }
+                },
+                false
             );
         }
 
@@ -885,7 +886,8 @@ public abstract class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "globalTopicName",
             "globalProcessorName",
-            voidProcessorSupplier);
+            voidProcessorSupplier,
+            false);
 
         testDriver = new TopologyTestDriver(topology, config);
 
@@ -1221,7 +1223,8 @@ public abstract class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "topicDummy1",
             "processorDummy1",
-            voidProcessorSupplier);
+            voidProcessorSupplier,
+            false);
         topology.addGlobalStore(
             persistent ?
                 Stores.timestampedKeyValueStoreBuilder(
@@ -1239,7 +1242,8 @@ public abstract class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "topicDummy2",
             "processorDummy2",
-            voidProcessorSupplier);
+            voidProcessorSupplier,
+            false);
         if (persistent) { // versioned stores do not offer an in-memory version yet
             topology.addGlobalStore(
                 Stores.versionedKeyValueStoreBuilder(
@@ -1252,7 +1256,8 @@ public abstract class TopologyTestDriverTest {
                 Serdes.ByteArray().deserializer(),
                 "topicDummy3",
                 "processorDummy3",
-                voidProcessorSupplier);
+                voidProcessorSupplier,
+                false);
         }
     }
 
@@ -1276,7 +1281,8 @@ public abstract class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "globalTopicName",
             "globalProcessorName",
-            voidProcessorSupplier);
+            voidProcessorSupplier,
+            false);
 
         testDriver = new TopologyTestDriver(topology, config);
 
@@ -1687,7 +1693,8 @@ public abstract class TopologyTestDriverTest {
                 public void process(final Record<String, String> record) {
                     stateStore.put(record.key(), record.value());
                 }
-            }
+            },
+            false
         );
         topology.addProcessor(
             "recursiveProcessor",
