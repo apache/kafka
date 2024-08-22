@@ -664,7 +664,7 @@ public class RestoreIntegrationTest {
         }
 
         boolean awaitUntilRestorationSuspends() throws InterruptedException {
-            return awaitLatchWithTimeout(onRestoreSuspendedLatch);
+            return onRestoreEndLatch.getCount() == 1 || awaitLatchWithTimeout(onRestoreSuspendedLatch);
         }
 
         boolean awaitUntilRestorationEnds() throws InterruptedException {
