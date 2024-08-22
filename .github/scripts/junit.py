@@ -152,10 +152,12 @@ if __name__ == "__main__":
                 total_time += suite.time
                 for test_failure in suite.test_failures:
                     logger.debug(f"Found test failure: {test_failure}")
-                    table.append(("❌", test_failure.class_name, test_failure.test_name, test_failure.failure_message))
+                    simple_class_name = test_failure.class_name.split(".")[-1]
+                    table.append(("❌", simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}"))
                 for skipped_test in suite.skipped_tests:
+                    simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
-                    table.append(("⚠️", skipped_test.class_name, skipped_test.test_name, ""))
+                    table.append(("⚠️", skipped_test.class_name, skipped_test.test_name, "Skipped", ""))
     duration = pretty_time_duration(total_time)
     print(f"{total_tests} tests run in {duration}, {total_failures} failed, {total_skipped} skipped, {total_errors} errors.")
     if len(table) > 0:
@@ -166,7 +168,7 @@ if __name__ == "__main__":
             print(f"| {row_joined} |")
 
     if total_failures > 0:
-        logger.debug("Total Failures: {total_failures}")
+        logger.debug(f"Total Failures: {total_failures}")
         exit(1)
     else:
         exit(0)
