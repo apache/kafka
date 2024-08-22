@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.metadata.authorizer.trie;
 
-import java.util.Collections;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 
 public class ReadOnlyNode<T> implements NodeData<T> {
     public static <T> ReadOnlyNode<T> create(NodeData<T> data) {

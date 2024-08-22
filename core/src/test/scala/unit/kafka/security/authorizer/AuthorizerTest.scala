@@ -34,7 +34,6 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceP
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.controller.MockAclMutator
-import org.apache.kafka.metadata.authorizer.AbstractClusterMetadataAuthorizerTest.AuthorizerTestServerInfo
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.metadata.authorizer.AbstractAuthorizerTest.AuthorizerTestServerInfo
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}

@@ -24,11 +24,10 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -77,7 +76,6 @@ import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.PatternType.PREFIXED;
 import static org.apache.kafka.common.resource.ResourceType.GROUP;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
-import static org.apache.kafka.common.security.auth.KafkaPrincipal.USER_TYPE;
 import static org.apache.kafka.metadata.authorizer.AuthorizerData.findResult;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.SUPER_USERS_CONFIG;
@@ -92,6 +90,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 
 @Timeout(value = 40)
@@ -153,7 +152,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         }
 
         protected  void applyAcls(BiConsumer<Uuid, StandardAcl> consumer) {
-            acls.forEach( a -> consumer.accept(a.id(), a.acl()));
+            acls.forEach(a -> consumer.accept(a.id(), a.acl()));
         }
 
         public final Builder addAcls(Stream<StandardAcl> acls) {
@@ -162,7 +161,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         }
 
         public final Builder addAcl(StandardAcl acl) {
-            acls.add(withId(acl));
+            acls.add(AuthorizerTestUtils.withId(acl));
             return this;
         }
 
@@ -284,68 +283,57 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         return lst.stream();
     }
 
-    static Action newAction(AclOperation aclOperation,
-                            ResourceType resourceType,
-                            String resourceName) {
-        return new Action(aclOperation,
-                new ResourcePattern(resourceType, resourceName, LITERAL), 1, false, false);
-    }
-
-    static StandardAclWithId withId(StandardAcl acl) {
-        return new StandardAclWithId(new Uuid(acl.hashCode(), acl.hashCode()), acl);
-    }
-
     @Test
     public final void testFindResultImplication() throws Exception {
-        AuthorizableRequestContext ctxt = newRequestContext("bob");
+        AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("bob");
         // These permissions all imply DESCRIBE.
         for (AclOperation op : asList(DESCRIBE, READ, WRITE, DELETE, ALTER)) {
-            assertEquals(ALLOWED, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
+            assertEquals(ALLOWED, findResult(AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo_bar"),
                     ctxt,
                     new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, op, ALLOW)));
         }
         // CREATE does not imply DESCRIBE
-        assertNull(findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
+        assertNull(findResult(AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo_bar"),
                 ctxt,
                 new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, CREATE, ALLOW)));
         // Deny ACLs don't do "implication".
         for (AclOperation op : asList(READ, WRITE, DELETE, ALTER)) {
-            assertNull(findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
+            assertNull(findResult(AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo_bar"),
                     ctxt,
                     new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, op, DENY)));
         }
         // Exact match
-        assertEquals(DENIED, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
+        assertEquals(DENIED, findResult(AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo_bar"),
                 ctxt,
                 new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, DESCRIBE, DENY)));
         // These permissions all imply DESCRIBE_CONFIGS.
         for (AclOperation op : asList(DESCRIBE_CONFIGS, ALTER_CONFIGS)) {
-            assertEquals(ALLOWED, findResult(newAction(DESCRIBE_CONFIGS, TOPIC, "foo_bar"),
+            assertEquals(ALLOWED, findResult(AuthorizerTestUtils.newAction(DESCRIBE_CONFIGS, TOPIC, "foo_bar"),
                     ctxt,
                     new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, op, ALLOW)));
         }
         // Deny ACLs don't do "implication".
-        assertNull(findResult(newAction(DESCRIBE_CONFIGS, TOPIC, "foo_bar"),
+        assertNull(findResult(AuthorizerTestUtils.newAction(DESCRIBE_CONFIGS, TOPIC, "foo_bar"),
                 ctxt,
                 new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, ALTER_CONFIGS, DENY)));
         // Exact match
-        assertEquals(DENIED, findResult(newAction(ALTER_CONFIGS, TOPIC, "foo_bar"),
+        assertEquals(DENIED, findResult(AuthorizerTestUtils.newAction(ALTER_CONFIGS, TOPIC, "foo_bar"),
                 ctxt,
                 new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, ALTER_CONFIGS, DENY)));
     }
 
     @Test
     public final void testFindResultPrincipalMatching() throws Exception {
-        assertEquals(ALLOWED, findResult(newAction(READ, TOPIC, "foo_bar"),
-                newRequestContext("bob"),
+        assertEquals(ALLOWED, findResult(AuthorizerTestUtils.newAction(READ, TOPIC, "foo_bar"),
+                AuthorizerTestUtils.newRequestContext("bob"),
                 new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, READ, ALLOW)));
         // Principal does not match.
-        assertNull(findResult(newAction(READ, TOPIC, "foo_bar"),
-                newRequestContext("alice"),
+        assertNull(findResult(AuthorizerTestUtils.newAction(READ, TOPIC, "foo_bar"),
+                AuthorizerTestUtils.newRequestContext("alice"),
                 new StandardAcl(TOPIC, "foo_", PREFIXED, "User:bob", WILDCARD, READ, ALLOW)));
         // Wildcard principal matches anything.
-        assertEquals(DENIED, findResult(newAction(READ, GROUP, "bar"),
-                newRequestContext("alice"),
+        assertEquals(DENIED, findResult(AuthorizerTestUtils.newAction(READ, GROUP, "bar"),
+                AuthorizerTestUtils.newRequestContext("alice"),
                 new StandardAcl(GROUP, "bar", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, READ, DENY)));
     }
 
@@ -358,20 +346,6 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         }
         assertFalse(iterator.hasNext(), "Expected only " + acls.length + " element(s)");
     }
-
-    protected AuthorizableRequestContext newRequestContext(String principal) throws Exception {
-        return new MockAuthorizableRequestContext.Builder()
-                .setPrincipal(new KafkaPrincipal(USER_TYPE, principal))
-                .build();
-    }
-
-    protected AuthorizableRequestContext newRequestContext(String principal, InetAddress clientAddress) throws Exception {
-        return new MockAuthorizableRequestContext.Builder()
-                .setPrincipal(new KafkaPrincipal(USER_TYPE, principal))
-                .setClientAddress(clientAddress)
-                .build();
-    }
-
 
     /**
      * Test that ClusterMetadataAuthorizer#start returns a completed future for early start
@@ -398,7 +372,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         Builder builder = getTestingWrapperBuilder();
 
         T authorizer = builder.get().getAuthorizer();
-        AuthorizableRequestContext requestContext = newRequestContext("User:alice");
+        AuthorizableRequestContext requestContext = AuthorizerTestUtils.newRequestContext("User:alice");
 
         for (AclOperation op : AclOperation.values()) {
             for (ResourceType type : ResourceType.values()) {
@@ -455,7 +429,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 .addAcl(new StandardAcl(TOPIC, "foo", PREFIXED, "User:bob", WILDCARD, READ, ALLOW));
 
         T authorizer = builder.get().getAuthorizer();
-        AuthorizableRequestContext requestContext = newRequestContext("alice");
+        AuthorizableRequestContext requestContext = AuthorizerTestUtils.newRequestContext("alice");
 
         for (AclOperation op : AclOperation.values()) {
             for (ResourceType type : ResourceType.values()) {
@@ -515,43 +489,43 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         Builder builder = getTestingWrapperBuilder().superUser("User:superman");
 
         List<StandardAcl> acls = Arrays.asList(
-                new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", "*", ALL, DENY),
-                new StandardAcl(TOPIC, "foo", PREFIXED, "User:alice", "*", READ, ALLOW),
-                new StandardAcl(TOPIC, "foo", LITERAL, "User:*", "*", ALL, DENY),
-                new StandardAcl(TOPIC, "foo", PREFIXED, "User:*", "*", DESCRIBE, ALLOW)
+                new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", WILDCARD, ALL, DENY),
+                new StandardAcl(TOPIC, "foo", PREFIXED, "User:alice", WILDCARD, READ, ALLOW),
+                new StandardAcl(TOPIC, "foo", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, ALL, DENY),
+                new StandardAcl(TOPIC, "foo", PREFIXED, WILDCARD_PRINCIPAL, WILDCARD, DESCRIBE, ALLOW)
         );
         builder.addAcls(acls.stream());
         T authorizer = builder.get().getAuthorizer();
 
-        AuthorizableRequestContext ctxt = newRequestContext("alice");
-        execAuthorize(() -> "Test DENY precedence with operation all : alice write", authorizer, ctxt, newAction(WRITE, TOPIC, "foo"), DENIED);
-        execAuthorize(() -> "Test DENY precedence with operation all : alice read", authorizer, ctxt, newAction(READ, TOPIC, "foo"), DENIED);
-        execAuthorize(() -> "Test DENY precedence with operation all : alice describe", authorizer, ctxt, newAction(DESCRIBE, TOPIC, "foo"), DENIED);
-        execAuthorize(() -> "Test DENY precedence with operation all : alice read foobar", authorizer, ctxt, newAction(READ, TOPIC, "foobar"), ALLOWED);
+        AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("alice");
+        execAuthorize(() -> "Test DENY precedence with operation all : alice write", authorizer, ctxt, AuthorizerTestUtils.newAction(WRITE, TOPIC, "foo"), DENIED);
+        execAuthorize(() -> "Test DENY precedence with operation all : alice read", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foo"), DENIED);
+        execAuthorize(() -> "Test DENY precedence with operation all : alice describe", authorizer, ctxt, AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo"), DENIED);
+        execAuthorize(() -> "Test DENY precedence with operation all : alice read foobar", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foobar"), ALLOWED);
 
-        ctxt = newRequestContext("bob");
-        execAuthorize(() -> "Test DENY precedence with operation all : bob describe", authorizer, ctxt, newAction(DESCRIBE, TOPIC, "foo"), DENIED);
-        execAuthorize(() -> "Test DENY precedence with operation all : bob read", authorizer, ctxt, newAction(READ, TOPIC, "foo"), DENIED);
-        execAuthorize(() -> "Test DENY precedence with operation all : bob write", authorizer, ctxt, newAction(WRITE, TOPIC, "foo"), DENIED);
-        execAuthorize(() -> "Test DENY precedence with operation all : bob describe foobaz", authorizer, ctxt, newAction(DESCRIBE, TOPIC, "foobaz"), ALLOWED);
-        execAuthorize(() -> "Test DENY precedence with operation all : bob read foobaz", authorizer, ctxt, newAction(READ, TOPIC, "foobaz"), DENIED);
+        ctxt = AuthorizerTestUtils.newRequestContext("bob");
+        execAuthorize(() -> "Test DENY precedence with operation all : bob describe", authorizer, ctxt, AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo"), DENIED);
+        execAuthorize(() -> "Test DENY precedence with operation all : bob read", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foo"), DENIED);
+        execAuthorize(() -> "Test DENY precedence with operation all : bob write", authorizer, ctxt, AuthorizerTestUtils.newAction(WRITE, TOPIC, "foo"), DENIED);
+        execAuthorize(() -> "Test DENY precedence with operation all : bob describe foobaz", authorizer, ctxt, AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foobaz"), ALLOWED);
+        execAuthorize(() -> "Test DENY precedence with operation all : bob read foobaz", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foobaz"), DENIED);
 
         // same in groups
         assertEquals(Arrays.asList(DENIED, DENIED, DENIED, ALLOWED), authorizer.authorize(
-                newRequestContext("alice"),
+                AuthorizerTestUtils.newRequestContext("alice"),
                 Arrays.asList(
-                        newAction(WRITE, TOPIC, "foo"),
-                        newAction(READ, TOPIC, "foo"),
-                        newAction(DESCRIBE, TOPIC, "foo"),
-                        newAction(READ, TOPIC, "foobar"))));
+                        AuthorizerTestUtils.newAction(WRITE, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "foobar"))));
         assertEquals(Arrays.asList(DENIED, DENIED, DENIED, ALLOWED, DENIED), authorizer.authorize(
-                newRequestContext("bob"),
+                AuthorizerTestUtils.newRequestContext("bob"),
                 Arrays.asList(
-                        newAction(DESCRIBE, TOPIC, "foo"),
-                        newAction(READ, TOPIC, "foo"),
-                        newAction(WRITE, TOPIC, "foo"),
-                        newAction(DESCRIBE, TOPIC, "foobaz"),
-                        newAction(READ, TOPIC, "foobaz"))));
+                        AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(WRITE, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foobaz"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "foobaz"))));
 
 
     }
@@ -563,30 +537,30 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
         T authorizer = builder.get().getAuthorizer();
 
-        AuthorizableRequestContext bob = newRequestContext("bob");
-        execAuthorize(() -> ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG + "=true, No ACLs, bob", authorizer, bob, newAction(READ, TOPIC, "topic1"), ALLOWED);
+        AuthorizableRequestContext bob = AuthorizerTestUtils.newRequestContext("bob");
+        execAuthorize(() -> ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG + "=true, No ACLs, bob", authorizer, bob, AuthorizerTestUtils.newAction(READ, TOPIC, "topic1"), ALLOWED);
 
-        AuthorizableRequestContext superuser = newRequestContext("superman");
-        execAuthorize(() -> ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG + "=true, No ACLs, superuser", authorizer, superuser, newAction(READ, TOPIC, "topic1"), ALLOWED);
+        AuthorizableRequestContext superuser = AuthorizerTestUtils.newRequestContext("superman");
+        execAuthorize(() -> ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG + "=true, No ACLs, superuser", authorizer, superuser, AuthorizerTestUtils.newAction(READ, TOPIC, "topic1"), ALLOWED);
 
         authorizer = builder.config(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false").get().getAuthorizer();
 
-        execAuthorize(() -> ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG + "=false, No ACLs, bob", authorizer, bob, newAction(READ, TOPIC, "topic2"), DENIED);
+        execAuthorize(() -> ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG + "=false, No ACLs, bob", authorizer, bob, AuthorizerTestUtils.newAction(READ, TOPIC, "topic2"), DENIED);
 
-        execAuthorize(() -> ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG + "=false, No ACLs, superuser", authorizer, superuser, newAction(READ, TOPIC, "topic2"), ALLOWED);
+        execAuthorize(() -> ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG + "=false, No ACLs, superuser", authorizer, superuser, AuthorizerTestUtils.newAction(READ, TOPIC, "topic2"), ALLOWED);
 
     }
 
     protected Builder addManyAcls(Builder builder) {
-        return builder.addAcl(new StandardAcl(TOPIC, "green2", LITERAL, "User:*", "*", READ, ALLOW))
-                .addAcl(new StandardAcl(TOPIC, "green", PREFIXED, "User:bob", "*", READ, ALLOW))
-                .addAcl(new StandardAcl(TOPIC, "betamax4", LITERAL, "User:bob", "*", READ, ALLOW))
-                .addAcl(new StandardAcl(TOPIC, "betamax", LITERAL, "User:bob", "*", READ, ALLOW))
-                .addAcl(new StandardAcl(TOPIC, "beta", PREFIXED, "User:*", "*", READ, ALLOW))
-                .addAcl(new StandardAcl(TOPIC, "alpha", PREFIXED, "User:*", "*", READ, ALLOW))
-                .addAcl(new StandardAcl(TOPIC, "alp", PREFIXED, "User:bob", "*", READ, DENY))
-                .addAcl(new StandardAcl(GROUP, "*", LITERAL, "User:bob", "*", WRITE, ALLOW))
-                .addAcl(new StandardAcl(GROUP, "wheel", LITERAL, "User:*", "*", WRITE, DENY));
+        return builder.addAcl(new StandardAcl(TOPIC, "green2", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, READ, ALLOW))
+                .addAcl(new StandardAcl(TOPIC, "green", PREFIXED, "User:bob", WILDCARD, READ, ALLOW))
+                .addAcl(new StandardAcl(TOPIC, "betamax4", LITERAL, "User:bob", WILDCARD, READ, ALLOW))
+                .addAcl(new StandardAcl(TOPIC, "betamax", LITERAL, "User:bob", WILDCARD, READ, ALLOW))
+                .addAcl(new StandardAcl(TOPIC, "beta", PREFIXED, WILDCARD_PRINCIPAL, WILDCARD, READ, ALLOW))
+                .addAcl(new StandardAcl(TOPIC, "alpha", PREFIXED, WILDCARD_PRINCIPAL, WILDCARD, READ, ALLOW))
+                .addAcl(new StandardAcl(TOPIC, "alp", PREFIXED, "User:bob", WILDCARD, READ, DENY))
+                .addAcl(new StandardAcl(GROUP, WILDCARD, LITERAL, "User:bob", WILDCARD, WRITE, ALLOW))
+                .addAcl(new StandardAcl(GROUP, "wheel", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, WRITE, DENY));
     }
 
     @Test
@@ -637,13 +611,13 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 .addAcl(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
                 .config(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
         T authorizer = builder.get().getAuthorizer();
-        AuthorizableRequestContext ctxt = newRequestContext("Bob");
+        AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("Bob");
 
-        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled - other ACLs for topic 1 exist", authorizer, ctxt, newAction(READ, TOPIC, "topic1"), DENIED);
-        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled", authorizer, ctxt, newAction(READ, TOPIC, "topic2"), ALLOWED);
+        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled - other ACLs for topic 1 exist", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "topic1"), DENIED);
+        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "topic2"), ALLOWED);
 
         authorizer = builder.addAcl(new StandardAcl(TOPIC, "top", PREFIXED, "User:Alice", WILDCARD, READ, ALLOW)).get().getAuthorizer();
-        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled - with prefixed ACL for 'top'", authorizer, ctxt, newAction(READ, TOPIC, "topic3"), DENIED);
+        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled - with prefixed ACL for 'top'", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "topic3"), DENIED);
     }
 
     @Test
@@ -651,10 +625,10 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         T authorizer = getTestingWrapperBuilder().superUser("User:alice;User:chris")
                 .addAcl(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
                 .config(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false").get().getAuthorizer();
-        AuthorizableRequestContext ctxt = newRequestContext("Bob");
+        AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("Bob");
 
-        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled", authorizer, ctxt, newAction(READ, TOPIC, "topic1"), DENIED);
-        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled", authorizer, ctxt, newAction(READ, TOPIC, "topic2"), DENIED);
+        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "topic1"), DENIED);
+        execAuthorize(() -> "testAllowEveryoneIfNoAclFoundConfigEnabled", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "topic2"), DENIED);
     }
 
     @Test
@@ -676,44 +650,44 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 new StandardAcl(GROUP, "bar", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, ALTER_CONFIGS, ALLOW));
         T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls.stream()).get().getAuthorizer();
 
-        AuthorizableRequestContext ctxt = newRequestContext("bob");
-        execAuthorize(() -> "testSimpleAuthorizations", authorizer, ctxt, newAction(READ, TOPIC, "foo_"), ALLOWED);
+        AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("bob");
+        execAuthorize(() -> "testSimpleAuthorizations", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foo_"), ALLOWED);
 
-        ctxt = newRequestContext("fred");
-        execAuthorize(() -> "testSimpleAuthorizations", authorizer, ctxt, newAction(ALTER_CONFIGS, GROUP, "bar"), ALLOWED);
+        ctxt = AuthorizerTestUtils.newRequestContext("fred");
+        execAuthorize(() -> "testSimpleAuthorizations", authorizer, ctxt, AuthorizerTestUtils.newAction(ALTER_CONFIGS, GROUP, "bar"), ALLOWED);
     }
 
     @Test
     public void testTopicAclWithOperationAll() throws Exception {
         List<StandardAcl> acls = Arrays.asList(
-                new StandardAcl(TOPIC, "foo", LITERAL, "User:*", "*", ALL, ALLOW),
-                new StandardAcl(TOPIC, "bar", PREFIXED, "User:alice", "*", ALL, ALLOW),
-                new StandardAcl(TOPIC, "baz", LITERAL, "User:bob", "*", ALL, ALLOW)
+                new StandardAcl(TOPIC, "foo", LITERAL, WILDCARD_PRINCIPAL, WILDCARD, ALL, ALLOW),
+                new StandardAcl(TOPIC, "bar", PREFIXED, "User:alice", WILDCARD, ALL, ALLOW),
+                new StandardAcl(TOPIC, "baz", LITERAL, "User:bob", WILDCARD, ALL, ALLOW)
         );
 
         T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls.stream()).get().getAuthorizer();
 
 
         assertEquals(Arrays.asList(ALLOWED, ALLOWED, DENIED), authorizer.authorize(
-                newRequestContext("alice"),
+                AuthorizerTestUtils.newRequestContext("alice"),
                 Arrays.asList(
-                        newAction(WRITE, TOPIC, "foo"),
-                        newAction(DESCRIBE_CONFIGS, TOPIC, "bar"),
-                        newAction(DESCRIBE, TOPIC, "baz"))));
+                        AuthorizerTestUtils.newAction(WRITE, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(DESCRIBE_CONFIGS, TOPIC, "bar"),
+                        AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "baz"))));
 
         assertEquals(Arrays.asList(ALLOWED, DENIED, ALLOWED), authorizer.authorize(
-                newRequestContext("bob"),
+                AuthorizerTestUtils.newRequestContext("bob"),
                 Arrays.asList(
-                        newAction(WRITE, TOPIC, "foo"),
-                        newAction(READ, TOPIC, "bar"),
-                        newAction(DESCRIBE, TOPIC, "baz"))));
+                        AuthorizerTestUtils.newAction(WRITE, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "bar"),
+                        AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "baz"))));
 
         assertEquals(Arrays.asList(ALLOWED, DENIED, DENIED), authorizer.authorize(
-                newRequestContext("malory"),
+                AuthorizerTestUtils.newRequestContext("malory"),
                 Arrays.asList(
-                        newAction(DESCRIBE, TOPIC, "foo"),
-                        newAction(WRITE, TOPIC, "bar"),
-                        newAction(READ, TOPIC, "baz"))));
+                        AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "foo"),
+                        AuthorizerTestUtils.newAction(WRITE, TOPIC, "bar"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "baz"))));
     }
 
     @Test
@@ -723,35 +697,35 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
         List<StandardAcl> acls = Arrays.asList(
                 new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", host1.getHostAddress(), READ, DENY),
-                new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", "*", READ, ALLOW),
+                new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", WILDCARD, READ, ALLOW),
                 new StandardAcl(TOPIC, "bar", LITERAL, "User:bob", host2.getHostAddress(), READ, ALLOW),
-                new StandardAcl(TOPIC, "bar", LITERAL, "User:*", InetAddress.getLocalHost().getHostAddress(), DESCRIBE, ALLOW)
+                new StandardAcl(TOPIC, "bar", LITERAL, WILDCARD_PRINCIPAL, InetAddress.getLocalHost().getHostAddress(), DESCRIBE, ALLOW)
         );
         T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls.stream()).get().getAuthorizer();
 
         List<Action> actions = Arrays.asList(
-                newAction(READ, TOPIC, "foo"),
-                newAction(READ, TOPIC, "bar"),
-                newAction(DESCRIBE, TOPIC, "bar")
+                AuthorizerTestUtils.newAction(READ, TOPIC, "foo"),
+                AuthorizerTestUtils.newAction(READ, TOPIC, "bar"),
+                AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "bar")
         );
 
         assertEquals(Arrays.asList(ALLOWED, DENIED, ALLOWED), authorizer.authorize(
-                newRequestContext("alice", InetAddress.getLocalHost()), actions));
+                AuthorizerTestUtils.newRequestContext("alice", InetAddress.getLocalHost()), actions));
 
         assertEquals(Arrays.asList(DENIED, DENIED, DENIED), authorizer.authorize(
-                newRequestContext("alice", host1), actions));
+                AuthorizerTestUtils.newRequestContext("alice", host1), actions));
 
         assertEquals(Arrays.asList(ALLOWED, DENIED, DENIED), authorizer.authorize(
-                newRequestContext("alice", host2), actions));
+                AuthorizerTestUtils.newRequestContext("alice", host2), actions));
 
         assertEquals(Arrays.asList(DENIED, DENIED, ALLOWED), authorizer.authorize(
-                newRequestContext("bob", InetAddress.getLocalHost()), actions));
+                AuthorizerTestUtils.newRequestContext("bob", InetAddress.getLocalHost()), actions));
 
         assertEquals(Arrays.asList(DENIED, DENIED, DENIED), authorizer.authorize(
-                newRequestContext("bob", host1), actions));
+                AuthorizerTestUtils.newRequestContext("bob", host1), actions));
 
         assertEquals(Arrays.asList(DENIED, ALLOWED, ALLOWED), authorizer.authorize(
-                newRequestContext("bob", host2), actions));
+                AuthorizerTestUtils.newRequestContext("bob", host2), actions));
     }
 
     @Test
@@ -761,71 +735,283 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
                 .addAcl(new StandardAcl(TOPIC, "foobar", LITERAL, "User:alice", WILDCARD, READ, ALLOW));
         T authorizer = builder.get().getAuthorizer();
 
-        AuthorizableRequestContext ctxt = newRequestContext("alice");
-        execAuthorize(() -> "noAcl=false, prefix overrides matching literal", authorizer, ctxt, newAction(READ, TOPIC, "foobar"), DENIED);
-        execAuthorize(() -> "noAcl=false, prefix override nothing", authorizer, ctxt, newAction(READ, TOPIC, "foob"), DENIED);
+        AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("alice");
+        execAuthorize(() -> "noAcl=false, prefix overrides matching literal", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foobar"), DENIED);
+        execAuthorize(() -> "noAcl=false, prefix override nothing", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foob"), DENIED);
 
         authorizer = builder.config(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true").get().getAuthorizer();
-        execAuthorize(() -> "noAcl=true, prefix overrides matching literal", authorizer, ctxt, newAction(READ, TOPIC, "foobar"), DENIED);
-        execAuthorize(() -> "noAcl=true, prefix override nothing", authorizer, ctxt, newAction(READ, TOPIC, "foob"), DENIED);
+        execAuthorize(() -> "noAcl=true, prefix overrides matching literal", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foobar"), DENIED);
+        execAuthorize(() -> "noAcl=true, prefix override nothing", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foob"), DENIED);
 
-        ctxt = newRequestContext("bob");
-        execAuthorize(() -> "noAcl=true, no matching ACLs", authorizer, ctxt, newAction(READ, TOPIC, "foobar"), DENIED);
+        ctxt = AuthorizerTestUtils.newRequestContext("bob");
+        execAuthorize(() -> "noAcl=true, no matching ACLs", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foobar"), DENIED);
 
         authorizer = builder
                 .addAcl(new StandardAcl(TOPIC, "foobar", LITERAL, "User:bob", WILDCARD, READ, ALLOW)).get().getAuthorizer();
-        execAuthorize(() -> "noAcl=true, literal allow", authorizer, ctxt, newAction(READ, TOPIC, "foobar"), ALLOWED);
+        execAuthorize(() -> "noAcl=true, literal allow", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foobar"), ALLOWED);
 
         authorizer = builder.addAcl(new StandardAcl(TOPIC, "foobar", PREFIXED, "User:bob", WILDCARD, READ, DENY)).get().getAuthorizer();
-        execAuthorize(() -> "noAcl=true, prefix deny and literal allow at same level", authorizer, ctxt, newAction(READ, TOPIC, "foobar"), DENIED);
+        execAuthorize(() -> "noAcl=true, prefix deny and literal allow at same level", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "foobar"), DENIED);
     }
     @Test
     public void testAuthorizationWithManyAcls() throws Exception {
 
         T authorizer = addManyAcls(getTestingWrapperBuilder().superUser("User:superman")).get().getAuthorizer();
-        AuthorizableRequestContext ctxt = newRequestContext("bob");
+        AuthorizableRequestContext ctxt = AuthorizerTestUtils.newRequestContext("bob");
 
-        execAuthorize(() -> "Test authorize with many ACLs : bob read green1", authorizer, ctxt, newAction(READ, TOPIC, "green1"), ALLOWED);
-        execAuthorize(() -> "Test authorize with many ACLs : bob write wheel", authorizer, ctxt, newAction(WRITE, TOPIC, "wheel"), DENIED);
-        execAuthorize(() -> "Test authorize with many ACLs : bob read alpha", authorizer, ctxt, newAction(READ, TOPIC, "alpha"), DENIED);
-        execAuthorize(() -> "Test authorize with many ACLs : bob write arbitrary", authorizer, ctxt, newAction(WRITE, GROUP, "arbitrary"), ALLOWED);
-        execAuthorize(() -> "Test authorize with many ACLs : bob read ala", authorizer, ctxt, newAction(READ, TOPIC, "ala"), DENIED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob read green1", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "green1"), ALLOWED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob write wheel", authorizer, ctxt, AuthorizerTestUtils.newAction(WRITE, TOPIC, "wheel"), DENIED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob read alpha", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "alpha"), DENIED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob write arbitrary", authorizer, ctxt, AuthorizerTestUtils.newAction(WRITE, GROUP, "arbitrary"), ALLOWED);
+        execAuthorize(() -> "Test authorize with many ACLs : bob read ala", authorizer, ctxt, AuthorizerTestUtils.newAction(READ, TOPIC, "ala"), DENIED);
 
         // the same set in groups.
 
         assertEquals(Arrays.asList(ALLOWED, DENIED),
                 authorizer.authorize(ctxt,
-                        Arrays.asList(newAction(READ, TOPIC, "green1"),
-                                newAction(WRITE, GROUP, "wheel"))));
+                        Arrays.asList(AuthorizerTestUtils.newAction(READ, TOPIC, "green1"),
+                                AuthorizerTestUtils.newAction(WRITE, GROUP, "wheel"))));
         assertEquals(Arrays.asList(DENIED, ALLOWED, DENIED),
                 authorizer.authorize(ctxt,
-                        Arrays.asList(newAction(READ, TOPIC, "alpha"),
-                                newAction(WRITE, GROUP, "arbitrary"),
-                                newAction(READ, TOPIC, "ala"))));
+                        Arrays.asList(AuthorizerTestUtils.newAction(READ, TOPIC, "alpha"),
+                                AuthorizerTestUtils.newAction(WRITE, GROUP, "arbitrary"),
+                                AuthorizerTestUtils.newAction(READ, TOPIC, "ala"))));
     }
 
     @Test
     public void testPrefixAcls() throws Exception {
         List<StandardAcl> acls = Arrays.asList(
-                new StandardAcl(TOPIC, "fooa", PREFIXED, "User:alice", "*", ALL, ALLOW),
-                new StandardAcl(TOPIC, "foobar", LITERAL, "User:bob", "*", ALL, ALLOW),
-                new StandardAcl(TOPIC, "f", PREFIXED, "User:bob", "*", ALL, ALLOW)
+                new StandardAcl(TOPIC, "fooa", PREFIXED, "User:alice", WILDCARD, ALL, ALLOW),
+                new StandardAcl(TOPIC, "foobar", LITERAL, "User:bob", WILDCARD, ALL, ALLOW),
+                new StandardAcl(TOPIC, "f", PREFIXED, "User:bob", WILDCARD, ALL, ALLOW)
         );
         T authorizer = getTestingWrapperBuilder().superUser("User:superman").addAcls(acls.stream()).get().getAuthorizer();
 
         assertEquals(Arrays.asList(ALLOWED, DENIED, ALLOWED), authorizer.authorize(
-                newRequestContext("bob"),
+                AuthorizerTestUtils.newRequestContext("bob"),
                 Arrays.asList(
-                        newAction(WRITE, TOPIC, "foobarr"),
-                        newAction(READ, TOPIC, "goobar"),
-                        newAction(READ, TOPIC, "fooa"))));
+                        AuthorizerTestUtils.newAction(WRITE, TOPIC, "foobarr"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "goobar"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "fooa"))));
 
         assertEquals(Arrays.asList(ALLOWED, DENIED, DENIED), authorizer.authorize(
-                newRequestContext("alice"),
+                AuthorizerTestUtils.newRequestContext("alice"),
                 Arrays.asList(
-                        newAction(DESCRIBE, TOPIC, "fooa"),
-                        newAction(WRITE, TOPIC, "bar"),
-                        newAction(READ, TOPIC, "baz"))));
+                        AuthorizerTestUtils.newAction(DESCRIBE, TOPIC, "fooa"),
+                        AuthorizerTestUtils.newAction(WRITE, TOPIC, "bar"),
+                        AuthorizerTestUtils.newAction(READ, TOPIC, "baz"))));
+    }
+
+    @Test
+    public void aclsRetrieveResourceTypeTest() {
+        Builder builder = getTestingWrapperBuilder().superUser("User:superman");
+        Map<ResourceType, Set<AclBinding>> expected = new HashMap<>();
+
+
+        for (ResourceType type : ResourceType.values()) {
+            switch (type) {
+                case TOPIC:
+                case GROUP:
+                case CLUSTER:
+                case TRANSACTIONAL_ID:
+                case DELEGATION_TOKEN:
+                case USER:
+                    StandardAcl acl = new StandardAcl(type, "foo", PREFIXED, "User:bob", WILDCARD, AclOperation.CREATE, ALLOW);
+                    builder.addAcl(acl);
+                    expected.put(type, new HashSet<>(Collections.singletonList(acl.toBinding())));
+                    break;
+                case UNKNOWN:
+                    expected.put(type, Collections.emptySet());
+                    break;
+                case ANY:
+                    break;
+            }
+        }
+
+        Set<AclBinding> set = new HashSet<>();
+        for (Iterable<AclBinding> iterable : expected.values()) {
+            iterable.forEach(set::add);
+        }
+        expected.put(ResourceType.ANY, set);
+
+        T authorizer = builder.get().getAuthorizer();
+
+        List<String> failures = new ArrayList<>();
+        for (ResourceType type : ResourceType.values()) {
+            ResourcePatternFilter pattern = new ResourcePatternFilter(type, null, PatternType.ANY);
+            Iterable<AclBinding> iterable = authorizer.acls(new AclBindingFilter(pattern, AccessControlEntryFilter.ANY));
+            Set<AclBinding> actual = new HashSet<>();
+            iterable.forEach(actual::add);
+            if (!expected.get(type).equals(actual)) {
+                failures.add(format("type %s: ex: %s  act: %s", type, expected.get(type), actual));
+            }
+        }
+        if (!failures.isEmpty()) {
+            fail("Failed on " + String.join(System.lineSeparator() + " and ", failures));
+        }
+    }
+
+    @Test
+    public void aclsRetrievePrincipalTest() {
+        Builder builder = getTestingWrapperBuilder().superUser("User:superman");
+        Map<String, Set<AclBinding>> expected = new HashMap<>();
+
+        List<String> principals = Arrays.asList("User:bob", "User:alice", "Group:bob", "Group:alice");
+
+        for (String principal : principals) {
+            StandardAcl acl = new StandardAcl(TOPIC, "foo", PatternType.LITERAL, principal, WILDCARD, AclOperation.CREATE, ALLOW);
+            builder.addAcl(acl);
+            expected.put(principal, new HashSet<>(Collections.singletonList(acl.toBinding())));
+        }
+
+        Set<AclBinding> set = new HashSet<>();
+        expected.values().forEach(set::addAll);
+        expected.put(WILDCARD_PRINCIPAL, set);
+
+        T authorizer = builder.get().getAuthorizer();
+
+        List<String> failures = new ArrayList<>();
+        for (String principal : expected.keySet()) {
+            AccessControlEntryFilter pattern =  new AccessControlEntryFilter(principal.equals(WILDCARD_PRINCIPAL) ? null : principal, WILDCARD, AclOperation.ANY, AclPermissionType.ANY);
+            Iterable<AclBinding> iterable = authorizer.acls(new AclBindingFilter(ResourcePatternFilter.ANY, pattern));
+            Set<AclBinding> actual = new HashSet<>();
+            iterable.forEach(actual::add);
+            if (!expected.get(principal).equals(actual)) {
+                failures.add(format("type %s: ex: %s  act: %s", principal, expected.get(principal), actual));
+            }
+        }
+        if (!failures.isEmpty()) {
+            fail("Failed on " + String.join(System.lineSeparator() + " and ", failures));
+        }
+    }
+
+    @Test
+    public void aclsRetrieveHostTest() {
+        Builder builder = getTestingWrapperBuilder().superUser("User:superman");
+        Map<String, Set<AclBinding>> expected = new HashMap<>();
+
+        List<String> hosts = Arrays.asList("localhost", "example.com", "example.net", "example.org");
+
+        for (String host : hosts) {
+            StandardAcl acl = new StandardAcl(TOPIC, "foo", PatternType.LITERAL, WILDCARD_PRINCIPAL, host, AclOperation.CREATE, ALLOW);
+            builder.addAcl(acl);
+            expected.put(host, new HashSet<>(Collections.singletonList(acl.toBinding())));
+        }
+
+        Set<AclBinding> set = new HashSet<>();
+        expected.values().forEach(set::addAll);
+        expected.put(WILDCARD, set);
+
+        T authorizer = builder.get().getAuthorizer();
+
+        List<String> failures = new ArrayList<>();
+        for (String host : expected.keySet()) {
+            AccessControlEntryFilter pattern =  new AccessControlEntryFilter(WILDCARD_PRINCIPAL, host.equals(WILDCARD) ? null : host, AclOperation.ANY, AclPermissionType.ANY);
+            Iterable<AclBinding> iterable = authorizer.acls(new AclBindingFilter(ResourcePatternFilter.ANY, pattern));
+            Set<AclBinding> actual = new HashSet<>();
+            iterable.forEach(actual::add);
+            if (!expected.get(host).equals(actual)) {
+                failures.add(format("type %s: ex: %s  act: %s", host, expected.get(host), actual));
+            }
+        }
+        if (!failures.isEmpty()) {
+            fail("Failed on " + String.join(System.lineSeparator() + " and ", failures));
+        }
+    }
+
+    @Test
+    public void aclsRetrieveOperationTest() {
+        Builder builder = getTestingWrapperBuilder().superUser("User:superman");
+        Map<AclOperation, Set<AclBinding>> expected = new HashMap<>();
+
+        for (AclOperation operation : AclOperation.values()) {
+            switch (operation) {
+                case ALL:
+                case READ:
+                case WRITE:
+                case CREATE:
+                case DELETE:
+                case ALTER:
+                case DESCRIBE:
+                case CLUSTER_ACTION:
+                case DESCRIBE_CONFIGS:
+                case ALTER_CONFIGS:
+                case IDEMPOTENT_WRITE:
+                case CREATE_TOKENS:
+                case DESCRIBE_TOKENS:
+                    StandardAcl acl = new StandardAcl(TOPIC, "foo", PatternType.LITERAL, WILDCARD_PRINCIPAL, WILDCARD, operation, ALLOW);
+                    builder.addAcl(acl);
+                    expected.put(operation, new HashSet<>(Collections.singletonList(acl.toBinding())));
+                    break;
+                case UNKNOWN:
+                    expected.put(operation, Collections.emptySet());
+                    break;
+                case ANY:
+                    break;
+            }
+        }
+
+        Set<AclBinding> set = new HashSet<>();
+        expected.values().forEach(set::addAll);
+        expected.put(AclOperation.ANY, set);
+
+        T authorizer = builder.get().getAuthorizer();
+
+        List<String> failures = new ArrayList<>();
+        for (AclOperation operation : AclOperation.values()) {
+            AccessControlEntryFilter pattern =  new AccessControlEntryFilter(null, null, operation, AclPermissionType.ANY);
+            Iterable<AclBinding> iterable = authorizer.acls(new AclBindingFilter(ResourcePatternFilter.ANY, pattern));
+            Set<AclBinding> actual = new HashSet<>();
+            iterable.forEach(actual::add);
+            if (!expected.get(operation).equals(actual)) {
+                failures.add(format("type %s: ex: %s  act: %s", operation, expected.get(operation), actual));
+            }
+        }
+        if (!failures.isEmpty()) {
+            fail("Failed on " + String.join(System.lineSeparator() + " and ", failures));
+        }
+    }
+
+    @Test
+    public void aclsRetrievePermissionTypeTest() {
+        Builder builder = getTestingWrapperBuilder().superUser("User:superman");
+        Map<AclPermissionType, Set<AclBinding>> expected = new HashMap<>();
+
+        for (AclPermissionType permission : AclPermissionType.values()) {
+            switch (permission) {
+                case ALLOW:
+                case DENY:
+                    StandardAcl acl = new StandardAcl(TOPIC, "foo", PatternType.LITERAL, WILDCARD_PRINCIPAL, WILDCARD, AclOperation.CREATE, permission);
+                    builder.addAcl(acl);
+                    expected.put(permission, new HashSet<>(Collections.singletonList(acl.toBinding())));
+                    break;
+                case UNKNOWN:
+                    expected.put(permission, Collections.emptySet());
+                    break;
+                case ANY:
+                    break;
+            }
+        }
+
+        Set<AclBinding> set = new HashSet<>();
+        expected.values().forEach(set::addAll);
+        expected.put(AclPermissionType.ANY, set);
+
+        T authorizer = builder.get().getAuthorizer();
+
+        List<String> failures = new ArrayList<>();
+        for (AclPermissionType permission : AclPermissionType.values()) {
+            AccessControlEntryFilter pattern =  new AccessControlEntryFilter(null, null, AclOperation.ANY, permission);
+            Iterable<AclBinding> iterable = authorizer.acls(new AclBindingFilter(ResourcePatternFilter.ANY, pattern));
+            Set<AclBinding> actual = new HashSet<>();
+            iterable.forEach(actual::add);
+            if (!expected.get(permission).equals(actual)) {
+                failures.add(format("type %s: ex: %s  act: %s", permission, expected.get(permission), actual));
+            }
+        }
+        if (!failures.isEmpty()) {
+            fail("Failed on " + String.join(System.lineSeparator() + " and ", failures));
+        }
     }
 
 }

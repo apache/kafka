@@ -36,6 +36,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+
 public class DefaultAuthorizerTest extends AbstractAuthorizerTest<DefaultAuthorizerTest.DefaultAuthorizer> {
     @Override
     protected Builder getTestingWrapperBuilder() {
@@ -82,6 +83,7 @@ public class DefaultAuthorizerTest extends AbstractAuthorizerTest<DefaultAuthori
             }
         };
     }
+
 
     public static class DefaultAuthorizer implements Authorizer {
 

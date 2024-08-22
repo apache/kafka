@@ -17,7 +17,6 @@
 package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
@@ -28,6 +27,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.bitmap.BitMaps;
 import org.apache.kafka.metadata.authorizer.trie.Matcher;
 import org.apache.kafka.metadata.authorizer.trie.Node;
@@ -141,7 +141,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
      * Create an empty AuthorizerData instance.
      * @return
      */
-    public static TrieAuthorizerData createEmpty() {
+    static TrieAuthorizerData createEmpty() {
         return new TrieAuthorizerData(createLogger(-1),
                 null,
                 false,
@@ -164,8 +164,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
                                boolean loadingComplete,
                                Set<String> superUsers,
                                AuthorizationResult defaultResult,
-                               final TrieData trieData
-                                   ) {
+                               final TrieData trieData) {
         this.log = log;
         this.aclMutator = aclMutator;
         this.loadingComplete = loadingComplete;
@@ -270,7 +269,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
         if (action.resourcePattern().patternType() != LITERAL) {
             throw new IllegalArgumentException("Only literal resources are supported. Got: " + action.resourcePattern().patternType());
         }
-        KafkaPrincipal principal = AuthorizerData.baseKafkaPrincipal(requestContext);
+        KafkaPrincipal principal = requestContext.principal(); //AuthorizerData.baseKafkaPrincipal(requestContext);
         final MatchingRule rule;
 
         // Superusers are authorized to do anything.
@@ -357,6 +356,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
      */
     @Override
     public AuthorizationResult authorizeByResourceType(KafkaPrincipal principal, String host, AclOperation operation, ResourceType resourceType) {
+        SecurityUtils.authorizeByResourceTypeCheckArgs(operation, resourceType);
         MatchingRule rule = matchingRuleByResourceType(buildResourceTypeFilter(principal, host, operation), resourceType);
         logAuditMessage(principal, host, operation, resourceType, rule);
         return rule.result();
@@ -365,10 +365,10 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
     private Predicate<StandardAcl> buildResourceTypeFilter(final KafkaPrincipal principal, final String host, final AclOperation operation) {
         Predicate<StandardAcl> filter = acl -> acl.operation() == operation || acl.operation() == ALL;
 
-        if (!principal.toString().equals(WILDCARD_PRINCIPAL)) {
+        if (principal != null) {
             filter = filter.and(acl -> principal.equals(acl.kafkaPrincipal()));
         }
-        if (!host.equals(WILDCARD)) {
+        if (host != null) {
             filter = filter.and(acl -> host.equals(acl.host()));
         }
         return filter;
@@ -492,14 +492,14 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
                 // split off the types
                 int pos1 = str.indexOf(":");
                 int pos2 = other.indexOf(":");
-                result = str.substring(0,pos1).compareTo(other.substring(0,pos2));
+                result = str.substring(0, pos1).compareTo(other.substring(0, pos2));
                 if (result != 0) {
                     return result;
                 }
 
                 // if types are equal then names must not be equal because of equality check at start.
-                String one = str.substring(pos1+1);
-                String two = other.substring(pos2+1);
+                String one = str.substring(pos1 + 1);
+                String two = other.substring(pos2 + 1);
                 result = one.compareTo(two);
                 return one.equals("*") ? 1 : other.equals("*") ? -1 : result;
             }
@@ -730,6 +730,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
                 case DELEGATION_TOKEN:
                 case TRANSACTIONAL_ID:
                     Trie<AclContainer> trie = tries.get(filter.patternFilter().resourceType());
+                    // returns true to stop searching
                     Predicate<Node<AclContainer>> trieFilter = n -> {
                         AclContainer container = n.getContents();
                         if (container != null) {
@@ -740,7 +741,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
                                 }
                             }
                         }
-                        return true;
+                        return false;
                     };
                     // populates aclBindinList by side effect.
                     Walker.preOrder(trieFilter, trie);
@@ -770,7 +771,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
                 log.info("No trie found for {}", resourcePattern.resourceType());
             } else {
                 ReadOnlyNode<AclContainer> result = trie.search(new StandardMatcher<>(resourcePattern.name(), exit));
-                log.debug("Found {}.", result != null ? result.getName() : null);
+                log.debug("Found {}.", result.getName());
                 while (result != null && results.isEmpty()) {
                     if (result.hasContents()) {
                         results =  result.getContents().findMatch(matchFilter).collect(Collectors.toList());

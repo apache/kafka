@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.Collections;
 import java.util.Set;
-import java.util.function.Consumer;
 
 @Timeout(value = 40)
 public class TrieAuthorizerTest extends AbstractClusterMetadataAuthorizerTest<TrieAuthorizer> {

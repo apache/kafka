@@ -86,29 +86,13 @@ public interface AuthorizerData {
     }
 
     /**
-     * Extracts the @{code KafkaPrincipla} from the context.
-     * @param context the context.
-     * @return the Kafka principal found in the context or one derived from it.
-     */
-    static KafkaPrincipal baseKafkaPrincipal(AuthorizableRequestContext context) {
-        KafkaPrincipal sessionPrincipal = context.principal();
-        return sessionPrincipal.getClass().equals(KafkaPrincipal.class)
-            ? sessionPrincipal
-            : new KafkaPrincipal(sessionPrincipal.getPrincipalType(), sessionPrincipal.getName());
-    }
-
-    /**
      * Creates a set of {@code KafkaPrincipals} from the context set.  The set includes the
      * {@link #WILDCARD_KAFKA_PRINCIPAL}.
      * @param context the context to extract the principals from.
      * @return the set of Kafka principals.
      */
     static Set<KafkaPrincipal> matchingPrincipals(AuthorizableRequestContext context) {
-        KafkaPrincipal sessionPrincipal = context.principal();
-        KafkaPrincipal basePrincipal = sessionPrincipal.getClass().equals(KafkaPrincipal.class)
-            ? sessionPrincipal
-            : new KafkaPrincipal(sessionPrincipal.getPrincipalType(), sessionPrincipal.getName());
-        return Utils.mkSet(basePrincipal, WILDCARD_KAFKA_PRINCIPAL);
+        return Utils.mkSet(context.principal(), WILDCARD_KAFKA_PRINCIPAL);
     }
 
     /**

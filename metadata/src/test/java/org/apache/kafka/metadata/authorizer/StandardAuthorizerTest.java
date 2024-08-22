@@ -22,7 +22,6 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 
 
