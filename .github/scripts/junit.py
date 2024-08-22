@@ -120,11 +120,9 @@ def pretty_time_duration(seconds: float) -> str:
 
 if __name__ == "__main__":
     """
-    Parse JUnit XML reports and generate GitHub job summary.
+    Parse JUnit XML reports and generate GitHub job summary in Markdown format.
 
-    525 tests run, 524 passed, 1 skipped, 0 failed.
-
-    See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#setting-a-notice-message
+    Exits with status code 0 if no tests failed, 1 otherwise.
     """
     if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")

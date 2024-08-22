@@ -105,6 +105,7 @@ jobs:
           name: junit-reports-${{ matrix.java }}
           path: |
             **/test-results/**/*.xml
+            **/build/reports/tests/test/index.html
           if-no-files-found: ignore
       - name: Parse JUnit tests
         if: always()
