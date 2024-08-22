@@ -20,6 +20,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -181,6 +182,9 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     public String name() {
         return "";
     }
+
+    @Override
+    public void init(StateStoreContext context, StateStore root) {}
 
     @Override
     public void flush() {

@@ -101,8 +101,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         return name;
     }
 
-    private void initInternal(final ProcessorContext context, final StateStore root) {
-        this.context = context;
+    @Override
+    public void init(final StateStoreContext stateStoreContext,
+                     final StateStore root) {
+        this.stateStoreContext = stateStoreContext;
+        this.context = StoreToProcessorContextAdapter.adapt(stateStoreContext);
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
         final String threadId = Thread.currentThread().getName();
@@ -140,13 +143,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             );
         }
         open = true;
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        this.stateStoreContext = context;
-        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override

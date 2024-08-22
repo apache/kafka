@@ -108,11 +108,6 @@ class TimeOrderedCachingWindowStore
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        initInternal(context);
-        super.init(context, root);
-    }
-
-    private void initInternal(final StateStoreContext context) {
         this.context = asInternalProcessorContext(context);
         final String topic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
 
@@ -125,6 +120,7 @@ class TimeOrderedCachingWindowStore
         this.context.registerCacheFlushListener(cacheName, entries -> {
             putAndMaybeForward(entries, this.context);
         });
+        super.init(context, root);
     }
 
     private void putAndMaybeForward(final List<DirtyEntry> entries,

@@ -70,13 +70,8 @@ class CachingSessionStore
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
-    }
-
-    private void initInternal(final InternalProcessorContext<?, ?> context) {
-        this.context = context;
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        this.context = asInternalProcessorContext(stateStoreContext);
 
         cacheName = context.taskId() + "-" + name();
         context.registerCacheFlushListener(cacheName, entries -> {
@@ -84,6 +79,7 @@ class CachingSessionStore
                 putAndMaybeForward(entry, context);
             }
         });
+        super.init(stateStoreContext, root);
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext<?, ?> context) {

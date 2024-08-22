@@ -66,8 +66,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return name;
     }
 
-    private void initInternal(final ProcessorContext context,
-                              final StateStore root) {
+    @Override
+    public void init(final StateStoreContext stateStoreContext,
+                     final StateStore root) {
+        final ProcessorContext context = StoreToProcessorContextAdapter.adapt(stateStoreContext);
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
                 context.appConfigs(),
@@ -95,13 +97,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         open = true;
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
-        this.context = context;
+        this.context = stateStoreContext;
     }
 
     @Override

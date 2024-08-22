@@ -294,9 +294,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return name;
     }
 
-    private void initInternal(final ProcessorContext context,
-                              final StateStore root) {
-        this.context = context;
+    @Override
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        this.stateStoreContext = stateStoreContext;
+        this.context = StoreToProcessorContextAdapter.adapt(stateStoreContext);
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
         final String threadId = Thread.currentThread().getName();
@@ -327,12 +328,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 context.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        this.stateStoreContext = context;
-        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override

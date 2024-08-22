@@ -69,7 +69,7 @@ public interface StateStore {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    default void init(final StateStoreContext context, final StateStore root) {}
+    void init(final StateStoreContext context, final StateStore root);
 
     /**
      * Flush any cached data

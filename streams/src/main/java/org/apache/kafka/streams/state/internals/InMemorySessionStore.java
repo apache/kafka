@@ -95,7 +95,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         return name;
     }
 
-    private void initInternal(final ProcessorContext context, final StateStore root) {
+    @Override
+    public void init(final StateStoreContext stateStoreContext,
+                     final StateStore root) {
+        this.stateStoreContext = stateStoreContext;
+        final ProcessorContext context = StoreToProcessorContextAdapter.adapt(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 
@@ -137,13 +141,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             );
         }
         open = true;
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        this.stateStoreContext = context;
-        initInternal(StoreToProcessorContextAdapter.adapt(context), root);
     }
 
     @Override

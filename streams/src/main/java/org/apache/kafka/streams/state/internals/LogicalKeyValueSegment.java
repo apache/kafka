@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
 
@@ -133,6 +135,9 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     public String name() {
         return name;
     }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {}
 
     @Override
     public void flush() {
