@@ -56,18 +56,18 @@ public class PersisterStateBatch {
 
     public static PersisterStateBatch from(ReadShareGroupStateResponseData.StateBatch batch) {
         return new PersisterStateBatch(
-                batch.firstOffset(),
-                batch.lastOffset(),
-                batch.deliveryState(),
-                batch.deliveryCount());
+            batch.firstOffset(),
+            batch.lastOffset(),
+            batch.deliveryState(),
+            batch.deliveryCount());
     }
 
     public static PersisterStateBatch from(WriteShareGroupStateRequestData.StateBatch batch) {
         return new PersisterStateBatch(
-                batch.firstOffset(),
-                batch.lastOffset(),
-                batch.deliveryState(),
-                batch.deliveryCount());
+            batch.firstOffset(),
+            batch.lastOffset(),
+            batch.deliveryState(),
+            batch.deliveryCount());
     }
 
     @Override
@@ -86,10 +86,10 @@ public class PersisterStateBatch {
     @Override
     public String toString() {
         return "PersisterStateBatch(" +
-                "firstOffset=" + firstOffset + "," +
-                "lastOffset=" + lastOffset + "," +
-                "deliveryState=" + deliveryState + "," +
-                "deliveryCount=" + deliveryCount +
-                ")";
+            "firstOffset=" + firstOffset + "," +
+            "lastOffset=" + lastOffset + "," +
+            "deliveryState=" + deliveryState + "," +
+            "deliveryCount=" + deliveryCount +
+            ")";
     }
 }

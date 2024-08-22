@@ -39,33 +39,33 @@ public class ShareCoordinatorRecordHelpersTest {
         int partitionId = 1;
         PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(groupId, topicId, partitionId, new ShareGroupOffset(
-                0,
-                1,
-                5,
-                0,
-                Collections.singletonList(batch)
+            0,
+            1,
+            5,
+            0,
+            Collections.singletonList(batch)
         ));
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new ShareSnapshotKey()
-                                .setGroupId(groupId)
-                                .setTopicId(topicId)
-                                .setPartition(partitionId),
-                        ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
-                new ApiMessageAndVersion(
-                        new ShareSnapshotValue()
-                                .setSnapshotEpoch(0)
-                                .setStateEpoch(1)
-                                .setLeaderEpoch(5)
-                                .setStartOffset(0)
-                                .setStateBatches(Collections.singletonList(
-                                        new ShareSnapshotValue.StateBatch()
-                                                .setFirstOffset(1L)
-                                                .setLastOffset(10L)
-                                                .setDeliveryState((byte) 0)
-                                                .setDeliveryCount((short) 1))),
-                        ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION));
+            new ApiMessageAndVersion(
+                new ShareSnapshotKey()
+                    .setGroupId(groupId)
+                    .setTopicId(topicId)
+                    .setPartition(partitionId),
+                ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(0)
+                    .setStateEpoch(1)
+                    .setLeaderEpoch(5)
+                    .setStartOffset(0)
+                    .setStateBatches(Collections.singletonList(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(1L)
+                            .setLastOffset(10L)
+                            .setDeliveryState((byte) 0)
+                            .setDeliveryCount((short) 1))),
+                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION));
 
         assertEquals(expectedRecord, record);
     }
@@ -77,32 +77,32 @@ public class ShareCoordinatorRecordHelpersTest {
         int partitionId = 1;
         PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(groupId, topicId, partitionId, new ShareGroupOffset(
-                0,
-                -1, // this is ignored for share update
-                5,
-                0,
-                Collections.singletonList(batch)
+            0,
+            -1, // this is ignored for share update
+            5,
+            0,
+            Collections.singletonList(batch)
         ));
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new ShareUpdateKey()
-                                .setGroupId(groupId)
-                                .setTopicId(topicId)
-                                .setPartition(partitionId),
-                        ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
-                new ApiMessageAndVersion(
-                        new ShareUpdateValue()
-                                .setSnapshotEpoch(0)
-                                .setLeaderEpoch(5)
-                                .setStartOffset(0)
-                                .setStateBatches(Collections.singletonList(
-                                        new ShareUpdateValue.StateBatch()
-                                                .setFirstOffset(1L)
-                                                .setLastOffset(10L)
-                                                .setDeliveryState((byte) 0)
-                                                .setDeliveryCount((short) 1))),
-                        ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION));
+            new ApiMessageAndVersion(
+                new ShareUpdateKey()
+                    .setGroupId(groupId)
+                    .setTopicId(topicId)
+                    .setPartition(partitionId),
+                ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+            new ApiMessageAndVersion(
+                new ShareUpdateValue()
+                    .setSnapshotEpoch(0)
+                    .setLeaderEpoch(5)
+                    .setStartOffset(0)
+                    .setStateBatches(Collections.singletonList(
+                        new ShareUpdateValue.StateBatch()
+                            .setFirstOffset(1L)
+                            .setLastOffset(10L)
+                            .setDeliveryState((byte) 0)
+                            .setDeliveryCount((short) 1))),
+                ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION));
 
         assertEquals(expectedRecord, record);
     }

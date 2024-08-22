@@ -44,8 +44,8 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
     public byte[] serializeKey(CoordinatorRecord record) {
         // Record does not accept a null key.
         return MessageUtil.toVersionPrefixedBytes(
-                record.key().version(),
-                record.key().message()
+            record.key().version(),
+            record.key().message()
         );
     }
 
@@ -56,16 +56,16 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
             return null;
         } else {
             return MessageUtil.toVersionPrefixedBytes(
-                    record.value().version(),
-                    record.value().message()
+                record.value().version(),
+                record.value().message()
             );
         }
     }
 
     @Override
     public CoordinatorRecord deserialize(
-            ByteBuffer keyBuffer,
-            ByteBuffer valueBuffer
+        ByteBuffer keyBuffer,
+        ByteBuffer valueBuffer
     ) throws RuntimeException {
         final short recordType = readVersion(keyBuffer, "key");
         final ApiMessage keyMessage = apiMessageKeyFor(recordType);
@@ -80,8 +80,8 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
         readMessage(valueMessage, valueBuffer, valueVersion, "value");
 
         return new CoordinatorRecord(
-                new ApiMessageAndVersion(keyMessage, recordType),
-                new ApiMessageAndVersion(valueMessage, valueVersion)
+            new ApiMessageAndVersion(keyMessage, recordType),
+            new ApiMessageAndVersion(valueMessage, valueVersion)
         );
     }
 
@@ -98,13 +98,14 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
             message.read(new ByteBufferAccessor(buffer), version);
         } catch (RuntimeException ex) {
             throw new RuntimeException(String.format("Could not read record with version %d from %s's buffer due to: %s.",
-                    version, name, ex.getMessage()), ex);
+                version, name, ex.getMessage()), ex);
         }
     }
 
     /**
      * Concrete child class must provide implementation which returns appropriate
      * type of {@link ApiMessage} objects representing the key.
+     *
      * @param recordType - short representing version
      * @return ApiMessage object
      */
@@ -113,6 +114,7 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
     /**
      * Concrete child class must provide implementation which returns appropriate
      * type of {@link ApiMessage} objects representing the value.
+     *
      * @param recordType - short representing version
      * @return ApiMessage object
      */

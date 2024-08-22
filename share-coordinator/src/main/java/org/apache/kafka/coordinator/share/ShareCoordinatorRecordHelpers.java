@@ -29,46 +29,46 @@ import java.util.stream.Collectors;
 public class ShareCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareSnapshotRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return new CoordinatorRecord(
-                new ApiMessageAndVersion(new ShareSnapshotKey()
-                        .setGroupId(groupId)
-                        .setTopicId(topicId)
-                        .setPartition(partitionId),
-                        ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
-                new ApiMessageAndVersion(new ShareSnapshotValue()
-                        .setSnapshotEpoch(offsetData.snapshotEpoch())
-                        .setStateEpoch(offsetData.stateEpoch())
-                        .setLeaderEpoch(offsetData.leaderEpoch())
-                        .setStartOffset(offsetData.startOffset())
-                        .setStateBatches(offsetData.stateBatches().stream()
-                                .map(batch -> new ShareSnapshotValue.StateBatch()
-                                        .setFirstOffset(batch.firstOffset())
-                                        .setLastOffset(batch.lastOffset())
-                                        .setDeliveryCount(batch.deliveryCount())
-                                        .setDeliveryState(batch.deliveryState()))
-                                .collect(Collectors.toList())),
-                        ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+            new ApiMessageAndVersion(new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId),
+                ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
+            new ApiMessageAndVersion(new ShareSnapshotValue()
+                .setSnapshotEpoch(offsetData.snapshotEpoch())
+                .setStateEpoch(offsetData.stateEpoch())
+                .setLeaderEpoch(offsetData.leaderEpoch())
+                .setStartOffset(offsetData.startOffset())
+                .setStateBatches(offsetData.stateBatches().stream()
+                    .map(batch -> new ShareSnapshotValue.StateBatch()
+                        .setFirstOffset(batch.firstOffset())
+                        .setLastOffset(batch.lastOffset())
+                        .setDeliveryCount(batch.deliveryCount())
+                        .setDeliveryState(batch.deliveryState()))
+                    .collect(Collectors.toList())),
+                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
         );
     }
 
     public static CoordinatorRecord newShareSnapshotUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return new CoordinatorRecord(
-                new ApiMessageAndVersion(new ShareUpdateKey()
-                        .setGroupId(groupId)
-                        .setTopicId(topicId)
-                        .setPartition(partitionId),
-                        ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
-                new ApiMessageAndVersion(new ShareUpdateValue()
-                        .setSnapshotEpoch(offsetData.snapshotEpoch())
-                        .setLeaderEpoch(offsetData.leaderEpoch())
-                        .setStartOffset(offsetData.startOffset())
-                        .setStateBatches(offsetData.stateBatches().stream()
-                                .map(batch -> new ShareUpdateValue.StateBatch()
-                                        .setFirstOffset(batch.firstOffset())
-                                        .setLastOffset(batch.lastOffset())
-                                        .setDeliveryCount(batch.deliveryCount())
-                                        .setDeliveryState(batch.deliveryState()))
-                                .collect(Collectors.toList())),
-                        ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION)
+            new ApiMessageAndVersion(new ShareUpdateKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId),
+                ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+            new ApiMessageAndVersion(new ShareUpdateValue()
+                .setSnapshotEpoch(offsetData.snapshotEpoch())
+                .setLeaderEpoch(offsetData.leaderEpoch())
+                .setStartOffset(offsetData.startOffset())
+                .setStateBatches(offsetData.stateBatches().stream()
+                    .map(batch -> new ShareUpdateValue.StateBatch()
+                        .setFirstOffset(batch.firstOffset())
+                        .setLastOffset(batch.lastOffset())
+                        .setDeliveryCount(batch.deliveryCount())
+                        .setDeliveryState(batch.deliveryState()))
+                    .collect(Collectors.toList())),
+                ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION)
         );
     }
 }

@@ -82,12 +82,12 @@ public class ShareGroupOffset {
 
     public static ShareGroupOffset fromRecord(ShareSnapshotValue record) {
         return new ShareGroupOffset(record.snapshotEpoch(), record.stateEpoch(), record.leaderEpoch(), record.startOffset(), record.stateBatches().stream()
-                .map(ShareGroupOffset::toPersisterStateBatch).collect(Collectors.toList()));
+            .map(ShareGroupOffset::toPersisterStateBatch).collect(Collectors.toList()));
     }
 
     public static ShareGroupOffset fromRecord(ShareUpdateValue record) {
         return new ShareGroupOffset(record.snapshotEpoch(), -1, record.leaderEpoch(), record.startOffset(), record.stateBatches().stream()
-                .map(ShareGroupOffset::toPersisterStateBatch).collect(Collectors.toList()));
+            .map(ShareGroupOffset::toPersisterStateBatch).collect(Collectors.toList()));
     }
 
     public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data) {
@@ -96,18 +96,18 @@ public class ShareGroupOffset {
 
     public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, int snapshotEpoch) {
         return new ShareGroupOffset(snapshotEpoch,
-                data.stateEpoch(),
-                data.leaderEpoch(),
-                data.startOffset(),
-                data.stateBatches().stream()
-                        .map(PersisterStateBatch::from)
-                        .collect(Collectors.toList()));
+            data.stateEpoch(),
+            data.leaderEpoch(),
+            data.startOffset(),
+            data.stateBatches().stream()
+                .map(PersisterStateBatch::from)
+                .collect(Collectors.toList()));
     }
 
     public Set<PersisterOffsetsStateBatch> stateBatchAsSet() {
         return this.stateBatches().stream()
-                .map(PersisterOffsetsStateBatch::of)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+            .map(PersisterOffsetsStateBatch::of)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     public static class Builder {
