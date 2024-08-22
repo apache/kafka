@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
-import org.apache.kafka.raft.internals.ReplicaKey;
+import org.apache.kafka.raft.ReplicaKey;
 
 import java.util.Collection;
 import java.util.Collections;

@@ -64,10 +64,11 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.raft.utils.BeginQuorumEpochRpc;
 import org.apache.kafka.raft.utils.DescribeQuorumRpc;
+import org.apache.kafka.raft.utils.EndQuorumEpochRpc;
 import org.apache.kafka.raft.utils.FetchRpc;
 import org.apache.kafka.raft.utils.FetchSnapshotRpc;
-import org.apache.kafka.raft.utils.QuorumEpochRpc;
 import org.apache.kafka.raft.utils.VoteRpc;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -1327,7 +1328,7 @@ public final class RaftClientTestContext {
         int epoch,
         OptionalInt leaderId
     ) {
-        return QuorumEpochRpc.singletonEndQuorumEpochResponse(
+        return EndQuorumEpochRpc.singletonEndQuorumEpochResponse(
             channel.listenerName(),
             endQuorumEpochRpcVersion(),
             Errors.NONE,
@@ -1358,7 +1359,7 @@ public final class RaftClientTestContext {
         int leaderId,
         List<ReplicaKey> preferredCandidates
     ) {
-        return QuorumEpochRpc.singletonEndQuorumEpochRequest(
+        return EndQuorumEpochRpc.singletonEndQuorumEpochRequest(
             metadataPartition,
             clusterId,
             epoch,
@@ -1385,7 +1386,7 @@ public final class RaftClientTestContext {
         int leaderId,
         ReplicaKey voterKey
     ) {
-        return QuorumEpochRpc.singletonBeginQuorumEpochRequest(
+        return BeginQuorumEpochRpc.singletonBeginQuorumEpochRequest(
             metadataPartition,
             clusterId,
             epoch,
@@ -1396,7 +1397,7 @@ public final class RaftClientTestContext {
     }
 
     BeginQuorumEpochResponseData beginEpochResponse(int epoch, int leaderId) {
-        return QuorumEpochRpc.singletonBeginQuorumEpochResponse(
+        return BeginQuorumEpochRpc.singletonBeginQuorumEpochResponse(
             channel.listenerName(),
             beginQuorumEpochRpcVersion(),
             Errors.NONE,

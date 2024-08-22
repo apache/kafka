@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.internals.ReplicaKey;
+import org.apache.kafka.raft.ReplicaKey;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
