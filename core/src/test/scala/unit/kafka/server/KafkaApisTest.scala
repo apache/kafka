@@ -212,6 +212,8 @@ class KafkaApisTest extends Logging {
 
     val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
 
+    when(groupCoordinator.isNewGroupCoordinator).thenReturn(config.isNewGroupCoordinatorEnabled)
+
     new KafkaApis(
       requestChannel = requestChannel,
       metadataSupport = metadataSupport,
