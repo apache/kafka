@@ -19,11 +19,21 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.consumer.GroupProtocol
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.serialization.IntegerSerializer
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.junit.jupiter.api.Assertions.fail
+import org.apache.kafka.server.config.ServerConfigs
+import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
+
+import java.time.Duration
+import java.util.Collections
+import java.util.concurrent.CompletableFuture
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
@@ -165,5 +175,81 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         version = version.toShort
       )
     }
+  }
+
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, value = "2")
+  ))
+  def testFetchSessionWithClassicGroupProtocol(): Unit = {
+    testFetchSession(GroupProtocol.CLASSIC)
+  }
+
+  @ClusterTest(types = Array(Type.KRAFT), serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, value = "2")
+  ))
+  def testFetchSessionWithConsumerGroupProtocol(): Unit = {
+    testFetchSession(GroupProtocol.CONSUMER)
+  }
+
+  def testFetchSession(groupProtocol: GroupProtocol): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 4
+    )
+
+    val time = Time.SYSTEM
+    val workerRunMs = 30000
+    val testRunMs = workerRunMs + 5000
+
+    CompletableFuture.runAsync(() => {
+      val producer = TestUtils.createProducer(cluster.bootstrapServers(), acks = -1)
+      val timer = time.timer(workerRunMs)
+
+      try {
+        while (!timer.isExpired) {
+          val values = (0 until 3).map(x => s"test-$x")
+          val intSerializer = new IntegerSerializer()
+          val records = values.zipWithIndex.map { case (v, i) =>
+            new ProducerRecord("foo", intSerializer.serialize("foo", i), v.getBytes)
+          }
+          val futures = records.map(producer.send)
+          futures.foreach(_.get)
+          timer.sleep(100)
+        }
+      } finally {
+        producer.close()
+      }
+    })
+
+    for (_ <- 0 to 1) {
+      CompletableFuture.runAsync(() => {
+        val consumer = TestUtils.createConsumer(cluster.bootstrapServers(), groupProtocol = groupProtocol)
+        consumer.subscribe(Collections.singletonList("foo"))
+        val timer = time.timer(workerRunMs)
+
+        try {
+          while (!timer.isExpired) {
+            consumer.poll(Duration.ofMillis(100))
+            timer.sleep(100)
+          }
+        } finally {
+          consumer.close()
+        }
+      })
+    }
+
+    time.sleep(testRunMs)
+    assertEquals(0, TestUtils.meterCount("IncrementalFetchSessionEvictionsPerSec"))
   }
 }

@@ -570,7 +570,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             do {
                 // Make sure the network thread can tell the application is actively polling
-                applicationEventHandler.add(new PollEvent(timer.currentTimeMs()));
+                applicationEventHandler.add(new PollEvent(timer.currentTimeMs(), calculateDeadlineMs(timer)));
 
                 processBackgroundEvents();
 

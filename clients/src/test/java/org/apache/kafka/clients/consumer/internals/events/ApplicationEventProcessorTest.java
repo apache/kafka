@@ -117,7 +117,7 @@ public class ApplicationEventProcessorTest {
         Map<TopicPartition, OffsetAndMetadata> offset = new HashMap<>();
         final long currentTimeMs = 12345;
         return Stream.of(
-                Arguments.of(new PollEvent(100)),
+                Arguments.of(new PollEvent(currentTimeMs, calculateDeadlineMs(currentTimeMs, 100))),
                 Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),

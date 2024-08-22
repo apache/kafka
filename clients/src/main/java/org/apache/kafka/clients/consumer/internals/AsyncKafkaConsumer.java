@@ -684,10 +684,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             do {
-
-                // Make sure to let the background thread know that we are still polling.
-                applicationEventHandler.add(new PollEvent(timer.currentTimeMs()));
-
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
                 // of the fetches. A wakeup between returned fetches and returning records would lead to never
@@ -697,6 +693,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
+                    sendFetches(timer);
+
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
                             + "since the consumer's position has advanced for at least one topic partition");
@@ -1532,6 +1530,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
+        // send any new fetches (won't resend pending fetches)
+        sendFetches(timer);
+
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
 
@@ -1710,6 +1711,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
         if (offsetAndMetadata != null)
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
+    }
+
+    private void sendFetches(Timer timer) {
+        applicationEventHandler.addAndGet(new PollEvent(timer.currentTimeMs(), calculateDeadlineMs(timer)));
     }
 
     @Override

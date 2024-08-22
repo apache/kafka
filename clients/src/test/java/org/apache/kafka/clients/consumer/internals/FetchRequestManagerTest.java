@@ -3652,7 +3652,7 @@ public class FetchRequestManagerTest {
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector,
                                            ApiVersions apiVersions) {
-            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions);
+            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions, false);
             this.fetchCollector = fetchCollector;
         }
 
@@ -3661,6 +3661,7 @@ public class FetchRequestManagerTest {
         }
 
         private int sendFetches() {
+            requestFetch();
             NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);
             return pollResult.unsentRequests.size();

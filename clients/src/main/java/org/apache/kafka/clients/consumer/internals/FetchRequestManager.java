@@ -25,10 +25,12 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -40,7 +42,10 @@ import java.util.stream.Collectors;
  */
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
+    private final Logger log;
     private final NetworkClientDelegate networkClientDelegate;
+    private final boolean requireEmptyFetchBuffer;
+    private CompletableFuture<Integer> pendingFetchRequestFuture;
 
     FetchRequestManager(final LogContext logContext,
                         final Time time,
@@ -51,8 +56,34 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate,
                         final ApiVersions apiVersions) {
+        this(
+            logContext,
+            time,
+            metadata,
+            subscriptions,
+            fetchConfig,
+            fetchBuffer,
+            metricsManager,
+            networkClientDelegate,
+            apiVersions,
+            true
+        );
+    }
+
+    FetchRequestManager(final LogContext logContext,
+                        final Time time,
+                        final ConsumerMetadata metadata,
+                        final SubscriptionState subscriptions,
+                        final FetchConfig fetchConfig,
+                        final FetchBuffer fetchBuffer,
+                        final FetchMetricsManager metricsManager,
+                        final NetworkClientDelegate networkClientDelegate,
+                        final ApiVersions apiVersions,
+                        final boolean requireEmptyFetchBuffer) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
+        this.log = logContext.logger(FetchRequestManager.class);
         this.networkClientDelegate = networkClientDelegate;
+        this.requireEmptyFetchBuffer = requireEmptyFetchBuffer;
     }
 
     @Override
@@ -65,16 +96,48 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
         networkClientDelegate.maybeThrowAuthFailure(node);
     }
 
+    public CompletableFuture<Integer> requestFetch() {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+
+        if (pendingFetchRequestFuture != null) {
+            pendingFetchRequestFuture.whenComplete((value, exception) -> {
+                if (exception != null)
+                    future.completeExceptionally(exception);
+                else
+                    future.complete(value);
+            });
+        } else {
+            pendingFetchRequestFuture = future;
+        }
+
+        return future;
+    }
+
     /**
      * {@inheritDoc}
      */
     @Override
     public PollResult poll(long currentTimeMs) {
-        return pollInternal(
-                prepareFetchRequests(),
+        if (pendingFetchRequestFuture == null)
+            return PollResult.EMPTY;
+
+        final PollResult pollResult;
+
+        if (requireEmptyFetchBuffer && !fetchBuffer.bufferedPartitions().isEmpty()) {
+            pollResult = PollResult.EMPTY;
+            log.warn("No fetch request will be issued because the fetch buffer contains the following partitions: {}", fetchBuffer.bufferedPartitions());
+        } else {
+            Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests();
+            pollResult = pollInternal(
+                fetchRequests,
                 this::handleFetchSuccess,
                 this::handleFetchFailure
-        );
+            );
+        }
+
+        pendingFetchRequestFuture.complete(pollResult.unsentRequests.size());
+        pendingFetchRequestFuture = null;
+        return pollResult;
     }
 
     /**

@@ -1852,7 +1852,7 @@ public class AsyncKafkaConsumerTest {
 
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
-        verify(applicationEventHandler).add(any(PollEvent.class));
+        verify(applicationEventHandler).addAndGet(any(PollEvent.class));
     }
 
     private void testInvalidGroupId(final String groupId) {

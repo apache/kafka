@@ -746,7 +746,8 @@ object TestUtils extends Logging {
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): Consumer[K, V] = {
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                           groupProtocol: GroupProtocol = GroupProtocol.CLASSIC): Consumer[K, V] = {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
@@ -754,6 +755,7 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit.toString)
     consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, if (readCommitted) "read_committed" else "read_uncommitted")
+    consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name())
     consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
   }
@@ -1263,8 +1265,13 @@ object TestUtils extends Logging {
   def produceMessages[B <: KafkaBroker](
       brokers: Seq[B],
       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
-      acks: Int = -1): Unit = {
-    val producer = createProducer(plaintextBootstrapServers(brokers), acks = acks)
+      acks: Int = -1,
+      bootstrap: String = ""): Unit = {
+    val producer = if (bootstrap.isEmpty) {
+      createProducer(plaintextBootstrapServers(brokers), acks = acks)
+    } else {
+      createProducer(bootstrap, acks = acks)
+    }
     try {
       val futures = records.map(producer.send)
       futures.foreach(_.get)
