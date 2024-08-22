@@ -2004,100 +2004,97 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
 
+      // Start consumers in a thread that will subscribe to a new group.
+      val consumerThreads = consumerSet.zip(topicSet).map(zipped => createShareConsumerThread(zipped._1, zipped._2))
+
       try {
-        // Start consumers in a thread that will subscribe to a new group.
-        val consumerThreads = consumerSet.zip(topicSet).map(zipped => createShareConsumerThread(zipped._1, zipped._2))
+        consumerThreads.foreach(_.start())
+        assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
 
-        try {
-          consumerThreads.foreach(_.start())
-          assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
+        // Test that we can list the new group.
+        TestUtils.waitUntilTrue(() => {
+          client.listShareGroups.all.get.stream().filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ShareGroupState.STABLE).count() == 1
+        }, s"Expected to be able to list $testGroupId")
 
-          // Test that we can list the new group.
-          TestUtils.waitUntilTrue(() => {
-            client.listShareGroups.all.get.stream().filter(group =>
-              group.groupId == testGroupId &&
-                group.state.get == ShareGroupState.STABLE).count() == 1
-          }, s"Expected to be able to list $testGroupId")
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListShareGroupsOptions().inStates(Collections.singleton(ShareGroupState.STABLE))
+          client.listShareGroups(options).all.get.stream().filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ShareGroupState.STABLE).count() == 1
+        }, s"Expected to be able to list $testGroupId in state Stable")
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListShareGroupsOptions().inStates(Collections.singleton(ShareGroupState.STABLE))
-            client.listShareGroups(options).all.get.stream().filter(group =>
-              group.groupId == testGroupId &&
-                group.state.get == ShareGroupState.STABLE).count() == 1
-          }, s"Expected to be able to list $testGroupId in state Stable")
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListShareGroupsOptions().inStates(Collections.singleton(ShareGroupState.EMPTY))
+          client.listShareGroups(options).all.get.stream().filter(_.groupId == testGroupId).count() == 0
+        }, s"Expected to find zero groups")
 
-          TestUtils.waitUntilTrue(() => {
-            val options = new ListShareGroupsOptions().inStates(Collections.singleton(ShareGroupState.EMPTY))
-            client.listShareGroups(options).all.get.stream().filter(_.groupId == testGroupId).count() == 0
-          }, s"Expected to find zero groups")
+        val describeWithFakeGroupResult = client.describeShareGroups(util.Arrays.asList(testGroupId, fakeGroupId),
+          new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
 
-          val describeWithFakeGroupResult = client.describeShareGroups(util.Arrays.asList(testGroupId, fakeGroupId),
-            new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
+        // Test that we can get information about the test share group.
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
+        assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
+        var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
 
-          // Test that we can get information about the test share group.
-          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
-          assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
-          var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
-
-          assertEquals(testGroupId, testGroupDescription.groupId())
-          assertEquals(consumerSet.size, testGroupDescription.members().size())
-          val members = testGroupDescription.members()
-          members.forEach(member => assertEquals(testClientId, member.clientId()))
-          val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
-          topicSet.foreach { topic =>
-            val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
-            assertEquals(testNumPartitions, topicPartitions.size)
-          }
-
-          val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
-          assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
-
-          // Test that the fake group is listed as dead.
-          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-          val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
-
-          assertEquals(fakeGroupId, fakeGroupDescription.groupId())
-          assertEquals(0, fakeGroupDescription.members().size())
-          assertEquals(ShareGroupState.DEAD, fakeGroupDescription.state())
-          assertNull(fakeGroupDescription.authorizedOperations())
-
-          // Test that all() returns 2 results
-          assertEquals(2, describeWithFakeGroupResult.all().get().size())
-
-          val describeTestGroupResult = client.describeShareGroups(Collections.singleton(testGroupId),
-            new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(1, describeTestGroupResult.all().get().size())
-          assertEquals(1, describeTestGroupResult.describedGroups().size())
-
-          testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
-
-          assertEquals(testGroupId, testGroupDescription.groupId)
-          assertEquals(consumerSet.size, testGroupDescription.members().size())
-
-          // Describing a share group using describeConsumerGroups reports it as a DEAD consumer group
-          // in the same way as a non-existent group
-          val describeConsumerGroupResult = client.describeConsumerGroups(Collections.singleton(testGroupId),
-            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(1, describeConsumerGroupResult.all().get().size())
-
-          val deadConsumerGroupDescription = describeConsumerGroupResult.describedGroups().get(testGroupId).get()
-          assertEquals(testGroupId, deadConsumerGroupDescription.groupId())
-          assertEquals(0, deadConsumerGroupDescription.members().size())
-          assertEquals("", deadConsumerGroupDescription.partitionAssignor())
-          assertEquals(ConsumerGroupState.DEAD, deadConsumerGroupDescription.state())
-          assertEquals(expectedOperations, deadConsumerGroupDescription.authorizedOperations())
-        } finally {
-          consumerThreads.foreach {
-            case consumerThread =>
-              consumerThread.interrupt()
-              consumerThread.join()
-          }
+        assertEquals(testGroupId, testGroupDescription.groupId())
+        assertEquals(consumerSet.size, testGroupDescription.members().size())
+        val members = testGroupDescription.members()
+        members.forEach(member => assertEquals(testClientId, member.clientId()))
+        val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
+        topicSet.foreach { topic =>
+          val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
+          assertEquals(testNumPartitions, topicPartitions.size)
         }
+
+        val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
+        assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
+
+        // Test that the fake group is listed as dead.
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
+        val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
+
+        assertEquals(fakeGroupId, fakeGroupDescription.groupId())
+        assertEquals(0, fakeGroupDescription.members().size())
+        assertEquals(ShareGroupState.DEAD, fakeGroupDescription.state())
+        assertNull(fakeGroupDescription.authorizedOperations())
+
+        // Test that all() returns 2 results
+        assertEquals(2, describeWithFakeGroupResult.all().get().size())
+
+        val describeTestGroupResult = client.describeShareGroups(Collections.singleton(testGroupId),
+          new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(1, describeTestGroupResult.all().get().size())
+        assertEquals(1, describeTestGroupResult.describedGroups().size())
+
+        testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
+
+        assertEquals(testGroupId, testGroupDescription.groupId)
+        assertEquals(consumerSet.size, testGroupDescription.members().size())
+
+        // Describing a share group using describeConsumerGroups reports it as a DEAD consumer group
+        // in the same way as a non-existent group
+        val describeConsumerGroupResult = client.describeConsumerGroups(Collections.singleton(testGroupId),
+          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(1, describeConsumerGroupResult.all().get().size())
+
+        val deadConsumerGroupDescription = describeConsumerGroupResult.describedGroups().get(testGroupId).get()
+        assertEquals(testGroupId, deadConsumerGroupDescription.groupId())
+        assertEquals(0, deadConsumerGroupDescription.members().size())
+        assertEquals("", deadConsumerGroupDescription.partitionAssignor())
+        assertEquals(ConsumerGroupState.DEAD, deadConsumerGroupDescription.state())
+        assertEquals(expectedOperations, deadConsumerGroupDescription.authorizedOperations())
       } finally {
-        consumerSet.foreach(consumer => Utils.closeQuietly(consumer, "consumer"))
+        consumerThreads.foreach {
+          case consumerThread =>
+            consumerThread.interrupt()
+            consumerThread.join()
+        }
       }
     } finally {
+      consumerSet.foreach(consumer => Utils.closeQuietly(consumer, "consumer"))
       Utils.closeQuietly(producer, "producer")
       Utils.closeQuietly(client, "adminClient")
     }
