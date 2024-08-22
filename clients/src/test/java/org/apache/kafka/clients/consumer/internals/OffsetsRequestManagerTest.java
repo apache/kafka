@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
@@ -40,8 +41,8 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
 
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -74,6 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -85,8 +88,9 @@ public class OffsetsRequestManagerTest {
     private OffsetsRequestManager requestManager;
     private ConsumerMetadata metadata;
     private SubscriptionState subscriptionState;
-    private MockTime time;
+    private final Time time = mock(Time.class);
     private ApiVersions apiVersions;
+    private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
     private static final String TEST_TOPIC = "t1";
     private static final TopicPartition TEST_PARTITION_1 = new TopicPartition(TEST_TOPIC, 1);
     private static final TopicPartition TEST_PARTITION_2 = new TopicPartition(TEST_TOPIC, 2);
@@ -95,13 +99,14 @@ public class OffsetsRequestManagerTest {
     private static final IsolationLevel DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_COMMITTED;
     private static final int RETRY_BACKOFF_MS = 500;
     private static final int REQUEST_TIMEOUT_MS = 500;
+    private static final int DEFAULT_API_TIMEOUT_MS = 500;
 
     @BeforeEach
     public void setup() {
         LogContext logContext = new LogContext();
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
-        time = new MockTime(0);
+        // time = new MockTime(0);
         apiVersions = mock(ApiVersions.class);
         requestManager = new OffsetsRequestManager(
                 subscriptionState,
@@ -110,8 +115,10 @@ public class OffsetsRequestManagerTest {
                 time,
                 RETRY_BACKOFF_MS,
                 REQUEST_TIMEOUT_MS,
+                DEFAULT_API_TIMEOUT_MS,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
+                commitRequestManager,
                 logContext
         );
     }
@@ -651,6 +658,65 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.position(any())).thenReturn(position, position);
         requestManager.validatePositionsIfNeeded();
         assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
+    }
+
+    @Test
+    public void testUpdateFetchPositionsDiscardsCommittedOffsetsResponseIfInitializingPartitionsChanged() {
+        long currentTime = System.currentTimeMillis();
+        long updatePositionsTimeout = 0;
+        long internalFetchCommittedTimeout = currentTime + DEFAULT_API_TIMEOUT_MS;
+        when(time.milliseconds()).thenReturn(currentTime);
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.emptySet());
+        TopicPartition tp1 = new TopicPartition("topic1", 1);
+        when(subscriptionState.isAssigned(tp1)).thenReturn(true);
+        TopicPartition tp2 = new TopicPartition("topic1", 2);
+        when(subscriptionState.isAssigned(tp2)).thenReturn(true);
+        Metadata.LeaderAndEpoch leaderAndEpoch = testLeaderEpoch(LEADER_1, Optional.of(1));
+        when(metadata.currentLeader(tp2)).thenReturn(leaderAndEpoch);
+        when(subscriptionState.hasAllFetchPositions()).thenReturn(false);
+
+
+        when(metadata.currentLeader(tp1)).thenReturn(testLeaderEpoch(LEADER_1, Optional.of(1)));
+        Set<TopicPartition> initPartitions1 = Collections.singleton(tp1);
+        when(subscriptionState.initializingPartitions()).thenReturn(initPartitions1);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult1 = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult1);
+
+        // Update positions with tp1 as partition requiring position. The update
+        // positions operation won't complete just yet, waiting for the committed offsets
+        CompletableFuture<Boolean> updatePositions1 =
+            requestManager.updateFetchPositions(currentTime + updatePositionsTimeout);
+        assertFalse(updatePositions1.isDone());
+        verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
+        clearInvocations(commitRequestManager);
+
+        // Update positions now with tp2 as partition requiring position. Should discard the
+        // previous fetch request for tp1, and do not update positions for tp1.
+        Set<TopicPartition> initPartitions2 = Collections.singleton(tp2);
+        when(subscriptionState.initializingPartitions()).thenReturn(initPartitions2);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult2 = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions2, internalFetchCommittedTimeout)).thenReturn(fetchResult2);
+        CompletableFuture<Boolean> updatePositions2 =
+            requestManager.updateFetchPositions(currentTime + updatePositionsTimeout);
+
+        // Should cancel the previous offset fetch future
+        // assertFalse(updatePositions2.isDone());
+        verify(commitRequestManager).fetchOffsets(initPartitions2, internalFetchCommittedTimeout);
+        assertTrue(fetchResult1.isCancelled(), "Fetch committed should have been " +
+            "cancelled after updating positions for a different set of partitions");
+
+        // Complete first offset fetch request. Should be discarded because the set of
+        // partitions requiring position changed.
+        fetchResult1.complete(Collections.singletonMap(tp1, new OffsetAndMetadata(5)));
+        verify(subscriptionState, never()).seekUnvalidated(any(), any());
+
+        // Complete the second OffsetFetch request. It should update positions for tp2
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(10, Optional.of(1), "");
+        fetchResult2.complete(Collections.singletonMap(tp2, offsetAndMetadata));
+        assertTrue(updatePositions2.isDone());
+        SubscriptionState.FetchPosition expectedPosition =
+            new SubscriptionState.FetchPosition(offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
+        verify(subscriptionState).seekUnvalidated(tp2, expectedPosition);
     }
 
     private void mockSuccessfulBuildRequestForValidatingPositions(SubscriptionState.FetchPosition position, Node leader) {

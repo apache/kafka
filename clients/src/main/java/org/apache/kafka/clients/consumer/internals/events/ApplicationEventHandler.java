@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -110,6 +111,12 @@ public class ApplicationEventHandler implements Closeable {
     public <T> T addAndGet(final CompletableApplicationEvent<T> event) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
         add(event);
+        // Check if the thread was interrupted before we start waiting, to ensure that we
+        // propagate the exception even if we end up not having to wait (the event could complete
+        // between the time it's added and the time we attempt to getResult)
+        if (Thread.interrupted()) {
+            throw new InterruptException("Interrupted waiting for results for application event " + event);
+        }
         return ConsumerUtils.getResult(event.future());
     }
 

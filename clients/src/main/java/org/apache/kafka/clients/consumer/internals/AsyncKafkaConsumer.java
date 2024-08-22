@@ -351,8 +351,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     subscriptions,
-                    requestManagersSupplier,
-                    time);
+                    requestManagersSupplier);
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
@@ -530,8 +529,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 logContext,
                 metadata,
                 subscriptions,
-                requestManagersSupplier,
-                time
+                requestManagersSupplier
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
@@ -1591,9 +1589,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private boolean updateFetchPositions(final Timer timer) {
         try {
-            long eventDeadline = calculateDeadlineMs(timer);
-            long offsetFetchDeadline = calculateDeadlineMs(time, defaultApiTimeoutMs);
-            UpdateFetchPositionsEvent updateFetchPositionsEvent = new UpdateFetchPositionsEvent(eventDeadline, offsetFetchDeadline);
+            UpdateFetchPositionsEvent updateFetchPositionsEvent = new UpdateFetchPositionsEvent(calculateDeadlineMs(timer));
             wakeupTrigger.setActiveTask(updateFetchPositionsEvent.future());
             cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(updateFetchPositionsEvent);
         } catch (TimeoutException e) {

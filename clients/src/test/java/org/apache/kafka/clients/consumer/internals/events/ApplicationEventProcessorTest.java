@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
@@ -30,8 +29,6 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -51,16 +48,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -74,10 +64,6 @@ public class ApplicationEventProcessorTest {
     private ApplicationEventProcessor processor;
 
     private void setupProcessor(boolean withGroupId) {
-        setupProcessor(withGroupId, time);
-    }
-
-    private void setupProcessor(boolean withGroupId, Time time) {
         RequestManagers requestManagers = new RequestManagers(
                 new LogContext(),
                 offsetsRequestManager,
@@ -91,8 +77,7 @@ public class ApplicationEventProcessorTest {
                 new LogContext(),
                 requestManagers,
                 mock(ConsumerMetadata.class),
-                subscriptionState,
-                time
+                subscriptionState
         );
     }
 
@@ -137,7 +122,7 @@ public class ApplicationEventProcessorTest {
                 Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
-                Arguments.of(new UpdateFetchPositionsEvent(500, 30000)),
+                Arguments.of(new UpdateFetchPositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
                 Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
     }
@@ -150,155 +135,6 @@ public class ApplicationEventProcessorTest {
         ApplicationEvent e = new ListOffsetsEvent(timestamps, calculateDeadlineMs(time, 100), requireTimestamp);
         applicationEventProcessor.process(e);
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
-    }
-
-    @Test
-    public void testUpdateFetchPositionsReusesPendingOffsetFetchEvent() {
-        setupProcessor(true);
-        when(offsetsRequestManager.validatePositionsIfNeeded()).thenReturn(CompletableFuture.completedFuture(null));
-        when(subscriptionState.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("topic1", 0)));
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsetsResult = new CompletableFuture<>();
-        when(commitRequestManager.fetchOffsets(any(), anyLong())).thenReturn(fetchOffsetsResult);
-        long updatePositionsTimeoutMs = 0;
-        long fetchOffsetsTimeoutMs = 30000;
-        UpdateFetchPositionsEvent updatePositionsEvent1 = new UpdateFetchPositionsEvent(time.milliseconds() + updatePositionsTimeoutMs,
-            time.milliseconds() + fetchOffsetsTimeoutMs);
-        processor.process(updatePositionsEvent1);
-        verify(commitRequestManager).fetchOffsets(any(), anyLong());
-        assertTrue(processor.hasPendingOffsetFetchEvent());
-        assertThrows(TimeoutException.class,
-            () -> ConsumerUtils.getResult(updatePositionsEvent1.future(), updatePositionsTimeoutMs));
-
-        // Complete OffsetsFetch request after the first update positions event expired
-        updatePositionsEvent1.future().completeExceptionally(new TimeoutException("Application event expired"));
-        fetchOffsetsResult.complete(Collections.emptyMap());
-        clearInvocations(commitRequestManager);
-
-        // Next UpdateFetchPositions event with the same set of partitions should reuse the pendingOffsetFetch
-        when(offsetsRequestManager.resetPositionsIfNeeded()).thenReturn(CompletableFuture.completedFuture(null));
-        UpdateFetchPositionsEvent updatePositionsEvent2 = new UpdateFetchPositionsEvent(time.milliseconds() + updatePositionsTimeoutMs,
-            time.milliseconds() + fetchOffsetsTimeoutMs);
-        processor.process(updatePositionsEvent2);
-        assertDoesNotThrow(() -> ConsumerUtils.getResult(updatePositionsEvent2.future(), updatePositionsTimeoutMs));
-        assertFalse(processor.hasPendingOffsetFetchEvent(), "Pending OffsetFetch should be " +
-            "removed after being used");
-        verify(commitRequestManager, never()).fetchOffsets(any(), anyLong());
-    }
-
-    @Test
-    public void testUpdateFetchPositionsDoesNotReusePendingOffsetFetchEventForDifferentPartitions() {
-        setupProcessor(true);
-        TopicPartition tp0 = new TopicPartition("topic1", 0);
-        TopicPartition tp1 = new TopicPartition("topic1", 1);
-        when(offsetsRequestManager.validatePositionsIfNeeded()).thenReturn(CompletableFuture.completedFuture(null));
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsetsResult1 =
-            new CompletableFuture<>();
-        when(commitRequestManager.fetchOffsets(any(), anyLong())).thenReturn(fetchOffsetsResult1);
-        long updatePositionsTimeoutMs = 0;
-        long fetchOffsetsTimeoutMs = 30000;
-        UpdateFetchPositionsEvent updatePositionsEvent1 =
-            new UpdateFetchPositionsEvent(time.milliseconds() + updatePositionsTimeoutMs,
-                time.milliseconds() + fetchOffsetsTimeoutMs);
-        when(subscriptionState.initializingPartitions()).thenReturn(Collections.singleton(tp0));
-        processor.process(updatePositionsEvent1);
-        verify(commitRequestManager).fetchOffsets(any(), anyLong());
-        assertTrue(processor.hasPendingOffsetFetchEvent());
-        assertThrows(TimeoutException.class,
-            () -> ConsumerUtils.getResult(updatePositionsEvent1.future(), updatePositionsTimeoutMs));
-
-        // Complete OffsetsFetch request after the first update positions event expired
-        updatePositionsEvent1.future().completeExceptionally(new TimeoutException("Application event expired"));
-        fetchOffsetsResult1.complete(Collections.singletonMap(tp0, new OffsetAndMetadata(5L)));
-        clearInvocations(commitRequestManager);
-
-        // Next UpdateFetchPositions event should not reuse the pendingOffsetFetch because it's
-        // for a different set of partitions. It should issue a new offsetFetch request and
-        // overwrite the pendingOffsetFetch
-        when(subscriptionState.initializingPartitions()).thenReturn(Collections.singleton(tp1));
-        when(commitRequestManager.fetchOffsets(any(), anyLong())).thenReturn(new CompletableFuture<>());
-        UpdateFetchPositionsEvent updatePositionsEvent2 = new UpdateFetchPositionsEvent(time.milliseconds() + updatePositionsTimeoutMs,
-            time.milliseconds() + fetchOffsetsTimeoutMs);
-        processor.process(updatePositionsEvent2);
-        verify(commitRequestManager).fetchOffsets(any(), anyLong());
-        assertTrue(processor.hasPendingOffsetFetchEvent());
-        assertThrows(TimeoutException.class,
-            () -> ConsumerUtils.getResult(updatePositionsEvent2.future(), updatePositionsTimeoutMs));
-    }
-
-    @Test
-    public void testUpdateFetchPositionsDoesNotReuseExpiredOffsetFetchEvent() {
-        Time time = new MockTime();
-        setupProcessor(true, time);
-        when(offsetsRequestManager.validatePositionsIfNeeded()).thenReturn(CompletableFuture.completedFuture(null));
-        when(subscriptionState.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("topic1", 0)));
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsetsResult = new CompletableFuture<>();
-        when(commitRequestManager.fetchOffsets(any(), anyLong())).thenReturn(fetchOffsetsResult);
-        long updatePositionsTimeoutMs = 0;
-        long fetchOffsetsTimeoutMs = 30000;
-        UpdateFetchPositionsEvent updatePositionsEvent1 =
-            new UpdateFetchPositionsEvent(time.milliseconds() + updatePositionsTimeoutMs,
-                time.milliseconds() + fetchOffsetsTimeoutMs);
-        processor.process(updatePositionsEvent1);
-        verify(commitRequestManager).fetchOffsets(any(), anyLong());
-        assertTrue(processor.hasPendingOffsetFetchEvent());
-        assertThrows(TimeoutException.class,
-            () -> ConsumerUtils.getResult(updatePositionsEvent1.future(), updatePositionsTimeoutMs));
-
-        // Expire the pendingOffsetFetch request
-        time.sleep(fetchOffsetsTimeoutMs);
-        clearInvocations(commitRequestManager);
-
-        // Next UpdateFetchPositions event with the same set of partitions should not reuse the
-        // expired pendingOffsetFetch
-        UpdateFetchPositionsEvent updatePositionsEvent2 = new UpdateFetchPositionsEvent(time.milliseconds() + updatePositionsTimeoutMs,
-            time.milliseconds() + fetchOffsetsTimeoutMs);
-        processor.process(updatePositionsEvent2);
-        verify(commitRequestManager).fetchOffsets(any(), anyLong());
-        assertTrue(processor.hasPendingOffsetFetchEvent());
-        assertThrows(TimeoutException.class,
-            () -> ConsumerUtils.getResult(updatePositionsEvent1.future(), updatePositionsTimeoutMs));
-    }
-
-    @ParameterizedTest
-    @MethodSource("offsetFetchExceptionSupplier")
-    public void testOffsetFetchErrorsClearPendingEvent(Throwable fetchException) {
-        setupProcessor(true);
-        when(offsetsRequestManager.validatePositionsIfNeeded()).thenReturn(CompletableFuture.completedFuture(null));
-        when(subscriptionState.initializingPartitions()).thenReturn(Collections.singleton(new TopicPartition("topic1", 0)));
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsetsResult = new CompletableFuture<>();
-        when(commitRequestManager.fetchOffsets(any(), anyLong())).thenReturn(fetchOffsetsResult);
-        long updatePositionsTimeoutMs = 0;
-        long fetchOffsetsTimeoutMs = 30000;
-        UpdateFetchPositionsEvent updatePositionsEvent = new UpdateFetchPositionsEvent(
-            time.milliseconds() + updatePositionsTimeoutMs,
-            time.milliseconds() + fetchOffsetsTimeoutMs);
-        processor.process(updatePositionsEvent);
-        verify(commitRequestManager).fetchOffsets(any(), anyLong());
-        assertTrue(processor.hasPendingOffsetFetchEvent());
-        assertThrows(TimeoutException.class,
-            () -> ConsumerUtils.getResult(updatePositionsEvent.future(), updatePositionsTimeoutMs));
-
-        // Complete OffsetsFetch request with error after the first update positions event expired
-        updatePositionsEvent.future().completeExceptionally(new TimeoutException("App event expired"));
-        fetchOffsetsResult.completeExceptionally(fetchException);
-        clearInvocations(commitRequestManager);
-
-        // Next UpdateFetchPositions event with the same set of partitions should reuse the pendingOffsetFetch
-        UpdateFetchPositionsEvent updatePositionsEvent2 = new UpdateFetchPositionsEvent(
-            time.milliseconds() + updatePositionsTimeoutMs,
-            time.milliseconds() + fetchOffsetsTimeoutMs);
-        processor.process(updatePositionsEvent2);
-        assertThrows(fetchException.getClass(), () -> ConsumerUtils.getResult(updatePositionsEvent2.future(), updatePositionsTimeoutMs));
-        assertFalse(processor.hasPendingOffsetFetchEvent(), "Pending OffsetFetch should be " +
-            "removed after being used");
-        verify(commitRequestManager, never()).fetchOffsets(any(), anyLong());
-    }
-
-    private static Stream<Arguments> offsetFetchExceptionSupplier() {
-        return Stream.of(
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR.exception()),
-            Arguments.of(Errors.REQUEST_TIMED_OUT.exception()),
-            Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT.exception()));
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {

@@ -21,6 +21,8 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.LogTruncationException;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
@@ -29,6 +31,7 @@ import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -46,14 +49,18 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.hasUsableOffsetForLeaderEpochVersion;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.regroupFetchPositionsByLeader;
 
@@ -84,6 +91,26 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
+    private final CommitRequestManager commitRequestManager;
+    private final long defaultApiTimeoutMs;
+
+    /**
+     * Exception that occurred while updating positions after the triggering event had already
+     * expired. It will be propagated and cleared on the next call to update fetch positions.
+     */
+    private final AtomicReference<Throwable> cachedUpdatePositionsException = new AtomicReference<>();
+
+    /**
+     * This holds the last OffsetFetch request triggered to retrieve committed offsets to update
+     * fetch positions that hasn't completed yet. When a response is received, it's used to
+     * update the fetch positions and the pendingOffsetFetchEvent is cleared. While it hasn't
+     * completed, as long as it hasn't completed
+     * yet. If the update fetch positions attempt runs
+     * out of time before this request to fetch committed gets a response, it's kept
+     * it will be kept to be used on the next attempt to update fetch positions if partitions
+     * remain the same.
+     */
+    private PendingFetchCommittedRequest pendingOffsetFetchEvent;
 
     @SuppressWarnings("this-escape")
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
@@ -92,8 +119,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final Time time,
                                  final long retryBackoffMs,
                                  final long requestTimeoutMs,
+                                 final long defaultApiTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
+                                 final CommitRequestManager commitRequestManager,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -111,6 +140,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.subscriptionState = subscriptionState;
         this.time = time;
         this.requestTimeoutMs = requestTimeoutMs;
+        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
@@ -119,6 +149,18 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
+        this.commitRequestManager = commitRequestManager;
+    }
+
+    private static class PendingFetchCommittedRequest {
+        final Set<TopicPartition> requestedPartitions;
+        final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result;
+
+        private PendingFetchCommittedRequest(final Set<TopicPartition> requestedPartitions,
+                                              final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result) {
+            this.requestedPartitions = Objects.requireNonNull(requestedPartitions);
+            this.result = Objects.requireNonNull(result);
+        }
     }
 
     /**
@@ -176,6 +218,180 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                         result.fetchedOffsets));
     }
 
+    private boolean maybeCompleteWithPreviousKnownException(CompletableFuture<Boolean> result) {
+        Throwable exception = cachedUpdatePositionsException.getAndSet(null);
+        if (exception != null) {
+            // Return exception that may have been encountered on a previous attempt to update
+            // positions, after the triggering event had already expired.
+            result.completeExceptionally(exception);
+            return true;
+        }
+        return false;
+    }
+
+    public CompletableFuture<Boolean> updateFetchPositions(long deadlineMs) {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+
+        if (maybeCompleteWithPreviousKnownException(result)) {
+            return result;
+        }
+
+        result.whenComplete((__, error) -> {
+            boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
+            if (error != null && updatePositionsExpired) {
+                // Update fetch positions operations are triggered asynchronously here in the
+                // background thread, so they may complete (with error)
+                // when the triggering UpdateFetchPositionsEvent has been already expired. Keep
+                // exception saved to be thrown on the next call to update positions.
+                cachedUpdatePositionsException.set(error);
+            }
+        });
+
+        try {
+
+            // Validate positions using the partition leader end offsets, to detect if any partition
+            // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
+            // request, retrieve the partition end offsets, and validate the current position
+            // against it. It will throw an exception if log truncation is detected.
+            validatePositionsIfNeeded();
+
+            boolean hasAllFetchPositions = subscriptionState.hasAllFetchPositions();
+            if (hasAllFetchPositions) {
+                result.complete(true);
+                return result;
+            }
+
+            // Reset positions using committed offsets retrieved from the group coordinator, for any
+            // partitions which do not have a valid position and are not awaiting reset. This will
+            // trigger an OffsetFetch request and update positions with the offsets retrieved.
+            if (commitRequestManager != null) {
+                CompletableFuture<Void> initWithCommittedOffsetsResult = initWithCommittedOffsetsIfNeeded(deadlineMs);
+                initWithCommittedOffsetsResult.whenComplete((__, error) -> {
+                    if (error == null) {
+                        initWithPartitionOffsetsIfNeeded(result);
+                    } else {
+                        result.completeExceptionally(error);
+                    }
+                });
+            } else {
+                initWithPartitionOffsetsIfNeeded(result);
+            }
+        } catch (Exception e) {
+            result.completeExceptionally(e);
+        }
+        return result;
+    }
+
+    /**
+     * If there are partitions still needing a position and a reset policy is defined, request
+     * reset using the default policy.
+     *
+     * @param result Future that will complete when the reset operation completes.
+     * @throws NoOffsetForPartitionException If no reset strategy is configured
+     */
+    private void initWithPartitionOffsetsIfNeeded(CompletableFuture<Boolean> result) {
+        try {
+            // Mark partitions that need reset, using the configured reset strategy. If no
+            // strategy is defined, this will raise a NoOffsetForPartitionException exception.
+            subscriptionState.resetInitializingPositions();
+        } catch (Exception e) {
+            result.completeExceptionally(e);
+            return;
+        }
+
+        // For partitions awaiting reset, generate a ListOffset request to retrieve the partition
+        // offsets according to the strategy (ex. earliest, latest), and update the positions.
+        resetPositionsIfNeeded().whenComplete((resetResult, error) -> {
+            if (error == null) {
+                result.complete(false);
+            } else {
+                result.completeExceptionally(error);
+            }
+        });
+    }
+
+    // Visible for testing
+    boolean hasPendingOffsetFetchEvent() {
+        return pendingOffsetFetchEvent != null;
+    }
+
+    /**
+     * Fetch the committed offsets for partitions that require initialization. Use them to set
+     * the fetch positions in the subscription state.
+     *
+     * @throws TimeoutException If offsets could not be retrieved within the timeout
+     */
+    private CompletableFuture<Void> initWithCommittedOffsetsIfNeeded(long deadlineMs) {
+        final Set<TopicPartition> initializingPartitions = subscriptionState.initializingPartitions();
+
+        if (initializingPartitions.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+        CompletableFuture<Void> result = new CompletableFuture<>();
+
+        // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
+        // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
+        // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
+        // case it times out, subsequent attempts will also use the event in order to wait for the results.
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchCommittedFuture;
+        if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
+            if (pendingOffsetFetchEvent != null) {
+                // This will be the case where we were waiting for a fetch committed offsets request
+                // to update positions, but the set of initializing partitions changed. We need to
+                // cancel the pending future, to ensure that it's results are not used to update
+                pendingOffsetFetchEvent.result.cancel(true);
+            }
+            // Need to generate a new request to fetch committed offsets
+            final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
+            fetchCommittedFuture = commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
+            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions,
+                fetchCommittedFuture);
+        } else {
+            fetchCommittedFuture = pendingOffsetFetchEvent.result;
+        }
+
+        // when the ongoing OffsetFetch completes, carry on with updating positions and
+        // completing the result future for the current attempt to initWithCommittedOffsetsIfNeeded
+        fetchCommittedFuture.whenComplete((offsets, error) -> {
+            pendingOffsetFetchEvent = null;
+            if (error instanceof CancellationException) {
+                // Abort updating positions
+                return;
+            }
+            // If an offset fetch triggered to update positions finishes without being
+            // cancelled, we update positions even if the original event expired. The event
+            // is cancelled whenever the set of partitions to initialize changes
+            if (error == null) {
+                refreshCommittedOffsets(offsets, metadata, subscriptionState);
+                result.complete(null);
+            } else {
+                log.error("Error fetching committed offsets to update positions", error);
+                result.completeExceptionally(error);
+            }
+        });
+
+        return result;
+    }
+
+    /**
+     * This determines if the {@link #pendingOffsetFetchEvent pending offset fetch event} can be reused. Reuse
+     * is only possible if all the following conditions are true:
+     *
+     * <ul>
+     *     <li>A pending offset fetch event exists</li>
+     *     <li>The partition set of the pending offset fetch event is the same as the given partition set</li>
+     * </ul>
+     */
+    private boolean canReusePendingOffsetFetchEvent(Set<TopicPartition> partitions) {
+        if (pendingOffsetFetchEvent == null) {
+            return false;
+        }
+
+        return pendingOffsetFetchEvent.requestedPartitions.equals(partitions);
+    }
+
     /**
      * Reset offsets for all assigned partitions that require it. Offsets will be reset
      * with timestamps according to the reset strategy defined for each partition. This will
@@ -188,7 +404,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * an error is received in the response, it will be saved to be thrown on the next call to
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
      */
-    public CompletableFuture<Void> resetPositionsIfNeeded() {
+    protected CompletableFuture<Void> resetPositionsIfNeeded() {
         Map<TopicPartition, Long> offsetResetTimestamps;
 
         try {
@@ -217,7 +433,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * detected, a {@link LogTruncationException} will be saved in memory, to be thrown on the
      * next call to this function.
      */
-    public CompletableFuture<Void> validatePositionsIfNeeded() {
+    protected CompletableFuture<Void> validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
                 offsetFetcherUtils.getPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
