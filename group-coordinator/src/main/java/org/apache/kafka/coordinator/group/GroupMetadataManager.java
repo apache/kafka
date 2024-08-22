@@ -61,6 +61,9 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
@@ -108,8 +111,6 @@ import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuild
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
@@ -143,23 +144,23 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupEpochRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupEpochRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.SHARE;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
@@ -879,19 +880,19 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ClassicGroup.
-     * @throws UnknownMemberIdException if the group does not exist and createIfNotExists is false.
-     * @throws GroupIdNotFoundException if the group is not a classic group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
+     *                                  if the group is not a classic group.
      *
      * Package private for testing.
      */
     ClassicGroup getOrMaybeCreateClassicGroup(
         String groupId,
         boolean createIfNotExists
-    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+    ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new UnknownMemberIdException(String.format("Classic group %s not found.", groupId));
+            throw new GroupIdNotFoundException(String.format("Classic group %s not found.", groupId));
         }
 
         if (group == null) {
@@ -2587,8 +2588,8 @@ public class GroupMetadataManager {
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withTopicsImage(metadataImage.topics())
-                    .withTargetAssignmentRecordBuilder(CoordinatorRecordHelpers::newShareGroupTargetAssignmentRecord)
-                    .withTargetAssignmentEpochRecordBuilder(CoordinatorRecordHelpers::newShareGroupTargetAssignmentEpochRecord)
+                    .withTargetAssignmentRecordBuilder(GroupCoordinatorRecordHelpers::newShareGroupTargetAssignmentRecord)
+                    .withTargetAssignmentEpochRecordBuilder(GroupCoordinatorRecordHelpers::newShareGroupTargetAssignmentEpochRecord)
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             long startTimeMs = time.milliseconds();
@@ -2814,16 +2815,16 @@ public class GroupMetadataManager {
         removeMember(records, groupId, oldMember.memberId());
 
         // Generate records.
-        records.add(CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(
             groupId,
             newMember
         ));
-        records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
             groupId,
             newMember.memberId(),
             group.targetAssignment(oldMember.memberId()).partitions()
         ));
-        records.add(CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(
             groupId,
             newMember
         ));
@@ -3899,10 +3900,10 @@ public class GroupMetadataManager {
         boolean isNewGroup = !groups.containsKey(groupId);
         try {
             group = getOrMaybeCreateClassicGroup(groupId, isUnknownMember);
-        } catch (Throwable t) {
+        } catch (GroupIdNotFoundException t) {
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(memberId)
-                .setErrorCode(Errors.forException(t).code())
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
             );
             return EMPTY_RESULT;
         }
@@ -3945,7 +3946,7 @@ public class GroupMetadataManager {
             });
 
             records.add(
-                CoordinatorRecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
+                GroupCoordinatorRecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
             );
 
             return new CoordinatorResult<>(records, appendFuture, false);
@@ -4288,7 +4289,7 @@ public class GroupMetadataManager {
         ClassicGroup group;
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+        } catch (GroupIdNotFoundException exception) {
             log.debug("Cannot find the group, skipping rebalance stage.", exception);
             return EMPTY_RESULT;
         }
@@ -4362,7 +4363,7 @@ public class GroupMetadataManager {
                     }
                 });
 
-                List<CoordinatorRecord> records = Collections.singletonList(CoordinatorRecordHelpers.newGroupMetadataRecord(
+                List<CoordinatorRecord> records = Collections.singletonList(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                     group, Collections.emptyMap(), metadataImage.features().metadataVersion()));
 
                 return new CoordinatorResult<>(records, appendFuture, false);
@@ -4432,7 +4433,7 @@ public class GroupMetadataManager {
         ClassicGroup group;
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+        } catch (GroupIdNotFoundException exception) {
             log.debug("Received notification of heartbeat expiration for member {} after group {} " +
                 "had already been deleted or upgraded.", memberId, groupId);
             return EMPTY_RESULT;
@@ -4706,7 +4707,7 @@ public class GroupMetadataManager {
         ClassicGroup group;
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+        } catch (GroupIdNotFoundException exception) {
             log.debug("Cannot find the group, skipping the initial rebalance stage.", exception);
             return EMPTY_RESULT;
         }
@@ -4863,7 +4864,7 @@ public class GroupMetadataManager {
         ClassicGroup group;
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+        } catch (GroupIdNotFoundException exception) {
             log.debug("Received notification of sync expiration for an unknown classic group {}.", groupId);
             return EMPTY_RESULT;
         }
@@ -5025,7 +5026,7 @@ public class GroupMetadataManager {
                 });
 
                 List<CoordinatorRecord> records = Collections.singletonList(
-                    CoordinatorRecordHelpers.newGroupMetadataRecord(group, groupAssignment, metadataImage.features().metadataVersion())
+                    GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, groupAssignment, metadataImage.features().metadataVersion())
                 );
 
                 return new CoordinatorResult<>(records, appendFuture, false);
@@ -5168,7 +5169,7 @@ public class GroupMetadataManager {
                 });
 
                 List<CoordinatorRecord> records = Collections.singletonList(
-                    CoordinatorRecordHelpers.newGroupMetadataRecord(group, assignment, metadataImage.features().metadataVersion())
+                    GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, assignment, metadataImage.features().metadataVersion())
                 );
                 return new CoordinatorResult<>(records, appendFuture, false);
             }

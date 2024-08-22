@@ -26,8 +26,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Utils;
@@ -511,20 +511,20 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId(), memberId))
         );
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(CoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
-        records.add(CoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
     }
 
     @Override
@@ -864,23 +864,23 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         List<CoordinatorRecord> records
     ) {
         members().forEach((__, consumerGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(CoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch()));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
                 groupId(),
                 consumerGroupMemberId,
                 targetAssignment(consumerGroupMemberId).partitions()
             ))
         );
 
-        records.add(CoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId(), groupEpoch()));
 
         members().forEach((__, consumerGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId(), consumerGroupMember))
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId(), consumerGroupMember))
         );
     }
 

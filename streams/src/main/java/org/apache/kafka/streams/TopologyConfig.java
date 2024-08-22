@@ -60,7 +60,7 @@ import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 
 /**
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
@@ -167,7 +167,7 @@ public class TopologyConfig extends AbstractConfig {
         final boolean cacheMaxBytesBufferingOverridden = isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides);
 
         if (!stateStoreCacheMaxBytesOverridden && !cacheMaxBytesBufferingOverridden) {
-            cacheSize = getTotalCacheSize(globalAppConfigs);
+            cacheSize = totalCacheSize(globalAppConfigs);
         } else {
             if (stateStoreCacheMaxBytesOverridden && cacheMaxBytesBufferingOverridden) {
                 cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);

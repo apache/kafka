@@ -1003,7 +1003,17 @@ public class StreamsConfig extends AbstractConfig {
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
-                    (name, value) -> verifyTopologyOptimizationConfigs((String) value),
+                    new ConfigDef.Validator() {
+                        @Override
+                        public void ensureValid(final String name, final Object value) {
+                            verifyTopologyOptimizationConfigs((String) value);
+                        }
+
+                        @Override
+                        public String toString() {
+                            return TOPOLOGY_OPTIMIZATION_CONFIGS.toString();
+                        }
+                    },
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
 
@@ -1252,14 +1262,14 @@ public class StreamsConfig extends AbstractConfig {
         // Private API to enable the state updater (i.e. state updating on a dedicated thread)
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
 
-        public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
+        public static boolean stateUpdaterEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
         }
         
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
-        public static boolean getProcessingThreadsEnabled(final Map<String, Object> configs) {
+        public static boolean processingThreadsEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
         }
 
