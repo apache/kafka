@@ -1180,7 +1180,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Expansion does not affect the ISR
     assertEquals(Set[Integer](leader, follower2), partition.partitionState.isr, "ISR")
     assertEquals(Set[Integer](leader, follower1, follower2), partition.partitionState.maximalIsr, "ISR")
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.toSet,
+    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.asScala.toSet,
       Set(leader, follower1, follower2), "AlterIsr")
   }
 
@@ -1425,7 +1425,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
-    assertEquals(Set(brokerId, remoteBrokerId), alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.toSet)
+    assertEquals(Set(brokerId, remoteBrokerId), alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.asScala.toSet)
 
     // Simulate invalid request failure
     alterPartitionManager.failIsrUpdate(Errors.INVALID_REQUEST)
@@ -1481,8 +1481,8 @@ class PartitionTest extends AbstractPartitionTest {
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
     val isrItem = alterPartitionManager.isrUpdates.head
-    assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId))
-    isrItem.leaderAndIsr.isrWithBrokerEpoch.foreach { brokerState =>
+    assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId).map(Int.box).asJava)
+    isrItem.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       // In ZK mode, the broker epochs in the leaderAndIsr should be -1.
       assertEquals(-1, brokerState.brokerEpoch())
     }
@@ -1865,7 +1865,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
     val isrUpdate = alterPartitionManager.isrUpdates.head
-    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.foreach { brokerState =>
+    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       if (brokerState.brokerId() == remoteBrokerId2) {
         // remoteBrokerId2 has not received any fetch request yet, it does not have broker epoch.
         assertEquals(-1, brokerState.brokerEpoch())
@@ -2070,7 +2070,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Try to shrink the ISR
     partition.maybeShrinkIsr()
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId))
+    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId).map(Int.box).asJava)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
 
@@ -2157,9 +2157,9 @@ class PartitionTest extends AbstractPartitionTest {
     partition.maybeShrinkIsr()
     assertEquals(0, alterPartitionListener.shrinks.get)
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId, remoteBrokerId1))
+    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId, remoteBrokerId1).map(Int.box).asJava)
     val isrUpdate = alterPartitionManager.isrUpdates.head
-    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.foreach { brokerState =>
+    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       assertEquals(defaultBrokerEpoch(brokerState.brokerId()), brokerState.brokerEpoch())
     }
     assertEquals(Set(brokerId, remoteBrokerId1, remoteBrokerId2), partition.partitionState.isr)

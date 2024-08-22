@@ -16,7 +16,6 @@
 */
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
 import kafka.server.KafkaConfig
@@ -27,11 +26,13 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.{Map, Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
@@ -288,7 +289,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       logFailedStateChange(partition, NewPartition, OnlinePartition, new StateChangeFailedException(failMsg))
     }
     val leaderIsrAndControllerEpochs = partitionsWithLiveReplicas.map { case (partition, liveReplicas) =>
-      val leaderAndIsr = LeaderAndIsr(liveReplicas.head, liveReplicas.toList)
+      val leaderAndIsr = new LeaderAndIsr(liveReplicas.head, liveReplicas.toList.map(Integer.valueOf).asJava)
       val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
       partition -> leaderIsrAndControllerEpoch
     }.toMap
@@ -308,7 +309,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       val leaderIsrAndControllerEpoch = leaderIsrAndControllerEpochs(partition)
       if (code == Code.OK) {
         controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
-        controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(leaderIsrAndControllerEpoch.leaderAndIsr.isr,
+        controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(leaderIsrAndControllerEpoch.leaderAndIsr.isr.asScala.map(_.toInt),
           partition, leaderIsrAndControllerEpoch, controllerContext.partitionFullReplicaAssignment(partition), isNew = true)
         successfulInitializations += partition
       } else {
@@ -475,7 +476,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   ): Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)] = {
     val (partitionsWithNoLiveInSyncReplicas, partitionsWithLiveInSyncReplicas) = leaderAndIsrs.partition {
       case (partition, leaderAndIsr) =>
-        val liveInSyncReplicas = leaderAndIsr.isr.filter(controllerContext.isReplicaOnline(_, partition))
+        val liveInSyncReplicas = leaderAndIsr.isr.asScala.filter(controllerContext.isReplicaOnline(_, partition))
         liveInSyncReplicas.isEmpty
     }
 

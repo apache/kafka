@@ -16,7 +16,6 @@
 */
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import kafka.server.KafkaConfig
 import kafka.utils.Implicits._
@@ -26,7 +25,10 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.zookeeper.KeeperException.Code
+
+import java.util.stream.Collectors
 import scala.collection.{Seq, mutable}
 
 abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends Logging {
@@ -341,8 +343,10 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
       case (partition, result) =>
         result.toOption.map { leaderAndIsr =>
-          val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
-          val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
+          val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NO_LEADER else leaderAndIsr.leader
+          val adjustedIsr =
+            if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr
+            else leaderAndIsr.isr.stream().filter(_ != replicaId).collect(Collectors.toList[Integer])
           partition -> leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
         }
     }

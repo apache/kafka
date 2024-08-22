@@ -18,10 +18,9 @@ package kafka.zk
 
 import TopicPartitionStateZNode.decode
 import TopicPartitionStateZNode.encode
-import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.utils.Json
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -37,7 +36,7 @@ final class TopicPartitionStateZNodeTest {
     val stat = mock(classOf[Stat])
     when(stat.getVersion).thenReturn(zkVersion)
 
-    val expected = LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 6, List(1), LeaderRecoveryState.RECOVERING, zkVersion), 10)
+    val expected = LeaderIsrAndControllerEpoch(new LeaderAndIsr(1, 6, List(1).map(Int.box).asJava, LeaderRecoveryState.RECOVERING, zkVersion), 10)
 
     assertEquals(Some(expected), decode(encode(expected), stat))
   }
@@ -48,7 +47,7 @@ final class TopicPartitionStateZNodeTest {
     val stat = mock(classOf[Stat])
     when(stat.getVersion).thenReturn(zkVersion)
 
-    val expected = LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 6, List(1), LeaderRecoveryState.RECOVERED, zkVersion), 10)
+    val expected = LeaderIsrAndControllerEpoch(new LeaderAndIsr(1, 6, List(1).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, zkVersion), 10)
 
     assertEquals(Some(expected), decode(encode(expected), stat))
   }
@@ -59,14 +58,14 @@ final class TopicPartitionStateZNodeTest {
     val stat = mock(classOf[Stat])
     when(stat.getVersion).thenReturn(zkVersion)
 
-    val expected = LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 6, List(1), LeaderRecoveryState.RECOVERED, zkVersion), 10)
+    val expected = LeaderIsrAndControllerEpoch(new LeaderAndIsr(1, 6, List(1).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, zkVersion), 10)
 
     val partitionState = Map(
       "version" -> 1,
       "leader" -> expected.leaderAndIsr.leader,
       "leader_epoch" -> expected.leaderAndIsr.leaderEpoch,
       "controller_epoch" -> expected.controllerEpoch,
-      "isr" -> expected.leaderAndIsr.isr.asJava
+      "isr" -> expected.leaderAndIsr.isr
     )
 
     assertEquals(Some(expected), decode(Json.encodeAsBytes(partitionState.asJava), stat))

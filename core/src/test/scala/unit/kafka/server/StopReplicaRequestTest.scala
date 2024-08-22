@@ -17,13 +17,13 @@
 
 package kafka.server
 
-import kafka.api.LeaderAndIsr
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -53,13 +53,13 @@ class StopReplicaRequestTest extends BaseRequestTest {
         .setTopicName(tp0.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp0.partition())
-          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.INITIAL_LEADER_EPOCH + 2)
           .setDeletePartition(true)).asJava),
       new StopReplicaTopicState()
         .setTopicName(tp1.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp1.partition())
-          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.INITIAL_LEADER_EPOCH + 2)
           .setDeletePartition(true)).asJava)
     ).asJava
 

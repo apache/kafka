@@ -16,7 +16,6 @@
 */
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -26,6 +25,7 @@ import kafka.zookeeper.{GetDataResponse, ResponseMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._
@@ -33,6 +33,8 @@ import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
+
+import scala.jdk.CollectionConverters._
 
 class ReplicaStateMachineTest {
   private var controllerContext: ControllerContext = _
@@ -190,7 +192,7 @@ class ReplicaStateMachineTest {
   def testOnlineReplicaToOnlineReplicaTransition(): Unit = {
     controllerContext.putReplicaState(replica, OnlineReplica)
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava), controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
@@ -207,12 +209,12 @@ class ReplicaStateMachineTest {
     val replicaIds = List(brokerId, otherBrokerId)
     controllerContext.putReplicaState(replica, OnlineReplica)
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicaIds))
-    val leaderAndIsr = LeaderAndIsr(brokerId, replicaIds)
+    val leaderAndIsr = new LeaderAndIsr(brokerId, replicaIds.map(Int.box).asJava)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
     val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-    val adjustedLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(LeaderAndIsr.NoLeader, List(otherBrokerId))
+    val adjustedLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(LeaderAndIsr.NO_LEADER, List(otherBrokerId).map(Int.box).asJava)
     val updatedLeaderAndIsr = adjustedLeaderAndIsr.withPartitionEpoch(adjustedLeaderAndIsr.partitionEpoch + 1)
     val updatedLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch)
     when(mockZkClient.getTopicPartitionStatesRaw(partitions)).thenReturn(
@@ -262,7 +264,7 @@ class ReplicaStateMachineTest {
   def testOfflineReplicaToOnlineReplicaTransition(): Unit = {
     controllerContext.putReplicaState(replica, OfflineReplica)
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava), controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
     verify(mockControllerBrokerRequestBatch).newBatch()
@@ -376,7 +378,7 @@ class ReplicaStateMachineTest {
   def testReplicaDeletionIneligibleToOnlineReplicaTransition(): Unit = {
     controllerContext.putReplicaState(replica, ReplicaDeletionIneligible)
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava), controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
     replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
     verify(mockControllerBrokerRequestBatch).newBatch()

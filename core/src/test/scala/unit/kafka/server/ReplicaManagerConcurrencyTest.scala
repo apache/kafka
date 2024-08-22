@@ -20,7 +20,6 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Optional, Properties}
-import kafka.api.LeaderAndIsr
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.metadata.MockConfigRepository
@@ -37,7 +36,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.QuorumConfig
@@ -439,7 +438,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       delta.replay(new PartitionChangeRecord()
         .setTopicId(topic.topicId)
         .setPartitionId(partitionId)
-        .setIsr(leaderAndIsr.isr.map(Int.box).asJava)
+        .setIsr(leaderAndIsr.isr)
         .setLeader(leaderAndIsr.leader)
       )
       this.registration = delta.topicsDelta

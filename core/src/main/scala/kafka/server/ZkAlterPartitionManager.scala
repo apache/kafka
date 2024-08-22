@@ -22,10 +22,10 @@ import org.apache.kafka.common.TopicPartition
 
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.CompletableFuture
-import kafka.api.LeaderAndIsr
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors.InvalidUpdateVersionException
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.mutable

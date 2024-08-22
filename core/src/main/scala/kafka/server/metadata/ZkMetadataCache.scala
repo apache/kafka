@@ -23,7 +23,6 @@ import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
-import kafka.api._
 import kafka.controller.StateChangeLogger
 import kafka.server.{BrokerFeatures, CachedControllerId, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
 import kafka.utils.CoreUtils._
@@ -40,6 +39,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
@@ -134,7 +134,7 @@ object ZkMetadataCache {
       .setTopicName(topicName)
       .setPartitionStates(new util.ArrayList())
     partitions.foreach(partition => {
-      val lisr = LeaderAndIsr.duringDelete(partition.isr().asScala.map(_.intValue()).toList)
+      val lisr = LeaderAndIsr.duringDelete(partition.isr())
       val newPartitionState = new UpdateMetadataPartitionState()
         .setPartitionIndex(partition.partitionIndex())
         .setTopicName(topicName)
@@ -143,7 +143,7 @@ object ZkMetadataCache {
         .setControllerEpoch(requestControllerEpoch)
         .setReplicas(partition.replicas())
         .setZkVersion(lisr.partitionEpoch)
-        .setIsr(lisr.isr.map(Integer.valueOf).asJava)
+        .setIsr(lisr.isr)
       topicState.partitionStates().add(newPartitionState)
     })
     topicState
@@ -443,7 +443,7 @@ class ZkMetadataCache(
     }
 
     val partitions = getAllPartitions(snapshot)
-      .filter { case (_, state) => state.leader != LeaderAndIsr.LeaderDuringDelete }
+      .filter { case (_, state) => state.leader != LeaderAndIsr.LEADER_DURING_DELETE }
       .map { case (tp, state) =>
         new PartitionInfo(tp.topic, tp.partition, node(state.leader),
           state.replicas.asScala.map(node).toArray,
@@ -573,7 +573,7 @@ class ZkMetadataCache(
         newStates.foreach { state =>
           // per-partition logging here can be very expensive due going through all partitions in the cluster
           val tp = new TopicPartition(state.topicName, state.partitionIndex)
-          if (state.leader == LeaderAndIsr.LeaderDuringDelete) {
+          if (state.leader == LeaderAndIsr.LEADER_DURING_DELETE) {
             removePartitionInfo(partitionStates, topicIds, tp.topic, tp.partition)
             if (traceEnabled)
               stateChangeLogger.trace(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +

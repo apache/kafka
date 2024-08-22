@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
@@ -78,6 +77,7 @@ import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAn
 import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.ClientMetricsManager
@@ -3061,25 +3061,25 @@ class KafkaApisTest extends Logging {
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.InitialLeaderEpoch + 2, deletePartition = true)
+      LeaderAndIsr.INITIAL_LEADER_EPOCH + 2, deletePartition = true)
   }
 
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndDeleteSentinel(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.EpochDuringDelete, deletePartition = true)
+      LeaderAndIsr.EPOCH_DURING_DELETE, deletePartition = true)
   }
 
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndNoEpochSentinel(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.NoEpoch, deletePartition = true)
+      LeaderAndIsr.NO_EPOCH, deletePartition = true)
   }
 
   @Test
   def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.InitialLeaderEpoch + 2, deletePartition = false)
+      LeaderAndIsr.INITIAL_LEADER_EPOCH + 2, deletePartition = false)
   }
 
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,

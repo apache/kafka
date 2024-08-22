@@ -16,11 +16,11 @@
  */
 package kafka.migration
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelContext, LeaderIsrAndControllerEpoch}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.MetadataImage
+import org.apache.kafka.metadata.LeaderAndIsr
 
 import scala.jdk.CollectionConverters._
 
@@ -44,7 +44,7 @@ object MigrationControllerChannelContext {
     image.topics().topicsByName().asScala.get(topicPartition.topic()) match {
       case Some(topic) => topic.partitions().asScala.get(topicPartition.partition()) match {
         case Some(partition) =>
-          val leaderAndIsr = LeaderAndIsr(partition.leader, partition.leaderEpoch, partition.isr.toList,
+          val leaderAndIsr = new LeaderAndIsr(partition.leader, partition.leaderEpoch, partition.isr.toList.map(Integer.valueOf).asJava,
             partition.leaderRecoveryState, partition.partitionEpoch)
           Some(LeaderIsrAndControllerEpoch(leaderAndIsr, image.highestOffsetAndEpoch().epoch()))
         case None => None
@@ -95,14 +95,14 @@ sealed class MigrationControllerChannelContext(
   override def leaderEpoch(topicPartition: TopicPartition): Int = {
     // Topic is deleted use a special sentinel -2 to the indicate the same.
     if (isTopicQueuedUpForDeletion(topicPartition.topic())) {
-      LeaderAndIsr.EpochDuringDelete
+      LeaderAndIsr.EPOCH_DURING_DELETE
     } else {
       image.topics().topicsByName.asScala.get(topicPartition.topic()) match {
         case Some(topic) => topic.partitions().asScala.get(topicPartition.partition()) match {
           case Some(partition) => partition.leaderEpoch
-          case None => LeaderAndIsr.NoEpoch
+          case None => LeaderAndIsr.NO_EPOCH
         }
-        case None => LeaderAndIsr.NoEpoch
+        case None => LeaderAndIsr.NO_EPOCH
       }
     }
   }

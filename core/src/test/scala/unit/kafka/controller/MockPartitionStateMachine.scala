@@ -16,10 +16,10 @@
  */
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.metadata.LeaderAndIsr
 
 import scala.collection.{Seq, mutable}
 

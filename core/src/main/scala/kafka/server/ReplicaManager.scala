@@ -17,7 +17,6 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, PartitionListener}
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log.remote.RemoteLogManager
@@ -53,6 +52,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common
 import org.apache.kafka.server.common.DirectoryEventHandler
@@ -525,11 +525,11 @@ class ReplicaManager(val config: KafkaConfig,
               // a sentinel value (EpochDuringDelete) overwriting any previous epoch is used.
               // When an older version of the StopReplica request which does not contain the leader
               // epoch, a sentinel value (NoEpoch) is used and bypass the epoch validation.
-              if (requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete ||
-                  requestLeaderEpoch == LeaderAndIsr.NoEpoch ||
+              if (requestLeaderEpoch == LeaderAndIsr.EPOCH_DURING_DELETE ||
+                  requestLeaderEpoch == LeaderAndIsr.NO_EPOCH ||
                   requestLeaderEpoch >= currentLeaderEpoch) {
                 stoppedPartitions += StopPartition(topicPartition, deletePartition,
-                  deletePartition && partition.isLeader && requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete)
+                  deletePartition && partition.isLeader && requestLeaderEpoch == LeaderAndIsr.EPOCH_DURING_DELETE)
                 // Assume that everything will go right. It is overwritten in case of an error.
                 responseMap.put(topicPartition, Errors.NONE)
               } else {
