@@ -140,7 +140,7 @@ object StorageTool extends Logging {
 
   /**
    * Maps the given release version to the corresponding metadata version
-   * and prints the corresponding feature names and versions.
+   * and prints the corresponding features.
    *
    * @param namespace       Arguments containing the release version.
    * @param printStream     The print stream to output the version mapping.
@@ -249,11 +249,14 @@ object StorageTool extends Logging {
 
   private def addVersionMappingParser(subparsers: Subparsers): Unit = {
     val versionMappingParser = subparsers.addParser("version-mapping")
-      .help("Get the feature mapping for a given metadata version.")
+      .help("Look up the corresponding features for a given metadata version. " +
+        "Using the command with no  --release-version  argument will return the mapping for " +
+        "the latest stable metadata version"
+      )
 
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
-      .help(s"The release version to use for the initial feature settings. The minimum is " +
+      .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
         s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
 
     addCommonArguments(versionMappingParser)
