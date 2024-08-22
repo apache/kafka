@@ -446,7 +446,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
-     * @param resources The resources (topic and broker resource types are currently supported)
+     * @param resources See relevant type {@link ConfigResource.Type}
      * @return The DescribeConfigsResult
      */
     default DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources) {
@@ -464,9 +464,22 @@ public interface Admin extends AutoCloseable {
      * <p>
      * Config entries where isReadOnly() is true cannot be updated.
      * <p>
+     * The different behavior of nonexistent resource:
+     * <ul>
+     *     <li>{@link ConfigResource.Type#BROKER}:
+     *     will throw a {@link org.apache.kafka.common.errors.TimeoutException} exception</li>
+     *     <li>{@link ConfigResource.Type#TOPIC}:
+     *     will throw a {@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException} exception</li>
+     *     <li>{@link ConfigResource.Type#GROUP}:
+     *     just return default configs even if the target group is nonexistent</li>
+     *     <li>{@link ConfigResource.Type#BROKER_LOGGER}:
+     *     will throw a {@link org.apache.kafka.common.errors.TimeoutException} exception</li>
+     *     <li>{@link ConfigResource.Type#CLIENT_METRICS}: will return empty configs</li>
+     * </ul>
+     * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
-     * @param resources The resources (topic and broker resource types are currently supported)
+     * @param resources See relevant type {@link ConfigResource.Type}
      * @param options   The options to use when describing configs
      * @return The DescribeConfigsResult
      */
