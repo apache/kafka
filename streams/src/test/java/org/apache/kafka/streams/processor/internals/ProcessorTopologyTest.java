@@ -1569,7 +1569,7 @@ public class ProcessorTopologyTest {
         assertEquals(headers, record.headers());
     }
 
-    private StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
+    private StreamPartitioner<String, String> constantPartitioner(final Integer partition) {
         return (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(partition));
     }
 
