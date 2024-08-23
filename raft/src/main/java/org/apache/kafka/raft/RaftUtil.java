@@ -18,8 +18,10 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -32,13 +34,14 @@ import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
+import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.raft.internals.ReplicaKey;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
@@ -64,6 +67,10 @@ public class RaftUtil {
                 return new FetchResponseData().setErrorCode(error.code());
             case FETCH_SNAPSHOT:
                 return new FetchSnapshotResponseData().setErrorCode(error.code());
+            case API_VERSIONS:
+                return new ApiVersionsResponseData().setErrorCode(error.code());
+            case UPDATE_RAFT_VOTER:
+                return new UpdateRaftVoterResponseData().setErrorCode(error.code());
             default:
                 throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
         }
@@ -542,7 +549,7 @@ public class RaftUtil {
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
     }
-    
+
     public static RemoveRaftVoterRequestData removeVoterRequest(
         String clusterId,
         ReplicaKey voter
@@ -562,6 +569,50 @@ public class RaftUtil {
         return new RemoveRaftVoterResponseData()
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
+    }
+
+    public static UpdateRaftVoterRequestData updateVoterRequest(
+        String clusterId,
+        ReplicaKey voter,
+        int epoch,
+        SupportedVersionRange supportedVersions,
+        Endpoints endpoints
+    ) {
+        UpdateRaftVoterRequestData request = new UpdateRaftVoterRequestData()
+            .setClusterId(clusterId)
+            .setCurrentLeaderEpoch(epoch)
+            .setVoterId(voter.id())
+            .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+            .setListeners(endpoints.toUpdateVoterRequest());
+
+        request.kRaftVersionFeature()
+            .setMinSupportedVersion(supportedVersions.min())
+            .setMaxSupportedVersion(supportedVersions.max());
+
+        return request;
+    }
+
+    public static UpdateRaftVoterResponseData updateVoterResponse(
+        Errors error,
+        ListenerName listenerName,
+        LeaderAndEpoch leaderAndEpoch,
+        Endpoints endpoints
+    ) {
+        UpdateRaftVoterResponseData response = new UpdateRaftVoterResponseData()
+            .setErrorCode(error.code());
+
+        response.currentLeader()
+            .setLeaderId(leaderAndEpoch.leaderId().orElse(-1))
+            .setLeaderEpoch(leaderAndEpoch.epoch());
+
+        Optional<InetSocketAddress> address = endpoints.address(listenerName);
+        if (address.isPresent()) {
+            response.currentLeader()
+                .setHost(address.get().getHostString())
+                .setPort(address.get().getPort());
+        }
+
+        return response;
     }
 
     private static List<DescribeQuorumResponseData.ReplicaState> toReplicaStates(
@@ -634,6 +685,14 @@ public class RaftUtil {
     }
 
     public static Optional<ReplicaKey> removeVoterRequestVoterKey(RemoveRaftVoterRequestData request) {
+        if (request.voterId() < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(ReplicaKey.of(request.voterId(), request.voterDirectoryId()));
+        }
+    }
+
+    public static Optional<ReplicaKey> updateVoterRequestVoterKey(UpdateRaftVoterRequestData request) {
         if (request.voterId() < 0) {
             return Optional.empty();
         } else {

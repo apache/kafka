@@ -56,7 +56,6 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{immutable, _}
 
@@ -80,7 +79,6 @@ class GroupMetadataManagerTest {
   val defaultRequireStable = false
   val numOffsetsPartitions = 2
 
-  @nowarn("cat=deprecation")
   private val offsetConfig = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
     new OffsetConfig(config.groupCoordinatorConfig.offsetMetadataMaxSize,
@@ -91,8 +89,7 @@ class GroupMetadataManagerTest {
       config.groupCoordinatorConfig.offsetsTopicSegmentBytes,
       config.groupCoordinatorConfig.offsetsTopicReplicationFactor,
       config.groupCoordinatorConfig.offsetTopicCompressionType,
-      config.groupCoordinatorConfig.offsetCommitTimeoutMs,
-      config.groupCoordinatorConfig.offsetCommitRequiredAcks)
+      config.groupCoordinatorConfig.offsetCommitTimeoutMs)
   }
 
   @BeforeEach

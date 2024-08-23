@@ -326,20 +326,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.foreach(action.asForeachAction, named)
 
   /**
-   * Creates an array of `KStream` from this stream by branching the records in the original stream based on
-   * the supplied predicates.
-   *
-   * @param predicates the ordered list of functions that return a Boolean
-   * @return multiple distinct substreams of this [[KStream]]
-   * @see `org.apache.kafka.streams.kstream.KStream#branch`
-   * @deprecated since 2.8. Use `split` instead.
-   */
-  // noinspection ScalaUnnecessaryParentheses
-  @deprecated("use `split()` instead", "2.8")
-  def branch(predicates: ((K, V) => Boolean)*): Array[KStream[K, V]] =
-    inner.branch(predicates.map(_.asPredicate): _*).map(kstream => new KStream(kstream))
-
-  /**
    * Split this stream. [[BranchedKStream]] can be used for routing the records to different branches depending
    * on evaluation against the supplied predicates.
    * Stream branching is a stateless record-by-record operation.

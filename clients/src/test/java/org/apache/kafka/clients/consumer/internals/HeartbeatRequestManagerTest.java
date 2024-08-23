@@ -19,9 +19,9 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager.HeartbeatRequestState;
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager.HeartbeatState;
-import org.apache.kafka.clients.consumer.internals.MembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.KafkaException;
@@ -97,7 +97,7 @@ public class HeartbeatRequestManagerTest {
     private SubscriptionState subscriptions;
     private Metadata metadata;
     private HeartbeatRequestManager heartbeatRequestManager;
-    private MembershipManager membershipManager;
+    private ConsumerMembershipManager membershipManager;
     private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
     private HeartbeatRequestManager.HeartbeatState heartbeatState;
     private BackgroundEventHandler backgroundEventHandler;
@@ -112,7 +112,7 @@ public class HeartbeatRequestManagerTest {
         this.heartbeatState = mock(HeartbeatState.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
         this.subscriptions = mock(SubscriptionState.class);
-        this.membershipManager = mock(MembershipManagerImpl.class);
+        this.membershipManager = mock(ConsumerMembershipManager.class);
         this.metadata = mock(ConsumerMetadata.class);
         Metrics metrics = new Metrics(time);
         ConsumerConfig config = mock(ConsumerConfig.class);
@@ -836,7 +836,7 @@ public class HeartbeatRequestManagerTest {
 
     private HeartbeatRequestManager createHeartbeatRequestManager(
             final CoordinatorRequestManager coordinatorRequestManager,
-            final MembershipManager membershipManager,
+            final ConsumerMembershipManager membershipManager,
             final HeartbeatRequestManager.HeartbeatState heartbeatState,
             final HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler) {

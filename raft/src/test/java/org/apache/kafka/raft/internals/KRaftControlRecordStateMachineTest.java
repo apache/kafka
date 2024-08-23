@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.MockLog;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.VoterSet;
+import org.apache.kafka.raft.VoterSetTest;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
@@ -42,7 +44,7 @@ final class KRaftControlRecordStateMachineTest {
         return new MockLog(new TopicPartition("partition", 0), Uuid.randomUuid(), new LogContext());
     }
 
-    private static KRaftControlRecordStateMachine buildPartitionListener(MockLog log, Optional<VoterSet> staticVoterSet) {
+    private static KRaftControlRecordStateMachine buildPartitionListener(MockLog log, VoterSet staticVoterSet) {
         return new KRaftControlRecordStateMachine(
             staticVoterSet,
             log,
@@ -58,12 +60,24 @@ final class KRaftControlRecordStateMachineTest {
         MockLog log = buildLog();
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(voterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, voterSet);
 
         // This should be a no-op operation
         partitionState.updateState();
 
         assertEquals(voterSet, partitionState.lastVoterSet());
+    }
+
+    @Test
+    void testEmptyPartitionWithNoStaticVoters() {
+        MockLog log = buildLog();
+
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, VoterSet.empty());
+
+        // This should be a no-op operation
+        partitionState.updateState();
+
+        assertEquals(VoterSet.empty(), partitionState.lastVoterSet());
     }
 
     @Test
@@ -73,7 +87,7 @@ final class KRaftControlRecordStateMachineTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
 
         // Append the kraft.version control record
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -116,7 +130,7 @@ final class KRaftControlRecordStateMachineTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
 
         // Create a snapshot that doesn't have any kraft.version or voter set control records
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
@@ -166,7 +180,7 @@ final class KRaftControlRecordStateMachineTest {
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
 
         // Create a snapshot that has kraft.version and voter set control records
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -196,7 +210,7 @@ final class KRaftControlRecordStateMachineTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
 
         // Create a snapshot that has kraft.version and voter set control records
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -243,7 +257,7 @@ final class KRaftControlRecordStateMachineTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
 
         // Append the kraft.version control record
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -311,7 +325,7 @@ final class KRaftControlRecordStateMachineTest {
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
 
         // Append the kraft.version control record
         long kraftVersionOffset = log.endOffset().offset();

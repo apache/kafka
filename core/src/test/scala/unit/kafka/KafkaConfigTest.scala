@@ -20,12 +20,13 @@ import java.nio.file.Files
 import java.util
 import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.{Exit, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
@@ -151,8 +152,12 @@ class KafkaConfigTest {
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "")
     setListenerProps(propertiesFile)
-    assertBadConfigContainingMessage(propertiesFile,
-      "If using process.roles, controller.quorum.voters must contain a parseable set of voters.")
+    assertBadConfigContainingMessage(
+      propertiesFile,
+      """If using process.roles, either controller.quorum.bootstrap.servers
+      |must contain the set of bootstrap controllers or controller.quorum.voters must contain a
+      |parseable set of controllers.""".stripMargin.replace("\n", " ")
+    )
 
     // Ensure that if neither process.roles nor controller.quorum.voters is populated, then an exception is thrown if zookeeper.connect is not defined
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "")

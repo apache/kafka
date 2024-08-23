@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -39,18 +41,13 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -64,6 +61,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -72,7 +70,6 @@ import org.apache.kafka.test.MockApiFixedKeyProcessorSupplier;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
@@ -116,8 +113,9 @@ public class KStreamImplTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
     private final MockApiFixedKeyProcessorSupplier<String, String, Void> fixedKeyProcessorSupplier = new MockApiFixedKeyProcessorSupplier<>();
-    private final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier =
-        () -> new Transformer<String, String, KeyValue<String, String>>() {
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.streams.kstream.TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier =
+        () -> new org.apache.kafka.streams.kstream.Transformer<String, String, KeyValue<String, String>>() {
             @Override
             public void init(final ProcessorContext context) {}
 
@@ -129,8 +127,9 @@ public class KStreamImplTest {
             @Override
             public void close() {}
         };
-    private final TransformerSupplier<String, String, Iterable<KeyValue<String, String>>> flatTransformerSupplier =
-        () -> new Transformer<String, String, Iterable<KeyValue<String, String>>>() {
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.streams.kstream.TransformerSupplier<String, String, Iterable<KeyValue<String, String>>> flatTransformerSupplier =
+        () -> new org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<String, String>>>() {
             @Override
             public void init(final ProcessorContext context) {}
 
@@ -142,8 +141,9 @@ public class KStreamImplTest {
             @Override
             public void close() {}
         };
-    private final ValueTransformerSupplier<String, String> valueTransformerSupplier =
-        () -> new ValueTransformer<String, String>() {
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.streams.kstream.ValueTransformerSupplier<String, String> valueTransformerSupplier =
+        () -> new org.apache.kafka.streams.kstream.ValueTransformer<String, String>() {
             @Override
             public void init(final ProcessorContext context) {}
 
@@ -168,8 +168,9 @@ public class KStreamImplTest {
             @Override
             public void close() {}
         };
-    private final ValueTransformerSupplier<String, Iterable<String>> flatValueTransformerSupplier =
-        () -> new ValueTransformer<String, Iterable<String>>() {
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.streams.kstream.ValueTransformerSupplier<String, Iterable<String>> flatValueTransformerSupplier =
+        () -> new org.apache.kafka.streams.kstream.ValueTransformer<String, Iterable<String>>() {
             @Override
             public void init(final ProcessorContext context) {}
 
@@ -488,60 +489,6 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.peek((k, v) -> { }, null));
         assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings({"rawtypes", "unchecked", "deprecation"})
-    public void shouldNotAllowNullPredicatedOnBranch() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.branch((Predicate[]) null));
-        assertThat(exception.getMessage(), equalTo("predicates can't be a null array"));
-    }
-
-    @Test
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public void shouldHaveAtLeastOnPredicateWhenBranching() {
-        final IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> testStream.branch());
-        assertThat(exception.getMessage(), equalTo("branch() requires at least one predicate"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Test
-    public void shouldHaveAtLeastOnPredicateWhenBranchingWithNamed() {
-        final IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> testStream.branch(Named.as("branch")));
-        assertThat(exception.getMessage(), equalTo("branch() requires at least one predicate"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Test
-    public void shouldNotAllowNullNamedOnBranch() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.branch((Named) null, (k, v) -> true));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Test
-    public void shouldCantHaveNullPredicate() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.branch((Predicate<Object, Object>) null));
-        assertThat(exception.getMessage(), equalTo("predicates can't be null"));
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    @Test
-    public void shouldCantHaveNullPredicateWithNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.branch(Named.as("branch"), (Predicate<Object, Object>) null));
-        assertThat(exception.getMessage(), equalTo("predicates can't be null"));
     }
 
     @Test
@@ -1793,7 +1740,7 @@ public class KStreamImplTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransform() {
-        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
             () -> testStream.flatTransform(() -> transformer)
@@ -1804,7 +1751,7 @@ public class KStreamImplTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithStores() {
-        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
             () -> testStream.flatTransform(() -> transformer, "storeName")
@@ -1815,7 +1762,7 @@ public class KStreamImplTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamed() {
-        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
             () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"))
@@ -1826,7 +1773,7 @@ public class KStreamImplTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamedAndStores() {
-        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final org.apache.kafka.streams.kstream.Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
             () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"), "storeName")
@@ -1927,7 +1874,7 @@ public class KStreamImplTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnTransformValues() {
-        final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
+        final org.apache.kafka.streams.kstream.ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
             () -> testStream.transformValues(() -> transformer)
@@ -1938,7 +1885,7 @@ public class KStreamImplTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnTransformValuesWithNamed() {
-        final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
+        final org.apache.kafka.streams.kstream.ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
             () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
@@ -1951,7 +1898,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.transformValues((ValueTransformerSupplier<Object, Object>) null));
+            () -> testStream.transformValues((org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Object>) null));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
     }
 
@@ -1992,7 +1939,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transformValues(
-                (ValueTransformerSupplier<Object, Object>) null,
+                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Object>) null,
                 "storeName"));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
     }
@@ -2014,7 +1961,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transformValues(
-                (ValueTransformerSupplier<Object, Object>) null,
+                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Object>) null,
                 Named.as("valueTransformer")));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
     }
@@ -2036,7 +1983,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transformValues(
-                (ValueTransformerSupplier<Object, Object>) null,
+                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Object>) null,
                 Named.as("valueTransformer"),
                 "storeName"));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
@@ -2196,7 +2143,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.flatTransformValues((ValueTransformerSupplier<Object, Iterable<Object>>) null));
+            () -> testStream.flatTransformValues((org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Iterable<Object>>) null));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
     }
 
@@ -2215,7 +2162,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatTransformValues(
-                (ValueTransformerSupplier<Object, Iterable<Object>>) null,
+                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Iterable<Object>>) null,
                 "stateStore"));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
     }
@@ -2237,7 +2184,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatTransformValues(
-                (ValueTransformerSupplier<Object, Iterable<Object>>) null,
+                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Iterable<Object>>) null,
                 Named.as("flatValueTransformer")));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
     }
@@ -2259,7 +2206,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatTransformValues(
-                (ValueTransformerSupplier<Object, Iterable<Object>>) null,
+                (org.apache.kafka.streams.kstream.ValueTransformerSupplier<Object, Iterable<Object>>) null,
                 Named.as("flatValueTransformer"),
                 "stateStore"));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
@@ -2612,9 +2559,9 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, Serdes.String().serializer(), Serdes.String().serializer());
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic =
-                driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(output, new StringDeserializer(), new StringDeserializer());
 
             inputTopic.pipeInput("A", "01", 5L);
             inputTopic.pipeInput("B", "02", 100L);
@@ -2695,8 +2642,8 @@ public class KStreamImplTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
                     input,
-                    Serdes.String().serializer(),
-                    Serdes.String().serializer()
+                    new StringSerializer(),
+                    new StringSerializer()
                 );
 
             inputTopic.pipeInput("A", "0", 5L);
@@ -2786,8 +2733,8 @@ public class KStreamImplTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
                     input,
-                    Serdes.String().serializer(),
-                    Serdes.String().serializer()
+                    new StringSerializer(),
+                    new StringSerializer()
                 );
 
             inputTopic.pipeInput("A", "0", 5L);
@@ -2842,14 +2789,14 @@ public class KStreamImplTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
                     input,
-                    Serdes.String().serializer(),
-                    Serdes.String().serializer()
+                    new StringSerializer(),
+                    new StringSerializer()
                 );
             final TestOutputTopic<String, Integer> outputTopic =
                 driver.createOutputTopic(
                     output,
-                    Serdes.String().deserializer(),
-                    Serdes.Integer().deserializer()
+                    new StringDeserializer(),
+                    new IntegerDeserializer()
                 );
 
             inputTopic.pipeInput("A", "0", 5L);
@@ -2908,14 +2855,14 @@ public class KStreamImplTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(
                     input,
-                    Serdes.String().serializer(),
-                    Serdes.String().serializer()
+                    new StringSerializer(),
+                    new StringSerializer()
                 );
             final TestOutputTopic<String, Integer> outputTopic =
                 driver.createOutputTopic(
                     output,
-                    Serdes.String().deserializer(),
-                    Serdes.Integer().deserializer()
+                    new StringDeserializer(),
+                    new IntegerDeserializer()
                 );
 
             inputTopic.pipeInput("A", "0", 5L);
@@ -2964,7 +2911,7 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, Serdes.String().serializer(), Serdes.String().serializer());
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer());
             final KeyValueStore<String, String> store = driver.getKeyValueStore(storeName);
 
             inputTopic.pipeInput("A", "01");
@@ -3023,9 +2970,9 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, Serdes.String().serializer(), Serdes.String().serializer());
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Integer, String> outputTopic =
-                driver.createOutputTopic(output, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(output, new IntegerDeserializer(), new StringDeserializer());
 
             inputTopic.pipeInput("A", "01", 5L);
             inputTopic.pipeInput("B", "02", 100L);
@@ -3373,7 +3320,7 @@ public class KStreamImplTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Long> outputTopic =
-                driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.Long().deserializer());
+                driver.createOutputTopic(output, new StringDeserializer(), new LongDeserializer());
 
             inputTopic.pipeInput("A", "green", 10L);
             inputTopic.pipeInput("B", "green", 9L);
@@ -3438,7 +3385,7 @@ public class KStreamImplTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Integer> outputTopic =
-                driver.createOutputTopic(output, Serdes.String().deserializer(), Serdes.Integer().deserializer());
+                driver.createOutputTopic(output, new StringDeserializer(), new IntegerDeserializer());
             final KeyValueStore<String, Integer> store = driver.getKeyValueStore(storeName);
 
             inputTopic.pipeInput("A", "green", 10L);
@@ -3469,7 +3416,9 @@ public class KStreamImplTest {
 
     private static <K, V> Map<K, V> asMap(final KeyValueStore<K, V> store) {
         final HashMap<K, V> result = new HashMap<>();
-        store.all().forEachRemaining(kv -> result.put(kv.key, kv.value));
+        try (final KeyValueIterator<K, V> it = store.all()) {
+            it.forEachRemaining(kv -> result.put(kv.key, kv.value));
+        }
         return result;
     }
 }
