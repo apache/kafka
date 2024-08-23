@@ -21,7 +21,6 @@ import java.util
 import java.util.Properties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
@@ -38,8 +37,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.TokenInformation
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_2_7_IV0}
@@ -275,12 +275,20 @@ object BrokerIdZNode {
             Seq(endPoint)
           }
           else {
-            val securityProtocolMap = brokerInfo.get(ListenerSecurityProtocolMapKey).map(
-              _.to[Map[String, String]].map { case (listenerName, securityProtocol) =>
-                new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
-              })
-            val listeners = brokerInfo(EndpointsKey).to[Seq[String]]
-            listeners.map(EndPoint.createEndPoint(_, securityProtocolMap))
+            val securityProtocolMap = brokerInfo.get(ListenerSecurityProtocolMapKey) match {
+              case None => SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO
+              case Some(m) => {
+                val result = new java.util.HashMap[ListenerName, SecurityProtocol]()
+                m.to[Map[String, String]].foreach {
+                  case (k, v) => result.put(
+                    new ListenerName(k), SecurityProtocol.forName(v))
+                }
+                result
+              }
+            }
+            val listenersString = brokerInfo(EndpointsKey).to[Seq[String]].mkString(",")
+            SocketServerConfigs.listenerListToEndPoints(listenersString, securityProtocolMap).
+              asScala.map(EndPoint.fromJava(_))
           }
 
         val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
@@ -378,7 +386,7 @@ object TopicPartitionStateZNode {
       "leader" -> leaderAndIsr.leader,
       "leader_epoch" -> leaderAndIsr.leaderEpoch,
       "controller_epoch" -> controllerEpoch,
-      "isr" -> leaderAndIsr.isr.asJava
+      "isr" -> leaderAndIsr.isr
     )
 
     if (leaderAndIsr.leaderRecoveryState != LeaderRecoveryState.RECOVERED) {
@@ -401,7 +409,7 @@ object TopicPartitionStateZNode {
       val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
 
       val zkPathVersion = stat.getVersion
-      LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, recovery, zkPathVersion), controllerEpoch)
+      LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader, epoch, isr.map(Int.box).asJava, recovery, zkPathVersion), controllerEpoch)
     }
   }
 }

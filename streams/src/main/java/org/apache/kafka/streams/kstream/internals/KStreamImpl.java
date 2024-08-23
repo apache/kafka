@@ -38,12 +38,10 @@ import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode.BaseRepartitionNodeBuilder;
@@ -450,22 +448,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionRequired,
             peekNode,
             builder);
-    }
-
-    @Deprecated
-    @Override
-    @SuppressWarnings("unchecked")
-    public KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates) {
-        return doBranch(NamedInternal.empty(), predicates);
-    }
-
-    @Deprecated
-    @Override
-    @SuppressWarnings("unchecked")
-    public KStream<K, V>[] branch(final Named named,
-                                  final Predicate<? super K, ? super V>... predicates) {
-        Objects.requireNonNull(named, "named can't be null");
-        return doBranch(new NamedInternal(named), predicates);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -1097,12 +1079,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
-                    joined.keySerde(),
-                    joined.valueSerde()
+                    joinedInternal.keySerde(),
+                    joinedInternal.leftValueSerde()
             );
-            return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joined, false);
+            return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joinedInternal, false);
         } else {
-            return doStreamTableJoin(table, joiner, joined, false);
+            return doStreamTableJoin(table, joiner, joinedInternal, false);
         }
     }
 
@@ -1140,12 +1122,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
-                    joined.keySerde(),
-                    joined.valueSerde()
+                    joinedInternal.keySerde(),
+                    joinedInternal.leftValueSerde()
             );
-            return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joined, true);
+            return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joinedInternal, true);
         } else {
-            return doStreamTableJoin(table, joiner, joined, true);
+            return doStreamTableJoin(table, joiner, joinedInternal, true);
         }
     }
 
@@ -1250,27 +1232,26 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @SuppressWarnings("unchecked")
     private <VO, VR> KStream<K, VR> doStreamTableJoin(final KTable<K, VO> table,
                                                       final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                                      final Joined<K, V, VO> joined,
+                                                      final JoinedInternal<K, V, VO> joinedInternal,
                                                       final boolean leftJoin) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
         final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) table));
 
-        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
 
         Optional<String> bufferStoreName = Optional.empty();
 
-        if (joined.gracePeriod() != null) {
+        if (joinedInternal.gracePeriod() != null) {
             if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
             bufferStoreName = Optional.of(name + "-Buffer");
             final RocksDBTimeOrderedKeyValueBuffer.Builder<Object, Object> storeBuilder =
-                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joined.gracePeriod(), name);
+                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joinedInternal.gracePeriod(), name);
             builder.addStateStore(new StoreBuilderWrapper(storeBuilder));
         }
 
@@ -1278,7 +1259,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
             joiner,
             leftJoin,
-            Optional.ofNullable(joined.gracePeriod()),
+            Optional.ofNullable(joinedInternal.gracePeriod()),
             bufferStoreName);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
@@ -1287,7 +1268,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             processorParameters,
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
             this.name,
-            joined.gracePeriod(),
+            joinedInternal.gracePeriod(),
             bufferStoreName
         );
 
@@ -1299,7 +1280,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         // do not have serde for joined result
         return new KStreamImpl<>(
             name,
-            joined.keySerde() != null ? joined.keySerde() : keySerde,
+            joinedInternal.keySerde() != null ? joinedInternal.keySerde() : keySerde,
             null,
             allSourceNodes,
             false,
@@ -1309,7 +1290,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <KR, VR> KStream<KR, VR> transform(final TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
+    public <KR, VR> KStream<KR, VR> transform(final org.apache.kafka.streams.kstream.TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
                                               final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
         final String name = builder.newProcessorName(TRANSFORM_NAME);
@@ -1318,7 +1299,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <KR, VR> KStream<KR, VR> transform(final TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
+    public <KR, VR> KStream<KR, VR> transform(final org.apache.kafka.streams.kstream.TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
                                               final Named named,
                                               final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
@@ -1327,7 +1308,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
+    public <K1, V1> KStream<K1, V1> flatTransform(final org.apache.kafka.streams.kstream.TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                                   final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
         final String name = builder.newProcessorName(TRANSFORM_NAME);
@@ -1336,7 +1317,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
+    public <K1, V1> KStream<K1, V1> flatTransform(final org.apache.kafka.streams.kstream.TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                                   final Named named,
                                                   final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
@@ -1369,7 +1350,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
+    public <VR> KStream<K, VR> transformValues(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                                final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
         return doTransformValues(
@@ -1380,7 +1361,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
+    public <VR> KStream<K, VR> transformValues(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                                final Named named,
                                                final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
@@ -1440,7 +1421,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
+    public <VR> KStream<K, VR> flatTransformValues(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                                    final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
         return doFlatTransformValues(
@@ -1451,7 +1432,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
+    public <VR> KStream<K, VR> flatTransformValues(final org.apache.kafka.streams.kstream.ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                                    final Named named,
                                                    final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");

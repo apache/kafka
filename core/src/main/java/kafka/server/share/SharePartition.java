@@ -257,7 +257,7 @@ public class SharePartition {
     /**
      * The next fetch offset is used to determine the next offset that should be fetched from the leader.
      * The offset should be the next offset after the last fetched batch but there could be batches/
-     * offsets that are either released by acknowledgement API or lock timed out hence the next fetch
+     * offsets that are either released by acknowledge API or lock timed out hence the next fetch
      * offset might be different from the last batch next offset. Hence, method checks if the next
      * fetch offset should be recomputed else returns the last computed next fetch offset.
      *
@@ -351,7 +351,7 @@ public class SharePartition {
         String memberId,
         FetchPartitionData fetchPartitionData
     ) {
-        log.trace("Received acquire request for share partition: {}-{}", memberId, fetchPartitionData);
+        log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
         RecordBatch lastBatch = fetchPartitionData.records.lastBatch().orElse(null);
         if (lastBatch == null) {
             // Nothing to acquire.
@@ -386,7 +386,7 @@ public class SharePartition {
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
-                + " the share group: {}-{}", groupId, topicIdPartition);
+                + " the share partition: {}-{}", groupId, topicIdPartition);
             List<AcquiredRecords> result = new ArrayList<>();
             // The fetched records are already part of the in-flight records. The records might
             // be available for re-delivery hence try acquiring same. The request batches could
@@ -399,7 +399,7 @@ public class SharePartition {
                 if (!fullMatch || inFlightBatch.offsetState() != null) {
                     log.trace("Subset or offset tracked batch record found for share partition,"
                             + " batch: {} request offsets - first: {}, last: {} for the share"
-                            + " group: {}-{}", inFlightBatch, firstBatch.baseOffset(),
+                            + " partition: {}-{}", inFlightBatch, firstBatch.baseOffset(),
                         lastBatch.lastOffset(), groupId, topicIdPartition);
                     if (inFlightBatch.offsetState() == null) {
                         // Though the request is a subset of in-flight batch but the offset
@@ -408,7 +408,7 @@ public class SharePartition {
                         // complete batch is available yet. Hence, do a pre-check to avoid exploding
                         // the in-flight offset tracking unnecessarily.
                         if (inFlightBatch.batchState() != RecordState.AVAILABLE) {
-                            log.trace("The batch is not available to acquire in share group: {}-{}, skipping: {}"
+                            log.trace("The batch is not available to acquire in share partition: {}-{}, skipping: {}"
                                     + " skipping offset tracking for batch as well.", groupId,
                                 topicIdPartition, inFlightBatch);
                             continue;
@@ -423,14 +423,14 @@ public class SharePartition {
 
                 // The in-flight batch is a full match hence change the state of the complete batch.
                 if (inFlightBatch.batchState() != RecordState.AVAILABLE) {
-                    log.trace("The batch is not available to acquire in share group: {}-{}, skipping: {}",
+                    log.trace("The batch is not available to acquire in share partition: {}-{}, skipping: {}",
                         groupId, topicIdPartition, inFlightBatch);
                     continue;
                 }
 
                 InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, true, maxDeliveryCount, memberId);
                 if (updateResult == null) {
-                    log.info("Unable to acquire records for the batch: {} in share group: {}-{}",
+                    log.info("Unable to acquire records for the batch: {} in share partition: {}-{}",
                         inFlightBatch, groupId, topicIdPartition);
                     continue;
                 }
@@ -464,13 +464,13 @@ public class SharePartition {
      * that should be fetched from the leader, if required.
      *
      * @param memberId The member id of the client that is fetching the record.
-     * @param acknowledgementBatch The acknowledgement batch list for the share partition.
+     * @param acknowledgementBatches The acknowledgement batch list for the share partition.
      *
      * @return A future which is completed when the records are acknowledged.
      */
     public CompletableFuture<Optional<Throwable>> acknowledge(
         String memberId,
-        List<ShareAcknowledgementBatch> acknowledgementBatch
+        List<ShareAcknowledgementBatch> acknowledgementBatches
     ) {
         log.trace("Acknowledgement batch request for share partition: {}-{}", groupId, topicIdPartition);
 
@@ -481,9 +481,7 @@ public class SharePartition {
         try {
             // Avoided using enhanced for loop as need to check if the last batch have offsets
             // in the range.
-            for (int i = 0; i < acknowledgementBatch.size(); i++) {
-                ShareAcknowledgementBatch batch = acknowledgementBatch.get(i);
-
+            for (ShareAcknowledgementBatch batch : acknowledgementBatches) {
                 // Client can either send a single entry in acknowledgeTypes which represents the state
                 // of the complete batch or can send individual offsets state.
                 Map<Long, RecordState> recordStateMap;
@@ -506,14 +504,14 @@ public class SharePartition {
                 // be a full match, subset or spans over multiple fetched batches.
                 NavigableMap<Long, InFlightBatch> subMap;
                 try {
-                    subMap = fetchSubMapForAcknowledgementBatch(batch, i == acknowledgementBatch.size() - 1);
+                    subMap = fetchSubMapForAcknowledgementBatch(batch);
                 } catch (InvalidRecordStateException | InvalidRequestException e) {
                     throwable = e;
                     break;
                 }
 
                 // Acknowledge the records for the batch.
-                Optional<Throwable> ackThrowable = acknowledgementBatchRecords(
+                Optional<Throwable> ackThrowable = acknowledgeBatchRecords(
                     memberId,
                     batch,
                     recordStateMap,
@@ -974,7 +972,7 @@ public class SharePartition {
 
                 if (offsetState.getValue().state != RecordState.AVAILABLE) {
                     log.trace("The offset is not available skipping, offset: {} batch: {}"
-                            + " for the share group: {}-{}", offsetState.getKey(), inFlightBatch,
+                            + " for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
                         groupId, topicIdPartition);
                     continue;
                 }
@@ -983,7 +981,7 @@ public class SharePartition {
                     memberId);
                 if (updateResult == null) {
                     log.trace("Unable to acquire records for the offset: {} in batch: {}"
-                            + " for the share group: {}-{}", offsetState.getKey(), inFlightBatch,
+                            + " for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
                         groupId, topicIdPartition);
                     continue;
                 }
@@ -1058,8 +1056,7 @@ public class SharePartition {
     }
 
     private NavigableMap<Long, InFlightBatch> fetchSubMapForAcknowledgementBatch(
-        ShareAcknowledgementBatch batch,
-        boolean isLastBatch
+        ShareAcknowledgementBatch batch
     ) {
         lock.writeLock().lock();
         try {
@@ -1073,7 +1070,7 @@ public class SharePartition {
                     // If the start offset has been moved and within the request batch then fetch
                     // the floor entry from start offset and acknowledge cached offsets. Consider
                     // the case where the start offset has moved from 0 to 10, with the cached batch
-                    // of 0 - 5, 5 - 10, 10 - 12, 12 - 15. The request batch for acknowledgement is 5 - 15,
+                    // of 0 - 5, 5 - 10, 10 - 12, 12 - 15. The request batch for acknowledge is 5 - 15,
                     // then post acquisition lock timeout the cache will have data from only from 10 to 15.
                     // Hence, we need to fetch the floor entry from start offset.
                     floorOffset = cachedState.floorEntry(startOffset);
@@ -1086,8 +1083,8 @@ public class SharePartition {
             }
 
             NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(floorOffset.getKey(), true, batch.lastOffset(), true);
-            // Validate if the request batch has the first offset less than the last offset of the last
-            // fetched cached batch, then there will be offsets in the request that are already acquired.
+            // Validate if the request batch has the first offset greater than the last offset of the last
+            // fetched cached batch, then there will be no offsets in the request that can be acknowledged.
             if (subMap.lastEntry().getValue().lastOffset < batch.firstOffset()) {
                 log.debug("Request batch: {} has offsets which are not found for share partition: {}-{}", batch, groupId, topicIdPartition);
                 throw new InvalidRequestException("Batch record not found. The first offset in request is past acquired records.");
@@ -1096,7 +1093,7 @@ public class SharePartition {
             // Validate if the request batch has the last offset greater than the last offset of
             // the last fetched cached batch, then there will be offsets in the request than cannot
             // be found in the fetched batches.
-            if (isLastBatch && batch.lastOffset() > subMap.lastEntry().getValue().lastOffset) {
+            if (batch.lastOffset() > subMap.lastEntry().getValue().lastOffset) {
                 log.debug("Request batch: {} has offsets which are not found for share partition: {}-{}", batch, groupId, topicIdPartition);
                 throw new InvalidRequestException("Batch record not found. The last offset in request is past acquired records.");
             }
@@ -1107,7 +1104,7 @@ public class SharePartition {
         }
     }
 
-    private Optional<Throwable> acknowledgementBatchRecords(
+    private Optional<Throwable> acknowledgeBatchRecords(
         String memberId,
         ShareAcknowledgementBatch batch,
         Map<Long, RecordState> recordStateMap,
@@ -1163,7 +1160,7 @@ public class SharePartition {
                                 inFlightBatch, groupId, topicIdPartition);
                             return Optional.of(new InvalidRecordStateException("The batch cannot be acknowledged. The subset batch is not in the acquired state."));
                         }
-                        // The request batch is a subset or per offset state is managed hence update
+                        // The request batch is a subset and requires per offset state hence initialize
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
@@ -1437,7 +1434,7 @@ public class SharePartition {
     }
 
     private boolean canMoveStartOffset() {
-        // The Share Partition Start Offset may be moved after acknowledgement request is complete.
+        // The Share Partition Start Offset may be moved after acknowledge request is complete.
         // The following conditions need to be met to move the startOffset:
         // 1. When the cachedState is not empty.
         // 2. When the acknowledgement type for the records is either ACCEPT or REJECT.
@@ -1604,7 +1601,7 @@ public class SharePartition {
             if (!stateBatches.isEmpty() && !isWriteShareGroupStateSuccessful(stateBatches)) {
 
                 // Even if write share group state RPC call fails, we will still go ahead with the state transition.
-                log.error("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId {}. " +
+                log.error("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}. " +
                                 "Proceeding with state transition.", groupId, topicIdPartition, memberId);
             }
 
@@ -1640,7 +1637,7 @@ public class SharePartition {
             return;
         }
         log.debug("The batch is not in acquired state while release of acquisition lock on timeout, skipping, batch: {}"
-                + " for the share group: {}-{}-{}", inFlightBatch, groupId, memberId, topicIdPartition);
+                + " for the share partition: {}-{} memberId: {}", inFlightBatch, groupId, topicIdPartition, memberId);
     }
 
     private void releaseAcquisitionLockOnTimeoutForPerOffsetBatch(InFlightBatch inFlightBatch,
@@ -1661,7 +1658,7 @@ public class SharePartition {
             }
             if (offsetState.getValue().state != RecordState.ACQUIRED) {
                 log.debug("The offset is not in acquired state while release of acquisition lock on timeout, skipping, offset: {} batch: {}"
-                                + " for the share group: {}-{} memberId: {}", offsetState.getKey(), inFlightBatch,
+                                + " for the share partition: {}-{} memberId: {}", offsetState.getKey(), inFlightBatch,
                         groupId, topicIdPartition, memberId);
                 continue;
             }
@@ -1672,7 +1669,7 @@ public class SharePartition {
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
                 log.error("Unable to release acquisition lock on timeout for the offset: {} in batch: {}"
-                                + " for the share group: {}-{} memberId: {}", offsetState.getKey(), inFlightBatch,
+                                + " for the share partition: {}-{} memberId: {}", offsetState.getKey(), inFlightBatch,
                         groupId, topicIdPartition, memberId);
                 continue;
             }

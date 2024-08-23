@@ -372,6 +372,10 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                 System.err.println("WARNING: kafka.coordinator.group.GroupMetadataManager$OffsetsMessageFormatter is deprecated and will be removed in the next major release. " +
                         "Please use org.apache.kafka.tools.consumer.OffsetsMessageFormatter instead");
                 return className;
+            case "kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter":
+                System.err.println("WARNING: kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter instead");
+                return className;
             default:
                 return className;
         }

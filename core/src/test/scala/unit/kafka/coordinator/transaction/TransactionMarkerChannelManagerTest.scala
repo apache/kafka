@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions._
@@ -86,6 +87,8 @@ class TransactionMarkerChannelManagerTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))))
     when(txnStateManager.getTransactionState(ArgumentMatchers.eq(transactionalId2)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
+    when(metadataCache.metadataVersion())
+      .thenReturn(MetadataVersion.latestProduction())
   }
 
   @Test

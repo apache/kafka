@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import com.yammer.metrics.core.MetricName
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.SocketServer
@@ -37,7 +36,6 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, L
 import org.apache.kafka.server.util.Scheduler
 
 import java.time.Duration
-import java.util
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -103,13 +101,9 @@ trait KafkaBroker extends Logging {
   def clientToControllerChannelManager: NodeToControllerChannelManager
   def tokenCache: DelegationTokenCache
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass) {
-    // For backwards compatibility, we need to keep older metrics tied
-    // to their original name when this class was named `KafkaServer`
-    override def metricName(name: String, tags: util.Map[String, String]): MetricName = {
-      KafkaMetricsGroup.explicitMetricName(Server.MetricsPrefix, KafkaBroker.MetricsTypeName, name, tags)
-    }
-  }
+  // For backwards compatibility, we need to keep older metrics tied
+  // to their original name when this class was named `KafkaServer`
+  private val metricsGroup = new KafkaMetricsGroup(Server.MetricsPrefix, KafkaBroker.MetricsTypeName)
 
   metricsGroup.newGauge("BrokerState", () => brokerState.value)
   metricsGroup.newGauge("ClusterId", () => clusterId)
