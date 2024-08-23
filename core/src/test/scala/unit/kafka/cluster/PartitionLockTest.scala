@@ -40,7 +40,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, LogSegments, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchIsolation, FetchParams, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogSegments, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -319,12 +319,14 @@ class PartitionLockTest extends Logging {
           mockTime.scheduler,
           mockTime,
           logDirFailureChannel,
-          hadCleanShutdown = true,
+          true,
           segments,
           0L,
           0L,
           leaderEpochCache.asJava,
-          producerStateManager
+          producerStateManager,
+          new ConcurrentHashMap[String, Integer],
+          false
         ).load()
         val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
           offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
