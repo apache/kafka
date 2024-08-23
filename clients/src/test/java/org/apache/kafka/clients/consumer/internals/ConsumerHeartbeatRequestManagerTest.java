@@ -419,7 +419,7 @@ public class ConsumerHeartbeatRequestManagerTest {
             new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
             .setMemberId(DEFAULT_MEMBER_ID)
             .setMemberEpoch(DEFAULT_MEMBER_EPOCH));
-        membershipManager.onHeartbeatSuccess(result.data());
+        membershipManager.onHeartbeatSuccess(result);
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         mockStableMemberData(DEFAULT_GROUP_INSTANCE_ID);
@@ -500,7 +500,7 @@ public class ConsumerHeartbeatRequestManagerTest {
 
         switch (error) {
             case NONE:
-                verify(membershipManager).onHeartbeatSuccess(mockResponse.data());
+                verify(membershipManager).onHeartbeatSuccess(mockResponse);
                 assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS);
                 break;
 

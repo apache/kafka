@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
-import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
@@ -38,31 +37,11 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
- * <p>Manages the request creation and response handling for the heartbeat of a consumer group. The module creates a
- * {@link ConsumerGroupHeartbeatRequest} using the state stored in the {@link ConsumerMembershipManager} and enqueue it to
- * the network queue to be sent out. Once the response is received, it updates the state in the
- * {@link ConsumerMembershipManager} and handles any errors.</p>
+ * This is the heartbeat request manager for consumer groups.
  *
- * <p>The manager will try to send a heartbeat when the member is in {@link MemberState#STABLE},
- * {@link MemberState#JOINING}, or {@link MemberState#RECONCILING}, which means the member is either in a stable
- * group, is trying to join a group, or is in the process of reconciling the assignment changes.</p>
- *
- * <p>If the member got kicked out of a group, it will try to give up the current assignment by invoking {@code
- * OnPartitionsLost} before attempting to join again with a zero epoch.</p>
- *
- * <p>If the member does not have groupId configured or encountering fatal exceptions, a heartbeat will not be sent.</p>
- *
- * <p>If the coordinator not is not found, we will skip sending the heartbeat and try to find a coordinator first.</p>
- *
- * <p>If the heartbeat failed due to retriable errors, such as TimeoutException, the subsequent attempt will be
- * backed off exponentially.</p>
- *
- * <p>When the member completes the assignment reconciliation, the {@link HeartbeatRequestState} will be reset so
- * that a heartbeat will be sent in the next event loop.</p>
- *
- * <p>See {@link AbstractHeartbeatRequestManager.HeartbeatRequestState} for more details.</p>
+ * <p>See {@link AbstractHeartbeatRequestManager} for more details.</p>
  */
-public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestManager<ConsumerGroupHeartbeatResponse, ConsumerGroupHeartbeatResponseData> {
+public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestManager<ConsumerGroupHeartbeatResponse> {
 
     /**
      * Membership manager for consumer groups
@@ -84,7 +63,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, time, config, coordinatorRequestManager, backgroundEventHandler,
-                new HeartbeatMetricsManager(metrics));
+            new HeartbeatMetricsManager(metrics));
         this.membershipManager = membershipManager;
         this.heartbeatState = new HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs);
     }
@@ -101,30 +80,33 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
-                new HeartbeatMetricsManager(metrics));
+            new HeartbeatMetricsManager(metrics));
         this.membershipManager = membershipManager;
         this.heartbeatState = heartbeatState;
     }
 
-    public boolean handleSpecificError(final ConsumerGroupHeartbeatResponse response,
-                                       final long currentTimeMs) {
-        Errors error = Errors.forCode(errorCodeForResponse(response));
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean handleSpecificError(final ConsumerGroupHeartbeatResponse response, final long currentTimeMs) {
+        Errors error = errorForResponse(response);
         String errorMessage = errorMessageForResponse(response);
         boolean errorHandled;
 
         switch (error) {
             case UNRELEASED_INSTANCE_ID:
                 logger.error("{} failed due to unreleased instance id {}: {}",
-                        heartbeatRequestName(), membershipManager.groupInstanceId().orElse("null"), errorMessage);
+                    heartbeatRequestName(), membershipManager.groupInstanceId().orElse("null"), errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 errorHandled = true;
                 break;
 
             case FENCED_INSTANCE_ID:
                 logger.error("{} failed due to fenced instance id {}: {}. " +
-                                "This is expected in the case that the member was removed from the group " +
-                                "by an admin client, and another member joined using the same group instance id.",
-                        heartbeatRequestName(), membershipManager.groupInstanceId().orElse("null"), errorMessage);
+                        "This is expected in the case that the member was removed from the group " +
+                        "by an admin client, and another member joined using the same group instance id.",
+                    heartbeatRequestName(), membershipManager.groupInstanceId().orElse("null"), errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 errorHandled = true;
                 break;
@@ -135,43 +117,59 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         return errorHandled;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void resetHeartbeatState() {
         heartbeatState.reset();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public NetworkClientDelegate.UnsentRequest buildHeartbeatRequest() {
         return new NetworkClientDelegate.UnsentRequest(
-                new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
-                coordinatorRequestManager.coordinator());
+            new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
+            coordinatorRequestManager.coordinator());
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String heartbeatRequestName() {
         return "ConsumerGroupHeartbeatRequest";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public short errorCodeForResponse(ConsumerGroupHeartbeatResponse response) {
-        return response.data().errorCode();
+    public Errors errorForResponse(ConsumerGroupHeartbeatResponse response) {
+        return Errors.forCode(response.data().errorCode());
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String errorMessageForResponse(ConsumerGroupHeartbeatResponse response) {
         return response.data().errorMessage();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public long heartbeatIntervalForResponse(ConsumerGroupHeartbeatResponse response) {
         return response.data().heartbeatIntervalMs();
     }
 
-    @Override
-    public ConsumerGroupHeartbeatResponseData responseData(ConsumerGroupHeartbeatResponse response) {
-        return response.data();
-    }
-
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public ConsumerMembershipManager membershipManager() {
         return membershipManager;
@@ -260,10 +258,10 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
 
         private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Map<Uuid, SortedSet<Integer>> topicIdPartitions) {
             return topicIdPartitions.entrySet().stream().map(
-                            entry -> new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                                    .setTopicId(entry.getKey())
-                                    .setPartitions(new ArrayList<>(entry.getValue())))
-                    .collect(Collectors.toList());
+                    entry -> new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                        .setTopicId(entry.getKey())
+                        .setPartitions(new ArrayList<>(entry.getValue())))
+                .collect(Collectors.toList());
         }
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request

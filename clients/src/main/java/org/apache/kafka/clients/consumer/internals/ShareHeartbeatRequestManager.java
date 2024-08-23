@@ -20,8 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
-import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -34,37 +34,18 @@ import java.util.TreeSet;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
 
 /**
- * <p>Manages the request creation and response handling for the heartbeat of a share group. The module creates a
- * {@link ShareGroupHeartbeatRequest} using the state stored in the {@link ShareMembershipManager} and enqueue it to
- * the network queue to be sent out. Once the response is received, it updates the state in the
- * {@link ShareMembershipManager} and handles any errors.</p>
+ * This is the heartbeat request manager for share groups.
  *
- * <p>The manager will try to send a heartbeat when the member is in {@link MemberState#STABLE},
- * {@link MemberState#JOINING}, or {@link MemberState#RECONCILING}, which means the member is either in a stable
- * group, is trying to join a group, or is in the process of reconciling the assignment changes.</p>
- *
- * <p>If the member got kicked out of a group, it will attempt to join again with a zero epoch.</p>
- *
- * <p>If the member does not have groupId configured or encountering fatal exceptions, a heartbeat will not be sent.</p>
- *
- * <p>If the coordinator not is not found, we will skip sending the heartbeat and try to find a coordinator first.</p>
- *
- * <p>If the heartbeat failed due to retriable errors, such as TimeoutException, the subsequent attempt will be
- * backed off exponentially.</p>
- *
- * <p>When the member completes the assignment reconciliation, the {@link HeartbeatRequestState} will be reset so
- * that a heartbeat will be sent in the next event loop.</p>
- *
- * <p>See {@link AbstractHeartbeatRequestManager.HeartbeatRequestState} for more details.</p>
+ * <p>See {@link AbstractHeartbeatRequestManager} for more details.</p>
  */
-public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManager<ShareGroupHeartbeatResponse, ShareGroupHeartbeatResponseData> {
+public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManager<ShareGroupHeartbeatResponse> {
 
     /**
-     * Membership manager for consumer groups
+     * Membership manager for share groups
      */
     private final ShareMembershipManager membershipManager;
 
-    /*
+    /**
      * HeartbeatState manages building the heartbeat requests correctly
      */
     private final HeartbeatState heartbeatState;
@@ -79,7 +60,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, time, config, coordinatorRequestManager, backgroundEventHandler,
-                new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
+            new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
         this.membershipManager = membershipManager;
         this.heartbeatState = new HeartbeatState(subscriptions, membershipManager);
     }
@@ -96,48 +77,64 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
-                new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
+            new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
         this.membershipManager = membershipManager;
         this.heartbeatState = heartbeatState;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void resetHeartbeatState() {
         heartbeatState.reset();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public NetworkClientDelegate.UnsentRequest buildHeartbeatRequest() {
         return new NetworkClientDelegate.UnsentRequest(
-                new ShareGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
-                coordinatorRequestManager.coordinator());
+            new ShareGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
+            coordinatorRequestManager.coordinator());
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String heartbeatRequestName() {
         return "ShareGroupHeartbeatRequest";
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
-    public short errorCodeForResponse(ShareGroupHeartbeatResponse response) {
-        return response.data().errorCode();
+    public Errors errorForResponse(ShareGroupHeartbeatResponse response) {
+        return Errors.forCode(response.data().errorCode());
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public String errorMessageForResponse(ShareGroupHeartbeatResponse response) {
         return response.data().errorMessage();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public long heartbeatIntervalForResponse(ShareGroupHeartbeatResponse response) {
         return response.data().heartbeatIntervalMs();
     }
 
-    @Override
-    public ShareGroupHeartbeatResponseData responseData(ShareGroupHeartbeatResponse response) {
-        return response.data();
-    }
-
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public ShareMembershipManager membershipManager() {
         return membershipManager;

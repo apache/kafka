@@ -378,7 +378,7 @@ public class ShareHeartbeatRequestManagerTest {
 
         switch (error) {
             case NONE:
-                verify(membershipManager).onHeartbeatSuccess(mockResponse.data());
+                verify(membershipManager).onHeartbeatSuccess(mockResponse);
                 assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS);
                 break;
 
@@ -485,7 +485,7 @@ public class ShareHeartbeatRequestManagerTest {
                 .setMemberEpoch(DEFAULT_MEMBER_EPOCH)
                 .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
-        membershipManager.onHeartbeatSuccess(rs1.data());
+        membershipManager.onHeartbeatSuccess(rs1);
     }
 
     @Test

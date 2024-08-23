@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -42,27 +41,22 @@ import java.util.Collections;
  * the network queue to be sent out. Once the response is received, it updates the state in the
  * membership manager and handles any errors.
  *
- * <p>The manager will try to send a heartbeat when the member is in {@link MemberState#STABLE},
- * {@link MemberState#JOINING}, or {@link MemberState#RECONCILING}. Which mean the member is either in a stable
- * group, is trying to join a group, or is in the process of reconciling the assignment changes.
+ * <p>The heartbeat manager generates heartbeat requests based on the member state. It's also responsible
+ * for the timing of the heartbeat requests to ensure they are sent according to the heartbeat interval
+ * (while the member state is stable) or on demand (while the member is acknowledging an assignment or
+ * leaving the group).
  *
  * <p>If the member got kicked out of a group, it will try to give up the current assignment by invoking {@code
  * OnPartitionsLost} before attempting to join again with a zero epoch.
  *
- * <p>If the member does not have groupId configured or encountering fatal exceptions, a heartbeat will not be sent.
- *
  * <p>If the coordinator not is not found, we will skip sending the heartbeat and try to find a coordinator first.
- *
- * <p>If the heartbeat failed due to retriable errors, such as TimeoutException, the subsequent attempt will be
- * backed off exponentially.
  *
  * <p>When the member completes the assignment reconciliation, the {@link HeartbeatRequestState} will be reset so
  * that a heartbeat will be sent in the next event loop.
  *
- * <p>The class variable HBR is the response for the specific group's heartbeat RPC.
- * <p>The class variable HRBD is the response data for the specific group's heartbeat RPC.
+ * <p>The class variable R is the response for the specific group's heartbeat RPC.
  */
-public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractResponse, HBRD extends ApiMessage> implements RequestManager {
+public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse> implements RequestManager {
 
     protected final Logger logger;
 
@@ -98,7 +92,7 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
      */
     private final HeartbeatMetricsManager metricsManager;
 
-    public AbstractHeartbeatRequestManager(
+    AbstractHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
             final ConsumerConfig config,
@@ -117,7 +111,6 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         this.metricsManager = metricsManager;
     }
 
-    // Visible for testing
     AbstractHeartbeatRequestManager(
             final LogContext logContext,
             final Timer timer,
@@ -168,10 +161,10 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         pollTimer.update(currentTimeMs);
         if (pollTimer.isExpired() && !membershipManager().isLeavingGroup()) {
             logger.warn("Consumer poll timeout has expired. This means the time between " +
-                    "subsequent calls to poll() was longer than the configured max.poll.interval.ms, " +
-                    "which typically implies that the poll loop is spending too much time processing " +
-                    "messages. You can address this either by increasing max.poll.interval.ms or by " +
-                    "reducing the maximum size of batches returned in poll() with max.poll.records.");
+                "subsequent calls to poll() was longer than the configured max.poll.interval.ms, " +
+                "which typically implies that the poll loop is spending too much time processing " +
+                "messages. You can address this either by increasing max.poll.interval.ms or by " +
+                "reducing the maximum size of batches returned in poll() with max.poll.records.");
 
             membershipManager().transitionToSendingLeaveGroup(true);
             NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequest(currentTimeMs, true);
@@ -184,8 +177,9 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
 
         // Case 1: The member is leaving
         boolean heartbeatNow = membershipManager().state() == MemberState.LEAVING ||
-                // Case 2: The member state indicates it should send a heartbeat without waiting for the interval, and there is no heartbeat request currently in-flight
-                (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
+            // Case 2: The member state indicates it should send a heartbeat without waiting for the interval,
+            // and there is no heartbeat request currently in-flight
+            (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
 
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -199,7 +193,7 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
      * Returns the {@link AbstractMembershipManager} that this request manager is using to track the state of the group.
      * This is provided so that the {@link ApplicationEventProcessor} can access the state for querying or updating.
      */
-    public abstract AbstractMembershipManager<HBRD> membershipManager();
+    public abstract AbstractMembershipManager<R> membershipManager();
 
     /**
      * Returns the delay for which the application thread can safely wait before it should be responsive
@@ -231,15 +225,14 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
             logger.warn("Time between subsequent calls to poll() was longer than the configured " +
-                            "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
-                    pollTimer.isExpiredBy(), membershipManager().memberId());
+                "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                pollTimer.isExpiredBy(), membershipManager().memberId());
             membershipManager().maybeRejoinStaleMember();
         }
         pollTimer.reset(maxPollIntervalMs);
     }
 
-    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
-                                                                     final boolean ignoreResponse) {
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs, final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager().onHeartbeatRequestGenerated();
@@ -258,7 +251,7 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
                 long completionTimeMs = request.handler().completionTimeMs();
                 if (response != null) {
                     metricsManager.recordRequestLatency(response.requestLatencyMs());
-                    onResponse((HBR) response.responseBody(), completionTimeMs);
+                    onResponse((R) response.responseBody(), completionTimeMs);
                 } else {
                     onFailure(exception, completionTimeMs);
                 }
@@ -270,8 +263,7 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         return request.whenComplete((response, exception) -> {
             if (response != null) {
                 metricsManager.recordRequestLatency(response.requestLatencyMs());
-                Errors error =
-                    Errors.forCode(errorCodeForResponse((HBR) response.responseBody()));
+                Errors error = errorForResponse((R) response.responseBody());
                 if (error == Errors.NONE)
                     logger.debug("{} responded successfully: {}", heartbeatRequestName(), response);
                 else
@@ -288,9 +280,9 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         membershipManager().onHeartbeatFailure(exception instanceof RetriableException);
         if (exception instanceof RetriableException) {
             String message = String.format("%s failed because of the retriable exception. Will retry in %s ms: %s",
-                    heartbeatRequestName(),
-                    heartbeatRequestState.remainingBackoffMs(responseTimeMs),
-                    exception.getMessage());
+                heartbeatRequestName(),
+                heartbeatRequestState.remainingBackoffMs(responseTimeMs),
+                exception.getMessage());
             logger.debug(message);
         } else {
             logger.error("{} failed due to fatal error: {}", heartbeatRequestName(), exception.getMessage());
@@ -298,19 +290,18 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         }
     }
 
-    private void onResponse(final HBR response, long currentTimeMs) {
-        if (Errors.forCode(errorCodeForResponse(response)) == Errors.NONE) {
+    private void onResponse(final R response, final long currentTimeMs) {
+        if (errorForResponse(response) == Errors.NONE) {
             heartbeatRequestState.updateHeartbeatIntervalMs(heartbeatIntervalForResponse(response));
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-            membershipManager().onHeartbeatSuccess(responseData(response));
+            membershipManager().onHeartbeatSuccess(response);
             return;
         }
         onErrorResponse(response, currentTimeMs);
     }
 
-    private void onErrorResponse(final HBR response,
-                                 final long currentTimeMs) {
-        Errors error = Errors.forCode(errorCodeForResponse(response));
+    private void onErrorResponse(final R response, final long currentTimeMs) {
+        Errors error = errorForResponse(response);
         String errorMessage = errorMessageForResponse(response);
         String message;
 
@@ -382,8 +373,8 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
                 break;
 
             default:
-                // If the manager receives an unknown error - there could be a bug in the code or a new error code
                 if (!handleSpecificError(response, currentTimeMs)) {
+                    // If the manager receives an unknown error - there could be a bug in the code or a new error code
                     logger.error("{} failed due to unexpected error {}: {}", heartbeatRequestName(), error, errorMessage);
                     handleFatalFailure(error.exception(errorMessage));
                 }
@@ -391,13 +382,11 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         }
     }
 
-    protected void logInfo(final String message,
-                         final HBR response,
-                         final long currentTimeMs) {
+    protected void logInfo(final String message, final R response, final long currentTimeMs) {
         logger.info("{} in {}ms: {}",
-                message,
-                heartbeatRequestState.remainingBackoffMs(currentTimeMs),
-                errorMessageForResponse(response));
+            message,
+            heartbeatRequestState.remainingBackoffMs(currentTimeMs),
+            errorMessageForResponse(response));
     }
 
     protected void handleFatalFailure(Throwable error) {
@@ -405,24 +394,60 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         membershipManager().transitionToFatal();
     }
 
-    public boolean handleSpecificError(final HBR response,
-                                       final long currentTimeMs) {
+
+    /**
+     * Error handling specific to a group type.
+     *
+     * @param response The heartbeat response
+     * @param currentTimeMs Current time
+     * @return true if the error was handled, else false
+     */
+    public boolean handleSpecificError(final R response, final long currentTimeMs) {
         return false;
     }
 
+    /**
+     * Resets the heartbeat state.
+     */
     public abstract void resetHeartbeatState();
 
+    /**
+     * Builds a heartbeat request using the heartbeat state to follow the protocol faithfully.
+     *
+     * @return The heartbeat request
+     */
     public abstract NetworkClientDelegate.UnsentRequest buildHeartbeatRequest();
 
+    /**
+     * Returns the heartbeat RPC request name to be used for logging.
+     *
+     * @return The heartbeat RPC request name
+     */
     public abstract String heartbeatRequestName();
 
-    public abstract short errorCodeForResponse(HBR response);
+    /**
+     * Returns the error for the response.
+     *
+     * @param response The heartbeat response
+     * @return The error {@link Errors}
+     */
+    public abstract Errors errorForResponse(R response);
 
-    public abstract String errorMessageForResponse(HBR response);
+    /**
+     * Returns the error message for the response.
+     *
+     * @param response The heartbeat response
+     * @return The error message
+     */
+    public abstract String errorMessageForResponse(R response);
 
-    public abstract long heartbeatIntervalForResponse(HBR response);
-
-    public abstract HBRD responseData(HBR response);
+    /**
+     * Returns the heartbeat interval for the response.
+     *
+     * @param response The heartbeat response
+     * @return The heartbeat interval
+     */
+    public abstract long heartbeatIntervalForResponse(R response);
 
     /**
      * Represents the state of a heartbeat request, including logic for timing, retries, and exponential backoff. The
@@ -463,8 +488,8 @@ public abstract class AbstractHeartbeatRequestManager<HBR extends AbstractRespon
         @Override
         public String toStringBase() {
             return super.toStringBase() +
-                    ", remainingMs=" + heartbeatTimer.remainingMs() +
-                    ", heartbeatIntervalMs=" + heartbeatIntervalMs;
+                ", remainingMs=" + heartbeatTimer.remainingMs() +
+                ", heartbeatIntervalMs=" + heartbeatIntervalMs;
         }
 
         /**
