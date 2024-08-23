@@ -161,7 +161,7 @@ if __name__ == "__main__":
     # Print summary
     report_url = get_env("REPORT_URL")
     report_md = f"Download [HTML report]({report_url})."
-    summary = f"{total_tests} tests run in {duration}, {total_failures} failed ❌, {total_skipped} skipped ⚠️, {total_errors} errors.")
+    summary = f"{total_tests} tests run in {duration}, {total_failures} failed ❌, {total_skipped} skipped ⚠️, {total_errors} errors."
     logger.debug(summary)
     print(f"{summary} {report_md}")
     if len(table) > 0:
