@@ -943,7 +943,7 @@ public class StateDirectoryTest {
                 Collections.emptyMap()
         );
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
-        Mockito.when(metadata.getTaskConfigFor(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
+        Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
 
         directory.initializeTasksForLocalState(metadata, new StreamsMetricsImpl(new Metrics(), "test", "0.1", time));
 

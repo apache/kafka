@@ -205,7 +205,7 @@ public class StateDirectory implements AutoCloseable {
             final LogContext logContext = new LogContext("main-thread ");
             final ThreadCache dummyCache = new ThreadCache(logContext, 0, streamsMetrics);
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
-            final boolean stateUpdaterEnabled = StreamsConfig.InternalConfig.getStateUpdaterEnabled(config.originals());
+            final boolean stateUpdaterEnabled = StreamsConfig.InternalConfig.stateUpdaterEnabled(config.originals());
 
             // discover all non-empty task directories in StateDirectory
             for (final TaskDirectory taskDirectory : nonEmptyTaskDirectories) {
@@ -240,7 +240,7 @@ public class StateDirectory implements AutoCloseable {
                         id,
                         inputPartitions,
                         topology,
-                        topologyMetadata.getTaskConfigFor(id),
+                        topologyMetadata.taskConfig(id),
                         streamsMetrics,
                         stateManager,
                         this,
