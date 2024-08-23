@@ -20,12 +20,13 @@ import kafka.common.OffsetAndMetadata
 import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Implicits.MapExtensionMethods
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.coordinator.group
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.util.FutureUtils
 
@@ -71,6 +72,15 @@ private[group] class GroupCoordinatorAdapter(
   ): CompletableFuture[ConsumerGroupHeartbeatResponseData] = {
     FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
       s"The old group coordinator does not support ${ApiKeys.CONSUMER_GROUP_HEARTBEAT.name} API."
+    ))
+  }
+
+  override def shareGroupHeartbeat(
+    context: RequestContext,
+    request: ShareGroupHeartbeatRequestData
+  ): CompletableFuture[ShareGroupHeartbeatResponseData] = {
+    FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
+      s"The old group coordinator does not support ${ApiKeys.SHARE_GROUP_HEARTBEAT.name} API."
     ))
   }
 
@@ -611,6 +621,17 @@ private[group] class GroupCoordinatorAdapter(
     coordinator.offsetsTopicConfigs
   }
 
+  override def groupConfig(groupId: String): Optional[group.GroupConfig] = {
+    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support get group config.")
+  }
+
+  override def updateGroupConfig(
+    groupId: String,
+    newGroupConfig: Properties
+  ): Unit = {
+    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support update group config.")
+  }
+
   override def startup(groupMetadataTopicPartitionCount: IntSupplier): Unit = {
     coordinator.startup(() => groupMetadataTopicPartitionCount.getAsInt)
   }
@@ -625,6 +646,15 @@ private[group] class GroupCoordinatorAdapter(
   ): CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]] = {
     FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
       s"The old group coordinator does not support ${ApiKeys.CONSUMER_GROUP_DESCRIBE.name} API."
+    ))
+  }
+
+  override def shareGroupDescribe(
+    context: RequestContext,
+    groupIds: util.List[String]
+  ): CompletableFuture[util.List[ShareGroupDescribeResponseData.DescribedGroup]] = {
+    FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
+      s"The old group coordinator does not support ${ApiKeys.SHARE_GROUP_DESCRIBE.name} API."
     ))
   }
 }

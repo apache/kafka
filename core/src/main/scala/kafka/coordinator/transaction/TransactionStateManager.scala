@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{ReplicaManager, RequestLocal}
+import kafka.server.{MetadataCache, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
@@ -36,7 +36,8 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.common.TransactionVersion
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
@@ -65,6 +66,7 @@ import scala.collection.mutable
 class TransactionStateManager(brokerId: Int,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
+                              metadataCache: MetadataCache,
                               config: TransactionConfig,
                               time: Time,
                               metrics: Metrics) extends Logging {
@@ -98,6 +100,10 @@ class TransactionStateManager(brokerId: Int,
   partitionLoadSensor.add(metrics.metricName("partition-load-time-avg",
     TransactionStateManagerConfigs.METRICS_GROUP,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
+
+  private[transaction] def usesFlexibleRecords(): Boolean = {
+    metadataCache.features().finalizedFeatures().getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort) > 0
+  }
 
   // visible for testing only
   private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
@@ -165,7 +171,7 @@ class TransactionStateManager(brokerId: Int,
                 if (recordsBuilder == null) {
                   recordsBuilder = MemoryRecords.builder(
                     ByteBuffer.allocate(math.min(16384, maxBatchSize)),
-                    TransactionLog.EnforcedCompressionType,
+                    TransactionLog.EnforcedCompression,
                     TimestampType.CREATE_TIME,
                     0L,
                     maxBatchSize
@@ -618,10 +624,10 @@ class TransactionStateManager(brokerId: Int,
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(newMetadata)
+    val valueBytes = TransactionLog.valueToBytes(newMetadata, usesFlexibleRecords())
     val timestamp = time.milliseconds()
 
-    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, new SimpleRecord(timestamp, keyBytes, valueBytes))
+    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val recordsPerPartition = Map(topicPartition -> records)
 
@@ -812,7 +818,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
                                                   transactionLogMinInsyncReplicas: Int = TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT,
                                                   abortTimedOutTransactionsIntervalMs: Int = TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT,
                                                   removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManagerConfigs.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT,
-                                                  requestTimeoutMs: Int = Defaults.REQUEST_TIMEOUT_MS)
+                                                  requestTimeoutMs: Int = ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT)
 
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {
   override def toString: String = {

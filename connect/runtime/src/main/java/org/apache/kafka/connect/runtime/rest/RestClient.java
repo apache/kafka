@@ -17,13 +17,15 @@
 
 package org.apache.kafka.connect.runtime.rest;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -35,9 +37,6 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -45,6 +44,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.Response;
 
 /**
  * Client for outbound REST requests to other members of a Connect cluster
@@ -189,16 +192,20 @@ public class RestClient {
                         Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
                         "Unexpected status code when handling forwarded request: " + responseCode);
             }
-        } catch (IOException | InterruptedException | TimeoutException | ExecutionException e) {
-            log.error("IO error forwarding REST request: ", e);
+        } catch (IOException | TimeoutException | ExecutionException e) {
+            log.error("IO error forwarding REST request to {} :", url, e);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            log.error("Thread was interrupted forwarding REST request to {} :", url, e);
+            Thread.currentThread().interrupt();
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Thread was interrupted trying to forward REST request: " + e.getMessage(), e);
         } catch (ConnectRestException e) {
             // catching any explicitly thrown ConnectRestException-s to preserve its status code
             // and to avoid getting it overridden by the more generic catch (Throwable) clause down below
-            log.error("Error forwarding REST request", e);
+            log.error("Error forwarding REST request to {} :", url, e);
             throw e;
         } catch (Throwable t) {
-            log.error("Error forwarding REST request", t);
+            log.error("Error forwarding REST request to {} :", url, t);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Error trying to forward REST request: " + t.getMessage(), t);
         }
     }

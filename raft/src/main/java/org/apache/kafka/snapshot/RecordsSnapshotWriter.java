@@ -17,37 +17,37 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.internals.BatchAccumulator;
-import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalLong;
 
-final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
-    final private RawSnapshotWriter snapshot;
-    final private BatchAccumulator<T> accumulator;
-    final private Time time;
+public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
+    private final RawSnapshotWriter snapshot;
+    private final BatchAccumulator<T> accumulator;
+    private final Time time;
 
     private RecordsSnapshotWriter(
         RawSnapshotWriter snapshot,
         int maxBatchSize,
         MemoryPool memoryPool,
         Time time,
-        CompressionType compressionType,
+        Compression compression,
         RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
@@ -58,9 +58,10 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             0,
             Integer.MAX_VALUE,
             maxBatchSize,
+            10, // maxNumberOfBatches
             memoryPool,
             time,
-            compressionType,
+            compression,
             serde
         );
     }
@@ -108,7 +109,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             throw new IllegalStateException(message);
         }
 
-        accumulator.append(snapshot.snapshotId().epoch(), records, OptionalLong.empty(), false);
+        accumulator.append(snapshot.snapshotId().epoch(), records, false);
 
         if (accumulator.needsDrain(time.milliseconds())) {
             appendBatches(accumulator.drain());
@@ -140,13 +141,13 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
     }
 
-    final public static class Builder {
+    public static final class Builder {
         private long lastContainedLogTimestamp = 0;
-        private CompressionType compressionType = CompressionType.NONE;
+        private Compression compression = Compression.NONE;
         private Time time = Time.SYSTEM;
         private int maxBatchSize = 1024;
         private MemoryPool memoryPool = MemoryPool.NONE;
-        private short kraftVersion = 1;
+        private KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
         private Optional<VoterSet> voterSet = Optional.empty();
         private Optional<RawSnapshotWriter> rawSnapshotWriter = Optional.empty();
 
@@ -155,8 +156,8 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             return this;
         }
 
-        public Builder setCompressionType(CompressionType compressionType) {
-            this.compressionType = compressionType;
+        public Builder setCompression(Compression compression) {
+            this.compression = compression;
             return this;
         }
 
@@ -180,7 +181,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             return this;
         }
 
-        public Builder setKraftVersion(short kraftVersion) {
+        public Builder setKraftVersion(KRaftVersion kraftVersion) {
             this.kraftVersion = kraftVersion;
             return this;
         }
@@ -197,7 +198,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 throw new IllegalStateException(
                     String.format("Initializing writer with a non-empty snapshot: %s", rawSnapshotWriter.get().snapshotId())
                 );
-            } else if (kraftVersion == 0 && voterSet.isPresent()) {
+            } else if (kraftVersion == KRaftVersion.KRAFT_VERSION_0 && voterSet.isPresent()) {
                 throw new IllegalStateException(
                     String.format("Voter set (%s) not expected when the kraft.version is 0", voterSet.get())
                 );
@@ -208,16 +209,16 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 maxBatchSize,
                 memoryPool,
                 time,
-                compressionType,
+                compression,
                 serde
             );
 
-            writer.accumulator.appendControlMessages((baseOffset, epoch, buffer) -> {
+            writer.accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
                 long now = time.milliseconds();
                 try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                         buffer,
                         RecordBatch.CURRENT_MAGIC_VALUE,
-                        compressionType,
+                        compression,
                         TimestampType.CREATE_TIME,
                         baseOffset,
                         now,
@@ -237,12 +238,12 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                             .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                     );
 
-                    if (kraftVersion > 0) {
+                    if (kraftVersion.isReconfigSupported()) {
                         builder.appendKRaftVersionMessage(
                             now,
                             new KRaftVersionRecord()
                                 .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
-                                .setKRaftVersion(kraftVersion)
+                                .setKRaftVersion(kraftVersion.featureLevel())
                         );
 
                         if (voterSet.isPresent()) {

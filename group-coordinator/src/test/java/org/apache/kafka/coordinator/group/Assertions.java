@@ -21,13 +21,17 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.opentest4j.AssertionFailedError;
 
 import java.nio.ByteBuffer;
@@ -64,9 +68,35 @@ public class Assertions {
         }
     }
 
+    public static void assertResponseEquals(
+        ShareGroupHeartbeatResponseData expected,
+        ShareGroupHeartbeatResponseData actual
+    ) {
+        if (!responseEquals(expected, actual)) {
+            assertionFailure()
+                .expected(expected)
+                .actual(actual)
+                .buildAndThrow();
+        }
+    }
+
     private static boolean responseEquals(
         ConsumerGroupHeartbeatResponseData expected,
         ConsumerGroupHeartbeatResponseData actual
+    ) {
+        if (expected.throttleTimeMs() != actual.throttleTimeMs()) return false;
+        if (expected.errorCode() != actual.errorCode()) return false;
+        if (!Objects.equals(expected.errorMessage(), actual.errorMessage())) return false;
+        if (!Objects.equals(expected.memberId(), actual.memberId())) return false;
+        if (expected.memberEpoch() != actual.memberEpoch()) return false;
+        if (expected.heartbeatIntervalMs() != actual.heartbeatIntervalMs()) return false;
+        // Unordered comparison of the assignments.
+        return responseAssignmentEquals(expected.assignment(), actual.assignment());
+    }
+
+    private static boolean responseEquals(
+        ShareGroupHeartbeatResponseData expected,
+        ShareGroupHeartbeatResponseData actual
     ) {
         if (expected.throttleTimeMs() != actual.throttleTimeMs()) return false;
         if (expected.errorCode() != actual.errorCode()) return false;
@@ -89,6 +119,17 @@ public class Assertions {
         return Objects.equals(fromAssignment(expected.topicPartitions()), fromAssignment(actual.topicPartitions()));
     }
 
+    private static boolean responseAssignmentEquals(
+        ShareGroupHeartbeatResponseData.Assignment expected,
+        ShareGroupHeartbeatResponseData.Assignment actual
+    ) {
+        if (expected == actual) return true;
+        if (expected == null) return false;
+        if (actual == null) return false;
+
+        return Objects.equals(fromShareGroupAssignment(expected.topicPartitions()), fromShareGroupAssignment(actual.topicPartitions()));
+    }
+
     private static Map<Uuid, Set<Integer>> fromAssignment(
         List<ConsumerGroupHeartbeatResponseData.TopicPartitions> assignment
     ) {
@@ -101,16 +142,28 @@ public class Assertions {
         return assignmentMap;
     }
 
+    private static Map<Uuid, Set<Integer>> fromShareGroupAssignment(
+        List<ShareGroupHeartbeatResponseData.TopicPartitions> assignment
+    ) {
+        if (assignment == null) return null;
+
+        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
+        assignment.forEach(topicPartitions -> {
+            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
+        });
+        return assignmentMap;
+    }
+
     public static void assertRecordsEquals(
-        List<Record> expectedRecords,
-        List<Record> actualRecords
+        List<CoordinatorRecord> expectedRecords,
+        List<CoordinatorRecord> actualRecords
     ) {
         try {
             assertEquals(expectedRecords.size(), actualRecords.size());
 
             for (int i = 0; i < expectedRecords.size(); i++) {
-                Record expectedRecord = expectedRecords.get(i);
-                Record actualRecord = actualRecords.get(i);
+                CoordinatorRecord expectedRecord = expectedRecords.get(i);
+                CoordinatorRecord actualRecord = actualRecords.get(i);
                 assertRecordEquals(expectedRecord, actualRecord);
             }
         } catch (AssertionFailedError e) {
@@ -122,8 +175,8 @@ public class Assertions {
     }
 
     public static void assertRecordEquals(
-        Record expected,
-        Record actual
+        CoordinatorRecord expected,
+        CoordinatorRecord actual
     ) {
         try {
             assertApiMessageAndVersionEquals(expected.key(), actual.key());
@@ -275,5 +328,30 @@ public class Assertions {
             assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()))
         );
         return assignmentMap;
+    }
+
+    public static void assertSyncGroupResponseEquals(
+        SyncGroupResponseData expected,
+        SyncGroupResponseData actual
+    ) {
+        SyncGroupResponseData expectedDuplicate = expected.duplicate();
+        SyncGroupResponseData actualDuplicate = actual.duplicate();
+
+        Arrays.asList(expectedDuplicate, actualDuplicate).forEach(duplicate -> {
+            try {
+                ConsumerPartitionAssignor.Assignment assignment =
+                    ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(duplicate.assignment()));
+                assignment.partitions().sort(
+                    Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                );
+                duplicate.setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
+                    assignment,
+                    ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(duplicate.assignment()))
+                )));
+            } catch (SchemaException ex) {
+                fail("Failed deserialization: " + ex.getMessage());
+            }
+        });
+        assertEquals(expectedDuplicate, actualDuplicate);
     }
 }

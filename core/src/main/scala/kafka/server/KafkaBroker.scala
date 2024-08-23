@@ -17,10 +17,8 @@
 
 package kafka.server
 
-import com.yammer.metrics.core.MetricName
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
-import kafka.metrics.LinuxIoMetricsCollector
 import kafka.network.SocketServer
 import kafka.utils.Logging
 import org.apache.kafka.common.ClusterResource
@@ -34,11 +32,10 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.util.Scheduler
 
 import java.time.Duration
-import java.util
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -98,24 +95,21 @@ trait KafkaBroker extends Logging {
   def awaitShutdown(): Unit
   def shutdown(): Unit = shutdown(Duration.ofMinutes(5))
   def shutdown(timeout: Duration): Unit
+  def isShutdown(): Boolean
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
   def clientToControllerChannelManager: NodeToControllerChannelManager
   def tokenCache: DelegationTokenCache
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass) {
-    // For backwards compatibility, we need to keep older metrics tied
-    // to their original name when this class was named `KafkaServer`
-    override def metricName(name: String, tags: util.Map[String, String]): MetricName = {
-      KafkaMetricsGroup.explicitMetricName(Server.MetricsPrefix, KafkaBroker.MetricsTypeName, name, tags)
-    }
-  }
+  // For backwards compatibility, we need to keep older metrics tied
+  // to their original name when this class was named `KafkaServer`
+  private val metricsGroup = new KafkaMetricsGroup(Server.MetricsPrefix, KafkaBroker.MetricsTypeName)
 
   metricsGroup.newGauge("BrokerState", () => brokerState.value)
   metricsGroup.newGauge("ClusterId", () => clusterId)
   metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
-  private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
+  private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM)
 
   if (linuxIoMetricsCollector.usable()) {
     metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())

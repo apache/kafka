@@ -22,6 +22,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.PositionSerde;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

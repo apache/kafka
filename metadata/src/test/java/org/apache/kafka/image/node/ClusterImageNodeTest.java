@@ -18,6 +18,7 @@
 package org.apache.kafka.image.node;
 
 import org.apache.kafka.image.ClusterImage;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -30,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 @Timeout(value = 40)
 public class ClusterImageNodeTest {
-    private final static ClusterImageNode NODE = new ClusterImageNode(ClusterImage.EMPTY);
+    private static final ClusterImageNode NODE = new ClusterImageNode(ClusterImage.EMPTY);
 
     @Test
     public void testChildNames() {

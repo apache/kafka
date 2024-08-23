@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import org.apache.kafka.common.protocol.types.Field.UUID;
+import java.util.UUID;
 
 /** A simple wrapper around UUID that abstracts a Process ID */
-public class ProcessId {
+public class ProcessId implements Comparable<ProcessId> {
 
     private final UUID id;
 
@@ -33,5 +33,40 @@ public class ProcessId {
      */
     public UUID id() {
         return id;
+    }
+
+    /**
+     *
+     * @return a randomly generated process id
+     */
+    public static ProcessId randomProcessId() {
+        return new ProcessId(UUID.randomUUID());
+    }
+
+    @Override
+    public String toString() {
+        return id.toString();
+    }
+
+    @Override
+    public int hashCode() {
+        return id.hashCode();
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        final ProcessId other = (ProcessId) obj;
+        return this.id.equals(other.id());
+    }
+
+    @Override
+    public int compareTo(final ProcessId o) {
+        return this.id.compareTo(o.id);
     }
 }

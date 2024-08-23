@@ -22,14 +22,13 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions.{assertThrows, fail}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{Tag, Timeout}
 
 import java.util.Optional
 import java.util.concurrent.{TimeUnit, TimeoutException}
@@ -43,11 +42,10 @@ import scala.jdk.CollectionConverters._
  * of just the broker registration path.
  */
 @Timeout(120)
-@Tag("integration")
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class KafkaServerKRaftRegistrationTest {
 
-  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
+  @ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
     new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
     new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
     new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
@@ -60,7 +58,7 @@ class KafkaServerKRaftRegistrationTest {
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -95,14 +93,14 @@ class KafkaServerKRaftRegistrationTest {
     }
   }
 
-  @ClusterTest(clusterType = Type.ZK, brokers = 3, metadataVersion = MetadataVersion.IBP_3_3_IV0)
+  @ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_3_IV0)
   def testRestartOldIbpZkBrokerInMigrationMode(zkCluster: ClusterInstance): Unit = {
     // Bootstrap the ZK cluster ID into KRaft
     val clusterId = zkCluster.clusterId()
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-        setClusterId(Uuid.fromString(clusterId)).
+        setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")

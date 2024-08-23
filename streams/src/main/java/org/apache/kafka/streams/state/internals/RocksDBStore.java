@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
@@ -40,6 +39,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
+
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -79,12 +79,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
-import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.getMetricsImpl;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.metricsImpl;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -171,7 +172,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public void init(final StateStoreContext context,
                      final StateStore root) {
         // open the DB dir
-        metricsRecorder.init(getMetricsImpl(context), context.taskId());
+        metricsRecorder.init(metricsImpl(context), context.taskId());
         openDB(context.appConfigs(), context.stateDir());
 
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");

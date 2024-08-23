@@ -27,7 +27,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.network.{ListenerName, ConnectionMode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
@@ -62,7 +62,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   override def generateConfigs: Seq[KafkaConfig] = {
-
     val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     configureListeners(cfgs)
@@ -72,6 +71,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     }
     if (isNewGroupCoordinatorEnabled()) {
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
+      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer"))
     }
 
     if(isKRaftTest()) {
@@ -162,7 +162,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def clientSecurityProps(certAlias: String): Properties = {
-    TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, certAlias, TestUtils.SslCertificateCn,
+    TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, certAlias, TestUtils.SslCertificateCn,
       clientSaslProperties)
   }
 
@@ -220,16 +220,18 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    producers.foreach(_.close(Duration.ZERO))
-    consumers.foreach(_.wakeup())
-    consumers.foreach(_.close(Duration.ZERO))
-    adminClients.foreach(_.close(Duration.ZERO))
+    try {
+      producers.foreach(_.close(Duration.ZERO))
+      consumers.foreach(_.wakeup())
+      consumers.foreach(_.close(Duration.ZERO))
+      adminClients.foreach(_.close(Duration.ZERO))
 
-    producers.clear()
-    consumers.clear()
-    adminClients.clear()
-
-    super.tearDown()
+      producers.clear()
+      consumers.clear()
+      adminClients.clear()
+    } finally {
+      super.tearDown()
+    }
   }
 
 }

@@ -32,6 +32,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
+import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
+import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
+
 /**
  * QuorumConfig encapsulates configuration specific to the cluster metadata KRaft replicas.
  *
@@ -54,6 +60,13 @@ public class QuorumConfig {
         "For example: <code>1@localhost:9092,2@localhost:9093,3@localhost:9094</code>";
     public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
+    public static final String QUORUM_BOOTSTRAP_SERVERS_CONFIG = QUORUM_PREFIX + "bootstrap.servers";
+    public static final String QUORUM_BOOTSTRAP_SERVERS_DOC = "List of endpoints to use for " +
+        "bootstrapping the cluster metadata. The endpoints are specified in comma-separated list " +
+        "of <code>{host}:{port}</code> entries. For example: " +
+        "<code>localhost:9092,localhost:9093,localhost:9094</code>.";
+    public static final List<String> DEFAULT_QUORUM_BOOTSTRAP_SERVERS = Collections.emptyList();
+
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
         "without being able to fetch from the leader before triggering a new election";
@@ -73,6 +86,7 @@ public class QuorumConfig {
     public static final String QUORUM_LINGER_MS_CONFIG = QUORUM_PREFIX + "append.linger.ms";
     public static final String QUORUM_LINGER_MS_DOC = "The duration in milliseconds that the leader will " +
         "wait for writes to accumulate before flushing them to disk.";
+
     public static final int DEFAULT_QUORUM_LINGER_MS = 25;
 
     public static final String QUORUM_REQUEST_TIMEOUT_MS_CONFIG = QUORUM_PREFIX +
@@ -84,6 +98,16 @@ public class QuorumConfig {
         CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
     public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
+
+    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
+            .define(QUORUM_VOTERS_CONFIG, LIST, DEFAULT_QUORUM_VOTERS, new ControllerQuorumVotersValidator(), HIGH, QUORUM_VOTERS_DOC)
+            .define(QUORUM_BOOTSTRAP_SERVERS_CONFIG, LIST, DEFAULT_QUORUM_BOOTSTRAP_SERVERS, new ControllerQuorumBootstrapServersValidator(), HIGH, QUORUM_BOOTSTRAP_SERVERS_DOC)
+            .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_TIMEOUT_MS, null, HIGH, QUORUM_ELECTION_TIMEOUT_MS_DOC)
+            .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_FETCH_TIMEOUT_MS, null, HIGH, QUORUM_FETCH_TIMEOUT_MS_DOC)
+            .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS, null, HIGH, QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
+            .define(QUORUM_LINGER_MS_CONFIG, INT, DEFAULT_QUORUM_LINGER_MS, null, MEDIUM, QUORUM_LINGER_MS_DOC)
+            .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, null, MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
+            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, null, LOW, QUORUM_RETRY_BACKOFF_MS_DOC);
 
     private final int requestTimeoutMs;
     private final int retryBackoffMs;
@@ -163,7 +187,7 @@ public class QuorumConfig {
         List<String> voterEntries,
         boolean requireRoutableAddresses
     ) {
-        Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
+        Map<Integer, InetSocketAddress> voterMap = new HashMap<>(voterEntries.size());
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
             if (idAndAddress.length != 2) {
@@ -173,7 +197,7 @@ public class QuorumConfig {
 
             Integer voterId = parseVoterId(idAndAddress[0]);
             String host = Utils.getHost(idAndAddress[1]);
-            if (host == null) {
+            if (host == null || !Utils.validHostPattern(host)) {
                 throw new ConfigException("Failed to parse host name from entry " + voterMapEntry
                     + " for the configuration " + QUORUM_VOTERS_CONFIG
                     + ". Each entry should be in the form `{id}@{host}:{port}`.");
@@ -189,7 +213,7 @@ public class QuorumConfig {
             InetSocketAddress address = new InetSocketAddress(host, port);
             if (address.getHostString().equals(NON_ROUTABLE_HOST) && requireRoutableAddresses) {
                 throw new ConfigException(
-                    String.format("Host string ({}) is not routeable", address.getHostString())
+                    String.format("Host string (%s) is not routeable", address.getHostString())
                 );
             } else {
                 voterMap.put(voterId, address);
@@ -197,6 +221,41 @@ public class QuorumConfig {
         }
 
         return voterMap;
+    }
+
+    public static List<InetSocketAddress> parseBootstrapServers(List<String> bootstrapServers) {
+        return bootstrapServers
+            .stream()
+            .map(QuorumConfig::parseBootstrapServer)
+            .collect(Collectors.toList());
+    }
+
+    private static InetSocketAddress parseBootstrapServer(String bootstrapServer) {
+        String host = Utils.getHost(bootstrapServer);
+        if (host == null || !Utils.validHostPattern(host)) {
+            throw new ConfigException(
+                String.format(
+                    "Failed to parse host name from %s for the configuration %s. Each " +
+                    "entry should be in the form \"{host}:{port}\"",
+                    bootstrapServer,
+                    QUORUM_BOOTSTRAP_SERVERS_CONFIG
+                )
+            );
+        }
+
+        Integer port = Utils.getPort(bootstrapServer);
+        if (port == null) {
+            throw new ConfigException(
+                String.format(
+                    "Failed to parse host port from %s for the configuration %s. Each " +
+                    "entry should be in the form \"{host}:{port}\"",
+                    bootstrapServer,
+                    QUORUM_BOOTSTRAP_SERVERS_CONFIG
+                )
+            );
+        }
+
+        return InetSocketAddress.createUnresolved(host, port);
     }
 
     public static List<Node> quorumVoterStringsToNodes(List<String> voters) {
@@ -224,6 +283,28 @@ public class QuorumConfig {
 
             // Attempt to parse the connect strings
             parseVoterConnections(voterStrings, false);
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty list";
+        }
+    }
+
+    public static class ControllerQuorumBootstrapServersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                throw new ConfigException(name, null);
+            }
+
+            @SuppressWarnings("unchecked")
+            List<String> entries = (List<String>) value;
+
+            // Attempt to parse the connect strings
+            for (String entry : entries) {
+                parseBootstrapServer(entry);
+            }
         }
 
         @Override

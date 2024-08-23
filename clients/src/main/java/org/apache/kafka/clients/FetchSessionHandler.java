@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -599,7 +600,9 @@ public class FetchSessionHandler {
      * The client will initiate the session close on next fetch request.
      */
     public void notifyClose() {
-        log.debug("Set the metadata for next fetch request to close the existing session ID={}", nextMetadata.sessionId());
+        if (log.isDebugEnabled()) {
+            log.debug("Set the metadata for next fetch request to close the existing session ID={}", nextMetadata.sessionId());
+        }
         nextMetadata = nextMetadata.nextCloseExisting();
     }
 

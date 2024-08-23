@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeAclsResult;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -28,52 +31,19 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.connector.ConnectorContext;
-import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.NewTopic;
-
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
-import org.junit.jupiter.api.Test;
 
-import static org.apache.kafka.clients.admin.AdminClientTestUtils.alterConfigsResult;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
-import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
-import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
-import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_LAG_MAX;
-import static org.apache.kafka.connect.mirror.MirrorSourceConfig.TASK_TOPIC_PARTITIONS;
-import static org.apache.kafka.connect.mirror.MirrorUtils.PARTITION_KEY;
-import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
-import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
-import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import org.apache.log4j.Level;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -88,6 +58,37 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.admin.AdminClientTestUtils.alterConfigsResult;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.SOURCE_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_LAG_MAX;
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.TASK_TOPIC_PARTITIONS;
+import static org.apache.kafka.connect.mirror.MirrorUtils.PARTITION_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
+import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 public class MirrorSourceConnectorTest {
     private ConfigPropertyFilter getConfigPropertyFilter() {
@@ -104,10 +105,16 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testReplicatesHeartbeatsDespiteFilter() {
+        DefaultReplicationPolicy defaultReplicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> false, new DefaultConfigPropertyFilter());
+            defaultReplicationPolicy, x -> false, new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
+
+        Map<String, ?> configs = Collections.singletonMap(DefaultReplicationPolicy.SEPARATOR_CONFIG, "_");
+        defaultReplicationPolicy.configure(configs);
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
+        assertFalse(connector.shouldReplicateTopic("us-west.heartbeats"), "should not consider this topic as a heartbeats topic");
     }
 
     @Test
@@ -196,7 +203,7 @@ public class MirrorSourceConnectorTest {
         when(sourceAdmin.describeAcls(any())).thenReturn(describeAclsResult);
 
         try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class)) {
-            connectorLogs.setClassLoggerToTrace(MirrorSourceConnector.class);
+            connectorLogs.setClassLogger(MirrorSourceConnector.class, Level.TRACE);
             connector.syncTopicAcls();
             long aclSyncDisableMessages = connectorLogs.getMessages().stream()
                     .filter(m -> m.contains("Consider disabling topic ACL syncing"))
@@ -244,7 +251,7 @@ public class MirrorSourceConnectorTest {
         when(sourceAdmin.describeConfigs(any())).thenReturn(describeConfigsResult);
 
         try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorUtils.class)) {
-            connectorLogs.setClassLoggerToTrace(MirrorUtils.class);
+            connectorLogs.setClassLogger(MirrorUtils.class, Level.TRACE);
             Set<String> topics = new HashSet<>();
             topics.add("topic1");
             topics.add("topic2");

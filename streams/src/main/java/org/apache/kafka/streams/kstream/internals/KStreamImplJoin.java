@@ -172,8 +172,7 @@ class KStreamImplJoin {
         final TimeTrackerSupplier sharedTimeTrackerSupplier = new TimeTrackerSupplier();
 
         final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
-        final KStreamKStreamJoin<K, V1, V2, VOut> joinThis = new KStreamKStreamJoin<>(
-            true,
+        final KStreamKStreamJoinLeftSide<K, V1, V2, VOut> joinThis = new KStreamKStreamJoinLeftSide<>(
             otherWindowStore.name(),
             internalWindows,
             joiner,
@@ -182,8 +181,7 @@ class KStreamImplJoin {
             sharedTimeTrackerSupplier
         );
 
-        final KStreamKStreamJoin<K, V2, V1, VOut> joinOther = new KStreamKStreamJoin<>(
-            false,
+        final KStreamKStreamJoinRightSide<K, V1, V2, VOut> joinOther = new KStreamKStreamJoinRightSide<>(
             thisWindowStore.name(),
             internalWindows,
             AbstractStream.reverseJoinerWithKey(joiner),

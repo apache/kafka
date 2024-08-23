@@ -32,6 +32,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics => kMetrics}
@@ -80,16 +81,15 @@ class GroupMetadataManagerTest {
 
   private val offsetConfig = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
-    new OffsetConfig(config.offsetMetadataMaxSize,
-      config.offsetsLoadBufferSize,
-      config.offsetsRetentionMinutes * 60 * 1000L,
-      config.offsetsRetentionCheckIntervalMs,
-      config.offsetsTopicPartitions,
-      config.offsetsTopicSegmentBytes,
-      config.offsetsTopicReplicationFactor,
-      config.offsetsTopicCompressionType,
-      config.offsetCommitTimeoutMs,
-      config.offsetCommitRequiredAcks)
+    new OffsetConfig(config.groupCoordinatorConfig.offsetMetadataMaxSize,
+      config.groupCoordinatorConfig.offsetsLoadBufferSize,
+      config.groupCoordinatorConfig.offsetsRetentionMs,
+      config.groupCoordinatorConfig.offsetsRetentionCheckIntervalMs,
+      config.groupCoordinatorConfig.offsetsTopicPartitions,
+      config.groupCoordinatorConfig.offsetsTopicSegmentBytes,
+      config.groupCoordinatorConfig.offsetsTopicReplicationFactor,
+      config.groupCoordinatorConfig.offsetTopicCompressionType,
+      config.groupCoordinatorConfig.offsetCommitTimeoutMs)
   }
 
   @BeforeEach
@@ -146,7 +146,7 @@ class GroupMetadataManagerTest {
     )
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, offsetCommitRecords.toArray: _*)
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE, offsetCommitRecords.toArray: _*)
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
     groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, groupEpoch, _ => (), 0L)
@@ -175,7 +175,7 @@ class GroupMetadataManagerTest {
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val groupMetadataRecord = buildEmptyGroupRecord(generation, protocolType)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -564,7 +564,7 @@ class GroupMetadataManagerTest {
   }
 
   private def appendConsumerOffsetCommit(buffer: ByteBuffer, baseOffset: Long, offsets: Map[TopicPartition, Long]) = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, baseOffset)
+    val builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.LOG_APPEND_TIME, baseOffset)
     val commitRecords = createCommittedOffsetRecords(offsets)
     commitRecords.foreach(builder.append)
     builder.build()
@@ -573,7 +573,7 @@ class GroupMetadataManagerTest {
 
   private def appendTransactionalOffsetCommits(buffer: ByteBuffer, producerId: Long, producerEpoch: Short,
                                                baseOffset: Long, offsets: Map[TopicPartition, Long]): Int = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, baseOffset, producerId, producerEpoch, 0, true)
+    val builder = MemoryRecords.builder(buffer, Compression.NONE, baseOffset, producerId, producerEpoch, 0, true)
     val commitRecords = createCommittedOffsetRecords(offsets)
     commitRecords.foreach(builder.append)
     builder.build()
@@ -582,7 +582,7 @@ class GroupMetadataManagerTest {
 
   private def completeTransactionalOffsetCommit(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, baseOffset: Long,
                                                 isCommit: Boolean): Int = {
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
       TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), producerId, producerEpoch, 0, true, true,
       RecordBatch.NO_PARTITION_LEADER_EPOCH)
     val controlRecordType = if (isCommit) ControlRecordType.COMMIT else ControlRecordType.ABORT
@@ -606,7 +606,7 @@ class GroupMetadataManagerTest {
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val tombstone = new SimpleRecord(GroupMetadataManager.offsetCommitKey(groupId, tombstonePartition), null)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(tombstone)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -645,7 +645,7 @@ class GroupMetadataManagerTest {
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
 
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -754,7 +754,7 @@ class GroupMetadataManagerTest {
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation = 15,
       protocolType = "consumer", protocol = "range", memberId)
     val groupMetadataTombstone = new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       Seq(groupMetadataRecord, groupMetadataTombstone).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -782,7 +782,7 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation = 15,
       protocolType = "consumer", protocol = "range", memberId, new Array[Byte](assignmentSize))
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -843,7 +843,7 @@ class GroupMetadataManagerTest {
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
     val groupMetadataTombstone = new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (Seq(groupMetadataRecord, groupMetadataTombstone) ++ offsetCommitRecords).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -877,14 +877,14 @@ class GroupMetadataManagerTest {
 
     val segment1MemberId = "a"
     val segment1Offsets = Map(tp0 -> 23L, tp1 -> 455L, tp3 -> 42L)
-    val segment1Records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val segment1Records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (createCommittedOffsetRecords(segment1Offsets) ++ Seq(buildStableGroupRecordWithMember(
         generation, protocolType, protocol, segment1MemberId))).toArray: _*)
     val segment1End = startOffset + segment1Records.records.asScala.size
 
     val segment2MemberId = "b"
     val segment2Offsets = Map(tp0 -> 33L, tp2 -> 8992L, tp3 -> 10L)
-    val segment2Records = MemoryRecords.withRecords(segment1End, CompressionType.NONE,
+    val segment2Records = MemoryRecords.withRecords(segment1End, Compression.NONE,
       (createCommittedOffsetRecords(segment2Offsets) ++ Seq(buildStableGroupRecordWithMember(
         generation, protocolType, protocol, segment2MemberId))).toArray: _*)
     val segment2End = segment1End + segment2Records.records.asScala.size
@@ -1662,6 +1662,134 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testOffsetMetadataTooLargePartialFailure(): Unit = {
+    val memberId = ""
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val validTopicIdPartition = new TopicIdPartition(topicIdPartition.topicId, 1, "foo")
+    val offset = 37
+    val requireStable = true;
+
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
+    val group = new GroupMetadata(groupId, Empty, time)
+    groupMetadataManager.addGroup(group)
+
+    val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
+    val offsets = immutable.Map(
+      topicIdPartition -> OffsetAndMetadata(offset, "s" * (offsetConfig.maxMetadataSize + 1) , time.milliseconds()),
+      validTopicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds())
+    )
+
+    expectAppendMessage(Errors.NONE)
+
+    var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
+    def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
+      commitErrors = Some(errors)
+    }
+
+    assertEquals(0, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
+    groupMetadataManager.storeOffsets(group, memberId, offsetTopicPartition, offsets, callback, verificationGuard = None)
+    assertTrue(group.hasOffsets)
+
+    assertEquals(Some(Map(
+      topicIdPartition -> Errors.OFFSET_METADATA_TOO_LARGE,
+      validTopicIdPartition -> Errors.NONE)
+    ), commitErrors)
+
+    val cachedOffsets = groupMetadataManager.getOffsets(
+      groupId,
+      requireStable,
+      Some(Seq(topicIdPartition.topicPartition, validTopicIdPartition.topicPartition))
+    )
+
+    assertEquals(
+      Some(OffsetFetchResponse.INVALID_OFFSET),
+      cachedOffsets.get(topicIdPartition.topicPartition).map(_.offset)
+    )
+    assertEquals(
+      Some(Errors.NONE),
+      cachedOffsets.get(topicIdPartition.topicPartition).map(_.error)
+    )
+    assertEquals(
+      Some(offset),
+      cachedOffsets.get(validTopicIdPartition.topicPartition).map(_.offset)
+    )
+
+    assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
+  }
+
+  @Test
+  def testTransactionalCommitOffsetWithOffsetMetadataTooLargePartialFailure(): Unit = {
+    val memberId = ""
+    val foo0 = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val foo1 = new TopicIdPartition(Uuid.randomUuid(), 1, "foo")
+    val producerId = 232L
+    val producerEpoch = 0.toShort
+
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
+
+    val group = new GroupMetadata(groupId, Empty, time)
+    groupMetadataManager.addGroup(group)
+
+    val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataManager.partitionFor(group.groupId))
+    val offsets = immutable.Map(
+      foo0 -> OffsetAndMetadata(37, "", time.milliseconds()),
+      foo1 -> OffsetAndMetadata(38, "s" * (offsetConfig.maxMetadataSize + 1), time.milliseconds())
+    )
+
+    val capturedResponseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
+
+    def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
+      commitErrors = Some(errors)
+    }
+
+    val verificationGuard = new VerificationGuard()
+
+    groupMetadataManager.storeOffsets(
+      group,
+      memberId,
+      offsetTopicPartition,
+      offsets,
+      callback,
+      producerId,
+      producerEpoch,
+      verificationGuard = Some(verificationGuard)
+    )
+    assertTrue(group.hasOffsets)
+    assertTrue(group.allOffsets.isEmpty)
+
+    verify(replicaManager).appendRecords(anyLong(),
+      anyShort(),
+      any(),
+      any(),
+      any[Map[TopicPartition, MemoryRecords]],
+      capturedResponseCallback.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any(),
+      any(),
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
+    verify(replicaManager).getMagic(any())
+    capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
+      new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+
+    assertEquals(Some(Map(
+      foo0 -> Errors.NONE,
+      foo1 -> Errors.OFFSET_METADATA_TOO_LARGE
+    )), commitErrors)
+
+    assertTrue(group.hasOffsets)
+    assertTrue(group.allOffsets.isEmpty)
+
+    group.completePendingTxnOffsetCommit(producerId, isCommit = true)
+    assertTrue(group.hasOffsets)
+    assertFalse(group.allOffsets.isEmpty)
+    assertEquals(offsets.get(foo0), group.offset(foo0.topicPartition))
+  }
+
+  @Test
   def testExpireOffset(): Unit = {
     val memberId = ""
     val topicIdPartition1 = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
@@ -2350,7 +2478,7 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets, metadataVersion = metadataVersion, retentionTimeOpt = Some(100))
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, metadataVersion = metadataVersion)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -2389,7 +2517,7 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets, retentionTimeOpt = Some(100))
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -2729,7 +2857,7 @@ class GroupMetadataManagerTest {
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val groupMetadataRecord = buildEmptyGroupRecord(generation, protocolType)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     // Prepend empty control batch to valid records
@@ -2946,7 +3074,7 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation = 15,
       protocolType = "consumer", protocol = "range", memberId)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -2993,7 +3121,7 @@ class GroupMetadataManagerTest {
     val unknownRecord1 = new SimpleRecord(unknownMessage1, unknownMessage1)
     val unknownRecord2 = new SimpleRecord(unknownMessage2, unknownMessage2)
 
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
       (offsetCommitRecords ++ Seq(unknownRecord1, unknownRecord2) ++ Seq(groupMetadataRecord)).toArray: _*)
 
     expectGroupMetadataLoad(groupTopicPartition, startOffset, records)

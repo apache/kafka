@@ -21,6 +21,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.MockDeserializer;
 import org.apache.kafka.tools.ToolsTestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -644,5 +645,68 @@ public class ConsoleConsumerOptionsTest {
             "--timeout-ms", "100"
         };
         assertEquals(100, new ConsoleConsumerOptions(validTimeoutMs).timeoutMs());
+    }
+
+    @Test
+    public void testParseDeprecatedFormatter() throws Exception {
+        String[] deprecatedDefaultMessageFormatter = generateArgsForFormatter("kafka.tools.DefaultMessageFormatter");
+        assertInstanceOf(DefaultMessageFormatter.class, new ConsoleConsumerOptions(deprecatedDefaultMessageFormatter).formatter());
+
+        String[] deprecatedLoggingMessageFormatter = generateArgsForFormatter("kafka.tools.LoggingMessageFormatter");
+        assertInstanceOf(LoggingMessageFormatter.class, new ConsoleConsumerOptions(deprecatedLoggingMessageFormatter).formatter());
+
+        String[] deprecatedNoOpMessageFormatter = generateArgsForFormatter("kafka.tools.NoOpMessageFormatter");
+        assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(deprecatedNoOpMessageFormatter).formatter());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testNewAndDeprecateTransactionLogMessageFormatter() throws Exception {
+        String[] deprecatedTransactionLogMessageFormatter = 
+                generateArgsForFormatter("kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter");
+        assertInstanceOf(kafka.coordinator.transaction.TransactionLog.TransactionLogMessageFormatter.class, 
+                new ConsoleConsumerOptions(deprecatedTransactionLogMessageFormatter).formatter());
+
+        String[] transactionLogMessageFormatter = 
+                generateArgsForFormatter("org.apache.kafka.tools.consumer.TransactionLogMessageFormatter");
+        assertInstanceOf(TransactionLogMessageFormatter.class, 
+                new ConsoleConsumerOptions(transactionLogMessageFormatter).formatter());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testNewAndDeprecateOffsetsMessageFormatter() throws Exception {
+        String[] deprecatedOffsetsMessageFormatter = 
+                generateArgsForFormatter("kafka.coordinator.group.GroupMetadataManager$OffsetsMessageFormatter");
+        assertInstanceOf(kafka.coordinator.group.GroupMetadataManager.OffsetsMessageFormatter.class,
+                new ConsoleConsumerOptions(deprecatedOffsetsMessageFormatter).formatter());
+
+        String[] offsetsMessageFormatter = 
+                generateArgsForFormatter("org.apache.kafka.tools.consumer.OffsetsMessageFormatter");
+        assertInstanceOf(OffsetsMessageFormatter.class,
+                new ConsoleConsumerOptions(offsetsMessageFormatter).formatter());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testNewAndDeprecateGroupMetadataMessageFormatter() throws Exception {
+        String[] deprecatedGroupMetadataMessageFormatter =
+                generateArgsForFormatter("kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter");
+        assertInstanceOf(kafka.coordinator.group.GroupMetadataManager.GroupMetadataMessageFormatter.class,
+                new ConsoleConsumerOptions(deprecatedGroupMetadataMessageFormatter).formatter());
+
+        String[] groupMetadataMessageFormatter =
+                generateArgsForFormatter("org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+        assertInstanceOf(GroupMetadataMessageFormatter.class,
+                new ConsoleConsumerOptions(groupMetadataMessageFormatter).formatter());
+    }
+    
+    private String[] generateArgsForFormatter(String formatter) {
+        return new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", formatter,
+        };
     }
 }

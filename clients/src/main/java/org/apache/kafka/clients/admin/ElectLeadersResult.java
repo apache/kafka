@@ -18,15 +18,15 @@
 package org.apache.kafka.clients.admin;
 
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * The result of {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}
@@ -34,7 +34,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-final public class ElectLeadersResult {
+public final class ElectLeadersResult {
     private final KafkaFuture<Map<TopicPartition, Optional<Throwable>>> electionFuture;
 
     ElectLeadersResult(KafkaFuture<Map<TopicPartition, Optional<Throwable>>> electionFuture) {

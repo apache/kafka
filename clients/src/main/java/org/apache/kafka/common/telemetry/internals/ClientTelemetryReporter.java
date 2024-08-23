@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.common.telemetry.internals;
 
-import io.opentelemetry.proto.metrics.v1.Metric;
-import io.opentelemetry.proto.metrics.v1.MetricsData;
-import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
-import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
@@ -42,6 +37,7 @@ import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.telemetry.ClientTelemetryState;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +56,11 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Predicate;
+
+import io.opentelemetry.proto.metrics.v1.Metric;
+import io.opentelemetry.proto.metrics.v1.MetricsData;
+import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
+import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
 
 /**
  * The implementation of the {@link MetricsReporter} for client telemetry which manages the life-cycle
@@ -492,6 +493,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
             lock.writeLock().lock();
             try {
+                /*
+                 This is the case when client began termination sometime after the last push request
+                 was issued. Just getting the callback, hence need to ignore it.
+                */
+                if (isTerminatingState()) {
+                    return;
+                }
+
                 Optional<Integer> errorIntervalMsOpt = ClientTelemetryUtils.maybeFetchErrorIntervalMs(data.errorCode(),
                     subscription.pushIntervalMs());
                 /*
@@ -500,14 +509,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  and the push retried.
                 */
                 if (errorIntervalMsOpt.isPresent()) {
-                    /*
-                     This is the case when client began termination sometime after the last push request
-                     was issued. Just getting the callback, hence need to ignore it.
-                    */
-                    if (isTerminatingState()) {
-                        return;
-                    }
-
                     if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
                         log.warn("Unable to transition state after failed push telemetry from state {}", state);
                     }

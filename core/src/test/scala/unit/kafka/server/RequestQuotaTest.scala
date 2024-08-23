@@ -14,11 +14,12 @@
 
 package kafka.server
 
-import kafka.api.LeaderAndIsr
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl._
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
@@ -41,10 +42,11 @@ import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResou
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, QuotaConfigs}
+import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -77,23 +79,23 @@ class RequestQuotaTest extends BaseRequestTest {
   private val tasks = new ListBuffer[Task]
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
+    properties.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.put(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100")
     properties.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
-    properties.put(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
-    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
+    properties.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
     if (isKRaftTest()) {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[RequestQuotaTest.KraftTestAuthorizer].getName)
+      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[RequestQuotaTest.KraftTestAuthorizer].getName)
     } else {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[RequestQuotaTest.ZkTestAuthorizer].getName)
+      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[RequestQuotaTest.ZkTestAuthorizer].getName)
     }
   }
 
   override def kraftControllerConfigs(): Seq[Properties] = {
     val properties = new Properties()
-    properties.put(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
+    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
     Seq(properties)
   }
 
@@ -178,7 +180,7 @@ class RequestQuotaTest extends BaseRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testExemptRequestTime(quorum: String): Unit = {
     // Exclude `DESCRIBE_QUORUM`, maybe it shouldn't be a cluster action
-    val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope - ApiKeys.DESCRIBE_QUORUM
+    val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope -- RequestQuotaTest.ShareGroupState - ApiKeys.DESCRIBE_QUORUM
     for (apiKey <- actions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
     }
@@ -266,7 +268,7 @@ class RequestQuotaTest extends BaseRequestTest {
                 .setName(tp.topic()).setPartitionData(Collections.singletonList(
                 new ProduceRequestData.PartitionProduceData()
                   .setIndex(tp.partition())
-                  .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+                  .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
                 .iterator))
             .setAcks(1.toShort)
             .setTimeoutMs(5000))
@@ -286,7 +288,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setPartitionIndex(tp.partition)
               .setTimestamp(0L)
               .setCurrentLeaderEpoch(15)).asJava)
-          ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+          ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false)
             .setTargetTimes(List(topic).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
@@ -310,7 +312,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setTopicName(tp.topic())
               .setPartitionStates(Seq(new StopReplicaPartitionState()
                 .setPartitionIndex(tp.partition())
-                .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
+                .setLeaderEpoch(LeaderAndIsr.INITIAL_LEADER_EPOCH + 2)
                 .setDeletePartition(true)).asJava)
           ).asJava
           new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
@@ -636,10 +638,10 @@ class RequestQuotaTest extends BaseRequestTest {
           new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
 
         case ApiKeys.VOTE =>
-          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, 1, 2, 0, 10))
+          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, null, 1, 2, 0, 10))
 
         case ApiKeys.BEGIN_QUORUM_EPOCH =>
-          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, 2, 5))
+          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, null, 2, 5))
 
         case ApiKeys.END_QUORUM_EPOCH =>
           new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
@@ -702,10 +704,10 @@ class RequestQuotaTest extends BaseRequestTest {
           new ConsumerGroupDescribeRequest.Builder(new ConsumerGroupDescribeRequestData(), true)
 
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS =>
-          new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData(), true)
+          new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData())
 
         case ApiKeys.PUSH_TELEMETRY =>
-          new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true)
+          new PushTelemetryRequest.Builder(new PushTelemetryRequestData())
 
         case ApiKeys.ASSIGN_REPLICAS_TO_DIRS =>
           new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData())
@@ -715,6 +717,42 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.DESCRIBE_TOPIC_PARTITIONS =>
           new DescribeTopicPartitionsRequest.Builder(new DescribeTopicPartitionsRequestData())
+
+        case ApiKeys.SHARE_GROUP_HEARTBEAT =>
+          new ShareGroupHeartbeatRequest.Builder(new ShareGroupHeartbeatRequestData(), true)
+
+        case ApiKeys.SHARE_GROUP_DESCRIBE =>
+          new ShareGroupDescribeRequest.Builder(new ShareGroupDescribeRequestData(), true)
+
+        case ApiKeys.SHARE_FETCH =>
+          new ShareFetchRequest.Builder(new ShareFetchRequestData(), true)
+
+        case ApiKeys.SHARE_ACKNOWLEDGE =>
+          new ShareAcknowledgeRequest.Builder(new ShareAcknowledgeRequestData(), true)
+
+        case ApiKeys.ADD_RAFT_VOTER =>
+          new AddRaftVoterRequest.Builder(new AddRaftVoterRequestData())
+
+        case ApiKeys.REMOVE_RAFT_VOTER =>
+          new RemoveRaftVoterRequest.Builder(new RemoveRaftVoterRequestData())
+
+        case ApiKeys.UPDATE_RAFT_VOTER =>
+          new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
+
+        case ApiKeys.INITIALIZE_SHARE_GROUP_STATE =>
+          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), true)
+
+        case ApiKeys.READ_SHARE_GROUP_STATE =>
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), true)
+
+        case ApiKeys.WRITE_SHARE_GROUP_STATE =>
+          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), true)
+
+        case ApiKeys.DELETE_SHARE_GROUP_STATE =>
+          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), true)
+
+        case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), true)
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -837,6 +875,8 @@ class RequestQuotaTest extends BaseRequestTest {
 object RequestQuotaTest {
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
   val Envelope = Set(ApiKeys.ENVELOPE)
+  val ShareGroupState = Set(ApiKeys.INITIALIZE_SHARE_GROUP_STATE, ApiKeys.READ_SHARE_GROUP_STATE, ApiKeys.WRITE_SHARE_GROUP_STATE,
+    ApiKeys.DELETE_SHARE_GROUP_STATE, ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY)
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

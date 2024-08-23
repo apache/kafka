@@ -17,6 +17,7 @@
 package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.internals.Topic;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +54,7 @@ public abstract class TopicFilter {
     }
 
     public static class IncludeList extends TopicFilter {
-        private final Logger log = LoggerFactory.getLogger(IncludeList.class);
+        private static final Logger log = LoggerFactory.getLogger(IncludeList.class);
         public IncludeList(String rawRegex) {
             super(rawRegex);
         }

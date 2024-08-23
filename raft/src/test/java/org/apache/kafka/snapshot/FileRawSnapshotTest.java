@@ -16,17 +16,18 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.UnalignedFileRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -342,7 +343,7 @@ public final class FileRawSnapshotTest {
 
     private static UnalignedMemoryRecords buildRecords(ByteBuffer... buffers) {
         MemoryRecords records =  MemoryRecords.withRecords(
-            CompressionType.NONE,
+            Compression.NONE,
             Arrays.stream(buffers).map(SimpleRecord::new).toArray(SimpleRecord[]::new)
         );
         return new UnalignedMemoryRecords(records.buffer());

@@ -22,8 +22,8 @@ import kafka.server.KafkaServer;
 import kafka.server.QuorumTestHarness;
 import kafka.server.QuotaType;
 import kafka.utils.EmptyTestInfo;
-import kafka.utils.Exit;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -34,9 +34,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
+
 import org.apache.log4j.PropertyConfigurator;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartFrame;
@@ -46,11 +48,7 @@ import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Option;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
-import javax.imageio.ImageIO;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -72,6 +70,12 @@ import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import javax.imageio.ImageIO;
+
+import scala.Option;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
@@ -119,7 +123,7 @@ public class ReplicationQuotasTestRig {
         experiments.forEach(def -> run(def, journal, displayChartsOnScreen));
 
         if (!displayChartsOnScreen)
-            Exit.exit(0, Option.empty());
+            Exit.exit(0);
     }
 
     static void run(ExperimentDef config, Journal journal, boolean displayChartsOnScreen) {

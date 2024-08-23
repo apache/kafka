@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +44,7 @@ import org.rocksdb.TickerType;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
@@ -59,13 +60,13 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBMetricsRecorderTest {
-    private final static String METRICS_SCOPE = "metrics-scope";
-    private final static TaskId TASK_ID1 = new TaskId(0, 0);
-    private final static TaskId TASK_ID2 = new TaskId(0, 1);
-    private final static String STORE_NAME = "store-name";
-    private final static String SEGMENT_STORE_NAME_1 = "segment-store-name-1";
-    private final static String SEGMENT_STORE_NAME_2 = "segment-store-name-2";
-    private final static String SEGMENT_STORE_NAME_3 = "segment-store-name-3";
+    private static final String METRICS_SCOPE = "metrics-scope";
+    private static final TaskId TASK_ID1 = new TaskId(0, 0);
+    private static final TaskId TASK_ID2 = new TaskId(0, 1);
+    private static final String STORE_NAME = "store-name";
+    private static final String SEGMENT_STORE_NAME_1 = "segment-store-name-1";
+    private static final String SEGMENT_STORE_NAME_2 = "segment-store-name-2";
+    private static final String SEGMENT_STORE_NAME_3 = "segment-store-name-3";
 
     private final RocksDB dbToAdd1 = mock(RocksDB.class);
     private final RocksDB dbToAdd2 = mock(RocksDB.class);

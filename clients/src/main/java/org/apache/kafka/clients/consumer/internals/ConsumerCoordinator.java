@@ -66,6 +66,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -96,7 +97,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshC
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
-    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
+    private static final TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
 
     private final GroupRebalanceConfig rebalanceConfig;
     private final Logger log;
@@ -1456,15 +1457,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (responseError != Errors.NONE) {
                 log.debug("Offset fetch failed: {}", responseError.message());
 
-                if (responseError == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                    // just retry
-                    future.raise(responseError);
-                } else if (responseError == Errors.NOT_COORDINATOR) {
+                if (responseError == Errors.COORDINATOR_NOT_AVAILABLE ||
+                    responseError == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
                     markCoordinatorUnknown(responseError);
                     future.raise(responseError);
                 } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
+                } else if (responseError.exception() instanceof RetriableException) {
+                    // retry
+                    future.raise(responseError);
                 } else {
                     future.raise(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
                 }

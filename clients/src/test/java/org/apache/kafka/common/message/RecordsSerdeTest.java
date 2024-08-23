@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.common.message;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -32,7 +33,7 @@ public class RecordsSerdeTest {
 
     @Test
     public void testSerdeRecords() {
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("foo".getBytes()),
             new SimpleRecord("bar".getBytes()));
 

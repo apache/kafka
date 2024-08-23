@@ -17,9 +17,6 @@
 
 package org.apache.kafka.snapshot;
 
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.OptionalLong;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -27,6 +24,10 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.RecordsIterator;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.OptionalLong;
 
 public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;
@@ -120,10 +121,10 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     }
 
     /**
-     * Returns the next non-control Batch
+     * Returns the next batch
      */
     private Optional<Batch<T>> nextBatch() {
-        while (iterator.hasNext()) {
+        if (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
             if (!lastContainedLogTimestamp.isPresent()) {

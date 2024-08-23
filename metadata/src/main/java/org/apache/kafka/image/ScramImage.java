@@ -17,9 +17,6 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.image.node.ScramImageNode;
-import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
@@ -27,13 +24,16 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.image.node.ScramImageNode;
+import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.ScramCredentialData;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.ArrayList;
-import java.util.Map;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 
@@ -63,7 +63,7 @@ public final class ScramImage {
             StringBuilder scramImageString = new StringBuilder("ScramImage({");
             for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
                 if (!mechanismEntry.getValue().isEmpty()) {
-                    scramImageString.append(mechanismEntry.getKey() + ":");
+                    scramImageString.append(mechanismEntry.getKey()).append(":");
                     List<String> users = new ArrayList<>(mechanismEntry.getValue().keySet());
                     scramImageString.append(String.join(", ", users));
                     scramImageString.append("},{");

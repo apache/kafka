@@ -22,6 +22,7 @@ import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -62,6 +63,7 @@ import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 
@@ -125,7 +127,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         Action expectedActions2 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true);
         Action expectedActions3 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedNonExistTopic, PatternType.LITERAL), 1, true, true);
 
-        // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
         when(authorizer.authorize(any(RequestContext.class), argThat(t ->
             t.contains(expectedActions1) || t.contains(expectedActions2) || t.contains(expectedActions3))))
             .thenAnswer(invocation -> {
@@ -197,7 +198,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
         );
-        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0);
+        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
         updateKraftMetadataCache(metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
             new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());
@@ -328,7 +329,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         Action expectedActions1 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true);
         Action expectedActions2 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic2, PatternType.LITERAL), 1, true, true);
 
-        // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
         when(authorizer.authorize(any(RequestContext.class), argThat(t ->
             t.contains(expectedActions1) || t.contains(expectedActions2))))
             .thenAnswer(invocation -> {
@@ -400,7 +400,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
         );
-        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0);
+        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0, () -> KRaftVersion.KRAFT_VERSION_1);
         updateKraftMetadataCache(metadataCache, records);
         DescribeTopicPartitionsRequestHandler handler =
             new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());

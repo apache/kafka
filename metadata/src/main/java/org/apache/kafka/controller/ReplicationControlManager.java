@@ -38,15 +38,15 @@ import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.message.AlterPartitionRequestData;
-import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
-import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
@@ -56,7 +56,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfigCollection;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
@@ -101,6 +101,7 @@ import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
+
 import org.slf4j.Logger;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -113,8 +114,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -287,9 +288,9 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Translate a CreateableTopicConfigCollection to a map from string to string.
+     * Translate a CreatableTopicConfigCollection to a map from string to string.
      */
-    static Map<String, String> translateCreationConfigs(CreateableTopicConfigCollection collection) {
+    static Map<String, String> translateCreationConfigs(CreatableTopicConfigCollection collection) {
         HashMap<String, String> result = new HashMap<>();
         collection.forEach(config -> result.put(config.name(), config.value()));
         return Collections.unmodifiableMap(result);
@@ -884,7 +885,7 @@ public class ReplicationControlManager {
             if (topicErrors.containsKey(topic.name())) continue;
             Map<String, Entry<OpType, String>> topicConfigs = new HashMap<>();
             List<String> nullConfigs = new ArrayList<>();
-            for (CreateTopicsRequestData.CreateableTopicConfig config : topic.configs()) {
+            for (CreateTopicsRequestData.CreatableTopicConfig config : topic.configs()) {
                 if (config.value() == null) {
                     nullConfigs.add(config.name());
                 } else {
@@ -1215,7 +1216,7 @@ public class ReplicationControlManager {
         }
 
         int[] newIsr = partitionData.newIsrWithEpochs().stream()
-            .mapToInt(brokerState -> brokerState.brokerId()).toArray();
+            .mapToInt(BrokerState::brokerId).toArray();
 
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
@@ -1559,6 +1560,7 @@ public class ReplicationControlManager {
         if (states.current() != states.next()) {
             switch (states.next()) {
                 case FENCED:
+                case SHUTDOWN_NOW:
                     handleBrokerFenced(brokerId, records);
                     break;
                 case UNFENCED:
@@ -1566,9 +1568,6 @@ public class ReplicationControlManager {
                     break;
                 case CONTROLLED_SHUTDOWN:
                     handleBrokerInControlledShutdown(brokerId, brokerEpoch, records);
-                    break;
-                case SHUTDOWN_NOW:
-                    handleBrokerFenced(brokerId, records);
                     break;
             }
         }
@@ -1904,7 +1903,7 @@ public class ReplicationControlManager {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
             if (brokerWithUncleanShutdown != NO_LEADER) {
-                builder.setUncleanShutdownReplicas(Arrays.asList(brokerWithUncleanShutdown));
+                builder.setUncleanShutdownReplicas(Collections.singletonList(brokerWithUncleanShutdown));
             }
 
             // Note: if brokerToRemove and brokerWithUncleanShutdown were passed as NO_LEADER, this is a no-op (the new
@@ -2077,7 +2076,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2201,9 +2200,7 @@ public class ReplicationControlManager {
         for (int partitionId : partitionIds) {
             Optional<OngoingPartitionReassignment> ongoing =
                 getOngoingPartitionReassignment(topicInfo, partitionId);
-            if (ongoing.isPresent()) {
-                ongoingTopic.partitions().add(ongoing.get());
-            }
+            ongoing.ifPresent(ongoingPartitionReassignment -> ongoingTopic.partitions().add(ongoingPartitionReassignment));
         }
         if (!ongoingTopic.partitions().isEmpty()) {
             response.topics().add(ongoingTopic);

@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.config.ConfigException;
+
+import org.junit.jupiter.api.Test;
+
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.jupiter.api.Test;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -57,8 +59,8 @@ public class ClientUtilsTest {
 
         // With lookup of example.com, either one or two addresses are expected depending on
         // whether ipv4 and ipv6 are enabled
-        List<InetSocketAddress> validatedAddresses = checkWithLookup(asList("example.com:10000"));
-        assertTrue(validatedAddresses.size() >= 1, "Unexpected addresses " + validatedAddresses);
+        List<InetSocketAddress> validatedAddresses = checkWithLookup(Collections.singletonList("example.com:10000"));
+        assertFalse(validatedAddresses.isEmpty(), "Unexpected addresses " + validatedAddresses);
         List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
                 .collect(Collectors.toList());
         List<String> expectedHostNames = asList("93.184.215.14", "2606:2800:21f:cb07:6820:80da:af6b:8b2c");
@@ -75,6 +77,11 @@ public class ClientUtilsTest {
     @Test
     public void testNoPort() {
         assertThrows(ConfigException.class, () -> checkWithoutLookup("127.0.0.1"));
+    }
+
+    @Test
+    public void testInvalidPort() {
+        assertThrows(ConfigException.class, () -> checkWithoutLookup("localhost:70000"));
     }
 
     @Test

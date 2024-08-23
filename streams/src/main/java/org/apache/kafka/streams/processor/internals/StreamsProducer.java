@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -31,6 +30,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
+
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -51,10 +52,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.taskProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.threadProducerClientId;
 
 /**
  * {@code StreamsProducer} manages the producers within a Kafka Streams application.
@@ -77,6 +80,7 @@ public class StreamsProducer {
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
     private double oldProducerTotalBlockedTime = 0;
+    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
     public StreamsProducer(final StreamsConfig config,
                            final String threadId,
@@ -97,14 +101,14 @@ public class StreamsProducer {
         final Map<String, Object> producerConfigs;
         switch (processingMode) {
             case AT_LEAST_ONCE: {
-                producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
+                producerConfigs = config.getProducerConfigs(threadProducerClientId(threadId));
                 eosV2ProducerConfigs = null;
 
                 break;
             }
             case EXACTLY_ONCE_ALPHA: {
                 producerConfigs = config.getProducerConfigs(
-                    getTaskProducerClientId(
+                    taskProducerClientId(
                         threadId,
                         Objects.requireNonNull(taskId, "taskId cannot be null for exactly-once alpha")
                     )
@@ -118,7 +122,7 @@ public class StreamsProducer {
                 break;
             }
             case EXACTLY_ONCE_V2: {
-                producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadId));
+                producerConfigs = config.getProducerConfigs(threadProducerClientId(threadId));
 
                 final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
                 producerConfigs.put(
@@ -239,7 +243,7 @@ public class StreamsProducer {
             try {
                 producer.beginTransaction();
                 transactionInFlight = true;
-            } catch (final ProducerFencedException | InvalidProducerEpochException error) {
+            } catch (final ProducerFencedException | InvalidProducerEpochException | InvalidPidMappingException error) {
                 throw new TaskMigratedException(
                     formatException("Producer got fenced trying to begin a new transaction"),
                     error
@@ -251,6 +255,10 @@ public class StreamsProducer {
                 );
             }
         }
+    }
+
+    AtomicReference<KafkaException> sendException() {
+        return sendException;
     }
 
     Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record,
@@ -278,6 +286,7 @@ public class StreamsProducer {
 
     private static boolean isRecoverable(final KafkaException uncaughtException) {
         return uncaughtException.getCause() instanceof ProducerFencedException ||
+            uncaughtException.getCause() instanceof InvalidPidMappingException ||
             uncaughtException.getCause() instanceof InvalidProducerEpochException ||
             uncaughtException.getCause() instanceof UnknownProducerIdException;
     }
@@ -299,7 +308,7 @@ public class StreamsProducer {
             producer.sendOffsetsToTransaction(offsets, maybeDowngradedGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
-        } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException error) {
+        } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException | InvalidPidMappingException error) {
             throw new TaskMigratedException(
                 formatException("Producer got fenced trying to commit a transaction"),
                 error
@@ -333,7 +342,7 @@ public class StreamsProducer {
                         " Will rely on broker to eventually abort the transaction after the transaction timeout passed.",
                     logAndSwallow
                 );
-            } catch (final ProducerFencedException | InvalidProducerEpochException error) {
+            } catch (final ProducerFencedException | InvalidProducerEpochException | InvalidPidMappingException error) {
                 // The producer is aborting the txn when there's still an ongoing one,
                 // which means that we did not commit the task while closing it, which
                 // means that it is a dirty close. Therefore it is possible that the dirty

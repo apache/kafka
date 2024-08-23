@@ -23,8 +23,8 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.record.{ControlRecordType, FileRecords, MemoryRecords}
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.{Deserializer, LoadSummary, UnknownRecordTypeException}
-import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.{LoadSummary, UnknownRecordTypeException}
+import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoader, CoordinatorPlayback, Deserializer}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.FetchIsolation
 
@@ -99,8 +99,8 @@ class CoordinatorLoaderImpl[T](
           var readAtLeastOneRecord = true
 
           var previousHighWatermark = -1L
-          var numRecords = 0
-          var numBytes = 0
+          var numRecords = 0L
+          var numBytes = 0L
           while (currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
             val fetchDataInfo = log.read(
               startOffset = currentOffset,

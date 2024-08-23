@@ -16,20 +16,23 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.raft.VoterSet;
+
 import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * A type for storing the historical value of the set of voters.
  *
- * This type can be use to keep track in-memory the sets for voters stored in the latest snapshot
- * and log. This is useful when generating a new snapshot at a given offset or when evaulating
- * the latest set of voters.
+ * This type can be used to keep track, in-memory, of the sets for voters stored in the latest snapshot
+ * and the log segments. This is useful when generating a new snapshot at a given offset or when
+ * evaluating the latest set of voters.
  */
-final public class VoterSetHistory {
-    private final Optional<VoterSet> staticVoterSet;
+public final class VoterSetHistory {
+    private final VoterSet staticVoterSet;
     private final LogHistory<VoterSet> votersHistory = new TreeMapLogHistory<>();
 
-    VoterSetHistory(Optional<VoterSet> staticVoterSet) {
+    VoterSetHistory(VoterSet staticVoterSet) {
         this.staticVoterSet = staticVoterSet;
     }
 
@@ -40,7 +43,7 @@ final public class VoterSetHistory {
      * offset of all previous calls to this method.
      *
      * @param offset the offset
-     * @param value the value to store
+     * @param voters the voters to store
      * @throws IllegalArgumentException if the offset is not greater than all previous offsets
      */
     public void addAt(long offset, VoterSet voters) {
@@ -69,7 +72,7 @@ final public class VoterSetHistory {
      * Computes the value of the voter set at a given offset.
      *
      * This function will only return values provided through {@code addAt} and it would never
-     * include the {@code staticVoterSet} provided through the constructoer.
+     * include the {@code staticVoterSet} provided through the constructor.
      *
      * @param offset the offset (inclusive)
      * @return the voter set if one exist, otherwise {@code Optional.empty()}
@@ -82,13 +85,33 @@ final public class VoterSetHistory {
      * Returns the latest set of voters.
      */
     public VoterSet lastValue() {
-        Optional<LogHistory.Entry<VoterSet>> result = votersHistory.lastEntry();
-        if (result.isPresent()) {
-            return result.get().value();
-        }
+        return votersHistory.lastEntry()
+            .map(LogHistory.Entry::value)
+            .orElse(staticVoterSet);
+    }
 
-        return staticVoterSet
-            .orElseThrow(() -> new IllegalStateException("No voter set found"));
+    /**
+     * Return the latest entry for the set of voters.
+     */
+    public Optional<LogHistory.Entry<VoterSet>> lastEntry() {
+        return votersHistory.lastEntry();
+    }
+
+    /**
+     * Returns the offset of the last voter set stored in the partition history.
+     *
+     * Returns {@code OptionalLong.empty} if the last voter set is from the static voters
+     * configuration.
+     *
+     * @return the offset storing the last voter set
+     */
+    public OptionalLong lastVoterSetOffset() {
+        Optional<LogHistory.Entry<VoterSet>> lastEntry = votersHistory.lastEntry();
+        if (lastEntry.isPresent()) {
+            return OptionalLong.of(lastEntry.get().offset());
+        } else {
+            return OptionalLong.empty();
+        }
     }
 
     /**

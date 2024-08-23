@@ -20,6 +20,7 @@ package org.apache.kafka.jmh.timeline;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -42,7 +43,7 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 
 public class TimelineHashMapBenchmark {
-    private final static int NUM_ENTRIES = 1_000_000;
+    private static final int NUM_ENTRIES = 1_000_000;
 
     @Benchmark
     public Map<Integer, String> testAddEntriesInHashMap() {
@@ -77,7 +78,7 @@ public class TimelineHashMapBenchmark {
             int key = (int) (0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
             if (j > 10 && key % 3 == 0) {
                 snapshotRegistry.deleteSnapshotsUpTo(epoch - 1000);
-                snapshotRegistry.getOrCreateSnapshot(epoch);
+                snapshotRegistry.idempotentCreateSnapshot(epoch);
                 j = 0;
             } else {
                 j++;

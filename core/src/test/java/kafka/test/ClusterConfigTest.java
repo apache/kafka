@@ -18,9 +18,11 @@
 package kafka.test;
 
 import kafka.test.annotation.Type;
+
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +31,9 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class ClusterConfigTest {
@@ -46,12 +50,12 @@ public class ClusterConfigTest {
         File trustStoreFile = TestUtils.tempFile();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
-                .setType(Type.KRAFT)
+                .setTypes(Collections.singleton(Type.KRAFT))
                 .setBrokers(3)
                 .setControllers(2)
                 .setDisksPerBroker(1)
-                .setName("builder-test")
                 .setAutoStart(true)
+                .setTags(Arrays.asList("name", "Generated Test"))
                 .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .setListenerName("EXTERNAL")
                 .setTrustStoreFile(trustStoreFile)
@@ -95,5 +99,19 @@ public class ClusterConfigTest {
                 .setControllers(1)
                 .setDisksPerBroker(0)
                 .build());
+    }
+
+    @Test
+    public void testDisplayTags() {
+        List<String> tags = Arrays.asList("tag 1", "tag 2", "tag 3");
+        ClusterConfig clusterConfig = ClusterConfig.defaultBuilder().setTags(tags).build();
+
+        Set<String> expectedDisplayTags = clusterConfig.displayTags();
+
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 1"));
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 2"));
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 3"));
+        Assertions.assertTrue(expectedDisplayTags.contains("MetadataVersion=" + MetadataVersion.latestTesting()));
+        Assertions.assertTrue(expectedDisplayTags.contains("Security=" + SecurityProtocol.PLAINTEXT));
     }
 }

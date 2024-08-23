@@ -23,13 +23,18 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -39,6 +44,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class InsertFieldTest {
     private final InsertField<SourceRecord> xformKey = new InsertField.Key<>();
     private final InsertField<SourceRecord> xformValue = new InsertField.Value<>();
+
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, null),
+                Arguments.of(true, 42L)
+        );
+    }
 
     @AfterEach
     public void teardown() {
@@ -209,4 +221,35 @@ public class InsertFieldTest {
 
         assertEquals(xformKey.version(), xformValue.version());
     }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testUnsetOptionalField(boolean replaceNullWithDefault, Object expectedValue) {
+
+        final Map<String, Object> props = new HashMap<>();
+        props.put("topic.field", "topic_field!");
+        props.put("partition.field", "partition_field");
+        props.put("timestamp.field", "timestamp_field?");
+        props.put("static.field", "instance_id");
+        props.put("static.value", "my-instance-id");
+        props.put("replace.null.with.default", replaceNullWithDefault);
+
+        xformValue.configure(props);
+
+        Schema magicFieldSchema = SchemaBuilder.int64().optional().defaultValue(42L).build();
+        final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic_with_default", magicFieldSchema).build();
+        final Struct simpleStruct = new Struct(simpleStructSchema).put("magic_with_default", null);
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0, null, null, simpleStructSchema, simpleStruct, 789L);
+        final SourceRecord transformedRecord = xformValue.apply(record);
+
+        assertEquals(simpleStructSchema.name(), transformedRecord.valueSchema().name());
+        assertEquals(simpleStructSchema.version(), transformedRecord.valueSchema().version());
+        assertEquals(simpleStructSchema.doc(), transformedRecord.valueSchema().doc());
+
+        assertEquals(magicFieldSchema, transformedRecord.valueSchema().field("magic_with_default").schema());
+        assertEquals(expectedValue, ((Struct) transformedRecord.value()).getInt64("magic_with_default"));
+
+    }
+
 }

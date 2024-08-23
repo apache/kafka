@@ -18,6 +18,7 @@ package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

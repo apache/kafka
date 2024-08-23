@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.util.Set;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -29,18 +28,19 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+
+import org.apache.log4j.Level;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static java.util.Collections.nCopies;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
@@ -68,11 +69,12 @@ import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_T
 import static org.apache.kafka.streams.StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -80,17 +82,16 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(600)
 public class StreamsConfigTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private final Properties props = new Properties();
     private StreamsConfig streamsConfig;
 
@@ -98,7 +99,7 @@ public class StreamsConfigTest {
     private final String clientId = "client";
     private final int threadIdx = 1;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -240,16 +241,16 @@ public class StreamsConfigTest {
 
         serializer.configure(serializerConfigs, true);
         assertEquals(
-            "Should get the original string after serialization and deserialization with the configured encoding",
             str,
-            streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
+            streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str)),
+            "Should get the original string after serialization and deserialization with the configured encoding"
         );
 
         serializer.configure(serializerConfigs, false);
         assertEquals(
-            "Should get the original string after serialization and deserialization with the configured encoding",
             str,
-            streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
+            streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str)),
+            "Should get the original string after serialization and deserialization with the configured encoding"
         );
     }
 
@@ -1023,7 +1024,7 @@ public class StreamsConfigTest {
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
         final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
+        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"none\"");
     }
 
     @Test
@@ -1032,7 +1033,7 @@ public class StreamsConfigTest {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
         final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
+        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"all\"");
     }
 
     @Test
@@ -1046,7 +1047,7 @@ public class StreamsConfigTest {
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
         final String actualDefaultStoreType = streamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
-        assertEquals("default.dsl.store should be \"rocksDB\"", expectedDefaultStoreType, actualDefaultStoreType);
+        assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"rocksDB\"");
     }
 
     @SuppressWarnings("deprecation")
@@ -1056,7 +1057,7 @@ public class StreamsConfigTest {
         props.put(DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
         final StreamsConfig config = new StreamsConfig(props);
         final String actualDefaultStoreType = config.getString(DEFAULT_DSL_STORE_CONFIG);
-        assertEquals("default.dsl.store should be \"in_memory\"", expectedDefaultStoreType, actualDefaultStoreType);
+        assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"in_memory\"");
     }
 
     @SuppressWarnings("deprecation")
@@ -1071,9 +1072,10 @@ public class StreamsConfigTest {
         final Class<?> expectedDefaultStoreType = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
         final Class<?> actualDefaultStoreType = streamsConfig.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
         assertEquals(
-                "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType,
-                expectedDefaultStoreType,
-                actualDefaultStoreType);
+            expectedDefaultStoreType,
+            actualDefaultStoreType,
+            "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType
+        );
     }
 
     @Test
@@ -1083,9 +1085,10 @@ public class StreamsConfigTest {
         final StreamsConfig config = new StreamsConfig(props);
         final Class<?> actualDefaultStoreType = config.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
         assertEquals(
-                "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType,
-                expectedDefaultStoreType,
-                actualDefaultStoreType);
+            expectedDefaultStoreType,
+            actualDefaultStoreType,
+            "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType
+        );
     }
 
     @SuppressWarnings("deprecation")
@@ -1094,7 +1097,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
+            appender.setClassLogger(StreamsConfig.class, Level.DEBUG);
             new StreamsConfig(props);
 
             assertThat(
@@ -1114,7 +1117,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
+            appender.setClassLogger(StreamsConfig.class, Level.DEBUG);
             new StreamsConfig(props);
 
             assertThat(
@@ -1122,23 +1125,6 @@ public class StreamsConfigTest {
                 hasItem("Configuration parameter `" + StreamsConfig.EXACTLY_ONCE_BETA +
                             "` is deprecated and will be removed in the 4.0.0 release. " +
                             "Please use `" + StreamsConfig.EXACTLY_ONCE_V2 + "` instead.")
-            );
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldLogWarningWhenRetriesIsUsed() {
-        props.put(StreamsConfig.RETRIES_CONFIG, 0);
-
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
-            appender.setClassLoggerToDebug(StreamsConfig.class);
-            new StreamsConfig(props);
-
-            assertThat(
-                appender.getMessages(),
-                hasItem("Configuration parameter `" + StreamsConfig.RETRIES_CONFIG +
-                            "` is deprecated and will be removed in the 4.0.0 release.")
             );
         }
     }
@@ -1296,7 +1282,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 100);
+        assertEquals(totalCacheSize(config), 100);
     }
 
     @Test
@@ -1304,20 +1290,20 @@ public class StreamsConfigTest {
     public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10);
+        assertEquals(totalCacheSize(config), 10);
     }
 
     @Test
     public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10);
+        assertEquals(totalCacheSize(config), 10);
     }
 
     @Test
     public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10 * 1024 * 1024);
+        assertEquals(totalCacheSize(config), 10 * 1024 * 1024);
     }
 
     @Test
@@ -1458,6 +1444,12 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldReturnTaskAssignorClass() {
+        props.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, "LegacyStickyTaskAssignor");
+        assertEquals("LegacyStickyTaskAssignor", new StreamsConfig(props).getString(TASK_ASSIGNOR_CLASS_CONFIG));
+    }
+
+    @Test
     public void shouldReturnDefaultClientSupplier() {
         final KafkaClientSupplier supplier = streamsConfig.getKafkaClientSupplier();
         assertInstanceOf(DefaultKafkaClientSupplier.class, supplier);
@@ -1576,6 +1568,33 @@ public class StreamsConfigTest {
         assertNull(
             streamsConfig.getGlobalConsumerConfigs("clientId")
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+    }
+
+    @Test
+    public void shouldGetDefaultValueProcessingExceptionHandler() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertEquals("org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler",   streamsConfig.processingExceptionHandler().getClass().getName());
+    }
+
+    @Test
+    public void shouldOverrideDefaultProcessingExceptionHandler() {
+        props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, "org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertEquals("org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler",   streamsConfig.processingExceptionHandler().getClass().getName());
+    }
+
+    @Test
+    public void testInvalidProcessingExceptionHandler() {
+        props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, "org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler");
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("Invalid value org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler " +
+                        "for configuration processing.exception.handler: Class org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler could not be found.")
         );
     }
 

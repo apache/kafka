@@ -45,7 +45,7 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.quota
@@ -1018,7 +1018,6 @@ class KRaftClusterTest {
     }
   }
 
-
   @Test
   def testUpdateMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
@@ -1036,11 +1035,13 @@ class KRaftClusterTest {
           Map(MetadataVersion.FEATURE_NAME ->
             new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
         )
+        assertEquals(new SupportedVersionRange(0, 1), admin.describeFeatures().featureMetadata().get().
+          supportedFeatures().get(KRaftVersion.FEATURE_NAME))
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
-        "Timed out waiting for metadata.version update.")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
+        "Timed out waiting for metadata.version update")
     } finally {
       cluster.close()
     }
@@ -1067,6 +1068,49 @@ class KRaftClusterTest {
           case None => fail("RemoteLogManager should be initialized")
         }
       })
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build())
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+        "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+        "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
+      .build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
+        "RaftManager was not initialized.")
+
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        // Create a test topic
+        val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 1.toShort))
+        val createTopicResult = admin.createTopics(newTopic)
+        createTopicResult.all().get()
+        waitForTopicListing(admin, Seq("test-topic"), Seq())
+
+        // Delete topic
+        val deleteResult = admin.deleteTopics(Collections.singletonList("test-topic"))
+        deleteResult.all().get()
+
+        // List again
+        waitForTopicListing(admin, Seq(), Seq("test-topic"))
+      } finally {
+        admin.close()
+      }
     } finally {
       cluster.close()
     }
@@ -1534,6 +1578,44 @@ class KRaftClusterTest {
           assertFalse(targetDirFile.exists())
           assertTrue(originalLogFile.exists())
         }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testControllerFailover(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(5).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
+        "RaftManager was not initialized.")
+
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        // Create a test topic
+        admin.createTopics(Collections.singletonList(
+          new NewTopic("test-topic", 1, 1.toShort))).all().get()
+        waitForTopicListing(admin, Seq("test-topic"), Seq())
+
+        // Shut down active controller
+        val active = cluster.waitForActiveController()
+        cluster.raftManagers().get(active.asInstanceOf[QuorumController].nodeId()).shutdown()
+
+        // Create a test topic on the new active controller
+        admin.createTopics(Collections.singletonList(
+          new NewTopic("test-topic2", 1, 1.toShort))).all().get()
+        waitForTopicListing(admin, Seq("test-topic2"), Seq())
       } finally {
         admin.close()
       }

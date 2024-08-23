@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -336,7 +337,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             boolean requireTimestamps,
             List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamps, isolationLevel, false)
+                .forConsumer(requireTimestamps, isolationLevel, false, false)
                 .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(targetTimes));
 
         log.debug("Creating ListOffset request {} for broker {} to reset positions", builder,

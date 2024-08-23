@@ -17,10 +17,10 @@
 
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.utils.Implicits._
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderAndIsr
 
 import scala.collection.{Map, Seq, Set, mutable}
 
@@ -216,6 +216,10 @@ class ControllerContext extends ControllerChannelContext {
 
   // getter
   def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet.diff(shuttingDownBrokerIds)
+  // To just check if a broker is live, we should use this method instead of liveBrokerIds.contains(brokerId)
+  // which is more expensive because it constructs the set of live broker IDs.
+  // See KAFKA-17061 for the details.
+  def isLiveBroker(brokerId: Int): Boolean = liveBrokerEpochs.contains(brokerId) && !shuttingDownBrokerIds(brokerId)
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
@@ -238,7 +242,7 @@ class ControllerContext extends ControllerChannelContext {
   def isReplicaOnline(brokerId: Int, topicPartition: TopicPartition, includeShuttingDownBrokers: Boolean): Boolean = {
     val brokerOnline = {
       if (includeShuttingDownBrokers) liveOrShuttingDownBrokerIds.contains(brokerId)
-      else liveBrokerIds.contains(brokerId)
+      else isLiveBroker(brokerId)
     }
     brokerOnline && !replicasOnOfflineDirs.getOrElse(brokerId, Set.empty).contains(topicPartition)
   }
@@ -454,11 +458,11 @@ class ControllerContext extends ControllerChannelContext {
     // A sentinel (-2) is used as an epoch if the topic is queued for deletion. It overrides
     // any existing epoch.
     if (isTopicQueuedUpForDeletion(partition.topic)) {
-      LeaderAndIsr.EpochDuringDelete
+      LeaderAndIsr.EPOCH_DURING_DELETE
     } else {
       partitionLeadershipInfo.get(partition)
         .map(_.leaderAndIsr.leaderEpoch)
-        .getOrElse(LeaderAndIsr.NoEpoch)
+        .getOrElse(LeaderAndIsr.NO_EPOCH)
     }
   }
 

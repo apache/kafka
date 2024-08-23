@@ -22,9 +22,10 @@ import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
+import java.util.function.Supplier
 import scala.collection._
 
 /**
@@ -109,20 +110,22 @@ trait MetadataCache {
 
   def getRandomAliveBrokerId: Option[Int]
 
-  def features(): Features
+  def features(): FinalizedFeatures
 }
 
 object MetadataCache {
   def zkMetadataCache(brokerId: Int,
                       metadataVersion: MetadataVersion,
                       brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
-                      kraftControllerNodes: collection.Seq[Node] = collection.Seq.empty[Node],
                       zkMigrationEnabled: Boolean = false)
   : ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, kraftControllerNodes, zkMigrationEnabled)
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, zkMigrationEnabled)
   }
 
-  def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {
-    new KRaftMetadataCache(brokerId)
+  def kRaftMetadataCache(
+    brokerId: Int,
+    kraftVersionSupplier: Supplier[KRaftVersion]
+  ): KRaftMetadataCache = {
+    new KRaftMetadataCache(brokerId, kraftVersionSupplier)
   }
 }

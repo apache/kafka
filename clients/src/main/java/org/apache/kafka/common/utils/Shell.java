@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -23,8 +26,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A base class for running a Unix command.
@@ -32,7 +33,7 @@ import org.slf4j.LoggerFactory;
  * <code>Shell</code> can be used to run unix commands like <code>du</code> or
  * <code>df</code>.
  */
-abstract public class Shell {
+public abstract class Shell {
 
     private static final Logger LOG = LoggerFactory.getLogger(Shell.class);
 

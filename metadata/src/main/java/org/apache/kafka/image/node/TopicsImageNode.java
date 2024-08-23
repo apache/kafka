@@ -27,7 +27,7 @@ public class TopicsImageNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public final static String NAME = "topics";
+    public static final String NAME = "topics";
 
     /**
      * The topics image.

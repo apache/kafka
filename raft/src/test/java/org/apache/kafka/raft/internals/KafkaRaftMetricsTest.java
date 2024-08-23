@@ -16,32 +16,40 @@
  */
 package org.apache.kafka.raft.internals;
 
-
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
+import org.apache.kafka.raft.ReplicaKey;
+import org.apache.kafka.raft.VoterSet;
+import org.apache.kafka.raft.VoterSetTest;
+import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.KRaftVersion;
+
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
-import java.util.Set;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KafkaRaftMetricsTest {
 
     private final int localId = 0;
+    private final Uuid localDirectoryId = Uuid.randomUuid();
     private final int electionTimeoutMs = 5000;
     private final int fetchTimeoutMs = 10000;
 
@@ -60,10 +68,25 @@ public class KafkaRaftMetricsTest {
         metrics.close();
     }
 
-    private QuorumState buildQuorumState(Set<Integer> voters) {
+    private QuorumState buildQuorumState(VoterSet voterSet, KRaftVersion kraftVersion) {
+        KRaftControlRecordStateMachine mockPartitionState = Mockito.mock(KRaftControlRecordStateMachine.class);
+
+        Mockito
+            .when(mockPartitionState.lastVoterSet())
+            .thenReturn(voterSet);
+        Mockito
+            .when(mockPartitionState.lastVoterSetOffset())
+            .thenReturn(kraftVersion.isReconfigSupported() ? OptionalLong.of(0) : OptionalLong.empty());
+        Mockito
+            .when(mockPartitionState.lastKraftVersion())
+            .thenReturn(kraftVersion);
+
         return new QuorumState(
             OptionalInt.of(localId),
-            voters,
+            localDirectoryId,
+            mockPartitionState,
+            voterSet.listeners(localId),
+            Features.KRAFT_VERSION.supportedVersionRange(),
             electionTimeoutMs,
             fetchTimeoutMs,
             new MockQuorumStateStore(),
@@ -73,9 +96,37 @@ public class KafkaRaftMetricsTest {
         );
     }
 
-    @Test
-    public void shouldRecordVoterQuorumState() {
-        QuorumState state = buildQuorumState(Utils.mkSet(localId, 1, 2));
+    private VoterSet localStandaloneVoterSet(KRaftVersion kraftVersion) {
+        boolean withDirectoryId = kraftVersion.featureLevel() > 0;
+        return VoterSetTest.voterSet(
+            Collections.singletonMap(
+                localId,
+                VoterSetTest.voterNode(
+                    ReplicaKey.of(
+                        localId,
+                        withDirectoryId ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID
+                    )
+                )
+            )
+        );
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordVoterQuorumState(KRaftVersion kraftVersion) {
+        boolean withDirectoryId = kraftVersion.featureLevel() > 0;
+        Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2), withDirectoryId);
+        voterMap.put(
+            localId,
+            VoterSetTest.voterNode(
+                ReplicaKey.of(
+                    localId,
+                    withDirectoryId ? localDirectoryId : ReplicaKey.NO_DIRECTORY_ID
+                )
+            )
+        );
+        VoterSet voters = VoterSetTest.voterSet(voterMap);
+        QuorumState state = buildQuorumState(voters, kraftVersion);
 
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
@@ -83,6 +134,10 @@ public class KafkaRaftMetricsTest {
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
@@ -90,6 +145,10 @@ public class KafkaRaftMetricsTest {
         assertEquals("candidate", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            localDirectoryId.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
@@ -98,27 +157,43 @@ public class KafkaRaftMetricsTest {
         assertEquals("leader", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            localDirectoryId.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L));
-        state.leaderStateOrThrow().updateReplicaState(1, 0, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters);
+        state.leaderStateOrThrow().updateReplicaState(
+            voterMap.get(1).voterKey(),
+            0,
+            new LogOffsetMetadata(5L)
+        );
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToFollower(2, 1);
+        state.transitionToFollower(2, 1, voters.listeners(1));
         assertEquals("follower", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 2, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToVoted(3, 2);
+        state.transitionToUnattachedVotedState(3, ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID));
         assertEquals("voted", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 3, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
@@ -126,26 +201,43 @@ public class KafkaRaftMetricsTest {
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 4, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
     }
 
-    @Test
-    public void shouldRecordNonVoterQuorumState() {
-        QuorumState state = buildQuorumState(Utils.mkSet(1, 2, 3));
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordNonVoterQuorumState(KRaftVersion kraftVersion) {
+        boolean withDirectoryId = kraftVersion.featureLevel() > 0;
+        VoterSet voters = VoterSetTest.voterSet(
+            VoterSetTest.voterMap(IntStream.of(1, 2, 3), withDirectoryId)
+        );
+        QuorumState state = buildQuorumState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.transitionToFollower(2, 1);
+        state.transitionToFollower(2, 1, voters.listeners(1));
         assertEquals("observer", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 2, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
@@ -156,13 +248,18 @@ public class KafkaRaftMetricsTest {
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(
+            Uuid.ZERO_UUID.toString(),
+            getMetric(metrics, "current-vote-directory-id").metricValue()
+        );
         assertEquals((double) 4, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
     }
 
-    @Test
-    public void shouldRecordLogEnd() {
-        QuorumState state = buildQuorumState(Collections.singleton(localId));
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordLogEnd(KRaftVersion kraftVersion) {
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
@@ -175,9 +272,10 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 1, getMetric(metrics, "log-end-epoch").metricValue());
     }
 
-    @Test
-    public void shouldRecordNumUnknownVoterConnections() {
-        QuorumState state = buildQuorumState(Collections.singleton(localId));
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordNumUnknownVoterConnections(KRaftVersion kraftVersion) {
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
@@ -188,9 +286,10 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 2, getMetric(metrics, "number-unknown-voter-connections").metricValue());
     }
 
-    @Test
-    public void shouldRecordPollIdleRatio() {
-        QuorumState state = buildQuorumState(Collections.singleton(localId));
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordPollIdleRatio(KRaftVersion kraftVersion) {
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
@@ -260,9 +359,10 @@ public class KafkaRaftMetricsTest {
         assertEquals(0.5, getMetric(metrics, "poll-idle-ratio-avg").metricValue());
     }
 
-    @Test
-    public void shouldRecordLatency() {
-        QuorumState state = buildQuorumState(Collections.singleton(localId));
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordLatency(KRaftVersion kraftVersion) {
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
@@ -291,9 +391,10 @@ public class KafkaRaftMetricsTest {
         assertEquals(60.0, getMetric(metrics, "commit-latency-max").metricValue());
     }
 
-    @Test
-    public void shouldRecordRate() {
-        QuorumState state = buildQuorumState(Collections.singleton(localId));
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void shouldRecordRate(KRaftVersion kraftVersion) {
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 

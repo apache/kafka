@@ -27,22 +27,21 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
-import org.junit.jupiter.api.{Tag, Timeout}
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.KRAFT)
-@Tag("integration")
+@ClusterTestDefaults(types = Array(Type.KRAFT))
 class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testAllocateProducersIdSentToController(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
-    val sourceBroker = raftCluster.brokers.findFirst().get()
+    val sourceBroker = raftCluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
 
     val controllerId = sourceBroker.raftManager.leaderAndEpoch.leaderId().getAsInt
-    val controllerServer = raftCluster.controllers()
+    val controllerServer = raftCluster.controllers.values().stream()
       .filter(_.config.nodeId == controllerId)
       .findFirst()
       .get()
@@ -56,10 +55,10 @@ class AllocateProducerIdsRequestTest(cluster: ClusterInstance) {
   @ClusterTest(controllers = 3)
   def testAllocateProducersIdSentToNonController(): Unit = {
     val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
-    val sourceBroker = raftCluster.brokers.findFirst().get()
+    val sourceBroker = raftCluster.brokers.values().stream().findFirst().get().asInstanceOf[BrokerServer]
 
     val controllerId = sourceBroker.raftManager.leaderAndEpoch.leaderId().getAsInt
-    val controllerServer = raftCluster.controllers()
+    val controllerServer = raftCluster.controllers().values().stream()
       .filter(_.config.nodeId != controllerId)
       .findFirst()
       .get()

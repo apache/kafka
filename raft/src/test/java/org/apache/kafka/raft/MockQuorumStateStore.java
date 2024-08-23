@@ -16,20 +16,26 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.raft.generated.QuorumStateData;
+import org.apache.kafka.server.common.KRaftVersion;
+
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
+import java.util.Optional;
 
 public class MockQuorumStateStore implements QuorumStateStore {
-    private ElectionState current;
+    private Optional<QuorumStateData> current = Optional.empty();
 
     @Override
-    public ElectionState readElectionState() {
-        return current;
+    public Optional<ElectionState> readElectionState() {
+        return current.map(ElectionState::fromQuorumStateData);
     }
 
     @Override
-    public void writeElectionState(ElectionState update) {
-        this.current = update;
+    public void writeElectionState(ElectionState update, KRaftVersion kraftVersion) {
+        current = Optional.of(
+            update.toQuorumStateData(kraftVersion.quorumStateVersion())
+        );
     }
 
     @Override
@@ -39,6 +45,6 @@ public class MockQuorumStateStore implements QuorumStateStore {
 
     @Override
     public void clear() {
-        current = null;
+        current = Optional.empty();
     }
 }

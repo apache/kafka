@@ -21,7 +21,6 @@ import com.yammer.metrics.core.Metric
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log._
 import kafka.server._
-import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, InvalidTxnStateException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
@@ -31,7 +30,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{AlterPartitionResponse, FetchRequest, ListOffsetsRequest, RequestHeader}
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.metadata.LeaderRecoveryState
@@ -42,11 +41,13 @@ import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong, anyString
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 
+import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
@@ -58,6 +59,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
 import org.junit.jupiter.params.ParameterizedTest
@@ -159,7 +161,7 @@ class PartitionTest extends AbstractPartitionTest {
       val recordArray = (1 to count).map { i =>
         new SimpleRecord(s"$i".getBytes)
       }
-      val records = MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
+      val records = MemoryRecords.withRecords(0L, Compression.NONE, leaderEpoch,
         recordArray: _*)
       log.appendAsLeader(records, leaderEpoch = leaderEpoch)
     }
@@ -239,11 +241,11 @@ class PartitionTest extends AbstractPartitionTest {
     val leaderEpoch = 8
 
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
-    log.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes)
     ), leaderEpoch = 0)
-    log.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 5,
+    log.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 5,
       new SimpleRecord("k3".getBytes, "v3".getBytes),
       new SimpleRecord("k4".getBytes, "v4".getBytes)
     ), leaderEpoch = 5)
@@ -433,7 +435,8 @@ class PartitionTest extends AbstractPartitionTest {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
+        val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+          log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "", None, time.scheduler)
         val maxTransactionTimeoutMs = 5 * 60 * 1000
         val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
         val producerStateManager = new ProducerStateManager(
@@ -505,7 +508,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Write records with duplicate keys to current replica and roll at offset 6
     val currentLog = partition.log.get
-    currentLog.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
+    currentLog.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k1".getBytes, "v2".getBytes),
       new SimpleRecord("k1".getBytes, "v3".getBytes),
@@ -514,7 +517,7 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v6".getBytes)
     ), leaderEpoch = 0)
     currentLog.roll()
-    currentLog.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
+    currentLog.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
       new SimpleRecord("k3".getBytes, "v7".getBytes),
       new SimpleRecord("k4".getBytes, "v8".getBytes)
     ), leaderEpoch = 0)
@@ -522,7 +525,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Write to the future replica as if the log had been compacted, and do not roll the segment
 
     val buffer = ByteBuffer.allocate(1024)
-    val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+    val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
       TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, 0)
     builder.appendWithOffset(2L, new SimpleRecord("k1".getBytes, "v3".getBytes))
     builder.appendWithOffset(5L, new SimpleRecord("k2".getBytes, "v6".getBytes))
@@ -1177,14 +1180,14 @@ class PartitionTest extends AbstractPartitionTest {
     // Expansion does not affect the ISR
     assertEquals(Set[Integer](leader, follower2), partition.partitionState.isr, "ISR")
     assertEquals(Set[Integer](leader, follower1, follower2), partition.partitionState.maximalIsr, "ISR")
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.toSet,
+    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.asScala.toSet,
       Set(leader, follower1, follower2), "AlterIsr")
   }
 
   def createRecords(records: Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(
-      buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.LOG_APPEND_TIME,
+      buf, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.LOG_APPEND_TIME,
       baseOffset, time.milliseconds, partitionLeaderEpoch)
     records.foreach(builder.append)
     builder.build()
@@ -1197,7 +1200,7 @@ class PartitionTest extends AbstractPartitionTest {
     val producerEpoch = 0.toShort
     val isTransactional = false
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-    val builder = MemoryRecords.builder(buf, CompressionType.NONE, baseOffset, producerId,
+    val builder = MemoryRecords.builder(buf, Compression.NONE, baseOffset, producerId,
       producerEpoch, baseSequence, isTransactional)
     records.foreach(builder.append)
     builder.build()
@@ -1210,7 +1213,7 @@ class PartitionTest extends AbstractPartitionTest {
     val producerEpoch = 0.toShort
     val isTransactional = true
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-    val builder = MemoryRecords.builder(buf, CompressionType.NONE, baseOffset, producerId,
+    val builder = MemoryRecords.builder(buf, Compression.NONE, baseOffset, producerId,
       producerEpoch, baseSequence, isTransactional)
     records.foreach(builder.append)
     builder.build()
@@ -1351,7 +1354,7 @@ class PartitionTest extends AbstractPartitionTest {
       alterPartitionManager))
 
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
-      .thenReturn(None)
+      .thenReturn(Optional.empty[JLong])
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 6, leaderEpoch = 4)
 
@@ -1422,7 +1425,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
-    assertEquals(Set(brokerId, remoteBrokerId), alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.toSet)
+    assertEquals(Set(brokerId, remoteBrokerId), alterPartitionManager.isrUpdates.head.leaderAndIsr.isr.asScala.toSet)
 
     // Simulate invalid request failure
     alterPartitionManager.failIsrUpdate(Errors.INVALID_REQUEST)
@@ -1478,8 +1481,8 @@ class PartitionTest extends AbstractPartitionTest {
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
     val isrItem = alterPartitionManager.isrUpdates.head
-    assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId))
-    isrItem.leaderAndIsr.isrWithBrokerEpoch.foreach { brokerState =>
+    assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId).map(Int.box).asJava)
+    isrItem.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       // In ZK mode, the broker epochs in the leaderAndIsr should be -1.
       assertEquals(-1, brokerState.brokerEpoch())
     }
@@ -1862,7 +1865,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
     val isrUpdate = alterPartitionManager.isrUpdates.head
-    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.foreach { brokerState =>
+    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       if (brokerState.brokerId() == remoteBrokerId2) {
         // remoteBrokerId2 has not received any fetch request yet, it does not have broker epoch.
         assertEquals(-1, brokerState.brokerEpoch())
@@ -2067,7 +2070,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Try to shrink the ISR
     partition.maybeShrinkIsr()
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId))
+    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId).map(Int.box).asJava)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.partitionState.maximalIsr)
 
@@ -2154,9 +2157,9 @@ class PartitionTest extends AbstractPartitionTest {
     partition.maybeShrinkIsr()
     assertEquals(0, alterPartitionListener.shrinks.get)
     assertEquals(alterPartitionManager.isrUpdates.size, 1)
-    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId, remoteBrokerId1))
+    assertEquals(alterPartitionManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId, remoteBrokerId1).map(Int.box).asJava)
     val isrUpdate = alterPartitionManager.isrUpdates.head
-    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.foreach { brokerState =>
+    isrUpdate.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
       assertEquals(defaultBrokerEpoch(brokerState.brokerId()), brokerState.brokerEpoch())
     }
     assertEquals(Set(brokerId, remoteBrokerId1, remoteBrokerId2), partition.partitionState.isr)
@@ -2746,7 +2749,7 @@ class PartitionTest extends AbstractPartitionTest {
     seedLogData(log, numRecords = 6, leaderEpoch = 5)
 
     when(offsetCheckpoints.fetch(logDir1.getAbsolutePath, topicPartition))
-      .thenReturn(Some(4L))
+      .thenReturn(Optional.of(long2Long(4L)))
 
     val controllerEpoch = 3
     val replicas = List[Integer](brokerId, brokerId + 1).asJava
@@ -2912,7 +2915,7 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, MetadataVersion.latestTesting, 0, () => defaultBrokerEpoch(0),
-      new SystemTime(), mock(classOf[AlterPartitionListener]), mock(classOf[DelayedOperations]),
+      Time.SYSTEM, mock(classOf[AlterPartitionListener]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterPartitionManager]))
 
     val replicas = Seq(0, 1, 2, 3)
@@ -3180,7 +3183,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Optional.of(new EpochEntry(leaderEpoch, 0L)), leaderLog.leaderEpochCache.asJava.flatMap(_.latestEntry))
 
     // Write to the log to increment the log end offset.
-    leaderLog.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
+    leaderLog.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k1".getBytes, "v1".getBytes)
     ), leaderEpoch = leaderEpoch)
@@ -3671,7 +3674,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   private def seedLogData(log: UnifiedLog, numRecords: Int, leaderEpoch: Int): Unit = {
     for (i <- 0 until numRecords) {
-      val records = MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
+      val records = MemoryRecords.withRecords(0L, Compression.NONE, leaderEpoch,
         new SimpleRecord(s"k$i".getBytes, s"v$i".getBytes))
       log.appendAsLeader(records, leaderEpoch)
     }
@@ -4082,5 +4085,34 @@ class PartitionTest extends AbstractPartitionTest {
     // Then
     assertTrue(res)
     verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Some(topicId), Some(targetDirectory))
+  }
+
+  @Test
+  def tryCompleteDelayedRequestsCatchesExceptions(): Unit = {
+    val requestKey = TopicPartitionOperationKey(topicPartition)
+
+    val produce = mock(classOf[DelayedOperationPurgatory[DelayedProduce]])
+    when(produce.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val fetch = mock(classOf[DelayedOperationPurgatory[DelayedFetch]])
+    when(fetch.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val deleteRecords = mock(classOf[DelayedOperationPurgatory[DelayedDeleteRecords]])
+    when(deleteRecords.checkAndComplete(requestKey)).thenThrow(new RuntimeException("uh oh"))
+
+    val delayedOperations = new DelayedOperations(topicPartition, produce, fetch, deleteRecords)
+    val spyLogManager = spy(logManager)
+    val partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_DEFAULT,
+      interBrokerProtocolVersion = MetadataVersion.latestTesting,
+      localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
+      time,
+      alterPartitionListener,
+      delayedOperations,
+      metadataCache,
+      spyLogManager,
+      alterPartitionManager)
+    partition.tryCompleteDelayedRequests()
   }
 }

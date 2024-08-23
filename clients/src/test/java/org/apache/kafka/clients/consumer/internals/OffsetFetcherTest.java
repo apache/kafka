@@ -60,6 +60,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1153,7 +1154,7 @@ public class OffsetFetcherTest {
                 .collect(Collectors.toSet());
 
             assertTrue(expectedPartitions.stream().noneMatch(allRequestedPartitions::contains));
-            assertTrue(expectedPartitions.size() > 0);
+            assertFalse(expectedPartitions.isEmpty());
             allRequestedPartitions.addAll(expectedPartitions);
 
             OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();

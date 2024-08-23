@@ -16,27 +16,24 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.tools.StreamsResetter;
-
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.test.IntegrationTest;
-
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
+import org.apache.kafka.tools.StreamsResetter;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -52,14 +49,15 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.is
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * Tests local state store and global application cleanup.
  */
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
 
     public static final EmbeddedKafkaCluster CLUSTER;
@@ -73,12 +71,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -88,20 +86,20 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         return null;
     }
 
-    @Before
-    public void before() throws Exception {
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws Exception {
         cluster = CLUSTER;
-        prepareTest();
+        prepareTest(testInfo);
     }
 
-    @After
+    @AfterEach
     public void after() throws Exception {
         cleanupTest();
     }
 
     @Test
-    public void shouldNotAllowToResetWhileStreamsIsRunning() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void shouldNotAllowToResetWhileStreamsIsRunning(final TestInfo testInfo) {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -118,14 +116,14 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams.start();
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
-        Assert.assertEquals(1, exitCode);
+        assertEquals(1, exitCode);
 
         streams.close();
     }
 
     @Test
-    public void shouldNotAllowToResetWhenInputTopicAbsent() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void shouldNotAllowToResetWhenInputTopicAbsent(final TestInfo testInfo) {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -136,12 +134,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
-        Assert.assertEquals(1, exitCode);
+        assertEquals(1, exitCode);
     }
 
     @Test
-    public void shouldNotAllowToResetWhenIntermediateTopicAbsent() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void shouldNotAllowToResetWhenIntermediateTopicAbsent(final TestInfo testInfo) {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -152,12 +150,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
-        Assert.assertEquals(1, exitCode);
+        assertEquals(1, exitCode);
     }
 
     @Test
-    public void shouldNotAllowToResetWhenSpecifiedInternalTopicDoesNotExist() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void shouldNotAllowToResetWhenSpecifiedInternalTopicDoesNotExist(final TestInfo testInfo) {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -168,12 +166,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
-        Assert.assertEquals(1, exitCode);
+        assertEquals(1, exitCode);
     }
 
     @Test
-    public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal(final TestInfo testInfo) {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -184,12 +182,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
-        Assert.assertEquals(1, exitCode);
+        assertEquals(1, exitCode);
     }
 
     @Test
-    public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void testResetWhenLongSessionTimeoutConfiguredWithForceOption(final TestInfo testInfo) throws Exception {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
         streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(STREAMS_CONSUMER_TIMEOUT * 100));
 
@@ -206,7 +204,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         // Reset would fail since long session timeout has been configured
         final boolean cleanResult = tryCleanGlobal(false, null, null, appID);
-        Assert.assertFalse(cleanResult);
+        assertFalse(cleanResult);
 
         // Reset will success with --force, it will force delete active members on broker side
         cleanGlobal(false, "--force", null, appID);
@@ -224,8 +222,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic(final TestInfo testInfo) throws Exception {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -265,8 +263,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic(final TestInfo testInfo) throws Exception {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -310,8 +308,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
+    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic(final TestInfo testInfo) throws Exception {
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testInfo);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN

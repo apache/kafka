@@ -38,6 +38,7 @@
   <allow pkg="org.apache.kafka.common" />
   <allow pkg="org.mockito" class="AssignmentsManagerTest"/>
   <allow pkg="org.apache.kafka.server"/>
+  <allow pkg="org.opentest4j" class="RemoteLogManagerTest"/>
   <!-- see KIP-544 for why KafkaYammerMetrics should be used instead of the global default yammer metrics registry
        https://cwiki.apache.org/confluence/display/KAFKA/KIP-544%3A+Make+metrics+exposed+via+JMX+configurable -->
   <disallow class="com.yammer.metrics.Metrics" />
@@ -109,6 +110,7 @@
     <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.clients.consumer"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
+    <allow pkg="org.apache.kafka.coordinator.transaction"/>
     <subpackage name="annotation">
       <allow pkg="kafka.test"/>
     </subpackage>
@@ -117,15 +119,23 @@
       <allow pkg="org.apache.kafka.clients"/>
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
+    <subpackage name="server">
+      <allow pkg="kafka.test" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="admin">
+    <allow pkg="kafka.admin"/>
     <allow pkg="kafka.cluster"/>
+    <allow pkg="kafka.security.authorizer"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
+    <allow pkg="org.apache.kafka.clients.admin"/>
+    <allow pkg="org.apache.kafka.metadata.authorizer"/>
     <allow pkg="org.apache.kafka.security"/>
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.log4j"/>
     <allow pkg="kafka.test"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>

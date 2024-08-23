@@ -21,12 +21,12 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
+import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
@@ -693,6 +693,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer2.unsubscribe()
     consumer3.unsubscribe()
 
+    assertTrue(consumer1.assignment().isEmpty)
+    assertTrue(consumer2.assignment().isEmpty)
+    assertTrue(consumer3.assignment().isEmpty)
+
     consumer1.close()
     consumer2.close()
     consumer3.close()
@@ -906,29 +910,5 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
 
     assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(100)))
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testGetPositionOfNewlyAssignedPartitionFromPartitionsAssignedCallback(quorum: String,
-                                                                            groupProtocol: String): Unit = {
-    val consumer = createConsumer()
-    val listener = new TestConsumerReassignmentListener {
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
-        super.onPartitionsRevoked(partitions)
-      }
-
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
-        super.onPartitionsAssigned(partitions)
-        partitions.forEach(tp => {
-          assertDoesNotThrow(() => consumer.position(tp))
-        })
-
-      }
-    }
-    consumer.subscribe(List(topic).asJava, listener)
-    awaitRebalance(consumer, listener)
-    assertEquals(1, listener.callsToAssigned)
-    assertEquals(0, listener.callsToRevoked)
   }
 }

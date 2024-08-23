@@ -32,7 +32,7 @@ public class MappedIteratorTest {
     @Test
     public void testStringToInteger() {
         List<String> list = asList("foo", "", "bar2", "baz45");
-        Function<String, Integer> mapper = s -> s.length();
+        Function<String, Integer> mapper = String::length;
 
         Iterable<Integer> mappedIterable = () -> new MappedIterator<>(list.iterator(), mapper);
         List<Integer> mapped = new ArrayList<>();
@@ -49,7 +49,7 @@ public class MappedIteratorTest {
     @Test
     public void testEmptyList() {
         List<String> list = emptyList();
-        Function<String, Integer> mapper = s -> s.length();
+        Function<String, Integer> mapper = String::length;
 
         Iterable<Integer> mappedIterable = () -> new MappedIterator<>(list.iterator(), mapper);
         List<Integer> mapped = new ArrayList<>();

@@ -18,23 +18,21 @@ package org.apache.kafka.tools.consumer.group;
 
 import kafka.api.AbstractSaslTest;
 import kafka.api.Both$;
-import kafka.utils.JaasTestUtils;
+import kafka.security.JaasTestUtils;
 import kafka.zk.ConfigEntityChangeNotificationZNode;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.function.Executable;
-import scala.Option;
-import scala.Some$;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,7 +40,11 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
-import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest.seq;
+import scala.Option;
+import scala.Some$;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -52,7 +54,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     public static final int NUM_PARTITIONS = 1;
     public static final int BROKER_COUNT = 1;
     public static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
-    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS = seq(Collections.singletonList(KAFKA_CLIENT_SASL_MECHANISM));
+    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS = JavaConverters.asScalaIteratorConverter(Collections.singletonList(KAFKA_CLIENT_SASL_MECHANISM).iterator()).asScala().toSeq();
 
     @SuppressWarnings({"deprecation"})
     private Consumer<byte[], byte[]> createConsumer() {
@@ -89,20 +91,20 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         super.configureSecurityBeforeServersStart(testInfo);
         zkClient().makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path());
         // Create broker credentials before starting brokers
-        createScramCredentials(zkConnect(), JaasTestUtils.KafkaScramAdmin(), JaasTestUtils.KafkaScramAdminPassword());
+        createScramCredentials(zkConnect(), JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD);
     }
 
     @Override
     public Admin createPrivilegedAdminClient() {
         return createAdminClient(bootstrapServers(listenerName()), securityProtocol(), trustStoreFile(), clientSaslProperties(),
-            KAFKA_CLIENT_SASL_MECHANISM, JaasTestUtils.KafkaScramAdmin(), JaasTestUtils.KafkaScramAdminPassword());
+            KAFKA_CLIENT_SASL_MECHANISM, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD);
     }
 
     @BeforeEach
     @Override
     public void setUp(TestInfo testInfo) {
         startSasl(jaasSections(KAFKA_SERVER_SASL_MECHANISMS, Some$.MODULE$.apply(KAFKA_CLIENT_SASL_MECHANISM), Both$.MODULE$,
-            JaasTestUtils.KafkaServerContextName()));
+            JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME));
         super.setUp(testInfo);
         createTopic(
             TOPIC,
@@ -134,7 +136,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
     @Test
     public void testConsumerGroupServiceWithAuthenticationSuccess() throws Exception {
-        createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2(), JaasTestUtils.KafkaScramPassword2());
+        createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
         try (Consumer<byte[], byte[]> consumer = createConsumer()) {
             consumer.subscribe(Collections.singletonList(TOPIC));

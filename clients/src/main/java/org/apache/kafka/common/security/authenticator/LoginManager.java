@@ -27,15 +27,21 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.security.auth.Subject;
-import javax.security.auth.login.LoginException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Callable;
+
+import javax.security.auth.Subject;
+import javax.security.auth.login.LoginException;
+
+import static java.util.Arrays.asList;
 
 public class LoginManager {
 
@@ -53,13 +59,18 @@ public class LoginManager {
     private int refCount;
 
     private LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
-                         LoginMetadata<?> loginMetadata) throws LoginException {
+                 LoginMetadata<?> loginMetadata) throws LoginException {
         this.loginMetadata = loginMetadata;
         this.login = Utils.newInstance(loginMetadata.loginClass);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
-        loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
-        login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
-        login.login();
+        try {
+            loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
+            login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
+            login.login();
+        } catch (Exception e) {
+            closeResources();
+            throw e;
+        }
     }
 
     /**
@@ -76,7 +87,7 @@ public class LoginManager {
      *
      * @param jaasContext Static or dynamic JAAS context. `jaasContext.dynamicJaasConfig()` is non-null for dynamic context.
      *                    For static contexts, this may contain multiple login modules if the context type is SERVER.
-     *                    For CLIENT static contexts and dynamic contexts of CLIENT and SERVER, 'jaasContext` contains
+     *                    For CLIENT static contexts and dynamic contexts of CLIENT and SERVER, `jaasContext` contains
      *                    only one login module.
      * @param saslMechanism SASL mechanism for which login manager is being acquired. For dynamic contexts, the single
      *                      login module in `jaasContext` corresponds to this SASL mechanism. Hence `Login` class is
@@ -164,6 +175,28 @@ public class LoginManager {
                 // subject.toString() exposes private credentials, so we can't use it
                 ", publicCredentials=" + subject().getPublicCredentials() +
                 ", refCount=" + refCount + ')';
+    }
+
+    /**
+     * Closes Login and AuthenticateCallbackHandler quietly.
+     * The function logs exceptions that are thrown during closing.
+     */
+    private void closeResources() {
+        try {
+            List<Callable<Void>> tasks = asList(
+                    () -> {
+                        login.close();
+                        return null;
+                    },
+                    () -> {
+                        loginCallbackHandler.close();
+                        return null;
+                    }
+            );
+            Utils.tryAll(tasks);
+        } catch (Throwable t) {
+            LOGGER.info("Exception thrown during closing", t);
+        }
     }
 
     /* Should only be used in tests. */

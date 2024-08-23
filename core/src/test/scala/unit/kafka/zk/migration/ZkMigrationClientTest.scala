@@ -16,19 +16,18 @@
  */
 package kafka.zk.migration
 
-import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.coordinator.transaction.{ProducerIdManager, ZkProducerIdManager}
-import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.config.{ConfigResource, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, PartitionRecord, ProducerIdsRecord, TopicRecord}
 import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
-import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs}
+import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
@@ -70,9 +69,9 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
 
     val leaderAndIsrs = Map(
       new TopicPartition("test", 0) -> LeaderIsrAndControllerEpoch(
-        LeaderAndIsr(0, 5, List(0, 1, 2), LeaderRecoveryState.RECOVERED, -1), 1),
+        new LeaderAndIsr(0, 5, List(0, 1, 2).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, -1), 1),
       new TopicPartition("test", 1) -> LeaderIsrAndControllerEpoch(
-        LeaderAndIsr(1, 5, List(1, 2, 3), LeaderRecoveryState.RECOVERED, -1), 1)
+        new LeaderAndIsr(1, 5, List(1, 2, 3).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, -1), 1)
     )
     zkClient.createTopicPartitionStatesRaw(leaderAndIsrs, 0)
 
@@ -106,12 +105,12 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     val partition0 = zkClient.getTopicPartitionState(new TopicPartition("test", 0)).get.leaderAndIsr
     assertEquals(1, partition0.leader)
     assertEquals(6, partition0.leaderEpoch)
-    assertEquals(List(1, 2), partition0.isr)
+    assertEquals(List(1, 2).map(Int.box).asJava, partition0.isr)
 
     val partition1 = zkClient.getTopicPartitionState(new TopicPartition("test", 1)).get.leaderAndIsr
     assertEquals(3, partition1.leader)
     assertEquals(7, partition1.leaderEpoch)
-    assertEquals(List(3), partition1.isr)
+    assertEquals(List(3).map(Int.box).asJava, partition1.isr)
 
     // Delete whole topic
     migrationState = migrationClient.topicClient().deleteTopic("test", migrationState)
@@ -149,12 +148,12 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     val partition0 = zkClient.getTopicPartitionState(new TopicPartition("test", 0)).get.leaderAndIsr
     assertEquals(0, partition0.leader)
     assertEquals(0, partition0.leaderEpoch)
-    assertEquals(List(0, 1, 2), partition0.isr)
+    assertEquals(List(0, 1, 2).map(Int.box).asJava, partition0.isr)
 
     val partition1 = zkClient.getTopicPartitionState(new TopicPartition("test", 1)).get.leaderAndIsr
     assertEquals(1, partition1.leader)
     assertEquals(0, partition1.leaderEpoch)
-    assertEquals(List(1, 2, 3), partition1.isr)
+    assertEquals(List(1, 2, 3).map(Int.box).asJava, partition1.isr)
   }
 
   @Test
@@ -331,7 +330,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     val topicId = Uuid.randomUuid()
     val props = new Properties()
     props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "1") // normal config
-    props.put(KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, SECRET) // sensitive config
+    props.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, SECRET) // sensitive config
 
     //    // Leave Zk in an incomplete state.
     //    zkClient.createTopicAssignment(topicName, Some(topicId), Map(tp -> Seq(1)))
@@ -393,7 +392,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
       assertEquals(leaderPartition, state.leaderAndIsr.leader)
       assertEquals(leaderEpoch, state.leaderAndIsr.leaderEpoch)
       assertEquals(LeaderRecoveryState.RECOVERED, state.leaderAndIsr.leaderRecoveryState)
-      assertEquals(replicas.asScala.map(Integer2int).toList, state.leaderAndIsr.isr)
+      assertEquals(replicas, state.leaderAndIsr.isr)
     }
 
     // Verify the broker and topic configs (including sensitive configs).
@@ -402,7 +401,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(2, brokerProps.size())
 
     brokerProps.asScala.foreach { case (key, value) =>
-      if (key == KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
+      if (key == SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
         assertEquals(SECRET, encoder.decode(value).value)
       } else {
         assertEquals(props.getProperty(key), value)
@@ -410,7 +409,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     }
 
     topicProps.asScala.foreach { case (key, value) =>
-      if (key == KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
+      if (key == SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) {
         assertEquals(SECRET, encoder.decode(value).value)
       } else {
         assertEquals(props.getProperty(key), value)
@@ -510,7 +509,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
       assertEquals(expectedPartition.partitionEpoch + 1, part.leaderAndIsr.partitionEpoch)
       assertEquals(expectedPartition.leaderEpoch, part.leaderAndIsr.leaderEpoch)
       assertEquals(expectedPartition.leaderRecoveryState, part.leaderAndIsr.leaderRecoveryState)
-      assertEquals(expectedPartition.isr.toList, part.leaderAndIsr.isr)
+      assertEquals(expectedPartition.isr.toList.map(Int.box).asJava, part.leaderAndIsr.isr)
     }
   }
 }

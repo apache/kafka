@@ -23,9 +23,8 @@ import java.io._
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
-import kafka.serializer.Decoder
-import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils.{CoreUtils, VerifiableProperties}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.ConsumerProtocolAssignment
 import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter
@@ -39,14 +38,16 @@ import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordT
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, Message}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group.RecordSerde
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupCurrentMemberAssignmentKey, ConsumerGroupCurrentMemberAssignmentKeyJsonConverter, ConsumerGroupCurrentMemberAssignmentValue, ConsumerGroupCurrentMemberAssignmentValueJsonConverter, ConsumerGroupMemberMetadataKey, ConsumerGroupMemberMetadataKeyJsonConverter, ConsumerGroupMemberMetadataValue, ConsumerGroupMemberMetadataValueJsonConverter, ConsumerGroupMetadataKey, ConsumerGroupMetadataKeyJsonConverter, ConsumerGroupMetadataValue, ConsumerGroupMetadataValueJsonConverter, ConsumerGroupPartitionMetadataKey, ConsumerGroupPartitionMetadataKeyJsonConverter, ConsumerGroupPartitionMetadataValue, ConsumerGroupPartitionMetadataValueJsonConverter, ConsumerGroupTargetAssignmentMemberKey, ConsumerGroupTargetAssignmentMemberKeyJsonConverter, ConsumerGroupTargetAssignmentMemberValue, ConsumerGroupTargetAssignmentMemberValueJsonConverter, ConsumerGroupTargetAssignmentMetadataKey, ConsumerGroupTargetAssignmentMetadataKeyJsonConverter, ConsumerGroupTargetAssignmentMetadataValue, ConsumerGroupTargetAssignmentMetadataValueJsonConverter, GroupMetadataKey, GroupMetadataKeyJsonConverter, GroupMetadataValue, GroupMetadataValueJsonConverter, OffsetCommitKey, OffsetCommitKeyJsonConverter, OffsetCommitValue, OffsetCommitValueJsonConverter}
-import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
+import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.UnknownRecordTypeException
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
+import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFileUtils, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex}
+import org.apache.kafka.tools.api.{Decoder, DefaultDecoder, IntegerDecoder, LongDecoder, StringDecoder}
 
 import java.nio.ByteBuffer
 import scala.jdk.CollectionConverters._
@@ -54,7 +55,6 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object DumpLogSegments {
-
   // visible for testing
   private[tools] val RecordIndent = "|"
 
@@ -419,7 +419,7 @@ object DumpLogSegments {
 
   // Package private for testing.
   class OffsetsMessageParser extends MessageParser[String, String] {
-    private val serde = new RecordSerde()
+    private val serde = new GroupCoordinatorRecordSerde()
 
     private def prepareKey(message: Message, version: Short): String = {
       val messageAsJson = message match {
@@ -584,10 +584,27 @@ object DumpLogSegments {
     }
   }
 
+  private class RemoteMetadataLogMessageParser extends MessageParser[String, String] {
+    private val metadataRecordSerde = new RemoteLogMetadataSerde
+    
+    override def parse(record: Record): (Option[String], Option[String]) = {
+      val output = try {
+        val data = new Array[Byte](record.value.remaining)
+        record.value.get(data)
+        metadataRecordSerde.deserialize(data).toString
+      } catch {
+        case e: Throwable =>
+          s"Error at offset ${record.offset}, skipping. ${e.getMessage}"
+      }
+      // No keys for metadata records
+      (None, Some(output))
+    }
+  }
+
   private class DumpLogSegmentsOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    private val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
-    private val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
-    private val indexSanityOpt = parser.accepts("index-sanity-check", "if set, just checks the index sanity without printing its content. " +
+    private val printOpt = parser.accepts("print-data-log", "If set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
+    private val verifyOpt = parser.accepts("verify-index-only", "If set, just verify the index log without printing its content.")
+    private val indexSanityOpt = parser.accepts("index-sanity-check", "If set, just checks the index sanity without printing its content. " +
       "This is the same check that is executed on broker startup to determine if an index needs rebuilding or not.")
     private val filesOpt = parser.accepts("files", "REQUIRED: The comma separated list of data and index log files to be dumped.")
       .withRequiredArg
@@ -603,21 +620,23 @@ object DumpLogSegments {
        .describedAs("size")
        .ofType(classOf[java.lang.Integer])
        .defaultsTo(Integer.MAX_VALUE)
-    private val deepIterationOpt = parser.accepts("deep-iteration", "if set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.")
-    private val valueDecoderOpt = parser.accepts("value-decoder-class", "if set, used to deserialize the messages. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
+    private val deepIterationOpt = parser.accepts("deep-iteration", "If set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.")
+    private val valueDecoderOpt = parser.accepts("value-decoder-class", "If set, used to deserialize the messages. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
       .withOptionalArg()
       .ofType(classOf[java.lang.String])
-      .defaultsTo("kafka.serializer.StringDecoder")
-    private val keyDecoderOpt = parser.accepts("key-decoder-class", "if set, used to deserialize the keys. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
+      .defaultsTo(classOf[StringDecoder].getName)
+    private val keyDecoderOpt = parser.accepts("key-decoder-class", "If set, used to deserialize the keys. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
       .withOptionalArg()
       .ofType(classOf[java.lang.String])
-      .defaultsTo("kafka.serializer.StringDecoder")
-    private val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from the " +
+      .defaultsTo(classOf[StringDecoder].getName)
+    private val offsetsOpt = parser.accepts("offsets-decoder", "If set, log data will be parsed as offset data from the " +
       "__consumer_offsets topic.")
-    private val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
+    private val transactionLogOpt = parser.accepts("transaction-log-decoder", "If set, log data will be parsed as " +
       "transaction metadata from the __transaction_state topic.")
-    private val clusterMetadataOpt = parser.accepts("cluster-metadata-decoder", "if set, log data will be parsed as cluster metadata records.")
-    private val skipRecordMetadataOpt = parser.accepts("skip-record-metadata", "whether to skip printing metadata for each record.")
+    private val clusterMetadataOpt = parser.accepts("cluster-metadata-decoder", "If set, log data will be parsed as cluster metadata records.")
+    private val remoteMetadataOpt = parser.accepts("remote-log-metadata-decoder", "If set, log data will be parsed as TopicBasedRemoteLogMetadataManager (RLMM) metadata records." + 
+      " Instead, the value-decoder-class option can be used if a custom RLMM implementation is configured.")
+    private val skipRecordMetadataOpt = parser.accepts("skip-record-metadata", "Whether to skip printing metadata for each record.")
     options = parser.parse(args : _*)
 
     def messageParser: MessageParser[_, _] =
@@ -627,9 +646,11 @@ object DumpLogSegments {
         new TransactionLogMessageParser
       } else if (options.has(clusterMetadataOpt)) {
         new ClusterMetadataLogMessageParser
+      } else if (options.has(remoteMetadataOpt)) {
+        new RemoteMetadataLogMessageParser  
       } else {
-        val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
-        val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
+        val valueDecoder = newDecoder(options.valueOf(valueDecoderOpt))
+        val keyDecoder = newDecoder(options.valueOf(keyDecoderOpt))
         new DecoderMessageParser(keyDecoder, valueDecoder)
       }
 
@@ -637,6 +658,7 @@ object DumpLogSegments {
       options.has(offsetsOpt) ||
       options.has(transactionLogOpt) ||
       options.has(clusterMetadataOpt) ||
+      options.has(remoteMetadataOpt) ||
       options.has(valueDecoderOpt) ||
       options.has(keyDecoderOpt)
 
@@ -649,6 +671,43 @@ object DumpLogSegments {
     lazy val maxBytes: Int = options.valueOf(maxBytesOpt).intValue()
 
     def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
+  }
 
+  /*
+   * The kafka.serializer.Decoder is deprecated in 3.8.0. This method is used to transfer the deprecated
+   * decoder to the new org.apache.kafka.tools.api.Decoder. Old decoders have an input VerifiableProperties.
+   * Remove it in new interface since it's always empty.
+   */
+  private[tools] def newDecoder(className: String): Decoder[_] = {
+    try {
+      CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](convertDeprecatedDecoderClass(className))
+    } catch  {
+      case _: Exception =>
+        // Old decoders always have an default VerifiableProperties input, because DumpLogSegments didn't provide
+        // any way to pass custom configs.
+        val decoder = CoreUtils.createObject[kafka.serializer.Decoder[_]](className, new VerifiableProperties())
+        (bytes: Array[Byte]) => decoder.fromBytes(bytes)
+    }
+  }
+
+  /*
+   * Covert deprecated decoder implementation to new decoder class.
+   */
+  private[tools] def convertDeprecatedDecoderClass(className: String): String = {
+    if (className == "kafka.serializer.StringDecoder") {
+      println("kafka.serializer.StringDecoder is deprecated. Please use org.apache.kafka.tools.api.StringDecoder instead")
+      classOf[StringDecoder].getName
+    } else if (className == "kafka.serializer.LongDecoder") {
+      println("kafka.serializer.LongDecoder is deprecated. Please use org.apache.kafka.tools.api.LongDecoder instead")
+      classOf[LongDecoder].getName
+    } else if (className == "kafka.serializer.IntegerDecoder") {
+      println("kafka.serializer.IntegerDecoder is deprecated. Please use org.apache.kafka.tools.api.IntegerDecoder instead")
+      classOf[IntegerDecoder].getName
+    } else if (className == "kafka.serializer.DefaultDecoder") {
+      println("kafka.serializer.DefaultDecoder is deprecated. Please use org.apache.kafka.tools.api.DefaultDecoder instead")
+      classOf[DefaultDecoder].getName
+    } else {
+      className
+    }
   }
 }

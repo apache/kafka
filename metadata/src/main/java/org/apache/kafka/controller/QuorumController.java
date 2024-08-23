@@ -31,10 +31,10 @@ import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterPartitionRequestData;
-import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
@@ -78,11 +78,11 @@ import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
-import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -95,6 +95,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.errors.ControllerExceptions;
 import org.apache.kafka.controller.errors.EventHandlerExceptionInfo;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
+import org.apache.kafka.deferred.DeferredEvent;
+import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -106,10 +108,8 @@ import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.util.RecordRedactor;
-import org.apache.kafka.deferred.DeferredEventQueue;
-import org.apache.kafka.deferred.DeferredEvent;
-import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
+import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
@@ -119,6 +119,7 @@ import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -127,18 +128,18 @@ import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -180,19 +181,19 @@ public final class QuorumController implements Controller {
     /**
      * The maximum records that the controller will write in a single batch.
      */
-    private final static int MAX_RECORDS_PER_BATCH = 10000;
+    private static final int MAX_RECORDS_PER_BATCH = 10000;
 
     /**
      * The maximum records any user-initiated operation is allowed to generate.
      *
      * For now, this is set to the maximum records in a single batch.
      */
-    final static int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
+    static final int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
 
     /**
      * A builder class which creates the QuorumController.
      */
-    static public class Builder {
+    public static class Builder {
         private final int nodeId;
         private final String clusterId;
         private FaultHandler nonFatalFaultHandler = null;
@@ -498,8 +499,6 @@ public final class QuorumController implements Controller {
             return clusterControl.controllerSupportedFeatures();
         }
     }
-
-    public static final String CONTROLLER_THREAD_SUFFIX = "QuorumControllerEventHandler";
 
     private OptionalInt latestController() {
         return raftClient.leaderAndEpoch().leaderId();
@@ -819,9 +818,10 @@ public final class QuorumController implements Controller {
                         // succeed; if it does not, that's a fatal error. It is important to do this before
                         // scheduling the record for Raft replication.
                         int recordIndex = 0;
-                        long nextWriteOffset = offsetControl.nextWriteOffset();
+                        long lastOffset = raftClient.prepareAppend(controllerEpoch, records);
+                        long baseOffset = lastOffset - records.size() + 1;
                         for (ApiMessageAndVersion message : records) {
-                            long recordOffset = nextWriteOffset + recordIndex;
+                            long recordOffset = baseOffset + recordIndex;
                             try {
                                 replay(message.message(), Optional.empty(), recordOffset);
                             } catch (Throwable e) {
@@ -829,17 +829,14 @@ public final class QuorumController implements Controller {
                                     "record at offset %d on active controller, from the " +
                                     "batch with baseOffset %d",
                                     message.message().getClass().getSimpleName(),
-                                    recordOffset, nextWriteOffset);
+                                    recordOffset, baseOffset);
                                 throw fatalFaultHandler.handleFault(failureMessage, e);
                             }
                             recordIndex++;
                         }
-                        long nextEndOffset = nextWriteOffset - 1 + recordIndex;
-                        raftClient.scheduleAtomicAppend(controllerEpoch,
-                            OptionalLong.of(nextWriteOffset),
-                            records);
-                        offsetControl.handleScheduleAtomicAppend(nextEndOffset);
-                        return nextEndOffset;
+                        raftClient.schedulePreparedAppend();
+                        offsetControl.handleScheduleAppend(lastOffset);
+                        return lastOffset;
                     }
                 );
                 op.processBatchEndOffset(offset);
@@ -1407,7 +1404,7 @@ public final class QuorumController implements Controller {
                     maybeScheduleNextWriteNoOpRecord();
 
                     return ControllerResult.of(
-                        Arrays.asList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
+                        Collections.singletonList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
                         null
                     );
                 },
@@ -2175,11 +2172,14 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerRegistrationRequestData request
     ) {
+        // populate finalized features map with latest known kraft version for validation
+        Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+        controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
         return appendWriteEvent("registerBroker", context.deadlineNs(),
             () -> {
                 ControllerResult<BrokerRegistrationReply> result = clusterControl.
-                    registerBroker(request, offsetControl.nextWriteOffset(), featureControl.
-                        finalizedFeatures(Long.MAX_VALUE), context.requestHeader().requestApiVersion());
+                    registerBroker(request, offsetControl.nextWriteOffset(),
+                        new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE));
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
@@ -2345,13 +2345,6 @@ public final class QuorumController implements Controller {
     // VisibleForTesting
     QuorumControllerMetrics controllerMetrics() {
         return controllerMetrics;
-    }
-
-    // VisibleForTesting
-    void setNewNextWriteOffset(long newNextWriteOffset) {
-        appendControlEvent("setNewNextWriteOffset", () -> {
-            offsetControl.setNextWriteOffset(newNextWriteOffset);
-        });
     }
 
     void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {

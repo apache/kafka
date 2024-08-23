@@ -17,8 +17,8 @@
 
 package org.apache.kafka.jmh.partition;
 
-import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
+import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.cluster.Replica;
 import kafka.log.LogManager;
@@ -26,18 +26,20 @@ import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
-import org.apache.kafka.server.util.KafkaScheduler;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -60,6 +62,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
 import scala.Option;
 import scala.compat.java8.OptionConverters;
 
@@ -74,7 +77,7 @@ public class UpdateFollowerFetchStateBenchmark {
     private final Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
     private long nextOffset = 0;
     private LogManager logManager;
@@ -106,7 +109,7 @@ public class UpdateFollowerFetchStateBenchmark {
             setKeepPartitionMetadataFile(true).
             build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Option.apply(0L));
+        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Optional.of(0L));
         DelayedOperations delayedOperations = new DelayedOperationsMock();
 
         // one leader, plus two followers

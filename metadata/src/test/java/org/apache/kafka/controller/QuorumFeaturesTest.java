@@ -22,8 +22,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,12 +37,13 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
-    private final static Map<String, VersionRange> LOCAL;
+    private static final Map<String, VersionRange> LOCAL;
 
-    private final static QuorumFeatures QUORUM_FEATURES;
+    private static final QuorumFeatures QUORUM_FEATURES;
 
     static {
         Map<String, VersionRange> local = new HashMap<>();
@@ -55,6 +60,15 @@ public class QuorumFeaturesTest {
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        for (Features feature : Features.PRODUCTION_FEATURES) {
+            short maxVersion = feature.defaultValue(MetadataVersion.LATEST_PRODUCTION);
+            if (maxVersion > 0) {
+                expectedFeatures.put(feature.featureName(), VersionRange.of(
+                    feature.minimumProduction(),
+                    maxVersion
+                ));
+            }
+        }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
     }
 
@@ -64,7 +78,25 @@ public class QuorumFeaturesTest {
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.latestTesting().featureLevel()));
+        for (Features feature : Features.PRODUCTION_FEATURES) {
+            short maxVersion = feature.defaultValue(MetadataVersion.latestTesting());
+            if (maxVersion > 0) {
+                expectedFeatures.put(feature.featureName(), VersionRange.of(
+                    feature.minimumProduction(),
+                    maxVersion
+                ));
+            }
+        }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void ensureDefaultSupportedFeaturesRangeMaxNotZero(boolean unstableVersionsEnabled) {
+        Map<String, VersionRange> quorumFeatures = QuorumFeatures.defaultFeatureMap(unstableVersionsEnabled);
+        for (VersionRange range : quorumFeatures.values()) {
+            assertNotEquals(0, range.max());
+        }
     }
 
     @Test
@@ -131,7 +163,7 @@ public class QuorumFeaturesTest {
     @Test
     public void testZkMigrationReadyIfAllControllersReady() {
         Map<Integer, ControllerRegistration> controllers = new HashMap<>();
-        QUORUM_FEATURES.quorumNodeIds().forEach(id -> {
+        QUORUM_FEATURES.quorumNodeIds().forEach(id ->
             controllers.put(id,
                 new ControllerRegistration.Builder().
                     setId(id).
@@ -139,8 +171,8 @@ public class QuorumFeaturesTest {
                     setIncarnationId(Uuid.fromString("kCBJaDGNQk6x3y5xbtQOpg")).
                     setListeners(Collections.singletonMap("CONTROLLER",
                         new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
-                    build());
-        });
+                    build())
+        );
         assertEquals(Optional.empty(), QUORUM_FEATURES.reasonAllControllersZkMigrationNotReady(
             MetadataVersion.IBP_3_7_IV0, controllers));
     }

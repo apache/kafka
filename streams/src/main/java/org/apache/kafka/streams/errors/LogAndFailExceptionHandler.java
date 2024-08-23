@@ -18,6 +18,7 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.processor.ProcessorContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +33,21 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
     private static final Logger log = LoggerFactory.getLogger(LogAndFailExceptionHandler.class);
 
     @Override
+    @Deprecated
     public DeserializationHandlerResponse handle(final ProcessorContext context,
+                                                 final ConsumerRecord<byte[], byte[]> record,
+                                                 final Exception exception) {
+
+        log.error("Exception caught during Deserialization, " +
+                  "taskId: {}, topic: {}, partition: {}, offset: {}",
+                  context.taskId(), record.topic(), record.partition(), record.offset(),
+                  exception);
+
+        return DeserializationHandlerResponse.FAIL;
+    }
+
+    @Override
+    public DeserializationHandlerResponse handle(final ErrorHandlerContext context,
                                                  final ConsumerRecord<byte[], byte[]> record,
                                                  final Exception exception) {
 

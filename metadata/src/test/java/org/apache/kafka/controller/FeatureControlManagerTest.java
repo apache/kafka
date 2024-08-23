@@ -17,17 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -41,9 +30,21 @@ import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonMap;
@@ -53,7 +54,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Timeout(value = 40)
 public class FeatureControlManagerTest {
 
-    @SuppressWarnings("unchecked")
     private static Map<String, VersionRange> rangeMap(Object... args) {
         Map<String, VersionRange> result = new HashMap<>();
         for (int i = 0; i < args.length; i += 3) {
@@ -99,7 +99,7 @@ public class FeatureControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
             build();
-        snapshotRegistry.getOrCreateSnapshot(-1);
+        snapshotRegistry.idempotentCreateSnapshot(-1);
         assertEquals(new FinalizedControllerFeatures(Collections.singletonMap("metadata.version", (short) 4), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(emptyList(), Collections.
@@ -130,7 +130,7 @@ public class FeatureControlManagerTest {
         FeatureLevelRecord record = new FeatureLevelRecord().
             setName("foo").setFeatureLevel((short) 2);
 
-        snapshotRegistry.getOrCreateSnapshot(-1);
+        snapshotRegistry.idempotentCreateSnapshot(-1);
         FeatureControlManager manager = new FeatureControlManager.Builder().
                 setLogContext(logContext).
                 setQuorumFeatures(features("foo", 1, 2)).
@@ -138,7 +138,7 @@ public class FeatureControlManagerTest {
                 setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
                 build();
         manager.replay(record);
-        snapshotRegistry.getOrCreateSnapshot(123);
+        snapshotRegistry.idempotentCreateSnapshot(123);
         assertEquals(new FinalizedControllerFeatures(versionMap("metadata.version", 4, "foo", 2), 123),
             manager.finalizedFeatures(123));
     }
@@ -169,8 +169,8 @@ public class FeatureControlManagerTest {
             setQuorumFeatures(features("foo", 1, 5, "bar", 0, 3)).
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
-                Arrays.asList(new SimpleImmutableEntry<>(5, Collections.singletonMap("bar", VersionRange.of(0, 3)))),
-                Arrays.asList())).
+                Collections.singletonList(new SimpleImmutableEntry<>(5, singletonMap("bar", VersionRange.of(0, 3)))),
+                emptyList())).
             build();
 
         assertEquals(ControllerResult.atomicOf(emptyList(),
@@ -184,7 +184,7 @@ public class FeatureControlManagerTest {
             updateMap("bar", 3), Collections.emptyMap(), false);
         assertEquals(Collections.singletonMap("bar", ApiError.NONE), result.response());
         manager.replay((FeatureLevelRecord) result.records().get(0).message());
-        snapshotRegistry.getOrCreateSnapshot(3);
+        snapshotRegistry.idempotentCreateSnapshot(3);
 
         assertEquals(ControllerResult.atomicOf(emptyList(), Collections.
                 singletonMap("bar", new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -212,7 +212,7 @@ public class FeatureControlManagerTest {
     }
 
     @Test
-    public void testReplayRecords() throws Exception {
+    public void testReplayRecords() {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         FeatureControlManager manager = new FeatureControlManager.Builder().
@@ -389,14 +389,14 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, emptyList())).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
-                Arrays.asList(new SimpleImmutableEntry<>(1, Collections.singletonMap("foo", VersionRange.of(0, 3)))),
-                Arrays.asList())).
+                Collections.singletonList(new SimpleImmutableEntry<>(1, singletonMap("foo", VersionRange.of(0, 3)))),
+                emptyList())).
                 build();
         ControllerResult<Map<String, ApiError>> result  = manager.updateFeatures(
                 Collections.singletonMap("foo", (short) 1),
                 Collections.singletonMap("foo", FeatureUpdate.UpgradeType.UPGRADE),
                 false);
-        assertEquals(ControllerResult.atomicOf(Arrays.asList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                 new FeatureLevelRecord().setName("foo").setFeatureLevel((short) 1), (short) 0)),
                         Collections.singletonMap("foo", ApiError.NONE)), result);
         RecordTestUtils.replayAll(manager, result.records());
@@ -406,7 +406,7 @@ public class FeatureControlManagerTest {
                 Collections.singletonMap("foo", (short) 0),
                 Collections.singletonMap("foo", FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
                 false);
-        assertEquals(ControllerResult.atomicOf(Arrays.asList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
                         new FeatureLevelRecord().setName("foo").setFeatureLevel((short) 0), (short) 0)),
                 Collections.singletonMap("foo", ApiError.NONE)), result2);
         RecordTestUtils.replayAll(manager, result2.records());

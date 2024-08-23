@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,11 +75,7 @@ public class MockScheduler implements Scheduler, MockTime.Listener {
             waiter.complete(timeMs);
         } else {
             long triggerTimeMs = timeMs + delayMs;
-            List<KafkaFutureImpl<Long>> futures = waiters.get(triggerTimeMs);
-            if (futures == null) {
-                futures = new ArrayList<>();
-                waiters.put(triggerTimeMs, futures);
-            }
+            List<KafkaFutureImpl<Long>> futures = waiters.computeIfAbsent(triggerTimeMs, k -> new ArrayList<>());
             futures.add(waiter);
         }
     }

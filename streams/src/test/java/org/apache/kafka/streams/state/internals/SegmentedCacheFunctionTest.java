@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
@@ -33,7 +33,7 @@ public class SegmentedCacheFunctionTest {
     private static final int TIMESTAMP = 736213517;
 
     private static final Bytes THE_KEY = WindowKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, TIMESTAMP, 42);
-    private final static Bytes THE_CACHE_KEY = Bytes.wrap(
+    private static final Bytes THE_CACHE_KEY = Bytes.wrap(
         ByteBuffer.allocate(8 + THE_KEY.get().length)
             .putLong(TIMESTAMP / SEGMENT_INTERVAL)
             .put(THE_KEY.get()).array()

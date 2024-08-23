@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
@@ -229,7 +230,7 @@ public abstract class AbstractFetch implements Closeable {
                 );
             }
 
-            metricsManager.recordLatency(resp.requestLatencyMs());
+            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
         } finally {
             removePendingFetchRequest(fetchTarget, data.metadata().sessionId());
         }

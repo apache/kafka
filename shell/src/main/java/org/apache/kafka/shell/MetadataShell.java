@@ -19,10 +19,7 @@ package org.apache.kafka.shell;
 
 import kafka.raft.KafkaRaftManager;
 import kafka.tools.TerseFailure;
-import kafka.utils.FileLock;
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.loader.MetadataLoader;
@@ -30,14 +27,21 @@ import org.apache.kafka.metadata.util.SnapshotFileReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.LoggingFaultHandler;
+import org.apache.kafka.server.util.FileLock;
 import org.apache.kafka.shell.command.Commands;
 import org.apache.kafka.shell.state.MetadataShellPublisher;
 import org.apache.kafka.shell.state.MetadataShellState;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -101,10 +105,10 @@ public final class MetadataShell {
      * Take the FileLock in the given directory, if it already exists. Technically, there is a
      * TOCTOU bug here where someone could create and lock the lockfile in between our check
      * and our use. However, this is very unlikely to ever be a problem in practice, and closing
-     * this hole would require the parent parent directory to always be writable when loading a
+     * this hole would require the parent directory to always be writable when loading a
      * snapshot so that we could create our .lock file there.
      */
-    static FileLock takeDirectoryLockIfExists(File directory) {
+    static FileLock takeDirectoryLockIfExists(File directory) throws IOException {
         if (new File(directory, ".lock").exists()) {
             return takeDirectoryLock(directory);
         } else {
@@ -115,7 +119,7 @@ public final class MetadataShell {
     /**
      * Take the FileLock in the given directory.
      */
-    static FileLock takeDirectoryLock(File directory) {
+    static FileLock takeDirectoryLock(File directory) throws IOException {
         FileLock fileLock = new FileLock(new File(directory, ".lock"));
         try {
             if (!fileLock.tryLock()) {

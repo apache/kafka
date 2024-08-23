@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
+
 import org.hamcrest.Description;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 
@@ -111,13 +112,10 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
                     .appendValue(actual.getClass().getSimpleName());
             return false;
         }
-        if (!compare(expectedRecord.key(), actualRecord.key(), keySerde.deserializer(), "Record key",
-                mismatchDescription) ||
-                !compare(expectedRecord.value(), actualRecord.value(), valueSerde.deserializer(), "Record value",
-                        mismatchDescription)) {
-            return false;
-        }
-        return true;
+        return compare(expectedRecord.key(), actualRecord.key(), keySerde.deserializer(), "Record key",
+                mismatchDescription) &&
+                compare(expectedRecord.value(), actualRecord.value(), valueSerde.deserializer(), "Record value",
+                        mismatchDescription);
     }
 
     private boolean compare(ByteBuffer lhs,

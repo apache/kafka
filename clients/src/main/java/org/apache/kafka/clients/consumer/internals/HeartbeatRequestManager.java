@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.MembershipManager.LocalAssignment;
+import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -45,11 +46,12 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
- * {@link ConsumerGroupHeartbeatRequest} using the state stored in the {@link MembershipManager} and enqueue it to
+ * {@link ConsumerGroupHeartbeatRequest} using the state stored in the {@link ConsumerMembershipManager} and enqueue it to
  * the network queue to be sent out. Once the response is received, the module will update the state in the
- * {@link MembershipManager} and handle any errors.</p>
+ * {@link ConsumerMembershipManager} and handle any errors.</p>
  *
  * <p>The manager will try to send a heartbeat when the member is in {@link MemberState#STABLE},
  * {@link MemberState#JOINING}, or {@link MemberState#RECONCILING}. Which mean the member is either in a stable
@@ -96,9 +98,9 @@ public class HeartbeatRequestManager implements RequestManager {
     private final HeartbeatState heartbeatState;
 
     /**
-     * MembershipManager manages member's essential attributes like epoch and id, and its rebalance state
+     * ConsumerMembershipManager manages member's essential attributes like epoch and id, and its rebalance state
      */
-    private final MembershipManager membershipManager;
+    private final ConsumerMembershipManager membershipManager;
 
     /**
      * ErrorEventHandler allows the background thread to propagate errors back to the user
@@ -122,7 +124,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
-        final MembershipManager membershipManager,
+        final ConsumerMembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics) {
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -145,7 +147,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final Timer timer,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
-        final MembershipManager membershipManager,
+        final ConsumerMembershipManager membershipManager,
         final HeartbeatState heartbeatState,
         final HeartbeatRequestState heartbeatRequestState,
         final BackgroundEventHandler backgroundEventHandler,
@@ -208,7 +210,11 @@ public class HeartbeatRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(leaveHeartbeat));
         }
 
-        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
+        // Case 1: The member is leaving
+        boolean heartbeatNow = membershipManager.state() == MemberState.LEAVING ||
+                // Case 2: The member state indicates it should send a heartbeat without waiting for the interval, and there is no heartbeat request currently in-flight
+                (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
+
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }
@@ -218,10 +224,10 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * Returns the {@link MembershipManager} that this request manager is using to track the state of the group.
+     * Returns the {@link ConsumerMembershipManager} that this request manager is using to track the state of the group.
      * This is provided so that the {@link ApplicationEventProcessor} can access the state for querying or updating.
      */
-    public MembershipManager membershipManager() {
+    public ConsumerMembershipManager membershipManager() {
         return membershipManager;
     }
 
@@ -255,11 +261,13 @@ public class HeartbeatRequestManager implements RequestManager {
      * member to {@link MemberState#JOINING}, so that it rejoins the group.
      */
     public void resetPollTimer(final long pollMs) {
+        pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
-            logger.debug("Poll timer has been reset after it had expired");
+            logger.warn("Time between subsequent calls to poll() was longer than the configured " +
+                "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                pollTimer.isExpiredBy(), membershipManager.memberId());
             membershipManager.maybeRejoinStaleMember();
         }
-        pollTimer.update(pollMs);
         pollTimer.reset(maxPollIntervalMs);
     }
 
@@ -267,7 +275,7 @@ public class HeartbeatRequestManager implements RequestManager {
                                                                      final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
-        membershipManager.onHeartbeatRequestSent();
+        membershipManager.onHeartbeatRequestGenerated();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
         heartbeatRequestState.resetTimer();
         return request;
@@ -310,6 +318,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private void onFailure(final Throwable exception, final long responseTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
         this.heartbeatState.reset();
+        membershipManager.onHeartbeatFailure(exception instanceof RetriableException);
         if (exception instanceof RetriableException) {
             String message = String.format("GroupHeartbeatRequest failed because of the retriable exception. " +
                     "Will retry in %s ms: %s",
@@ -340,7 +349,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         this.heartbeatState.reset();
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
-        membershipManager.onHeartbeatFailure();
+        membershipManager.onHeartbeatFailure(false);
 
         switch (error) {
             case NOT_COORDINATOR:
@@ -382,7 +391,15 @@ public class HeartbeatRequestManager implements RequestManager {
             case UNRELEASED_INSTANCE_ID:
                 logger.error("GroupHeartbeatRequest failed due to unreleased instance id {}: {}",
                         membershipManager.groupInstanceId().orElse("null"), errorMessage);
-                handleFatalFailure(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
+                handleFatalFailure(error.exception(errorMessage));
+                break;
+
+            case FENCED_INSTANCE_ID:
+                logger.error("GroupHeartbeatRequest failed due to fenced instance id {}: {}. " +
+                        "This is expected in the case that the member was removed from the group " +
+                        "by an admin client, and another member joined using the same group instance id.",
+                    membershipManager.groupInstanceId().orElse("null"), errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
                 break;
 
             case INVALID_REQUEST:
@@ -469,6 +486,13 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatTimer.reset(heartbeatIntervalMs);
         }
 
+        @Override
+        public String toStringBase() {
+            return super.toStringBase() +
+                    ", remainingMs=" + heartbeatTimer.remainingMs() +
+                    ", heartbeatIntervalMs=" + heartbeatIntervalMs;
+        }
+
         /**
          * Check if a heartbeat request should be sent on the current time. A heartbeat should be
          * sent if the heartbeat timer has expired, backoff has expired, and there is no request
@@ -513,13 +537,13 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     static class HeartbeatState {
         private final SubscriptionState subscriptions;
-        private final MembershipManager membershipManager;
+        private final ConsumerMembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
         private final SentFields sentFields;
 
         public HeartbeatState(
             final SubscriptionState subscriptions,
-            final MembershipManager membershipManager,
+            final ConsumerMembershipManager membershipManager,
             final int rebalanceTimeoutMs) {
             this.subscriptions = subscriptions;
             this.membershipManager = membershipManager;
@@ -555,7 +579,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
-            // SubscribedTopicNames - only sent if has changed since the last heartbeat
+            // SubscribedTopicNames - only sent if it has changed since the last heartbeat
             TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
             if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                 data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));

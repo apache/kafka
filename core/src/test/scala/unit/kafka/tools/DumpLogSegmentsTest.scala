@@ -22,36 +22,40 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Collections
 import java.util.Optional
-import java.util.Arrays
 import java.util.Properties
+import java.util.stream.IntStream
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
-import kafka.utils.TestUtils
+import kafka.utils.{TestUtils, VerifiableProperties}
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group
-import org.apache.kafka.coordinator.group.RecordSerde
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordBatch, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.utils.{Exit, Utils}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
-import org.apache.kafka.raft.internals.VoterSetTest
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch, VoterSetTest}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion}
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.nio.file.attribute.PosixFilePermissions
+import java.nio.file.{AccessDeniedException, Files, NoSuchFileException, Paths}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -61,7 +65,6 @@ import scala.util.matching.Regex
 case class BatchInfo(records: Seq[SimpleRecord], hasKeys: Boolean, hasValues: Boolean)
 
 class DumpLogSegmentsTest {
-
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val segmentName = "00000000000000000000"
@@ -70,12 +73,14 @@ class DumpLogSegmentsTest {
   val indexFilePath = s"$logDir/$segmentName.index"
   val timeIndexFilePath = s"$logDir/$segmentName.timeindex"
   val time = new MockTime(0, 0)
-
-  val batches = new ArrayBuffer[BatchInfo]
   var log: UnifiedLog = _
 
-  @BeforeEach
-  def setUp(): Unit = {
+  @AfterEach
+  def afterEach(): Unit = {
+    Option(log).foreach(log => Utils.closeQuietly(log, "UnifiedLog"))
+  }
+
+  private def createTestLog = {
     val props = new Properties
     props.setProperty(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128")
     log = UnifiedLog(
@@ -93,9 +98,10 @@ class DumpLogSegmentsTest {
       topicId = None,
       keepPartitionMetadataFile = true
     )
+    log
   }
 
-  def addSimpleRecords(): Unit = {
+  private def addSimpleRecords(log: UnifiedLog, batches: ArrayBuffer[BatchInfo]): Unit = {
     val now = System.currentTimeMillis()
     val firstBatchRecords = (0 until 10).map { i => new SimpleRecord(now + i * 2, s"message key $i".getBytes, s"message value $i".getBytes)}
     batches += BatchInfo(firstBatchRecords, hasKeys = true, hasValues = true)
@@ -107,42 +113,38 @@ class DumpLogSegmentsTest {
     batches += BatchInfo(fourthBatchRecords, hasKeys = false, hasValues = false)
 
     batches.foreach { batchInfo =>
-      log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, batchInfo.records: _*),
+      log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0, batchInfo.records: _*),
         leaderEpoch = 0)
     }
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
     log.flush(false)
   }
 
-  @AfterEach
-  def tearDown(): Unit = {
-    Utils.closeQuietly(log, "UnifiedLog")
-    Utils.delete(tmpDir)
-  }
-
   @Test
   def testBatchAndRecordMetadataOutput(): Unit = {
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
+    log = createTestLog
+
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes)
     ), leaderEpoch = 0)
 
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.GZIP, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(), 0,
       new SimpleRecord(time.milliseconds(), "c".getBytes, "1".getBytes),
       new SimpleRecord("d".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("e".getBytes, null),
       new SimpleRecord(null, "f".getBytes),
       new SimpleRecord("g".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withIdempotentRecords(CompressionType.NONE, 29342342L, 15.toShort, 234123,
+    log.appendAsLeader(MemoryRecords.withIdempotentRecords(Compression.NONE, 29342342L, 15.toShort, 234123,
       new SimpleRecord("h".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.GZIP, 98323L, 99.toShort, 266,
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.gzip().build(), 98323L, 99.toShort, 266,
       new SimpleRecord("i".getBytes),
       new SimpleRecord("j".getBytes)
     ), leaderEpoch = 5)
@@ -151,12 +153,15 @@ class DumpLogSegmentsTest {
       new EndTransactionMarker(ControlRecordType.COMMIT, 100)
     ), origin = AppendOrigin.COORDINATOR, leaderEpoch = 7)
 
-    assertDumpLogRecordMetadata()
+    assertDumpLogRecordMetadata(log)
   }
 
   @Test
   def testPrintDataLog(): Unit = {
-    addSimpleRecords()
+    log = createTestLog
+    val batches = new ArrayBuffer[BatchInfo]
+    addSimpleRecords(log, batches)
+    
     def verifyRecordsInOutput(checkKeysAndValues: Boolean, args: Array[String]): Unit = {
       def isBatch(index: Int): Boolean = {
         var i = 0
@@ -226,7 +231,10 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpIndexMismatches(): Unit = {
-    addSimpleRecords()
+    log = createTestLog
+    val batches = new ArrayBuffer[BatchInfo]
+    addSimpleRecords(log, batches)
+    
     val offsetMismatches = mutable.Map[String, List[(Long, Long)]]()
     DumpLogSegments.dumpIndex(new File(indexFilePath), indexSanityOnly = false, verifyOnly = true, offsetMismatches,
       Int.MaxValue)
@@ -235,7 +243,10 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpTimeIndexErrors(): Unit = {
-    addSimpleRecords()
+    log = createTestLog
+    val batches = new ArrayBuffer[BatchInfo]
+    addSimpleRecords(log, batches)
+    
     val errors = new TimeIndexDumpErrors
     DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), indexSanityOnly = false, verifyOnly = true, errors)
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
@@ -243,6 +254,219 @@ class DumpLogSegmentsTest {
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
   }
 
+  def countSubstring(str: String, sub: String): Int =
+    str.sliding(sub.length).count(_ == sub)
+  
+  // the number of batches in the log dump is equal to 
+  // the number of occurrences of the "baseOffset:" substring
+  def batchCount(str: String): Int =
+    countSubstring(str, "baseOffset:")
+
+  // the number of records in the log dump is equal to 
+  // the number of occurrences of the "payload:" substring
+  def recordCount(str: String): Int =
+    countSubstring(str, "payload:")
+
+  @Test
+  def testDumpRemoteLogMetadataEmpty(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 0)
+    assertTrue(recordCount(output) == 0)
+    assertTrue(output.contains("Log starting offset: 0"))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataOneRecordOneBatch(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+    
+    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)), 
+        RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+
+    val records: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
+    log.flush(false)
+
+    val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
+      "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(output.contains(expectedDeletePayload))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataMultipleRecordsOneBatch(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+    val remoteSegmentId = Uuid.randomUuid
+
+    val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0))
+    val remoteLogSegmentId = new RemoteLogSegmentId(topicIdPartition, remoteSegmentId)
+
+    val metadata = Seq(new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds,
+        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0),
+      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+
+    val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.flush(false)
+
+    val expectedUpdatePayload = String.format("RemoteLogSegmentMetadataUpdate{remoteLogSegmentId=" +
+      "RemoteLogSegmentId{topicIdPartition=%s:%s-0, id=%s}, customMetadata=Optional[" +
+      "CustomMetadata{4 bytes}], state=COPY_SEGMENT_FINISHED, eventTimestampMs=0, brokerId=0}", topicId, topicName, remoteSegmentId)
+    val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
+      "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
+    
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 2)
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(output.contains(expectedUpdatePayload))
+    assertTrue(output.contains(expectedDeletePayload))
+  }
+  
+  @Test
+  def testDumpRemoteLogMetadataMultipleRecordsMultipleBatches(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+    val remoteSegmentId = Uuid.randomUuid
+    
+    val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0))
+    val remoteLogSegmentId = new RemoteLogSegmentId(topicIdPartition, remoteSegmentId)
+
+    val metadata = Seq(
+      new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds,
+        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0),
+      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0)
+    )
+
+    val records: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 0)
+    log.flush(false)
+
+    val expectedUpdatePayload = String.format("RemoteLogSegmentMetadataUpdate{remoteLogSegmentId=" +
+      "RemoteLogSegmentId{topicIdPartition=%s:%s-0, id=%s}, customMetadata=Optional[" +
+      "CustomMetadata{4 bytes}], state=COPY_SEGMENT_FINISHED, eventTimestampMs=0, brokerId=0}", topicId, topicName, remoteSegmentId)
+    val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
+      "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 2)
+    assertTrue(recordCount(output) == 4)
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(countSubstring(output, expectedUpdatePayload) == 2)
+    assertTrue(countSubstring(output, expectedDeletePayload) == 2)
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataNonZeroStartingOffset(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+    
+    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
+      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+
+    val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+    
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    val secondSegment = log.roll();
+    secondSegment.append(1L, RecordBatch.NO_TIMESTAMP, 1L, MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*))
+    secondSegment.flush()
+    log.flush(true)
+    
+    val expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
+      "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", secondSegment.log().file().getAbsolutePath))
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
+    assertTrue(output.contains("Log starting offset: 1"))
+    assertTrue(output.contains(expectedDeletePayload))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataWithCorruption(): Unit = {
+    val metadataRecords = Array(new SimpleRecord(null, "corrupted".getBytes()))
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.flush(false)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(batchCount(output) == 1)
+    assertTrue(recordCount(output) == 1)
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(output.contains("Could not deserialize metadata record"))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataIoException(): Unit = {
+    val topicId = Uuid.randomUuid
+    val topicName = "foo"
+
+    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
+      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+
+    val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
+      new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
+    }).toArray
+    
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords:_*), leaderEpoch = 0)
+    log.flush(false)
+    
+    Files.setPosixFilePermissions(Paths.get(logFilePath), PosixFilePermissions.fromString("-w-------"))
+    
+    assertThrows(classOf[AccessDeniedException],
+      () => runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath)))
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataNoFilesFlag(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message))
+    try {
+      val thrown = assertThrows(classOf[IllegalArgumentException], () => runDumpLogSegments(Array("--remote-log-metadata-decoder")))
+      assertTrue(thrown.getMessage.equals("Missing required argument \"[files]\""))
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataNoSuchFileException(): Unit = {
+    val noSuchFileLogPath = "/tmp/nosuchfile/00000000000000000000.log"
+    assertThrows(classOf[NoSuchFileException], 
+      () => runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", noSuchFileLogPath)))
+  }
+  
   @Test
   def testDumpMetadataRecords(): Unit = {
     val mockTime = new MockTime
@@ -271,7 +495,7 @@ class DumpLogSegmentsTest {
       buf.flip()
       new SimpleRecord(null, buf.array)
     }).toArray
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 1)
     log.flush(false)
 
     var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
@@ -288,8 +512,8 @@ class DumpLogSegmentsTest {
     val writer = new ByteBufferAccessor(buf)
     writer.writeUnsignedVarint(10000)
     writer.writeUnsignedVarint(10000)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 2)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 2)
 
     output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
     assertTrue(output.contains("TOPIC_RECORD"))
@@ -337,8 +561,8 @@ class DumpLogSegmentsTest {
         .setTime(new MockTime)
         .setLastContainedLogTimestamp(lastContainedLogTimestamp)
         .setRawSnapshotWriter(metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)).get)
-        .setKraftVersion(1)
-        .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)))))
+        .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
+        .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))))
         .build(MetadataRecordSerde.INSTANCE)
     ) { snapshotWriter =>
       snapshotWriter.append(metadataRecords.asJava)
@@ -368,6 +592,8 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpEmptyIndex(): Unit = {
+    log = createTestLog
+    
     val indexFile = new File(indexFilePath)
     new PrintWriter(indexFile).close()
     val expectOutput = s"$indexFile is empty.\n"
@@ -389,7 +615,10 @@ class DumpLogSegmentsTest {
 
   @Test
   def testPrintDataLogPartialBatches(): Unit = {
-    addSimpleRecords()
+    log = createTestLog
+    val batches = new ArrayBuffer[BatchInfo]
+    addSimpleRecords(log, batches)
+    
     val totalBatches = batches.size
     val partialBatches = totalBatches / 2
 
@@ -412,11 +641,11 @@ class DumpLogSegmentsTest {
 
   @Test
   def testOffsetsMessageParser(): Unit = {
-    val serde = new RecordSerde()
+    val serde = new GroupCoordinatorRecordSerde()
     val parser = new OffsetsMessageParser()
 
     def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {
-      val record = new group.Record(key, value)
+      val record = new CoordinatorRecord(key, value)
       TestUtils.singletonRecords(
         key = serde.serializeKey(record),
         value = serde.serializeValue(record)
@@ -598,6 +827,26 @@ class DumpLogSegmentsTest {
     )
   }
 
+  @Test
+  def testNewDecoder(): Unit = {
+    // Decoder translate should pass without exception
+    DumpLogSegments.newDecoder(classOf[DumpLogSegmentsTest.TestDecoder].getName)
+    DumpLogSegments.newDecoder(classOf[kafka.serializer.DefaultDecoder].getName)
+    assertThrows(classOf[Exception], () => DumpLogSegments.newDecoder(classOf[DumpLogSegmentsTest.TestDecoderWithoutVerifiableProperties].getName))
+  }
+
+  @Test
+  def testConvertDeprecatedDecoderClass(): Unit = {
+    assertEquals(classOf[org.apache.kafka.tools.api.DefaultDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.DefaultDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.IntegerDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.IntegerDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.LongDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.LongDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.StringDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.StringDecoder].getName))
+  }
+
   private def readBatchMetadata(lines: util.ListIterator[String]): Option[String] = {
     while (lines.hasNext) {
       val line = lines.next()
@@ -678,7 +927,7 @@ class DumpLogSegmentsTest {
     fields.toMap
   }
 
-  private def assertDumpLogRecordMetadata(): Unit = {
+  private def assertDumpLogRecordMetadata(log: UnifiedLog): Unit = {
     val logReadInfo = log.read(
       startOffset = 0,
       maxLength = Int.MaxValue,
@@ -730,5 +979,15 @@ class DumpLogSegmentsTest {
         assertEquals(None, parsedRecord.get("compresscodec"))
       }
     }
+  }
+}
+
+object DumpLogSegmentsTest {
+  class TestDecoder(props: VerifiableProperties) extends kafka.serializer.Decoder[Array[Byte]] {
+    override def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
+  }
+
+  class TestDecoderWithoutVerifiableProperties() extends kafka.serializer.Decoder[Array[Byte]] {
+    override def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
   }
 }

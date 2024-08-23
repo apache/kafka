@@ -29,8 +29,9 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.immutable.ImmutableMap;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -247,11 +248,11 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
+            new HashSet<>(Collections.singletonList(new TopicPartition("baz", 0))),
             changes.electedLeaders().keySet()
         );
         assertEquals(
-            new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
+            new HashSet<>(Collections.singletonList(new TopicPartition("baz", 0))),
             changes.leaders().keySet()
         );
         assertEquals(
@@ -303,7 +304,7 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         LocalReplicaChanges changes = delta.localChanges(localId);
-        assertEquals(new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))), changes.deletes());
+        assertEquals(new HashSet<>(Collections.singletonList(new TopicPartition("zoo", 0))), changes.deletes());
         assertEquals(Collections.emptyMap(), changes.electedLeaders());
         assertEquals(Collections.emptyMap(), changes.leaders());
         assertEquals(Collections.emptyMap(), changes.followers());
@@ -345,7 +346,7 @@ public class TopicsImageTest {
         assertEquals(Collections.emptySet(), changes.deletes());
         assertEquals(Collections.emptyMap(), changes.electedLeaders());
         assertEquals(
-            new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))),
+            new HashSet<>(Collections.singletonList(new TopicPartition("zoo", 0))),
             changes.leaders().keySet()
         );
         assertEquals(Collections.emptyMap(), changes.followers());
@@ -517,7 +518,7 @@ public class TopicsImageTest {
         assertFalse(map.containsKey("baz"));
         assertNull(map.get("baz"));
         HashSet<Uuid> uuids = new HashSet<>();
-        map.values().iterator().forEachRemaining(u -> uuids.add(u));
+        map.values().iterator().forEachRemaining(uuids::add);
         HashSet<Uuid> expectedUuids = new HashSet<>(Arrays.asList(
             Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA"),
             Uuid.fromString("f62ptyETTjet8SL5ZeREiw")));
@@ -536,7 +537,7 @@ public class TopicsImageTest {
         assertFalse(map.containsKey(BAZ_UUID));
         assertNull(map.get(BAZ_UUID));
         HashSet<String> names = new HashSet<>();
-        map.values().iterator().forEachRemaining(n -> names.add(n));
+        map.values().iterator().forEachRemaining(names::add);
         HashSet<String> expectedNames = new HashSet<>(Arrays.asList("foo", "bar"));
         assertEquals(expectedNames, names);
         assertThrows(UnsupportedOperationException.class, () -> map.remove(FOO_UUID));

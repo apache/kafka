@@ -29,8 +29,8 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
-import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -54,6 +54,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         String TIMESTAMP_FIELD = "timestamp.field";
         String STATIC_FIELD = "static.field";
         String STATIC_VALUE = "static.value";
+        String REPLACE_NULL_WITH_DEFAULT = "replace.null.with.default";
     }
 
     private static final String OPTIONALITY_DOC = "Suffix with <code>!</code> to make this a required field, or <code>?</code> to keep it optional (the default).";
@@ -70,7 +71,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
             .define(ConfigName.STATIC_FIELD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
                     "Field name for static data field. " + OPTIONALITY_DOC)
             .define(ConfigName.STATIC_VALUE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
-                    "Static field value, if field name configured.");
+                    "Static field value, if field name configured.")
+            .define(ConfigName.REPLACE_NULL_WITH_DEFAULT, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private static final String PURPOSE = "field insertion";
 
@@ -103,6 +106,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
     private InsertionSpec timestampField;
     private InsertionSpec staticField;
     private String staticValue;
+    private boolean replaceNullWithDefault;
 
     private Cache<Schema, Schema> schemaUpdateCache;
 
@@ -120,6 +124,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         timestampField = InsertionSpec.parse(config.getString(ConfigName.TIMESTAMP_FIELD));
         staticField = InsertionSpec.parse(config.getString(ConfigName.STATIC_FIELD));
         staticValue = config.getString(ConfigName.STATIC_VALUE);
+        replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT);
 
         if (topicField == null && partitionField == null && offsetField == null && timestampField == null && staticField == null) {
             throw new ConfigException("No field insertion configured");
@@ -179,7 +184,7 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         final Struct updatedValue = new Struct(updatedSchema);
 
         for (Field field : value.schema().fields()) {
-            updatedValue.put(field.name(), value.get(field));
+            updatedValue.put(field.name(), getFieldValue(value, field));
         }
 
         if (topicField != null) {
@@ -225,6 +230,13 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         }
 
         return builder.build();
+    }
+
+    private Object getFieldValue(Struct value, Field field) {
+        if (replaceNullWithDefault) {
+            return value.get(field);
+        }
+        return value.getWithoutDefault(field.name());
     }
 
     @Override

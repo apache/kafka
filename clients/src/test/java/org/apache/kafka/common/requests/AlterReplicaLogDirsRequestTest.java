@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
@@ -28,7 +25,11 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -70,13 +71,13 @@ public class AlterReplicaLogDirsRequestTest {
                                                 .setPartitions(asList(0, 1)),
                                                new AlterReplicaLogDirTopic()
                                                 .setName("topic2")
-                                                .setPartitions(asList(7))).iterator())),
+                                                .setPartitions(singletonList(7))).iterator())),
                                 new AlterReplicaLogDir()
                                         .setPath("/data1")
                                         .setTopics(new AlterReplicaLogDirTopicCollection(
-                                                asList(new AlterReplicaLogDirTopic()
+                                                singletonList(new AlterReplicaLogDirTopic()
                                                         .setName("topic3")
-                                                        .setPartitions(asList(12))).iterator()))).iterator()));
+                                                        .setPartitions(singletonList(12))).iterator()))).iterator()));
         AlterReplicaLogDirsRequest request = new AlterReplicaLogDirsRequest.Builder(data).build();
         Map<TopicPartition, String> expect = new HashMap<>();
         expect.put(new TopicPartition("topic", 0), "/data0");

@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import java.time.Duration;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+
+import java.time.Duration;
 
 /**
  * The {@code Transformer} interface is for stateful mapping of an input record to zero, one, or multiple new output
@@ -46,7 +47,9 @@ import org.apache.kafka.streams.processor.To;
  * @see ValueTransformer
  * @see KStream#map(KeyValueMapper)
  * @see KStream#flatMap(KeyValueMapper)
+ * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.Processor api.Processor} instead.
  */
+@Deprecated
 public interface Transformer<K, V, R> {
 
     /**

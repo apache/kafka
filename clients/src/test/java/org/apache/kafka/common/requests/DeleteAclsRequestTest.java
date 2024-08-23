@@ -26,12 +26,13 @@ import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -110,7 +111,7 @@ public class DeleteAclsRequestTest {
     }
 
     private static DeleteAclsRequestData requestData(AclBindingFilter... acls) {
-        return new DeleteAclsRequestData().setFilters(asList(acls).stream()
+        return new DeleteAclsRequestData().setFilters(Arrays.stream(acls)
             .map(DeleteAclsRequest::deleteAclsFilter)
             .collect(Collectors.toList()));
     }

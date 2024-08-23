@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
-import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -28,6 +27,9 @@ import org.apache.kafka.connect.runtime.health.ConnectClusterDetailsImpl;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
+
+import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
@@ -50,8 +52,6 @@ import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.DispatcherType;
-import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -64,6 +64,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.servlet.DispatcherType;
+import javax.ws.rs.core.UriBuilder;
+
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
  */
@@ -74,6 +77,7 @@ public abstract class RestServer {
     // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
     // but currently a worker simply leaving the group can take this long as well.
     public static final long DEFAULT_REST_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(90);
+    public static final long DEFAULT_HEALTH_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
     private static final Logger log = LoggerFactory.getLogger(RestServer.class);
 
@@ -104,7 +108,7 @@ public abstract class RestServer {
 
         jettyServer = new Server();
         handlers = new ContextHandlerCollection();
-        requestTimeout = new RequestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        requestTimeout = new RequestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS, DEFAULT_HEALTH_CHECK_TIMEOUT_MS);
 
         createConnectors(listeners, adminListeners);
     }
@@ -447,6 +451,11 @@ public abstract class RestServer {
         this.requestTimeout.timeoutMs(requestTimeoutMs);
     }
 
+    // For testing only
+    public void healthCheckTimeout(long healthCheckTimeoutMs) {
+        this.requestTimeout.healthCheckTimeoutMs(healthCheckTimeoutMs);
+    }
+
     String determineAdvertisedProtocol() {
         String advertisedSecurityProtocol = config.advertisedListener();
         if (advertisedSecurityProtocol == null) {
@@ -531,9 +540,11 @@ public abstract class RestServer {
 
         private final RequestBinder binder;
         private volatile long timeoutMs;
+        private volatile long healthCheckTimeoutMs;
 
-        public RequestTimeout(long initialTimeoutMs) {
+        public RequestTimeout(long initialTimeoutMs, long initialHealthCheckTimeoutMs) {
             this.timeoutMs = initialTimeoutMs;
+            this.healthCheckTimeoutMs = initialHealthCheckTimeoutMs;
             this.binder = new RequestBinder();
         }
 
@@ -542,8 +553,17 @@ public abstract class RestServer {
             return timeoutMs;
         }
 
+        @Override
+        public long healthCheckTimeoutMs() {
+            return healthCheckTimeoutMs;
+        }
+
         public void timeoutMs(long timeoutMs) {
             this.timeoutMs = timeoutMs;
+        }
+
+        public void healthCheckTimeoutMs(long healthCheckTimeoutMs) {
+            this.healthCheckTimeoutMs = healthCheckTimeoutMs;
         }
 
         public Binder binder() {

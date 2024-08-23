@@ -19,12 +19,13 @@ package kafka.coordinator.group
 import kafka.log.UnifiedLog
 import kafka.server.ReplicaManager
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{MockTime, Time}
-import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
-import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.UnknownRecordTypeException
+import org.apache.kafka.coordinator.common.runtime.{CoordinatorPlayback, Deserializer}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogOffsetMetadata}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
@@ -39,7 +40,7 @@ import java.nio.charset.Charset
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.util.Using
 
-class StringKeyValueDeserializer extends CoordinatorLoader.Deserializer[(String, String)] {
+class StringKeyValueDeserializer extends Deserializer[(String, String)] {
   override def deserialize(key: ByteBuffer, value: ByteBuffer): (String, String) = {
     (
       Charset.defaultCharset().decode(key).toString,
@@ -54,7 +55,7 @@ class CoordinatorLoaderImplTest {
   def testNonexistentPartition(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
-    val serde = mock(classOf[CoordinatorLoader.Deserializer[(String, String)]])
+    val serde = mock(classOf[Deserializer[(String, String)]])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     Using(new CoordinatorLoaderImpl[(String, String)](
@@ -74,7 +75,7 @@ class CoordinatorLoaderImplTest {
   def testLoadingIsRejectedWhenClosed(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
-    val serde = mock(classOf[CoordinatorLoader.Deserializer[(String, String)]])
+    val serde = mock(classOf[Deserializer[(String, String)]])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     Using(new CoordinatorLoaderImpl[(String, String)](
@@ -639,13 +640,13 @@ class CoordinatorLoaderImplTest {
     val memoryRecords = if (producerId == RecordBatch.NO_PRODUCER_ID) {
       MemoryRecords.withRecords(
         startOffset,
-        CompressionType.NONE,
+        Compression.NONE,
         records: _*
       )
     } else {
       MemoryRecords.withTransactionalRecords(
         startOffset,
-        CompressionType.NONE,
+        Compression.NONE,
         producerId,
         producerEpoch,
         0,

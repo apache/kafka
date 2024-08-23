@@ -17,14 +17,13 @@
 
 package org.apache.kafka.jmh.fetcher;
 
+import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
-import org.apache.kafka.server.util.MockTime;
-import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
+import kafka.server.BrokerBlockingSender;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
@@ -34,21 +33,20 @@ import kafka.server.MetadataCache;
 import kafka.server.OffsetTruncationState;
 import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
-import kafka.server.BrokerBlockingSender;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.server.metadata.ZkMetadataCache;
 import kafka.utils.Pool;
 import kafka.utils.TestUtils;
 import kafka.zk.KafkaZkClient;
+
 import org.apache.kafka.clients.FetchSessionHandler;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -66,12 +64,16 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
-import org.apache.kafka.server.util.KafkaScheduler;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -99,6 +101,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
 import scala.Option;
 import scala.collection.Iterator;
 import scala.collection.Map;
@@ -112,7 +115,7 @@ import scala.collection.Map;
 public class ReplicaFetcherThreadBenchmark {
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private final Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
+    private final Pool<TopicPartition, Partition> pool = new Pool<>(Option.empty());
     private final Metrics metrics = new Metrics();
     private final Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
     @Param({"100", "500", "1000", "5000"})
@@ -133,7 +136,7 @@ public class ReplicaFetcherThreadBenchmark {
         KafkaConfig config = new KafkaConfig(props);
         LogConfig logConfig = createLogConfig();
 
-        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         List<File> logDirs = Collections.singletonList(logDir);
         logManager = new LogManagerBuilder().
@@ -175,7 +178,7 @@ public class ReplicaFetcherThreadBenchmark {
 
             AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-            Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
+            Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Optional.of(0L));
             AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
             Partition partition = new Partition(tp, 100, MetadataVersion.latestTesting(),
                     0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
@@ -217,7 +220,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         // TODO: fix to support raft
         ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(0,
-            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), null, false);
+            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), false);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
         replicaManager = new ReplicaManagerBuilder().

@@ -227,10 +227,19 @@ There are two code quality analysis tools that we regularly run, spotbugs and ch
 Checkstyle enforces a consistent coding style in Kafka.
 You can run checkstyle using:
 
-    ./gradlew checkstyleMain checkstyleTest
+    ./gradlew checkstyleMain checkstyleTest spotlessCheck
 
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
+
+**Please note that `./gradlew spotlessCheck` currently has an issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), so make sure to run this with JDK 11 or 17**
+
+#### Spotless ####
+The import order is a part of static check. please call `spotlessApply` (require JDK 11+) to optimize the imports of Java codes before filing pull request.
+
+    ./gradlew spotlessApply
+
+**Please note that `./gradlew spotlessApply` currently has an issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), so make sure to run this with JDK 11 or 17**
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.

@@ -16,16 +16,18 @@
  */
 package kafka.docker
 
+import kafka.Kafka
 import kafka.tools.StorageTool
-import kafka.utils.Exit
+import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import net.sourceforge.argparse4j.inf.Namespace
+import org.apache.kafka.common.utils.Exit
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
 
-object KafkaDockerWrapper {
+object KafkaDockerWrapper extends Logging {
   def main(args: Array[String]): Unit = {
     val namespace = parseArguments(args)
     val command = namespace.getString("command")
@@ -40,11 +42,15 @@ object KafkaDockerWrapper {
           case e: Throwable =>
             val errMsg = s"error while preparing configs: ${e.getMessage}"
             System.err.println(errMsg)
-            Exit.exit(1, Some(errMsg))
+            Exit.exit(1, errMsg)
         }
 
         val formatCmd = formatStorageCmd(finalConfigsPath, envVars)
         StorageTool.main(formatCmd)
+      case "start" =>
+        val configFile = namespace.getString("config")
+        info("Starting Kafka server in the native mode.")
+        Kafka.main(Array(configFile))
       case _ =>
         throw new RuntimeException(s"Unknown operation $command. " +
           s"Please provide a valid operation: 'setup'.")
@@ -60,7 +66,13 @@ object KafkaDockerWrapper {
 
     val subparsers = parser.addSubparsers().dest("command")
 
-    val setupParser = subparsers.addParser("setup")
+    val kafkaStartParser = subparsers.addParser("start").help("Start kafka server.")
+    kafkaStartParser.addArgument("--config", "-C")
+      .action(store())
+      .required(true)
+      .help("The kafka server configuration file")
+
+    val setupParser = subparsers.addParser("setup").help("Setup property files and format storage.")
 
     setupParser.addArgument("--default-configs-dir", "-D").
       action(store()).

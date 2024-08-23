@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.server.metadata.{KRaftMetadataCache, MetadataSnapshot, ZkMetadataCache}
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition
@@ -31,8 +30,8 @@ import org.apache.kafka.common.requests.{AbstractControlRequest, UpdateMetadataR
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -53,7 +52,7 @@ object MetadataCacheTest {
   def cacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
       MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting()),
-      MetadataCache.kRaftMetadataCache(1)
+      MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
     )
 
   def updateCache(cache: MetadataCache, request: UpdateMetadataRequest, records: Seq[ApiMessage] = List()): Unit = {
@@ -109,7 +108,7 @@ object MetadataCacheTest {
           val results = new mutable.ArrayBuffer[ApiMessage]()
           results += new TopicRecord().setName(topic.topicName()).setTopicId(topic.topicId())
           topic.partitionStates().forEach { partition =>
-            if (partition.leader() == LeaderAndIsr.LeaderDuringDelete) {
+            if (partition.leader() == LeaderAndIsr.LEADER_DURING_DELETE) {
               results += new RemoveTopicRecord().setTopicId(topic.topicId())
             } else {
               results += new PartitionRecord().
@@ -647,7 +646,7 @@ class MetadataCacheTest {
 
   @Test
   def testIsBrokerFenced(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val delta = new MetadataDelta.Builder().build()
     delta.replay(new RegisterBrokerRecord()
@@ -669,7 +668,7 @@ class MetadataCacheTest {
 
   @Test
   def testGetAliveBrokersWithBrokerFenced(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
     val listenerName = "listener"
     val endpoints = new BrokerEndpointCollection()
     endpoints.add(new BrokerEndpoint().
@@ -705,7 +704,7 @@ class MetadataCacheTest {
 
   @Test
   def testIsBrokerInControlledShutdown(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val delta = new MetadataDelta.Builder().build()
     delta.replay(new RegisterBrokerRecord()
@@ -727,7 +726,7 @@ class MetadataCacheTest {
 
   @Test
   def testGetLiveBrokerEpoch(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val delta = new MetadataDelta.Builder().build()
     delta.replay(new RegisterBrokerRecord()
@@ -748,7 +747,7 @@ class MetadataCacheTest {
 
   @Test
   def testGetTopicMetadataForDescribeTopicPartitionsResponse(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val controllerId = 2
     val controllerEpoch = 1
@@ -1106,7 +1105,7 @@ class MetadataCacheTest {
         new PartitionRecord().setTopicId(topicId).setPartitionId(partition.id).
           setReplicas(partition.replicas).setDirectories(partition.dirs).
           setLeader(partition.replicas.get(0)).setIsr(partition.replicas)))
-      val cache = MetadataCache.kRaftMetadataCache(1)
+      val cache = MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
       cache.setImage(delta.apply(MetadataProvenance.EMPTY))
       val topicMetadata = cache.getTopicMetadata(Set("foo"), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)).head
       topicMetadata.partitions().asScala.map(p => (p.partitionIndex(), p.offlineReplicas())).toMap

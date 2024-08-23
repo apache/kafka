@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -46,8 +47,8 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.taskProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.threadProducerClientId;
 
 class ActiveTaskCreator {
     private final TopologyMetadata topologyMetadata;
@@ -268,7 +269,7 @@ class ActiveTaskCreator {
             inputPartitions,
             topology,
             consumer,
-            topologyMetadata.getTaskConfigFor(taskId),
+            topologyMetadata.taskConfig(taskId),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -318,11 +319,11 @@ class ActiveTaskCreator {
 
     Set<String> producerClientIds() {
         if (threadProducer != null) {
-            return Collections.singleton(getThreadProducerClientId(threadId));
+            return Collections.singleton(threadProducerClientId(threadId));
         } else {
             return taskProducers.keySet()
                                 .stream()
-                                .map(taskId -> getTaskProducerClientId(threadId, taskId))
+                                .map(taskId -> taskProducerClientId(threadId, taskId))
                                 .collect(Collectors.toSet());
         }
     }
