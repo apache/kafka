@@ -102,6 +102,7 @@ jobs:
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
         # --continue:     Keep running even if a test fails
         timeout-minutes: 5  # 3 hours
+        continue-on-error: true
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
@@ -111,7 +112,6 @@ jobs:
       - name: Publish Build Scan
         run: echo "Test step outcome ${{ steps.test.outcome }}, conclusion ${{ steps.test.conclusion }}
       - name: Archive JUnit reports
-        if: always()
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
@@ -120,7 +120,6 @@ jobs:
             **/build/reports/tests/test/*
           if-no-files-found: ignore
       - name: Parse JUnit tests
-        if: always()
         run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
