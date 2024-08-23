@@ -226,7 +226,7 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         if (action.resourcePattern().patternType() != LITERAL) {
             throw new IllegalArgumentException("Only literal resources are supported. Got: " + action.resourcePattern().patternType());
         }
-        KafkaPrincipal principal = requestContext.principal(); //AuthorizerData.baseKafkaPrincipal(requestContext);
+        KafkaPrincipal principal = AuthorizerData.baseKafkaPrincipal(requestContext);
         final MatchingRule rule;
 
         // Superusers are authorized to do anything.
