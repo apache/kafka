@@ -176,11 +176,6 @@ public class GlobalStreamThread extends Thread {
 
             state = newState;
 
-            // Question: Is this a good idea? Or should we spread the latch countdown to finally blocks
-            // Count down the latch if transitioning from CREATED to any other state
-            if (oldState == State.CREATED && newState != State.CREATED) {
-                initializationLatch.countDown();
-            }
         }
 
         if (stateListener != null) {
@@ -436,6 +431,8 @@ public class GlobalStreamThread extends Thread {
         } catch (final Exception fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
+        } finally {
+            initializationLatch.countDown();
         }
         return null;
     }
@@ -457,7 +454,7 @@ public class GlobalStreamThread extends Thread {
             initializationLatch.await();
         } catch (final InterruptedException e) {
             currentThread().interrupt();
-            throw new IllegalStateException("Thread was interrupted during initialization", e);
+            throw new IllegalStateException("GlobalStreamThread was interrupted during initialization", e);
         }
 
         if (startupException != null) {
