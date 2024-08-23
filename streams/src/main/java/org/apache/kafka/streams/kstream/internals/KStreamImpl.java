@@ -450,22 +450,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
-    @Deprecated
-    @Override
-    @SuppressWarnings("unchecked")
-    public KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates) {
-        return doBranch(NamedInternal.empty(), predicates);
-    }
-
-    @Deprecated
-    @Override
-    @SuppressWarnings("unchecked")
-    public KStream<K, V>[] branch(final Named named,
-                                  final Predicate<? super K, ? super V>... predicates) {
-        Objects.requireNonNull(named, "named can't be null");
-        return doBranch(new NamedInternal(named), predicates);
-    }
-
     @SuppressWarnings({"unchecked", "rawtypes"})
     private KStream<K, V>[] doBranch(final NamedInternal named,
                                      final Predicate<? super K, ? super V>... predicates) {
@@ -1095,12 +1079,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
-                    joined.keySerde(),
-                    joined.valueSerde()
+                    joinedInternal.keySerde(),
+                    joinedInternal.leftValueSerde()
             );
-            return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joined, false);
+            return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joinedInternal, false);
         } else {
-            return doStreamTableJoin(table, joiner, joined, false);
+            return doStreamTableJoin(table, joiner, joinedInternal, false);
         }
     }
 
@@ -1138,12 +1122,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
-                    joined.keySerde(),
-                    joined.valueSerde()
+                    joinedInternal.keySerde(),
+                    joinedInternal.leftValueSerde()
             );
-            return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joined, true);
+            return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joinedInternal, true);
         } else {
-            return doStreamTableJoin(table, joiner, joined, true);
+            return doStreamTableJoin(table, joiner, joinedInternal, true);
         }
     }
 
@@ -1248,27 +1232,26 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @SuppressWarnings("unchecked")
     private <VO, VR> KStream<K, VR> doStreamTableJoin(final KTable<K, VO> table,
                                                       final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                                      final Joined<K, V, VO> joined,
+                                                      final JoinedInternal<K, V, VO> joinedInternal,
                                                       final boolean leftJoin) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
         final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) table));
 
-        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
         final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
 
         Optional<String> bufferStoreName = Optional.empty();
 
-        if (joined.gracePeriod() != null) {
+        if (joinedInternal.gracePeriod() != null) {
             if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
             bufferStoreName = Optional.of(name + "-Buffer");
             final RocksDBTimeOrderedKeyValueBuffer.Builder<Object, Object> storeBuilder =
-                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joined.gracePeriod(), name);
+                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joinedInternal.gracePeriod(), name);
             builder.addStateStore(new StoreBuilderWrapper(storeBuilder));
         }
 
@@ -1276,7 +1259,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
             joiner,
             leftJoin,
-            Optional.ofNullable(joined.gracePeriod()),
+            Optional.ofNullable(joinedInternal.gracePeriod()),
             bufferStoreName);
 
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(processorSupplier, name);
@@ -1285,7 +1268,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             processorParameters,
             ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
             this.name,
-            joined.gracePeriod(),
+            joinedInternal.gracePeriod(),
             bufferStoreName
         );
 
@@ -1297,7 +1280,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         // do not have serde for joined result
         return new KStreamImpl<>(
             name,
-            joined.keySerde() != null ? joined.keySerde() : keySerde,
+            joinedInternal.keySerde() != null ? joinedInternal.keySerde() : keySerde,
             null,
             allSourceNodes,
             false,

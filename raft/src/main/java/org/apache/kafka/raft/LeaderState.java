@@ -30,8 +30,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
-import org.apache.kafka.raft.internals.ReplicaKey;
-import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -372,7 +370,6 @@ public class LeaderState<T> implements EpochState {
                 return builder.build();
             }
         });
-        accumulator.forceDrain();
     }
 
     public long appendVotersRecord(VoterSet voters, long currentTimeMs) {
@@ -692,7 +689,7 @@ public class LeaderState<T> implements EpochState {
         }
     }
 
-    static class ReplicaState implements Comparable<ReplicaState> {
+    public static class ReplicaState implements Comparable<ReplicaState> {
         private ReplicaKey replicaKey;
         private Endpoints listeners;
         private Optional<LogOffsetMetadata> endOffset;
