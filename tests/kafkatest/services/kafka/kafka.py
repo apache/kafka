@@ -281,7 +281,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         
         # Set use_new_coordinator based on context and arguments.
         # The new group coordinator is used by default in kraft mode.
-        default_use_new_coordinator = self.quorum_info.using_kraft
+        default_use_new_coordinator = self.quorum_info.using_kraft and version == DEV_BRANCH
        
         if use_new_coordinator is None:
             arg_name = 'use_new_coordinator'
