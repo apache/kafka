@@ -96,17 +96,20 @@ jobs:
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Test
+        id: test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
         # --continue:     Keep running even if a test fails
-        timeout-minutes: 180  # 3 hours
+        timeout-minutes: 5  # 3 hours
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           test
+      - name: Publish Build Scan
+        run: echo "Test step outcome ${{ steps.test.outcome }}, conclusion ${{ steps.test.conclusion }}
       - name: Archive JUnit reports
         if: always()
         uses: actions/upload-artifact@v4
