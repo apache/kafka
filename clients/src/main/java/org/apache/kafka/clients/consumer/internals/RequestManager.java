@@ -40,8 +40,8 @@ public interface RequestManager {
      * method is called from the consumer's network I/O thread, so quick execution of this method in <em>all</em>
      * request managers is critical to ensure that we can heartbeat in a timely fashion.
      *
-     * @param currentTimeMs The current system time at which the method was called; useful for determining if
-     *                      time-sensitive operations should be performed
+     * @param currentTimeMs The current system time in milliseconds at which the method was called;
+     *                      useful for determining if time-sensitive operations should be performed
      */
     PollResult poll(long currentTimeMs);
 
@@ -59,7 +59,7 @@ public interface RequestManager {
      * <em>all</em> request managers is critical to ensure that we can complete as many of the consumer's shutdown
      * tasks as possible within the user-provided timeout.
      *
-     * @param currentTimeMs Current time in milliseconds
+     * @param currentTimeMs The current system time in milliseconds at which the method was called
      */
     default PollResult pollOnClose(long currentTimeMs) {
         return EMPTY;
