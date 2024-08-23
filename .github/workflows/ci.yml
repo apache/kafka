@@ -20,56 +20,20 @@ on:
     branches:
       - 'trunk'
 
+  pull_request:
+    types: [ opened, synchronize, reopened ]
+    branches:
+      - 'trunk'
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false  # Let each trunk commit finish a build
+  cancel-in-progress: ${{ github.ref != 'refs/heads/trunk' }}
 
 jobs:
-  validate:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        java: [8, 11, 17, 21]
-    name: Compile and Check Java ${{ matrix.java }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Setup Gradle
-        uses: ./.github/actions/setup-gradle
-        with:
-          java-version: ${{ matrix.java }}
-          gradle-cache-read-only: false
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
-      - name: Compile and validate
-        run: ./gradlew --build-cache --info --scan check -x test
-
-  test:
-    needs: validate
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        java: [ 11, 17 ]
-    name: JUnit tests Java ${{ matrix.java }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Setup Gradle
-        uses: ./.github/actions/setup-gradle
-        with:
-          java-version: ${{ matrix.java }}
-          gradle-cache-read-only: false
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
-      - name: Test
-        timeout-minutes: 180  # 3 hours
-        run: |
-          ./gradlew --build-cache --scan --continue \
-          -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
-          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
-          test
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      gradle-cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
+      github-actions-opt-in: ${{ github.ref == 'refs/heads/trunk' || contains(github.head_ref, 'gh-') }}
+    secrets:
+      inherit
