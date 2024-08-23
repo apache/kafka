@@ -22,12 +22,12 @@ timeout 5m ./gradlew --build-cache --scan --continue \
   -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
   test
 
-exitCode=$?
-if [ exitCode -eq 124 ]; then
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 124 ]; then
     echo "Timed out. Attempting to publish build scan"
     ./gradlew buildScanPublishPrevious
     exit 1
-elif [ exitCode -eq 127 ]; then
+elif [ $EXIT_CODE -eq 127 ]; then
     echo "Killed. Attempting to publish build scan"
     ./gradlew buildScanPublishPrevious
     exit 1
