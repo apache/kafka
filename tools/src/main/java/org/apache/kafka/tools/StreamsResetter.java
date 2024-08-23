@@ -58,6 +58,8 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,
@@ -111,6 +113,7 @@ public class StreamsResetter {
             + "reset tool!\n\n"
             + "*** Warning! This tool makes irreversible changes to your application. It is strongly recommended that "
             + "you run this once with \"--dry-run\" to preview your changes before making them.\n\n";
+    private static final Logger log = LoggerFactory.getLogger(StreamsResetter.class);
 
     private final List<String> allTopics = new LinkedList<>();
 
@@ -684,6 +687,7 @@ public class StreamsResetter {
         }
 
         public List<String> intermediateTopicsOption() {
+            log.warn("intermediateTopicsOption will be removed in version 5.0");
             return options.valuesOf(intermediateTopicsOption);
         }
 
