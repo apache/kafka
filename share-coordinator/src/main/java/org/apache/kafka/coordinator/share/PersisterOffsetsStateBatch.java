@@ -30,7 +30,12 @@ import java.util.Objects;
 public class PersisterOffsetsStateBatch {
     private final PersisterStateBatch delegate;
 
-    public PersisterOffsetsStateBatch(long firstOffset, long lastOffset, byte deliveryState, short deliveryCount) {
+    public PersisterOffsetsStateBatch(
+        long firstOffset,
+        long lastOffset,
+        byte deliveryState,
+        short deliveryCount
+    ) {
         delegate = new PersisterStateBatch(firstOffset, lastOffset, deliveryState, deliveryCount);
     }
 
@@ -51,7 +56,12 @@ public class PersisterOffsetsStateBatch {
     }
 
     public static PersisterOffsetsStateBatch from(WriteShareGroupStateRequestData.StateBatch batch) {
-        return new PersisterOffsetsStateBatch(batch.firstOffset(), batch.lastOffset(), batch.deliveryState(), batch.deliveryCount());
+        return new PersisterOffsetsStateBatch(
+            batch.firstOffset(),
+            batch.lastOffset(),
+            batch.deliveryState(),
+            batch.deliveryCount()
+        );
     }
 
     @Override
