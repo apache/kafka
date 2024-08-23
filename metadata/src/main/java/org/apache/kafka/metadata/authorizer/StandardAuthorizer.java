@@ -25,7 +25,6 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -69,7 +68,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     private volatile AuthorizerData data;
 
     public StandardAuthorizer() {
-        data = StandardAuthorizerData.createEmpty();
+        this(StandardAuthorizerData.createEmpty());
     }
 
     protected StandardAuthorizer(AuthorizerData data) {
@@ -79,6 +78,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     protected AuthorizerData getData() {
         return data;
     }
+
 
     @Override
     public void setAclMutator(AclMutator aclMutator) {
@@ -230,13 +230,10 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     public AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation operation, ResourceType resourceType) {
         SecurityUtils.authorizeByResourceTypeCheckArgs(operation, resourceType);
         // super users are granted access regardless of DENY ACLs.
-        KafkaPrincipal principal = new KafkaPrincipal(
-                requestContext.principal().getPrincipalType(),
-                requestContext.principal().getName());
-        if (data.superUsers().contains(principal.toString())) {
+        if (data.superUsers().contains(requestContext.principal().toString())) {
             return AuthorizationResult.ALLOWED;
         }
         String host = requestContext.clientAddress().getHostAddress();
-        return this.data.authorizeByResourceType(principal, host, operation, resourceType);
+        return this.data.authorizeByResourceType(requestContext.principal(), host, operation, resourceType);
     }
 }

@@ -36,6 +36,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+
 public class DefaultAuthorizerTest extends AbstractAuthorizerTest<DefaultAuthorizerTest.DefaultAuthorizer> {
     @Override
     protected Builder getTestingWrapperBuilder() {
@@ -50,16 +51,13 @@ public class DefaultAuthorizerTest extends AbstractAuthorizerTest<DefaultAuthori
 
                     @Override
                     public DefaultAuthorizer configure(DefaultAuthorizer authorizer) {
-
-                        authorizer.delegate.configure(configs);
+                        applyConfigs(authorizer::configure);
                         return authorizer;
                     }
 
                     @Override
                     public DefaultAuthorizer addAcls(DefaultAuthorizer authorizer) {
-                        acls.forEach(aclWithId -> {
-                            authorizer.delegate.addAcl(aclWithId.id(), aclWithId.acl());
-                        });
+                        applyAcls(authorizer::addAcl);
                         return authorizer;
                     }
 
@@ -85,6 +83,7 @@ public class DefaultAuthorizerTest extends AbstractAuthorizerTest<DefaultAuthori
             }
         };
     }
+
 
     public static class DefaultAuthorizer implements Authorizer {
 

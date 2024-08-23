@@ -48,6 +48,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 
+import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
@@ -83,7 +84,7 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
     /**
      * The result to return if no ACLs match.
      */
-    private final DefaultRule noAclRule;
+    private final MatchingRule noAclRule;
 
     /**
      * Contains all of the current ACLs
@@ -115,7 +116,7 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         this.aclMutator = aclMutator;
         this.loadingComplete = loadingComplete;
         this.superUsers = superUsers;
-        this.noAclRule = new DefaultRule(defaultResult);
+        this.noAclRule = () -> defaultResult;
         this.aclCache = aclCache;
     }
 
@@ -225,7 +226,7 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         if (action.resourcePattern().patternType() != LITERAL) {
             throw new IllegalArgumentException("Only literal resources are supported. Got: " + action.resourcePattern().patternType());
         }
-        KafkaPrincipal principal = AuthorizerData.baseKafkaPrincipal(requestContext);
+        KafkaPrincipal principal = requestContext.principal(); //AuthorizerData.baseKafkaPrincipal(requestContext);
         final MatchingRule rule;
 
         // Superusers are authorized to do anything.
@@ -377,31 +378,45 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         return aclCache.acls(filter::matches);
     }
 
+    private Predicate<AccessControlEntry> buildResourceTypeFilter(final String principal, final String host, final AclOperation operation) {
+        Predicate<AccessControlEntry> debug = ace -> {
+            System.out.println(ace);
+            return true;
+        };
+
+        Predicate<AccessControlEntry> filter = debug.and(ace -> ace.operation() == operation || ace.operation() == ALL);
+
+        if (principal != null) {
+            filter = filter.and(ace -> principal.equals(ace.principal()));
+        }
+
+        if (host != null) {
+            filter = filter.and(ace -> host.equals(ace.host()));
+        }
+        return filter;
+    }
+
     @Override
     public AuthorizationResult authorizeByResourceType(
             KafkaPrincipal principal,
             String hostAddr,
             AclOperation operation,
             ResourceType resourceType) {
+        SecurityUtils.authorizeByResourceTypeCheckArgs(operation, resourceType);
 
         // Filter out all the resource pattern corresponding to the principal, hostAddr,
         // AclOperation, and ResourceType
+
         ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
                 resourceType, null, PatternType.ANY);
 
         Predicate<AclBinding> aclFilter = new AclBindingFilter(
                 resourceTypeFilter, AccessControlEntryFilter.ANY)::matches;
 
+        Predicate<AccessControlEntry> aceFilter = buildResourceTypeFilter(principal == null ? null : principal.toString(), hostAddr, operation);
+        aclFilter = aclFilter.and(binding -> aceFilter.test(binding.entry()));
 
-        Predicate<String> hostFilter = s -> s.equals(WILDCARD) || s.equals(hostAddr);
 
-        Predicate<String> principalFilter = s -> SecurityUtils.parseKafkaPrincipal(s).equals(principal)
-                || s.equals("User:*");
-
-        Predicate<AccessControlEntry> operationFilter = ace -> ace.operation() == operation || ace.operation() != AclOperation.ALL;
-
-        aclFilter = aclFilter.and(binding -> hostFilter.test(binding.entry().host()) && principalFilter.test(binding.entry().principal())
-                && operationFilter.test(binding.entry()));
 
         EnumMap<PatternType, NavigableSet<String>> denyPatterns =
                 new EnumMap<PatternType, NavigableSet<String>>(PatternType.class) {{

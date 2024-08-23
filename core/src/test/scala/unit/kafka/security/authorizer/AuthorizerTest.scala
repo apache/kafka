@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package kafka.security.authorizer
-
 import kafka.Kafka
 import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.{TestInfoUtils, TestUtils}

@@ -162,14 +162,14 @@ public abstract class AbstractClusterMetadataAuthorizerTest<T extends ClusterMet
         TestingWrapper<T> wrapper = builder.get();
         T authorizer = wrapper.configure(wrapper.getUnconfiguredAuthorizer());
 
-        List<Action> actions =  Arrays.asList(newAction(READ, TOPIC, "green1"),
-                newAction(WRITE, GROUP, "wheel"));
+        List<Action> actions =  Arrays.asList(AuthorizerTestUtils.newAction(READ, TOPIC, "green1"),
+                AuthorizerTestUtils.newAction(WRITE, GROUP, "wheel"));
 
         assertThrows(AuthorizerNotReadyException.class, () ->
-            authorizer.authorize(newRequestContext("bob"), actions));
+            authorizer.authorize(AuthorizerTestUtils.newRequestContext("bob"), actions));
 
         assertEquals(Arrays.asList(ALLOWED, ALLOWED),
-            authorizer.authorize(newRequestContext("superMan"), actions));
+            authorizer.authorize(AuthorizerTestUtils.newRequestContext("superMan"), actions));
     }
 
     @Test

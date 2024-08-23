@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -47,7 +48,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.acl.AclOperation.READ;
 import static org.apache.kafka.common.acl.AclOperation.WRITE;
@@ -165,9 +165,12 @@ public class ClusterMetadataAuthorizerTest {
             new AccessControlEntry(WILDCARD_PRINCIPAL, WILDCARD, WRITE, ALLOW))
     );
 
-    static final List<AclBindingFilter> TEST_FILTERS = TEST_BINDINGS.stream().
-        map(AclBinding::toFilter).collect(Collectors.toList());
+    static final List<AclBindingFilter> TEST_FILTERS = new ArrayList<>();
 
+    static {
+        TEST_BINDINGS.forEach(binding -> TEST_FILTERS.add(binding.toFilter()));
+    }
+    
     @Test
     public void testCreateAcls() throws Exception {
         MockAclMutator mutator = new MockAclMutator();
