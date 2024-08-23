@@ -16,7 +16,7 @@
 
 echo "Running gradlew with timeout"
 
-timeout 5m ./gradlew --build-cache --scan --continue \
+timeout 20m ./gradlew --build-cache --scan --continue \
   -PtestLoggingEvents=started,passed,skipped,failed \
   -PignoreFailures=true -PmaxParallelForks=2 \
   -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
