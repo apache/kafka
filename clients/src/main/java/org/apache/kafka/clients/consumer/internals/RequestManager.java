@@ -58,6 +58,8 @@ public interface RequestManager {
      * (Note that it is still invoked on the consumer's network I/O thread). Quick execution of this method in
      * <em>all</em> request managers is critical to ensure that we can complete as many of the consumer's shutdown
      * tasks as possible within the user-provided timeout.
+     *
+     * @param currentTimeMs Current time in milliseconds
      */
     default PollResult pollOnClose(long currentTimeMs) {
         return EMPTY;
