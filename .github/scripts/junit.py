@@ -157,7 +157,13 @@ if __name__ == "__main__":
                     logger.debug(f"Found skipped test: {skipped_test}")
                     table.append(("⚠️", simple_class_name, skipped_test.test_name, "Skipped", ""))
     duration = pretty_time_duration(total_time)
-    print(f"{total_tests} tests run in {duration}, {total_failures} failed ❌, {total_skipped} skipped ⚠️, {total_errors} errors.")
+
+    # Print summary
+    report_url = get_env("REPORT_URL")
+    report_md = f"Download [HTML report]({report_url})."
+    summary = f"{total_tests} tests run in {duration}, {total_failures} failed ❌, {total_skipped} skipped ⚠️, {total_errors} errors.")
+    logger.debug(summary)
+    print(f"{summary} {report_md}")
     if len(table) > 0:
         print(f"|   | Module | Test | Message | Time |")
         print(f"| - | ------ | ---- | ------- | ---- |")

@@ -112,5 +112,4 @@ jobs:
         run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-      - name: Output artifact URL
-        run: echo 'JUnit reports can be downloaded from ${{ steps.junit-upload-artifact.outputs.artifact-url }}' >> $GITHUB_STEP_SUMMARY
+          REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
