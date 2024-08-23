@@ -36,6 +36,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -81,6 +82,7 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.Coo
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.FAILED;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.INITIAL;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.LOADING;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.HighWatermarkListener.NO_OFFSET;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.MIN_BUFFER_SIZE;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -99,6 +101,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("checkstyle:JavaNCSS")
 public class CoordinatorRuntimeTest {
     private static final TopicPartition TP = new TopicPartition("__consumer_offsets", 0);
     private static final Duration DEFAULT_WRITE_TIMEOUT = Duration.ofMillis(5);
@@ -224,24 +227,26 @@ public class CoordinatorRuntimeTest {
      * An in-memory partition writer that accepts a maximum number of writes.
      */
     private static class MockPartitionWriter extends InMemoryPartitionWriter {
+        private final Time time;
         private final int maxWrites;
         private final boolean failEndMarker;
         private final AtomicInteger writeCount = new AtomicInteger(0);
 
         public MockPartitionWriter() {
-            this(Integer.MAX_VALUE, false);
+            this(new MockTime(), Integer.MAX_VALUE, false);
         }
 
         public MockPartitionWriter(int maxWrites) {
-            this(maxWrites, false);
+            this(new MockTime(), maxWrites, false);
         }
 
         public MockPartitionWriter(boolean failEndMarker) {
-            this(Integer.MAX_VALUE, failEndMarker);
+            this(new MockTime(), Integer.MAX_VALUE, failEndMarker);
         }
 
-        public MockPartitionWriter(int maxWrites, boolean failEndMarker) {
+        public MockPartitionWriter(Time time, int maxWrites, boolean failEndMarker) {
             super(false);
+            this.time = time;
             this.maxWrites = maxWrites;
             this.failEndMarker = failEndMarker;
         }
@@ -271,6 +276,7 @@ public class CoordinatorRuntimeTest {
             if (failEndMarker && batch.firstBatch().isControlBatch())
                 throw new KafkaException("Couldn't write end marker.");
 
+            time.sleep(10);
             return super.append(tp, verificationGuard, batch);
         }
     }
@@ -4125,6 +4131,201 @@ public class CoordinatorRuntimeTest {
         assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(Collections.emptyList(), ctx.coordinator.coordinator().fullRecords());
         assertEquals(Collections.emptyList(), writer.entries(TP));
+    }
+
+    @Test
+    public void testRecordFlushTime() throws Exception {
+        MockTimer timer = new MockTimer();
+
+        // Writer sleeps for 10ms before appending records.
+        MockPartitionWriter writer = new MockPartitionWriter(timer.time(), Integer.MAX_VALUE, false);
+        CoordinatorRuntimeMetrics runtimeMetrics = mock(CoordinatorRuntimeMetrics.class);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(Duration.ofMillis(20))
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(runtimeMetrics)
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(10)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertNull(ctx.currentBatch);
+
+        // Get the max batch size.
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+
+        // Create records with a quarter of the max batch size each. Keep in mind that
+        // each batch has a header so it is not possible to have those four records
+        // in one single batch.
+        List<String> records = Stream.of('1', '2', '3', '4').map(c -> {
+            char[] payload = new char[maxBatchSize / 4];
+            Arrays.fill(payload, c);
+            return new String(payload);
+        }).collect(Collectors.toList());
+
+        // Write #1 with two records.
+        long firstBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(0, 2), "response1")
+        );
+
+        // A batch has been created.
+        assertNotNull(ctx.currentBatch);
+
+        // Write #2 with one record.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(2, 3), "response2")
+        );
+
+        // Verify the state. Records are replayed but no batch written.
+        assertEquals(Collections.emptyList(), writer.entries(TP));
+        verify(runtimeMetrics, times(0)).recordFlushTime(10);
+
+        // Write #3 with one record. This one cannot go into the existing batch
+        // so the existing batch should be flushed and a new one should be created.
+        long secondBatchTimestamp = timer.time().milliseconds();
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(50),
+            state -> new CoordinatorResult<>(records.subList(3, 4), "response3")
+        );
+
+        // Verify the state. Records are replayed. The previous batch
+        // got flushed with all the records but the new one from #3.
+        assertEquals(3L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Arrays.asList(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(Collections.singletonList(
+            records(firstBatchTimestamp, records.subList(0, 3))
+        ), writer.entries(TP));
+        verify(runtimeMetrics, times(1)).recordFlushTime(10);
+
+        // Advance past the linger time.
+        timer.advanceClock(11);
+
+        // Verify the state. The pending batch is flushed.
+        assertEquals(4L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Arrays.asList(
+            new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
+            new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
+            new MockCoordinatorShard.RecordAndMetadata(2, records.get(2)),
+            new MockCoordinatorShard.RecordAndMetadata(3, records.get(3))
+        ), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(Arrays.asList(
+            records(secondBatchTimestamp, records.subList(0, 3)),
+            records(secondBatchTimestamp, records.subList(3, 4))
+        ), writer.entries(TP));
+        verify(runtimeMetrics, times(2)).recordFlushTime(10);
+
+        // Commit and verify that writes are completed.
+        writer.commit(TP);
+        assertTrue(write1.isDone());
+        assertTrue(write2.isDone());
+        assertTrue(write3.isDone());
+        assertEquals(4L, ctx.coordinator.lastCommittedOffset());
+        assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
+        assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+        assertEquals("response3", write3.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testRecordEventPurgatoryTime() throws Exception {
+        Duration writeTimeout = Duration.ofMillis(1000);
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        ManualEventProcessor processor = new ManualEventProcessor();
+        CoordinatorRuntimeMetrics runtimeMetrics = mock(CoordinatorRuntimeMetrics.class);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(writeTimeout)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(processor)
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(runtimeMetrics)
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .build();
+
+        // Loads the coordinator. Poll once to execute the load operation and once
+        // to complete the load.
+        runtime.scheduleLoadOperation(TP, 10);
+        processor.poll();
+        processor.poll();
+
+        // write#1 will be committed and update the high watermark. Record time spent in purgatory.
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, writeTimeout,
+            state -> new CoordinatorResult<>(Collections.singletonList("record1"), "response1")
+        );
+        // write#2 will time out sitting in the purgatory. Record time spent in purgatory.
+        CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, writeTimeout,
+            state -> new CoordinatorResult<>(Collections.singletonList("record2"), "response2")
+        );
+        // write#3 will error while appending. Does not spend time in purgatory.
+        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, writeTimeout,
+            state -> {
+                throw new KafkaException("write#3 failed.");
+            });
+
+        processor.poll();
+        processor.poll();
+        processor.poll();
+
+        // Confirm we do not record purgatory time for write#3.
+        assertTrue(write3.isCompletedExceptionally());
+        verify(runtimeMetrics, times(0)).recordEventPurgatoryTime(0L);
+
+        // Records have been written to the log.
+        long writeTimestamp = timer.time().milliseconds();
+        assertEquals(Arrays.asList(
+            records(writeTimestamp, "record1"),
+            records(writeTimestamp, "record2")
+        ), writer.entries(TP));
+
+        // There is no pending high watermark.
+        assertEquals(NO_OFFSET, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+
+        // Advance the clock then commit records from write#1.
+        timer.advanceClock(700);
+        writer.commit(TP, 1);
+
+        // We should still have one pending event and the pending high watermark should be updated.
+        assertEquals(1, processor.size());
+        assertEquals(1, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+
+        // Poll once to process the high watermark update and complete the writes.
+        processor.poll();
+        long purgatoryTimeMs = timer.time().milliseconds() - writeTimestamp;
+
+        // Advance the clock past write timeout. write#2 has now timed out.
+        timer.advanceClock(300 + 1);
+        processor.poll();
+
+        assertEquals(NO_OFFSET, runtime.contextOrThrow(TP).highWatermarklistener.lastHighWatermark());
+        assertEquals(1, runtime.contextOrThrow(TP).coordinator.lastCommittedOffset());
+        assertTrue(write1.isDone());
+        assertTrue(write2.isCompletedExceptionally());
+        verify(runtimeMetrics, times(1)).recordEventPurgatoryTime(purgatoryTimeMs);
+        verify(runtimeMetrics, times(1)).recordEventPurgatoryTime(writeTimeout.toMillis() + 1);
     }
 
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(

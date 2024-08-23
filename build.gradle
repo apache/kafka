@@ -1424,6 +1424,7 @@ project(':group-coordinator') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.metrics
+    implementation libs.hdrHistogram
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output

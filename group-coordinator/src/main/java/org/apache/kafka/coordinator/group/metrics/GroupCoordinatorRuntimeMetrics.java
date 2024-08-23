@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics {
+
     /**
      * The metrics group.
      */
@@ -42,6 +43,26 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
      * The partition count metric name.
      */
     public static final String NUM_PARTITIONS_METRIC_NAME = "num-partitions";
+
+    /**
+     * The event queue time metric name.
+     */
+    public static final String EVENT_QUEUE_TIME_METRIC_NAME = "event-queue-time-ms";
+
+    /**
+     * The event queue time metric name.
+     */
+    public static final String EVENT_PROCESSING_TIME_METRIC_NAME = "event-processing-time-ms";
+
+    /**
+     * The event purgatory time metric name.
+     */
+    public static final String EVENT_PURGATORY_TIME_METRIC_NAME = "event-purgatory-time-ms";
+
+    /**
+     * The flush time metric name.
+     */
+    public static final String BATCH_FLUSH_TIME_METRIC_NAME = "batch-flush-time-ms";
 
     /**
      * Metric to count the number of partitions in Loading state.
@@ -81,6 +102,26 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
      */
     private final Sensor threadIdleSensor;
 
+    /**
+     * The event queue time sensor.
+     */
+    private final Sensor eventQueueTimeSensor;
+
+    /**
+     * The event processing time sensor.
+     */
+    private final Sensor eventProcessingTimeSensor;
+
+    /**
+     * Sensor to measure the time an event stays in the purgatory.
+     */
+    private final Sensor eventPurgatoryTimeSensor;
+
+    /**
+     * Sensor to measure the flush time.
+     */
+    private final Sensor flushTimeSensor;
+
     public GroupCoordinatorRuntimeMetrics(Metrics metrics) {
         this.metrics = Objects.requireNonNull(metrics);
 
@@ -97,7 +138,7 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
         );
 
         this.numPartitionsFailed = kafkaMetricName(
-        NUM_PARTITIONS_METRIC_NAME,
+            NUM_PARTITIONS_METRIC_NAME,
             "The number of partitions in Failed state.",
             "state", "failed"
         );
@@ -129,6 +170,42 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
             "The fraction of time the threads spent waiting for an event. This is an average across " +
                 "all coordinator event processor threads."),
             new Rate(TimeUnit.MILLISECONDS));
+
+        KafkaMetricHistogram eventQueueTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
+            suffix -> kafkaMetricName(
+                EVENT_QUEUE_TIME_METRIC_NAME + "-" + suffix,
+                "The " + suffix + " event queue time in milliseconds"
+            )
+        );
+        this.eventQueueTimeSensor = metrics.sensor("EventQueueTime");
+        this.eventQueueTimeSensor.add(eventQueueTimeHistogram);
+
+        KafkaMetricHistogram eventProcessingTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
+            suffix -> kafkaMetricName(
+                EVENT_PROCESSING_TIME_METRIC_NAME + "-" + suffix,
+                "The " + suffix + " event processing time in milliseconds"
+            )
+        );
+        this.eventProcessingTimeSensor = metrics.sensor("EventProcessingTime");
+        this.eventProcessingTimeSensor.add(eventProcessingTimeHistogram);
+
+        KafkaMetricHistogram eventPurgatoryTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
+            suffix -> kafkaMetricName(
+                EVENT_PURGATORY_TIME_METRIC_NAME + "-" + suffix,
+                "The " + suffix + " event purgatory time in milliseconds"
+            )
+        );
+        this.eventPurgatoryTimeSensor = metrics.sensor("EventPurgatoryTime");
+        this.eventPurgatoryTimeSensor.add(eventPurgatoryTimeHistogram);
+
+        KafkaMetricHistogram flushTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
+            suffix -> kafkaMetricName(
+                BATCH_FLUSH_TIME_METRIC_NAME + "-" + suffix,
+                "The " + suffix + " flush time in milliseconds"
+            )
+        );
+        this.flushTimeSensor = metrics.sensor("FlushTime");
+        this.flushTimeSensor.add(flushTimeHistogram);
     }
 
     /**
@@ -153,6 +230,10 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
 
         metrics.removeSensor(partitionLoadSensor.name());
         metrics.removeSensor(threadIdleSensor.name());
+        metrics.removeSensor(eventQueueTimeSensor.name());
+        metrics.removeSensor(eventProcessingTimeSensor.name());
+        metrics.removeSensor(eventPurgatoryTimeSensor.name());
+        metrics.removeSensor(flushTimeSensor.name());
     }
 
     /**
@@ -198,10 +279,24 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
     }
 
     @Override
-    public void recordEventQueueTime(long durationMs) { }
+    public void recordEventQueueTime(long durationMs) {
+        eventQueueTimeSensor.record(durationMs);
+    }
 
     @Override
-    public void recordEventQueueProcessingTime(long durationMs) { }
+    public void recordEventProcessingTime(long durationMs) {
+        eventProcessingTimeSensor.record(durationMs);
+    }
+
+    @Override
+    public void recordEventPurgatoryTime(long purgatoryTimeMs) {
+        eventPurgatoryTimeSensor.record(purgatoryTimeMs);
+    }
+
+    @Override
+    public void recordFlushTime(long durationMs) {
+        flushTimeSensor.record(durationMs);
+    }
 
     @Override
     public void recordThreadIdleTime(long idleTimeMs) {

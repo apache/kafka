@@ -68,6 +68,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorWriteEvent.NOT_QUEUED;
+
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
  * or the transaction coordinator.
@@ -741,12 +743,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private void flushCurrentBatch() {
             if (currentBatch != null) {
                 try {
+                    long flushStartMs = time.milliseconds();
                     // Write the records to the log and update the last written offset.
                     long offset = partitionWriter.append(
                         tp,
                         currentBatch.verificationGuard,
                         currentBatch.builder.build()
                     );
+                    runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                     coordinator.updateLastWrittenOffset(offset);
 
                     if (offset != currentBatch.nextOffset) {
@@ -1071,6 +1075,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     result
                 );
 
+                long flushStartMs = time.milliseconds();
                 long offset = partitionWriter.append(
                     tp,
                     VerificationGuard.SENTINEL,
@@ -1084,6 +1089,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         )
                     )
                 );
+                runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                 coordinator.updateLastWrittenOffset(offset);
 
                 deferredEventQueue.add(offset, event);
@@ -1143,6 +1149,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param <T> The type of the response.
      */
     class CoordinatorWriteEvent<T> implements CoordinatorEvent, DeferredEvent {
+
+        /**
+         * Indicates that the event was not appended to the deferred event queue.
+         */
+        public static final long NOT_QUEUED = -1L;
+
         /**
          * The topic partition that this write event is applied to.
          */
@@ -1206,6 +1218,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private final long createdTimeMs;
 
         /**
+         * The time the event was added to the deferred queue.
+         */
+        private long deferredEventQueuedTimestamp;
+
+        /**
          * Constructor.
          *
          * @param name                  The operation name.
@@ -1263,6 +1280,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
             this.writeTimeout = writeTimeout;
+            this.deferredEventQueuedTimestamp = NOT_QUEUED;
         }
 
         /**
@@ -1300,6 +1318,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     if (!future.isDone()) {
                         operationTimeout = new OperationTimeout(tp, this, writeTimeout.toMillis());
                         timer.add(operationTimeout);
+
+                        // Only update when this event was appended to the deferred queue.
+                        deferredEventQueuedTimestamp = time.milliseconds();
                     }
                 });
             } catch (Throwable t) {
@@ -1315,6 +1336,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         @Override
         public void complete(Throwable exception) {
+            final long purgatoryTimeMs = time.milliseconds() - deferredEventQueuedTimestamp;
             CompletableFuture<Void> appendFuture = result != null ? result.appendFuture() : null;
 
             if (exception == null) {
@@ -1328,6 +1350,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (operationTimeout != null) {
                 operationTimeout.cancel();
                 operationTimeout = null;
+            }
+
+            if (deferredEventQueuedTimestamp != NOT_QUEUED) {
+                // Only record the purgatory time if the event was deferred.
+                runtimeMetrics.recordEventPurgatoryTime(purgatoryTimeMs);
             }
         }
 
@@ -1531,6 +1558,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         private final long createdTimeMs;
 
+        /**
+         * The time the records were appended to the log.
+         */
+        private long deferredEventQueuedTimestamp;
+
         CoordinatorCompleteTransactionEvent(
             String name,
             TopicPartition tp,
@@ -1549,6 +1581,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.writeTimeout = writeTimeout;
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
+            this.deferredEventQueuedTimestamp = NOT_QUEUED;
         }
 
         /**
@@ -1578,6 +1611,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     if (!future.isDone()) {
                         operationTimeout = new OperationTimeout(tp, this, writeTimeout.toMillis());
                         timer.add(operationTimeout);
+
+                        // Only update when this event was appended to the deferred queue.
+                        deferredEventQueuedTimestamp = time.milliseconds();
                     }
                 });
             } catch (Throwable t) {
@@ -1593,6 +1629,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         @Override
         public void complete(Throwable exception) {
+            final long purgatoryTimeMs = time.milliseconds() - deferredEventQueuedTimestamp;
             if (exception == null) {
                 future.complete(null);
             } else {
@@ -1602,6 +1639,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (operationTimeout != null) {
                 operationTimeout.cancel();
                 operationTimeout = null;
+            }
+
+            if (deferredEventQueuedTimestamp != NOT_QUEUED) {
+                // Only record the purgatory time if the event was deferred.
+                runtimeMetrics.recordEventPurgatoryTime(purgatoryTimeMs);
             }
         }
 
@@ -1708,7 +1750,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      */
     class HighWatermarkListener implements PartitionWriter.Listener {
 
-        private static final long NO_OFFSET = -1L;
+        static final long NO_OFFSET = -1L;
 
         /**
          * The atomic long is used to store the last and unprocessed high watermark
