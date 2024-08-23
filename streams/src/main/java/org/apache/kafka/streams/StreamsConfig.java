@@ -1081,7 +1081,7 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_CLIENT_SUPPLIER_DOC)
             .define(LOG_SUMMARY_INTERVAL_MS_CONFIG,
                     Type.LONG,
-                   2 * 60 * 1000L,
+                    2 * 60 * 1000L,
                     Importance.LOW,
                     LOG_SUMMARY_INTERVAL_MS_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
