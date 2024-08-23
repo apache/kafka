@@ -103,20 +103,8 @@ jobs:
         # --continue:     Keep running even if a test fails
         timeout-minutes: 10  # 3 hours
         continue-on-error: true
-        shell: sh
-        run: |
-          timeout 1m ./gradlew --build-cache --scan --continue \
-          -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
-          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
-          test
-          echo "Timed out with $?"
-      - name: Publish Build Scan
-        if:  ${{ steps.test.outcome == 'failure' }}
-        continue-on-error: true
-        run: |
-          echo "Attempting to publish build scan from failed test run"
-          ./gradlew buildScanPublishPrevious
+        shell: bash
+        run: bash .github/scripts/junit.sh
       - name: Archive JUnit reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
