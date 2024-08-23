@@ -460,16 +460,18 @@ public class SharePartitionManager implements AutoCloseable {
                 if (shareSession == null) {
                     log.debug("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
-                } else {
-                    if (shareSession.epoch != reqMetadata.epoch()) {
-                        log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
-                                shareSession.epoch, reqMetadata.epoch());
-                        throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
-                    } else {
-                        cache.touch(shareSession, time.milliseconds());
-                        shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
-                    }
                 }
+
+                if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
+                    // If the epoch is FINAL_EPOCH, then return. Do not update the cache.
+                    return;
+                } else if (shareSession.epoch != reqMetadata.epoch()) {
+                    log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
+                            shareSession.epoch, reqMetadata.epoch());
+                    throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+                }
+                cache.touch(shareSession, time.milliseconds());
+                shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
         }
     }
