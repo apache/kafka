@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -39,72 +38,72 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class StoreToProcessorContextAdapterTest {
     @Mock
     private StateStoreContext delegate;
-    private ProcessorContext context;
+    private InternalProcessorContext internalProcessorContext;
     @Mock
     private Punctuator punctuator;
 
     @BeforeEach
     public void setUp() {
-        context = StoreToProcessorContextAdapter.adapt(delegate);
+        this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(delegate);
     }
 
     @Test
     public void shouldThrowOnCurrentSystemTime() {
-        assertThrows(UnsupportedOperationException.class, () -> context.currentSystemTimeMs());
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.currentSystemTimeMs());
     }
 
     @Test
     public void shouldThrowOnCurrentStreamTime() {
-        assertThrows(UnsupportedOperationException.class, () -> context.currentStreamTimeMs());
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.currentStreamTimeMs());
     }
 
     @Test
     public void shouldThrowOnGetStateStore() {
-        assertThrows(UnsupportedOperationException.class, () -> context.getStateStore("store"));
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.getStateStore("store"));
     }
 
     @Test
     public void shouldThrowOnScheduleWithDuration() {
-        assertThrows(UnsupportedOperationException.class, () -> context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator));
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator));
     }
 
     @Test
     public void shouldThrowOnForward() {
-        assertThrows(UnsupportedOperationException.class, () -> context.forward("key", "value"));
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.forward("key", "value"));
     }
 
     @Test
     public void shouldThrowOnForwardWithTo() {
-        assertThrows(UnsupportedOperationException.class, () -> context.forward("key", "value", To.all()));
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.forward("key", "value", To.all()));
     }
 
     @Test
     public void shouldThrowOnCommit() {
-        assertThrows(UnsupportedOperationException.class, () -> context.commit());
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.commit());
     }
 
     @Test
     public void shouldThrowOnTopic() {
-        assertThrows(UnsupportedOperationException.class, () -> context.topic());
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.topic());
     }
 
     @Test
     public void shouldThrowOnPartition() {
-        assertThrows(UnsupportedOperationException.class, () -> context.partition());
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.partition());
     }
 
     @Test
     public void shouldThrowOnOffset() {
-        assertThrows(UnsupportedOperationException.class, () -> context.offset());
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.offset());
     }
 
     @Test
     public void shouldThrowOnHeaders() {
-        assertThrows(UnsupportedOperationException.class, () -> context.headers());
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.headers());
     }
 
     @Test
     public void shouldThrowOnTimestamp() {
-        assertThrows(UnsupportedOperationException.class, () -> context.timestamp());
+        assertThrows(UnsupportedOperationException.class, () -> internalProcessorContext.timestamp());
     }
 }

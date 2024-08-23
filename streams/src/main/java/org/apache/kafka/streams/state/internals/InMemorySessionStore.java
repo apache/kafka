@@ -23,13 +23,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
@@ -99,14 +97,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         this.stateStoreContext = stateStoreContext;
-        final ProcessorContext context = StoreToProcessorContextAdapter.adapt(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
-        final String taskName = context.taskId().toString();
+        final String taskName = stateStoreContext.taskId().toString();
 
         // The provided context is not required to implement InternalProcessorContext,
         // If it doesn't, we can't record this metric.
-        if (context instanceof InternalProcessorContext) {
-            this.context = (InternalProcessorContext) context;
+        if (stateStoreContext instanceof InternalProcessorContext) {
+            this.context = (InternalProcessorContext) stateStoreContext;
             final StreamsMetricsImpl metrics = this.context.metrics();
             expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
                 threadId,
@@ -120,11 +117,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                context.appConfigs(),
+                stateStoreContext.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false
             );
-            context.register(
+            stateStoreContext.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
                     synchronized (position) {

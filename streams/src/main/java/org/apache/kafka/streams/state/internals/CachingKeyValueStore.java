@@ -95,10 +95,16 @@ public class CachingKeyValueStore
     }
 
     @Override
-    public void init(final StateStoreContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
-        super.init(context, root);
+        this.context = asInternalProcessorContext(stateStoreContext);
+        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
+        this.context.registerCacheFlushListener(cacheName, entries -> {
+            for (final ThreadCache.DirtyEntry entry : entries) {
+                putAndMaybeForward(entry, context);
+            }
+        });
+        super.init(stateStoreContext, root);
         // save the stream thread as we only ever want to trigger a flush
         // when the stream thread is the current thread.
         streamThread = Thread.currentThread();
@@ -198,16 +204,6 @@ public class CachingKeyValueStore
             result.setPosition(mergedPosition.copy());
         }
         return result;
-    }
-
-    private void initInternal(final InternalProcessorContext<?, ?> context) {
-        this.context = context;
-        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
-        this.context.registerCacheFlushListener(cacheName, entries -> {
-            for (final ThreadCache.DirtyEntry entry : entries) {
-                putAndMaybeForward(entry, context);
-            }
-        });
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,

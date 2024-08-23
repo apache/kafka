@@ -17,12 +17,18 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +42,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("deprecation") // this is a test of a deprecated API
 public class MockProcessorContextTest {
@@ -181,6 +191,44 @@ public class MockProcessorContextTest {
         context.resetCommit();
 
         assertFalse(context.committed());
+    }
+
+    @Test
+    public void shouldStoreAndReturnStateStores() {
+        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
+            @Override
+            public void process(final String key, final Long value) {
+                final KeyValueStore<String, Long> stateStore = context().getStateStore("my-state");
+                stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
+                stateStore.put("all", (stateStore.get("all") == null ? 0 : stateStore.get("all")) + value);
+            }
+        };
+
+        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
+
+        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("my-state"),
+                Serdes.String(),
+                Serdes.Long()).withLoggingDisabled();
+
+        final KeyValueStore<String, Long> store = storeBuilder.build();
+
+        final StateStoreContext stateStoreContext = mock(StateStoreContext.class);
+        when(stateStoreContext.taskId()).thenReturn(mock(TaskId.class));
+        final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+        when(streamsMetrics.storeLevelSensor(anyString(), anyString(), anyString(), any(Sensor.RecordingLevel.class))).thenReturn(mock(Sensor.class));
+        when(stateStoreContext.metrics()).thenReturn(streamsMetrics);
+
+        store.init(stateStoreContext, store);
+
+//        processor.init(stateStoreContext);
+//
+//        processor.process("foo", 5L);
+//        processor.process("bar", 50L);
+//
+//        assertEquals(5L, (long) store.get("foo"));
+//        assertEquals(50L, (long) store.get("bar"));
+//        assertEquals(55L, (long) store.get("all"));
     }
 
     @Test
