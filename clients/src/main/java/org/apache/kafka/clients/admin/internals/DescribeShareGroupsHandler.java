@@ -29,22 +29,23 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.admin.internals.AdminUtils.validAclOperations;
 
 public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<CoordinatorKey, ShareGroupDescription> {
 
@@ -109,7 +110,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(describedGroup.groupId());
             Errors error = Errors.forCode(describedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, error, describedGroup.errorMessage(), failed, groupsToUnmap);
+                handleError(groupIdKey, describedGroup, coordinator, error, describedGroup.errorMessage(), completed, failed, groupsToUnmap);
                 continue;
             }
 
@@ -147,8 +148,11 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
 
     private void handleError(
             CoordinatorKey groupId,
+            ShareGroupDescribeResponseData.DescribedGroup describedGroup,
+            Node coordinator,
             Errors error,
             String errorMsg,
+            Map<CoordinatorKey, ShareGroupDescription> completed,
             Map<CoordinatorKey, Throwable> failed,
             Set<CoordinatorKey> groupsToUnmap) {
         switch (error) {
@@ -173,26 +177,22 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                 break;
 
             case GROUP_ID_NOT_FOUND:
-                log.error("`DescribeShareGroups` request for group id {} failed because the group does not exist.", groupId.idValue);
-                failed.put(groupId, error.exception(errorMsg));
+                // In order to maintain compatibility with describeConsumerGroups, an unknown group ID is
+                // reported as a DEAD share group, and the admin client operation did not fail
+                log.debug("`DescribeShareGroups` request for group id {} failed because the group does not exist. {}",
+                    groupId.idValue, errorMsg != null ? errorMsg : "");
+                final ShareGroupDescription shareGroupDescription =
+                    new ShareGroupDescription(groupId.idValue,
+                        Collections.emptySet(),
+                        ShareGroupState.DEAD,
+                        coordinator,
+                        validAclOperations(describedGroup.authorizedOperations()));
+                completed.put(groupId, shareGroupDescription);
                 break;
 
             default:
                 log.error("`DescribeShareGroups` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception(errorMsg));
         }
-    }
-
-    private Set<AclOperation> validAclOperations(final int authorizedOperations) {
-        if (authorizedOperations == MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED) {
-            return null;
-        }
-        return Utils.from32BitField(authorizedOperations)
-            .stream()
-            .map(AclOperation::fromCode)
-            .filter(operation -> operation != AclOperation.UNKNOWN
-                && operation != AclOperation.ALL
-                && operation != AclOperation.ANY)
-            .collect(Collectors.toSet());
     }
 }

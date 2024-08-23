@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.time.Duration
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 
@@ -27,11 +27,11 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.common.network.{ListenerName, ConnectionMode}
+import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -46,12 +46,14 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   val producerConfig = new Properties
   val consumerConfig = new Properties
+  val shareConsumerConfig = new Properties
   val adminClientConfig = new Properties
   val superuserClientConfig = new Properties
   val serverConfig = new Properties
   val controllerConfig = new Properties
 
   private val consumers = mutable.Buffer[Consumer[_, _]]()
+  private val shareConsumers = mutable.Buffer[ShareConsumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
   private val adminClients = mutable.Buffer[Admin]()
 
@@ -72,6 +74,11 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     if (isNewGroupCoordinatorEnabled()) {
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer"))
+    }
+    if (isShareGroupTest()) {
+      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
+      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share"))
+      cfgs.foreach(_.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true"))
     }
 
     if(isKRaftTest()) {
@@ -135,6 +142,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     // Generate client security properties before starting the brokers in case certs are needed
     producerConfig ++= clientSecurityProps("producer")
     consumerConfig ++= clientSecurityProps("consumer")
+    shareConsumerConfig ++= clientSecurityProps("shareConsumer")
     adminClientConfig ++= clientSecurityProps("adminClient")
     superuserClientConfig ++= superuserSecurityProps("superuserClient")
 
@@ -151,6 +159,11 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     maybeGroupProtocolSpecified(testInfo).map(groupProtocol => consumerConfig.putIfAbsent(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name))
+
+    shareConsumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    shareConsumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
+    shareConsumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    shareConsumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
 
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
@@ -194,6 +207,19 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer
   }
 
+  def createShareConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
+                                valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                                configOverrides: Properties = new Properties,
+                                configsToRemove: List[String] = List()): ShareConsumer[K, V] = {
+    val props = new Properties
+    props ++= shareConsumerConfig
+    props ++= configOverrides
+    configsToRemove.foreach(props.remove(_))
+    val shareConsumer = new KafkaShareConsumer[K, V](props, keyDeserializer, valueDeserializer)
+    shareConsumers += shareConsumer
+    shareConsumer
+  }
+
   def createAdminClient(
     listenerName: ListenerName = listenerName,
     configOverrides: Properties = new Properties
@@ -224,10 +250,13 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       producers.foreach(_.close(Duration.ZERO))
       consumers.foreach(_.wakeup())
       consumers.foreach(_.close(Duration.ZERO))
+      shareConsumers.foreach(_.wakeup())
+      shareConsumers.foreach(_.close(Duration.ZERO))
       adminClients.foreach(_.close(Duration.ZERO))
 
       producers.clear()
       consumers.clear()
+      shareConsumers.clear()
       adminClients.clear()
     } finally {
       super.tearDown()

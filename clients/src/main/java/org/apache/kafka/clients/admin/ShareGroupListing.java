@@ -82,14 +82,8 @@ public class ShareGroupListing {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        if (!(o instanceof ShareGroupListing))
-            return false;
-        if (getClass() != o.getClass())
-            return false;
+        if (this == o) return true;
+        if (!(o instanceof ShareGroupListing)) return false;
         ShareGroupListing that = (ShareGroupListing) o;
         return Objects.equals(groupId, that.groupId) &&
             Objects.equals(state, that.state);
