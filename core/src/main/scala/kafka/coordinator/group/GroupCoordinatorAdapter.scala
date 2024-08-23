@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
-import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{KafkaConfig, ReplicaManager}
 import kafka.utils.Implicits.MapExtensionMethods
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, Tr
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.util.FutureUtils
 
 import java.time.Duration
@@ -130,7 +131,7 @@ private[group] class GroupCoordinatorAdapter(
       protocols,
       callback,
       Option(request.reason),
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     )
 
     future
@@ -166,7 +167,7 @@ private[group] class GroupCoordinatorAdapter(
       Option(request.groupInstanceId),
       assignmentMap.result(),
       callback,
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     )
 
     future
@@ -277,7 +278,7 @@ private[group] class GroupCoordinatorAdapter(
     val results = new DeleteGroupsResponseData.DeletableGroupResultCollection()
     coordinator.handleDeleteGroups(
       groupIds.asScala.toSet,
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     ).forKeyValue { (groupId, error) =>
       results.add(new DeleteGroupsResponseData.DeletableGroupResult()
         .setGroupId(groupId)
@@ -424,7 +425,7 @@ private[group] class GroupCoordinatorAdapter(
       request.generationIdOrMemberEpoch,
       partitions.toMap,
       callback,
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     )
 
     future
@@ -486,7 +487,7 @@ private[group] class GroupCoordinatorAdapter(
       request.generationId,
       partitions.toMap,
       callback,
-      RequestLocal(bufferSupplier),
+      new RequestLocal(bufferSupplier),
       context.apiVersion()
     )
 
@@ -536,7 +537,7 @@ private[group] class GroupCoordinatorAdapter(
     val (groupError, topicPartitionResults) = coordinator.handleDeleteOffsets(
       request.groupId,
       partitions,
-      RequestLocal(bufferSupplier)
+      new RequestLocal(bufferSupplier)
     )
 
     if (groupError != Errors.NONE) {
@@ -593,7 +594,7 @@ private[group] class GroupCoordinatorAdapter(
     topicPartitions: util.List[TopicPartition],
     bufferSupplier: BufferSupplier
   ): Unit = {
-    coordinator.handleDeletedPartitions(topicPartitions.asScala, RequestLocal(bufferSupplier))
+    coordinator.handleDeletedPartitions(topicPartitions.asScala, new RequestLocal(bufferSupplier))
   }
 
   override def onElection(

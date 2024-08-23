@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{BufferSupplier, MockTime, Time}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
@@ -70,7 +71,7 @@ class KafkaRequestHandlerTest {
             time.sleep(ms)
             handler.stop()
           },
-          RequestLocal.NoCaching)
+          RequestLocal.NO_CACHING)
         // Execute the callback asynchronously.
         CompletableFuture.runAsync(() => callback(1))
         request.apiLocalCompleteTimeNanos = time.nanoseconds
@@ -108,7 +109,7 @@ class KafkaRequestHandlerTest {
         (_: RequestLocal, _: Int) => {
           handler.stop()
         },
-        RequestLocal.NoCaching)
+        RequestLocal.NO_CACHING)
       // Execute the callback asynchronously.
       CompletableFuture.runAsync(() => callback(1))
     }
