@@ -110,7 +110,11 @@ jobs:
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           test
       - name: Publish Build Scan
-        run: echo "Test step outcome ${{ steps.test.outcome }}, conclusion ${{ steps.test.conclusion }}
+        if:  ${{ steps.test.outcome == "failure" }}
+        continue-on-error: true
+        run: |
+          echo "Attempting to publish build scan from failed test run"
+          ./gradlew --info buildScanPublishPrevious
       - name: Archive JUnit reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
