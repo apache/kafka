@@ -17,10 +17,11 @@
 package kafka.server.share;
 
 import kafka.server.DelayedOperationKey;
+
 import org.apache.kafka.common.TopicIdPartition;
 
-import java.util.Set;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * A key for delayed operations that fetch data for share consumers.

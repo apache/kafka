@@ -19,6 +19,7 @@ package kafka.server.share;
 import kafka.server.DelayedOperation;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
+
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,12 +27,9 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Option;
-import scala.Tuple2;
-import scala.jdk.javaapi.CollectionConverters;
-import scala.runtime.BoxedUnit;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -40,9 +38,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+
+import scala.Option;
+import scala.Tuple2;
+import scala.jdk.javaapi.CollectionConverters;
+import scala.runtime.BoxedUnit;
 
 /**
  * A delayed share fetch operation has been introduced in case there is no share partition for which we can acquire records. We will try to wait

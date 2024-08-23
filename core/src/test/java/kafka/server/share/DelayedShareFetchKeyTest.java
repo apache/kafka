@@ -19,6 +19,7 @@ package kafka.server.share;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

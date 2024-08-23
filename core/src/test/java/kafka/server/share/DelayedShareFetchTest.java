@@ -18,6 +18,7 @@ package kafka.server.share;
 
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
+
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -31,9 +32,9 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.FetchParams;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,13 +44,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
+import scala.Tuple2;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
