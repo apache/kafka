@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
@@ -78,6 +77,7 @@ import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAn
 import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.ClientMetricsManager
@@ -87,6 +87,7 @@ import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, Metadata
 import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareGroupConfig}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, FinalContext, ShareAcknowledgementBatch, ShareSession, ShareSessionContext, ShareSessionKey}
+import org.apache.kafka.server.quota.ThrottleCallback
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
 import org.junit.jupiter.api.Assertions._
@@ -129,7 +130,7 @@ class KafkaApisTest extends Logging {
   private val brokerId = 1
   // KRaft tests should override this with a KRaftMetadataCache
   private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latestTesting())
-  private val brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
+  private var brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
@@ -2919,6 +2920,8 @@ class KafkaApisTest extends Logging {
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleAddOffsetToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
       () => kafkaApis.handleAddOffsetsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
@@ -2926,6 +2929,8 @@ class KafkaApisTest extends Logging {
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleAddPartitionsToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
       () => kafkaApis.handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
@@ -2933,6 +2938,8 @@ class KafkaApisTest extends Logging {
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleTxnOffsetCommitRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
       () => kafkaApis.handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
@@ -2940,6 +2947,8 @@ class KafkaApisTest extends Logging {
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleEndTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
       () => kafkaApis.handleEndTxnRequest(null, RequestLocal.withThreadConfinedCaching))
@@ -2947,6 +2956,8 @@ class KafkaApisTest extends Logging {
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleWriteTxnMarkersRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_0_10_2_IV0)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
       () => kafkaApis.handleWriteTxnMarkersRequest(null, RequestLocal.withThreadConfinedCaching))
@@ -3061,25 +3072,25 @@ class KafkaApisTest extends Logging {
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.InitialLeaderEpoch + 2, deletePartition = true)
+      LeaderAndIsr.INITIAL_LEADER_EPOCH + 2, deletePartition = true)
   }
 
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndDeleteSentinel(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.EpochDuringDelete, deletePartition = true)
+      LeaderAndIsr.EPOCH_DURING_DELETE, deletePartition = true)
   }
 
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndNoEpochSentinel(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.NoEpoch, deletePartition = true)
+      LeaderAndIsr.NO_EPOCH, deletePartition = true)
   }
 
   @Test
   def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.InitialLeaderEpoch + 2, deletePartition = false)
+      LeaderAndIsr.INITIAL_LEADER_EPOCH + 2, deletePartition = false)
   }
 
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,
@@ -8748,6 +8759,8 @@ class KafkaApisTest extends Logging {
     ).build()
 
     val requestChannelRequest = buildRequest(joinGroupRequest)
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_2_2_IV1)
     kafkaApis.handleJoinGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
 
@@ -8766,6 +8779,8 @@ class KafkaApisTest extends Logging {
     ).build()
 
     val requestChannelRequest = buildRequest(syncGroupRequest)
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_2_2_IV1)
     kafkaApis.handleSyncGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
 
@@ -8783,6 +8798,8 @@ class KafkaApisTest extends Logging {
         .setGenerationId(1)
     ).build()
     val requestChannelRequest = buildRequest(heartbeatRequest)
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_2_2_IV1)
     kafkaApis.handleHeartbeatRequest(requestChannelRequest)
 
@@ -8812,6 +8829,9 @@ class KafkaApisTest extends Logging {
     ).build()
 
     val requestChannelRequest = buildRequest(offsetCommitRequest)
+    
+    metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
+    brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_2_2_IV1)
     kafkaApis.handleOffsetCommitRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
 

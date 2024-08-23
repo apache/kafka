@@ -63,6 +63,7 @@ import java.util.Collections.singletonList
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.{WritableTxnMarker, WritableTxnMarkerTopic}
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.junit.jupiter.api.function.Executable
 
 import scala.annotation.nowarn
@@ -470,7 +471,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setTopicName(tp.topic)
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp.partition)
-          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.INITIAL_LEADER_EPOCH + 2)
           .setDeletePartition(true)).asJava)
     ).asJava
     new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue,

@@ -19,7 +19,6 @@ package kafka.cluster
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
-import kafka.api.LeaderAndIsr
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -41,7 +40,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -140,7 +139,7 @@ object Partition {
     new Partition(topicPartition,
       _topicId = topicId,
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
-      interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
+      interBrokerProtocolVersion = replicaManager.metadataCache.metadataVersion(),
       localBrokerId = replicaManager.config.brokerId,
       localBrokerEpochSupplier = replicaManager.brokerEpochSupplier,
       time = time,
@@ -317,8 +316,8 @@ class Partition(val topicPartition: TopicPartition,
   // lock to prevent the follower replica log update while checking if the log dir could be replaced with future log.
   private val futureLogLock = new Object()
   // The current epoch for the partition for KRaft controllers. The current ZK version for the legacy controllers.
-  @volatile private var partitionEpoch: Int = LeaderAndIsr.InitialPartitionEpoch
-  @volatile private var leaderEpoch: Int = LeaderAndIsr.InitialLeaderEpoch - 1
+  @volatile private var partitionEpoch: Int = LeaderAndIsr.INITIAL_PARTITION_EPOCH
+  @volatile private var leaderEpoch: Int = LeaderAndIsr.INITIAL_LEADER_EPOCH - 1
   // start offset for 'leaderEpoch' above (leader epoch of the current leader for this partition),
   // defined when this broker is leader for partition
   @volatile private[cluster] var leaderEpochStartOffsetOpt: Option[Long] = None
@@ -1775,8 +1774,8 @@ class Partition(val topicPartition: TopicPartition,
     // Alternatively, if the update fails, no harm is done since the expanded ISR puts
     // a stricter requirement for advancement of the HW.
     val isrToSend = partitionState.isr + newInSyncReplicaId
-    val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList)
-    val newLeaderAndIsr = LeaderAndIsr(
+    val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList).asJava
+    val newLeaderAndIsr = new LeaderAndIsr(
       localBrokerId,
       leaderEpoch,
       partitionState.leaderRecoveryState,
@@ -1800,8 +1799,8 @@ class Partition(val topicPartition: TopicPartition,
     // erroneously advance the HW if the `AlterPartition` were to fail. Hence the "maximal ISR"
     // for `PendingShrinkIsr` is the the current ISR.
     val isrToSend = partitionState.isr -- outOfSyncReplicaIds
-    val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList)
-    val newLeaderAndIsr = LeaderAndIsr(
+    val isrWithBrokerEpoch = addBrokerEpochToIsr(isrToSend.toList).asJava
+    val newLeaderAndIsr = new LeaderAndIsr(
       localBrokerId,
       leaderEpoch,
       partitionState.leaderRecoveryState,
@@ -1972,7 +1971,7 @@ class Partition(val topicPartition: TopicPartition,
       //   2) leaderAndIsr.partitionEpoch == partitionEpoch: No update was performed since proposed and actual state are the same.
       // In both cases, we want to move from Pending to Committed state to ensure new updates are processed.
 
-      partitionState = CommittedPartitionState(leaderAndIsr.isr.toSet, leaderAndIsr.leaderRecoveryState)
+      partitionState = CommittedPartitionState(leaderAndIsr.isr.asScala.map(_.toInt).toSet, leaderAndIsr.leaderRecoveryState)
       partitionEpoch = leaderAndIsr.partitionEpoch
       info(s"ISR updated to ${partitionState.isr.mkString(",")} ${if (isUnderMinIsr) "(under-min-isr)" else ""} " +
         s"and version updated to $partitionEpoch")
