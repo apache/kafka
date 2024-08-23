@@ -824,7 +824,7 @@ object ConfigCommand extends Logging {
     val entityType: OptionSpec[String] = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics/groups)")
       .withRequiredArg
       .ofType(classOf[String])
-    val entityName: OptionSpec[String] = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics/group name)")
+    val entityName: OptionSpec[String] = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics/group id)")
       .withRequiredArg
       .ofType(classOf[String])
     private val entityDefault: OptionSpecBuilder = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
@@ -871,7 +871,7 @@ object ConfigCommand extends Logging {
     val ip: OptionSpec[String] = parser.accepts("ip", "The IP address.")
       .withRequiredArg
       .ofType(classOf[String])
-    val group: OptionSpec[String] = parser.accepts("group", "The group's name.")
+    val group: OptionSpec[String] = parser.accepts("group", "The group's ID.")
       .withRequiredArg
       .ofType(classOf[String])
     val zkTlsConfigFile: OptionSpec[String] = parser.accepts("zk-tls-config-file",
