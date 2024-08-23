@@ -52,7 +52,7 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
                 "collect_default": True},
             "producer_performance_heap_dump_file": {
                 "path": ProducerPerformanceService.HEAP_DUMP_FILE,
-                "collect_default": False}
+                "collect_default": True}
         }
 
         self.kafka = kafka
@@ -98,10 +98,9 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
             cmd += "export CLASSPATH; "
 
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
-        cmd += "KAFKA_OPTS=%(kafka_opts)s"
-        cmd += "KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s\"" %self.logs['producer_performance_heap_dump_file']['path']
-        cmd += "%(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
+        cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-Xmx512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/home/ducker/producer_performance_heap_dump.bin\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
               "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s %(metrics_props)s" % args
+
 
         self.security_config.setup_node(node)
         if self.security_config.security_protocol != SecurityConfig.PLAINTEXT:
