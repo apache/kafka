@@ -110,7 +110,7 @@ jobs:
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           test
       - name: Publish Build Scan
-        if:  steps.test.outcome == "failure"
+        if:  steps.test.outcome == 'failure'
         continue-on-error: true
         run: |
           echo "Attempting to publish build scan from failed test run"
