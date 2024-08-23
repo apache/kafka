@@ -59,6 +59,10 @@ object TestInfoUtils {
     testInfo.getDisplayName.contains("kraft+kip848")
   }
 
+  def isShareGroupTest(testInfo: TestInfo): Boolean = {
+    testInfo.getDisplayName.contains("kraft+kip932")
+  }
+
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
     if (testInfo.getDisplayName.contains("groupProtocol=classic"))
       Some(GroupProtocol.CLASSIC)
