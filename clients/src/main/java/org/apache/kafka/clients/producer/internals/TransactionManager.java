@@ -69,6 +69,7 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -397,7 +398,7 @@ public class TransactionManager {
             } else if (currentState != State.IN_TRANSACTION) {
                 throw new IllegalStateException("Cannot add partition " + topicPartition +
                     " to transaction while in state  " + currentState);
-            } else if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition)) {
+            } else if (transactionContainsPartition(topicPartition) || isPartitionPendingAdd(topicPartition)) {
                 return;
             } else if (isTransactionV2Enabled()) {
                 txnPartitionMap.getOrCreate(topicPartition);
@@ -406,14 +407,6 @@ public class TransactionManager {
                 txnPartitionMap.getOrCreate(topicPartition);
                 newPartitionsInTransaction.add(topicPartition);
             }
-        }
-    }
-
-    public synchronized void maybeHandlePartitionAdded(TopicPartition topicPartition) {
-        if (isTransactional() && isTransactionV2Enabled()) {
-            if (isPartitionAdded(topicPartition)) return;
-            log.debug("A new partition {} has been added to transaction", topicPartition);
-            partitionsInTransaction.add(topicPartition);
         }
     }
 
@@ -491,11 +484,6 @@ public class TransactionManager {
         if (pendingTransition != null) {
             pendingTransition.result.fail(exception);
         }
-    }
-
-    // visible for testing
-    synchronized boolean isPartitionAdded(TopicPartition partition) {
-        return partitionsInTransaction.contains(partition);
     }
 
     // visible for testing
@@ -906,7 +894,7 @@ public class TransactionManager {
 
     // visible for testing
     public synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
-        return partitionsInTransaction.contains(topicPartition);
+        return partitionsInTransaction.contains(topicPartition) || isTransactionV2Enabled();
     }
 
     // visible for testing

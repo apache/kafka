@@ -2421,57 +2421,6 @@ class ReplicaManagerTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(ints = Array(15 /* COORDINATOR_NOT_AVAILABLE */, 16 /* NOT_COORDINATOR */, 51 /* CONCURRENT_TRANSACTIONS */, 59 /* UNKNOWN_PRODUCER_ID */))
-  def testTransactionVerificationErrorConversions(errorCode: Int): Unit = {
-    val tp0 = new TopicPartition(topic, 0)
-    val producerId = 24L
-    val producerEpoch = 0.toShort
-    val sequence = 6
-    val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
-
-    val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
-    try {
-      replicaManager.becomeLeaderOrFollower(1,
-        makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
-        (_, _) => ())
-
-      // Start with sequence 6
-      val transactionalRecords = MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
-        new SimpleRecord("message".getBytes))
-
-      // We should add these partitions to the manager to verify.
-      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
-      val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
-        ArgumentMatchers.eq(transactionalId),
-        ArgumentMatchers.eq(producerId),
-        ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture(),
-        any()
-      )
-      val verificationGuard = getVerificationGuard(replicaManager, tp0, producerId)
-      assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
-
-      // Confirm we did not write to the log and instead returned error.
-      val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
-      val error = Errors.forCode(errorCode.toShort)
-      callback(Map(tp0 -> error).toMap)
-      error match {
-        case Errors.COORDINATOR_NOT_AVAILABLE | Errors.NOT_COORDINATOR | Errors.CONCURRENT_TRANSACTIONS =>
-          assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
-        case Errors.UNKNOWN_PRODUCER_ID =>
-          assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, result.assertFired.error)
-        case _ =>
-          assertTrue(false, "unknown error: " + error)
-      }
-      assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
-    } finally {
-      replicaManager.shutdown(checkpointHW = false)
-    }
-  }
-
   @Test
   def testTransactionVerificationGuardOnMultiplePartitions(): Unit = {
     val mockTimer = new MockTimer(time)
@@ -2679,7 +2628,8 @@ class ReplicaManagerTest {
       "CONCURRENT_TRANSACTIONS",
       "NETWORK_EXCEPTION",
       "COORDINATOR_LOAD_IN_PROGRESS",
-      "COORDINATOR_NOT_AVAILABLE"
+      "COORDINATOR_NOT_AVAILABLE",
+      "UNKNOWN_PRODUCER_ID"
     )
   )
   def testVerificationErrorConversions(error: Errors): Unit = {
@@ -2714,7 +2664,11 @@ class ReplicaManagerTest {
       // Confirm we did not write to the log and instead returned the converted error with the correct error message.
       val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
       callback(Map(tp0 -> error).toMap)
-      assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
+      if (error == Errors.UNKNOWN_PRODUCER_ID) {
+        assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, result.assertFired.error)
+      } else {
+        assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
+      }
       assertEquals(expectedMessage, result.assertFired.errorMessage)
     } finally {
       replicaManager.shutdown(checkpointHW = false)

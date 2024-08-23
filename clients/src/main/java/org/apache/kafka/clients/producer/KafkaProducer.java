@@ -1577,10 +1577,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             this.interceptors.onAcknowledgement(metadata, exception);
 
-            if (exception == null && transactionManager != null) {
-                transactionManager.maybeHandlePartitionAdded(topicPartition());
-            }
-
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }
