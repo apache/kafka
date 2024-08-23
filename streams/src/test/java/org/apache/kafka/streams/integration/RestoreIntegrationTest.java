@@ -569,7 +569,7 @@ public class RestoreIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        final List<KeyValue<Integer, Integer>> sampleData = IntStream.range(0, 100)
+        final List<KeyValue<Integer, Integer>> sampleData = IntStream.range(0, 1000)
                                                                      .mapToObj(i -> new KeyValue<>(i, i))
                                                                      .collect(Collectors.toList());
 
@@ -581,7 +581,7 @@ public class RestoreIntegrationTest {
 
         // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
         kafkaStreams.close(Duration.ofMillis(5000L));
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
+        kafkaStreams.cleanUp();
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
         kafkaStreams = startKafkaStreams(builder, kafkaStreams1StateRestoreListener, kafkaStreams1Configuration);
@@ -664,7 +664,7 @@ public class RestoreIntegrationTest {
         }
 
         boolean awaitUntilRestorationSuspends() throws InterruptedException {
-            return onRestoreEndLatch.getCount() == 1 || awaitLatchWithTimeout(onRestoreSuspendedLatch);
+            return awaitLatchWithTimeout(onRestoreSuspendedLatch);
         }
 
         boolean awaitUntilRestorationEnds() throws InterruptedException {
