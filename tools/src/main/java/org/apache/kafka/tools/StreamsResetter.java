@@ -687,7 +687,7 @@ public class StreamsResetter {
         }
 
         public List<String> intermediateTopicsOption() {
-            log.warn("intermediateTopicsOption will be removed in version 5.0");
+            log.warn("intermediateTopicsOption is deprecated and will be removed in version 5.0");
             return options.valuesOf(intermediateTopicsOption);
         }
 
