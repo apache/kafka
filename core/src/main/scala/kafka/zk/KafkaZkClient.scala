@@ -17,7 +17,6 @@
 package kafka.zk
 
 import java.util.Properties
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
@@ -31,6 +30,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{ConfigType, ZkConfigs}
@@ -45,6 +45,7 @@ import org.apache.zookeeper.{CreateMode, KeeperException, OpResult, ZooKeeper}
 
 import java.lang.{Long => JLong}
 import scala.collection.{Map, Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 sealed trait KRaftRegistrationResult
 case class FailedRegistrationResult() extends KRaftRegistrationResult
@@ -1156,7 +1157,7 @@ class KafkaZkClient private[zk] (
    * @return optional ISR if exists and None otherwise
    */
   def getInSyncReplicasForPartition(partition: TopicPartition): Option[Seq[Int]] =
-    getTopicPartitionState(partition).map(_.leaderAndIsr.isr)
+    getTopicPartitionState(partition).map(_.leaderAndIsr.isr.asScala.map(_.toInt))
 
 
   /**
