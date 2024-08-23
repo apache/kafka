@@ -175,7 +175,6 @@ public class GlobalStreamThread extends Thread {
             }
 
             state = newState;
-
         }
 
         if (stateListener != null) {
