@@ -1257,10 +1257,17 @@ public class RemoteLogManager implements Closeable {
                     }
 
                     if (RemoteLogSegmentState.COPY_SEGMENT_STARTED.equals(metadata.state())) {
-                        // If the state is COPY_SEGMENT_STARTED and it's not under copying process, this must be the previously
-                        // failed copied state. We should clean it up directly.
-                        danglingSegments.add(metadata);
-                        continue;
+                        // get the current segment state here to avoid the race condition that before the loop, it's under copying process,
+                        // but then completed. In this case, segmentIdsBeingCopied will not contain this id, so we might
+                        // delete this segment unexpectedly.
+                        Optional<RemoteLogSegmentMetadata> curMetadata = remoteLogMetadataManager.remoteLogSegmentMetadata(
+                                metadata.topicIdPartition(), metadata.segmentLeaderEpochs().firstKey(), metadata.startOffset());
+                        if (curMetadata.isPresent() && RemoteLogSegmentState.COPY_SEGMENT_STARTED.equals(curMetadata.get().state())) {
+                            // If the current state is COPY_SEGMENT_STARTED and it's not under copying process, this must be the previously
+                            // failed copied state. We should clean it up directly.
+                            danglingSegments.add(metadata);
+                            continue;
+                        }
                     }
                     if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state())) {
                         continue;
@@ -1388,9 +1395,10 @@ public class RemoteLogManager implements Closeable {
                     while (segmentsIterator.hasNext()) {
                         RemoteLogSegmentMetadata segmentMetadata = segmentsIterator.next();
                         // Only count the size of "COPY_SEGMENT_FINISHED" and "DELETE_SEGMENT_STARTED" state segments
-                        // because "COPY_SEGMENT_STARED" means copy didn't complete, and "DELETE_SEGMENT_FINISHED" means delete completed.
-                        // Note: there might be some "COPY_SEGMENT_STARED" segments not counted here, but become "COPY_SEGMENT_FINISHED" soon.
-                        // It's fine because the missed segment size will be count in next time, and it won't cause more segment deletion.
+                        // because "COPY_SEGMENT_STARTED" means copy didn't complete, and "DELETE_SEGMENT_FINISHED" means delete did complete.
+                        // Note: there might be some "COPY_SEGMENT_STARTED" segments not counted here.
+                        // Either they are being copied and will be counted next time or they are dangling and will be cleaned elsewhere,
+                        // either way, this won't cause more segment deletion.
                         if (segmentMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED) ||
                                 segmentMetadata.state().equals(RemoteLogSegmentState.DELETE_SEGMENT_STARTED)) {
                             RemoteLogSegmentId segmentId = segmentMetadata.remoteLogSegmentId();
