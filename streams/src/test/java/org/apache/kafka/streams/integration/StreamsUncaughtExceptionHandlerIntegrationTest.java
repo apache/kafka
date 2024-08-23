@@ -228,7 +228,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            //kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD);
 
             startApplicationAndWaitUntilRunning(kafkaStreams);
@@ -339,8 +338,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
         try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
              final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, properties)) {
-            //kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            //kafkaStreams2.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
             kafkaStreams2.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
 
@@ -356,8 +353,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     private void testReplaceThreads(final int numThreads) throws Exception {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            //kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-
             final AtomicInteger count = new AtomicInteger();
             kafkaStreams.setUncaughtExceptionHandler(exception -> {
                 if (count.incrementAndGet() == numThreads) {
