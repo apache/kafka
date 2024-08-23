@@ -79,7 +79,7 @@ public class AccessTokenRetrieverFactory  {
                 cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS),
                 cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false),
                 cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
-                cu.get(SASL_OAUTHBEARER_HEADER_URLENCODE));
+                cu.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE));
         }
     }
 

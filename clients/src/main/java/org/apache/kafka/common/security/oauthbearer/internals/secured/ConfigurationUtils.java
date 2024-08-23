@@ -209,6 +209,19 @@ public class ConfigurationUtils {
         return value;
     }
 
+    /**
+     * Validates that a value, if supplied, is a {@link Boolean}. If no value is present in the configuration, a
+     * default value of {@link Boolean#FALSE} is returned.
+     */
+    public Boolean validateBoolean(String name) {
+        Boolean value = get(name);
+
+        if (value != null)
+            return value;
+
+        return Boolean.FALSE;
+    }
+
     @SuppressWarnings("unchecked")
     public <T> T get(String name) {
         T value = (T) configs.get(prefix + name);
