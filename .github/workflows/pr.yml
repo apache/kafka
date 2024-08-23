@@ -101,14 +101,16 @@ jobs:
       - name: Archive JUnit reports
         if: always()
         uses: actions/upload-artifact@v4
+        id: junit-upload-artifact
         with:
           name: junit-reports-${{ matrix.java }}
           path: |
-            **/test-results/**/*.xml
-            **/build/reports/tests/test/index.html
+            **/build/reports/tests/test/*
           if-no-files-found: ignore
       - name: Parse JUnit tests
         if: always()
         run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Output artifact URL
+        run: echo 'JUnit reports can be downloaded from ${{ steps.junit-upload-artifact.outputs.artifact-url }}' >> $GITHUB_STEP_SUMMARY
