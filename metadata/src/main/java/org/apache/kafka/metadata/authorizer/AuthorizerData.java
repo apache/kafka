@@ -85,15 +85,21 @@ public interface AuthorizerData {
         );
     }
 
-    /**
-     * Creates a set of {@code KafkaPrincipals} from the context set.  The set includes the
-     * {@link #WILDCARD_KAFKA_PRINCIPAL}.
-     * @param context the context to extract the principals from.
-     * @return the set of Kafka principals.
-     */
-    static Set<KafkaPrincipal> matchingPrincipals(AuthorizableRequestContext context) {
-        return Utils.mkSet(context.principal(), WILDCARD_KAFKA_PRINCIPAL);
+    static KafkaPrincipal baseKafkaPrincipal(AuthorizableRequestContext context) {
+        KafkaPrincipal sessionPrincipal = context.principal();
+        return sessionPrincipal.getClass().equals(KafkaPrincipal.class)
+                ? sessionPrincipal
+                : new KafkaPrincipal(sessionPrincipal.getPrincipalType(), sessionPrincipal.getName());
     }
+
+    static Set<KafkaPrincipal> matchingPrincipals(AuthorizableRequestContext context) {
+        KafkaPrincipal sessionPrincipal = context.principal();
+        KafkaPrincipal basePrincipal = sessionPrincipal.getClass().equals(KafkaPrincipal.class)
+                ? sessionPrincipal
+                : new KafkaPrincipal(sessionPrincipal.getPrincipalType(), sessionPrincipal.getName());
+        return Utils.mkSet(basePrincipal, WILDCARD_KAFKA_PRINCIPAL);
+    }
+
 
     /**
      * Determine what the result of applying an ACL to the given action and request
