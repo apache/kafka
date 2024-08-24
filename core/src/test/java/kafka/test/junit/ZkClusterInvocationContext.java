@@ -243,6 +243,11 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
+        public long waitForMeatdataSync() {
+            return -1;
+        }
+
+        @Override
         public void waitForReadyBrokers() throws InterruptedException {
             org.apache.kafka.test.TestUtils.waitForCondition(() -> {
                 int numRegisteredBrokers = clusterReference.get().zkClient().getAllBrokersInCluster().size();
