@@ -469,6 +469,7 @@ public class GlobalStreamThread extends Thread {
         // one could call shutdown() multiple times, so ignore subsequent calls
         // if already shutting down or dead
         setState(PENDING_SHUTDOWN);
+        initializationLatch.countDown();
     }
 
     public Map<MetricName, Metric> consumerMetrics() {
