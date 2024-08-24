@@ -373,7 +373,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),
       "Timed out waiting for token to propagate to all servers")
 
-    val expiredOptions = new ExpireDelegationTokenOptions().expiryTimePeriodMs(Long.MaxValue)
+    val expiredOptions = new ExpireDelegationTokenOptions().expiryTimePeriodMs(token.tokenInfo.maxTimestamp)
     val expiredResult = client.expireDelegationToken(token.hmac, expiredOptions)
 
     assertTrue(token.tokenInfo.maxTimestamp >= token.tokenInfo.expiryTimestamp)
