@@ -37,7 +37,7 @@
 
     <!-- core -->
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="core[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+              files="core[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="NPathComplexity" files="(ClusterTestExtensions|KafkaApisBuilder|SharePartition).java"/>
     <suppress checks="NPathComplexity|ClassFanOutComplexity|ClassDataAbstractionCoupling" files="(RemoteLogManager|RemoteLogManagerTest).java"/>
     <suppress checks="MethodLength" files="RemoteLogManager.java"/>
@@ -111,7 +111,7 @@
               files="Murmur3.java"/>
 
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-            files="clients[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+            files="clients[\\/]build[\\/]generated[\\/].+.java$"/>
 
     <suppress checks="NPathComplexity"
             files="MessageTest.java|OffsetFetchRequest.java"/>
@@ -222,17 +222,17 @@
 
     <!-- Generated code -->
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="streams[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+              files="streams[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="raft[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+              files="raft[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="storage[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+              files="storage[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="group-coordinator[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+              files="group-coordinator[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="transaction-coordinator[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+              files="transaction-coordinator[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="share-coordinator[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+              files="share-coordinator[\\/]build[\\/]generated[\\/].+.java$"/>
 
     <suppress checks="ImportControl" files="FetchResponseData.java"/>
     <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
@@ -331,7 +331,7 @@
     <suppress checks="NPathComplexity"
               files="(ClientQuotasImage|KafkaEventQueue|ReplicationControlManager|FeatureControlManager|KRaftMigrationDriver|ScramControlManager|ClusterControlManager|MetadataDelta|MetaPropertiesEnsemble).java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-            files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+            files="metadata[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="BooleanExpressionComplexity"
               files="(MetadataImage).java"/>
     <suppress checks="ImportControl"

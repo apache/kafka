@@ -27,7 +27,7 @@ develocity {
     projectId = "kafka"
     buildScan {
         uploadInBackground = !isCI
-        publishing.onlyIf { it.authenticated }
+        publishing.onlyIf { false }  // Still allows users/CI to run with --scan
         obfuscation {
             // This obfuscates the IP addresses of the build machine in the build scan.
             // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
