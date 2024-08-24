@@ -27,6 +27,7 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs, ZkConfigs}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
@@ -537,29 +538,35 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     )
 
     // Test expiring the token immediately
-    val token1Future = client.createDelegationToken(createDelegationTokenOptions).delegationToken()
-    TestUtils.waitUntilTrue(() => token1Future.isDone, "Take too long to complete future", 500)
-    val expireTokeOptions = new ExpireDelegationTokenOptions()
-    val token1ExpireFuture = client.expireDelegationToken(token1Future.get().hmac(), expireTokeOptions.expiryTimePeriodMs(-1)).expiryTimestamp()
-    TestUtils.waitUntilTrue(() => token1ExpireFuture.isDone , "Take too long to complete future", 500)
-    assertTrue(token1ExpireFuture.get() < System.currentTimeMillis())
+    val token1 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    TestUtils.retry(maxWaitMs = 1000) { assertTrue(expireTokenOrFailWithAssert(token1, -1) < System.currentTimeMillis()) }
 
     // Test expiring the expired token
     val token2 = client.createDelegationToken(createDelegationTokenOptions.maxlifeTimeMs(1000)).delegationToken().get()
     // Ensure current time > maxLifeTimeMs of token
     Thread.sleep(1000)
     TestUtils.assertFutureExceptionTypeEquals(
-      client.expireDelegationToken(token2.hmac(), expireTokeOptions.expiryTimePeriodMs(1)).expiryTimestamp(),
+      client.expireDelegationToken(token2.hmac(), new ExpireDelegationTokenOptions().expiryTimePeriodMs(1)).expiryTimestamp(),
       classOf[DelegationTokenExpiredException]
     )
 
+    // Ensure expiring the expired token with negative expiryTimePeriodMs will not throw exception
+    assertDoesNotThrow(() => expireTokenOrFailWithAssert(token2, -1))
+
     // Test shortening the expiryTimestamp
-    val token3Future = client.createDelegationToken(createDelegationTokenOptions).delegationToken()
-    TestUtils.waitUntilTrue(() => token3Future.isDone, "Take too long to complete future", 500)
-    val token3 = token3Future.get()
-    val token3ExpireFuture = client.expireDelegationToken(token3.hmac(), expireTokeOptions.expiryTimePeriodMs(200)).expiryTimestamp()
-    TestUtils.waitUntilTrue(() => token3ExpireFuture.isDone, "Take too long to complete future", 500)
-    assertTrue(token3ExpireFuture.get() < token3.tokenInfo().expiryTimestamp())
+    val token3 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    TestUtils.retry(1000) { assertTrue(expireTokenOrFailWithAssert(token3, 200) < token3.tokenInfo().expiryTimestamp()) }
+  }
+
+  private def expireTokenOrFailWithAssert(token: DelegationToken, expiryTimePeriodMs: Long): Long  = {
+    try {
+      client.expireDelegationToken(token.hmac(), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs))
+        .expiryTimestamp().get()
+    } catch {
+      // If metadata is not synced yet, the response will contain an errorCode, causing an exception to be thrown.
+      // This wrapper is designed to work with TestUtils.retry
+      case _: ExecutionException => throw new AssertionError("Metadata not sync yet.")
+    }
   }
 
   private def describeConfigs(topic: String): Iterable[ConfigEntry] = {
