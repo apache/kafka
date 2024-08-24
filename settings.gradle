@@ -21,13 +21,14 @@ plugins {
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
 def isJenkins = System.getenv('JENKINS_URL') != null
 def isCI = isGithubActions || isJenkins
+def currentJvm = JavaVersion.current()
 
 develocity {
     server = "https://ge.apache.org"
     projectId = "kafka"
     buildScan {
         uploadInBackground = !isCI
-        publishing.onlyIf { false }  // Still allows users/CI to run with --scan
+        publishing.onlyIf { it.authenticated }
         obfuscation {
             // This obfuscates the IP addresses of the build machine in the build scan.
             // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
@@ -40,6 +41,7 @@ develocity {
         } else {
             tag "local"
         }
+        tag "JDK$currentJvm"
     }
 }
 

@@ -1,4 +1,3 @@
-
 dist
 *classes
 *.class
@@ -55,7 +54,8 @@ systest/
 jmh-benchmarks/generated
 jmh-benchmarks/src/main/generated
 **/.jqwik-database
-
+**/src/generated
+**/src/generated-test
 storage/kafka-tiered-storage/
 
 docker/test/report_*.html
