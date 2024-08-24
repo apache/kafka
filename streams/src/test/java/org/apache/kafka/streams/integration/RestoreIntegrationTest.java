@@ -581,7 +581,7 @@ public class RestoreIntegrationTest {
 
         // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
         kafkaStreams.close(Duration.ofMillis(5000L));
-        kafkaStreams.cleanUp();
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
         kafkaStreams = startKafkaStreams(builder, kafkaStreams1StateRestoreListener, kafkaStreams1Configuration);
