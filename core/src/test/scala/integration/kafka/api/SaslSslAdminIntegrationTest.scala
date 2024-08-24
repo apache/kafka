@@ -373,9 +373,11 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),
       "Timed out waiting for token to propagate to all servers")
 
-    val ExpiredOptions = new ExpireDelegationTokenOptions().expiryTimePeriodMs(Long.MaxValue)
-    client.expireDelegationToken(token.hmac, ExpiredOptions)
+    val expiredOptions = new ExpireDelegationTokenOptions().expiryTimePeriodMs(Long.MaxValue)
+    val expiredResult = client.expireDelegationToken(token.hmac, expiredOptions)
+
     assertTrue(token.tokenInfo.maxTimestamp >= token.tokenInfo.expiryTimestamp)
+    assertTrue(token.tokenInfo.maxTimestamp >= expiredResult.expiryTimestamp.get())
   }
 
   private def verifyCauseIsClusterAuth(e: Throwable): Unit = assertEquals(classOf[ClusterAuthorizationException], e.getCause.getClass)
