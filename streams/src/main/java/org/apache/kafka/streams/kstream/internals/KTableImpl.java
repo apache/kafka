@@ -1165,7 +1165,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> foreignResponseSinkPartitioner =
                 tableJoinedInternal.partitioner() == null
-                        ? (topic, key, subscriptionResponseWrapper, numPartitions) -> Optional.of(Collections.singleton(subscriptionResponseWrapper.getPrimaryPartition()))
+                        ? (topic, key, val, numPartitions) -> val.getPrimaryPartition() == null ? Optional.empty() : Optional.of(Collections.singleton(val.getPrimaryPartition()))
                         : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =
