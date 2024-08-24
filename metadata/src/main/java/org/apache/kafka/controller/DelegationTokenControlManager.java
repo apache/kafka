@@ -302,10 +302,6 @@ public class DelegationTokenControlManager {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_NOT_FOUND.code()));
         }
 
-        if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
-            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code()));
-        }
-
         if (!allowedToRenew(myTokenInformation, context.principal())) {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_OWNER_MISMATCH.code()));
         }
@@ -313,9 +309,11 @@ public class DelegationTokenControlManager {
         if (requestData.expiryTimePeriodMs() < 0) { // expire immediately
             responseData
                 .setErrorCode(NONE.code())
-                .setExpiryTimestampMs(requestData.expiryTimePeriodMs());
+                .setExpiryTimestampMs(now);
             records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
                 setTokenId(myTokenInformation.tokenId()), (short) 0));
+        } else if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
+            responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code());
         } else {
             long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(),
                 now + requestData.expiryTimePeriodMs());

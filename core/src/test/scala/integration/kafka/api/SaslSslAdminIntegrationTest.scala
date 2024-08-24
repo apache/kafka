@@ -22,13 +22,14 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation.{ALL, ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, IDEMPOTENT_WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, TopicConfig}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, DelegationTokenExpiredException, DelegationTokenNotFoundException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
-import org.apache.kafka.server.config.{ServerConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs, ZkConfigs}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
@@ -66,6 +67,10 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
       this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)
     }
+
+    // Enable delegationTokenControlManager
+    serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "123")
+    serverConfig.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG, "5000")
 
     setUpSasl()
     super.setUp(testInfo)
@@ -517,6 +522,50 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       assertEquals(describeEntry.isReadOnly, createEntry.isReadOnly, s"isReadOnly mismatch for $name")
       assertEquals(describeEntry.isSensitive, createEntry.isSensitive, s"isSensitive mismatch for $name")
       assertEquals(describeEntry.source, createEntry.source, s"Source mismatch for $name")
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testExpireDelegationToken(quorum: String): Unit = {
+    client = createAdminClient
+    val createDelegationTokenOptions = new CreateDelegationTokenOptions()
+
+    // Test expiration for non-exists token
+    TestUtils.assertFutureExceptionTypeEquals(
+      client.expireDelegationToken("".getBytes()).expiryTimestamp(),
+      classOf[DelegationTokenNotFoundException]
+    )
+
+    // Test expiring the token immediately
+    val token1 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    TestUtils.retry(maxWaitMs = 1000) { assertTrue(expireTokenOrFailWithAssert(token1, -1) < System.currentTimeMillis()) }
+
+    // Test expiring the expired token
+    val token2 = client.createDelegationToken(createDelegationTokenOptions.maxlifeTimeMs(1000)).delegationToken().get()
+    // Ensure current time > maxLifeTimeMs of token
+    Thread.sleep(1000)
+    TestUtils.assertFutureExceptionTypeEquals(
+      client.expireDelegationToken(token2.hmac(), new ExpireDelegationTokenOptions().expiryTimePeriodMs(1)).expiryTimestamp(),
+      classOf[DelegationTokenExpiredException]
+    )
+
+    // Ensure expiring the expired token with negative expiryTimePeriodMs will not throw exception
+    assertDoesNotThrow(() => expireTokenOrFailWithAssert(token2, -1))
+
+    // Test shortening the expiryTimestamp
+    val token3 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
+    TestUtils.retry(1000) { assertTrue(expireTokenOrFailWithAssert(token3, 200) < token3.tokenInfo().expiryTimestamp()) }
+  }
+
+  private def expireTokenOrFailWithAssert(token: DelegationToken, expiryTimePeriodMs: Long): Long  = {
+    try {
+      client.expireDelegationToken(token.hmac(), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs))
+        .expiryTimestamp().get()
+    } catch {
+      // If metadata is not synced yet, the response will contain an errorCode, causing an exception to be thrown.
+      // This wrapper is designed to work with TestUtils.retry
+      case _: ExecutionException => throw new AssertionError("Metadata not sync yet.")
     }
   }
 
