@@ -546,6 +546,8 @@ public class RestoreIntegrationTest {
 
     @Test
     public void shouldInvokeUserDefinedGlobalStateRestoreListener() throws Exception {
+
+        
         final String inputTopic = "inputTopic";
         final String outputTopic = "outputTopic";
         CLUSTER.createTopic(inputTopic, 5, 1);
