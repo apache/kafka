@@ -115,7 +115,7 @@ public class StreamsMetadataState {
     public synchronized Collection<StreamsMetadata> allMetadataForStore(final String storeName) {
         Objects.requireNonNull(storeName, "storeName cannot be null");
         if (topologyMetadata.hasNamedTopologies()) {
-            throw new IllegalArgumentException("Cannot invoke the getAllMetadataForStore(storeName) method when"
+            throw new IllegalArgumentException("Cannot invoke the allMetadataForStore(storeName) method when"
                                                    + "using named topologies, please use the overload that accepts"
                                                    + "a topologyName parameter to identify the correct store");
         }
@@ -211,13 +211,13 @@ public class StreamsMetadataState {
                                                                     final Serializer<K> keySerializer) {
         Objects.requireNonNull(keySerializer, "keySerializer can't be null");
         if (topologyMetadata.hasNamedTopologies()) {
-            throw new IllegalArgumentException("Cannot invoke the getKeyQueryMetadataForKey(storeName, key, keySerializer)"
+            throw new IllegalArgumentException("Cannot invoke the KeyQueryMetadataForKey(storeName, key, keySerializer)"
                                                    + "method when using named topologies, please use the overload that"
                                                    + "accepts a topologyName parameter to identify the correct store");
         }
         return keyQueryMetadataForKey(storeName,
-                                         key,
-                                         new DefaultStreamPartitioner<>(keySerializer));
+                                      key,
+                                      new DefaultStreamPartitioner<>(keySerializer));
     }
 
     /**
@@ -229,9 +229,9 @@ public class StreamsMetadataState {
                                                                     final String topologyName) {
         Objects.requireNonNull(keySerializer, "keySerializer can't be null");
         return keyQueryMetadataForKey(storeName,
-                                         key,
-                                         new DefaultStreamPartitioner<>(keySerializer),
-                                         topologyName);
+                                      key,
+                                      new DefaultStreamPartitioner<>(keySerializer),
+                                      topologyName);
     }
 
     /**
@@ -254,7 +254,7 @@ public class StreamsMetadataState {
         Objects.requireNonNull(key, "key can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
         if (topologyMetadata.hasNamedTopologies()) {
-            throw new IllegalArgumentException("Cannot invoke the getKeyQueryMetadataForKey(storeName, key, partitioner)"
+            throw new IllegalArgumentException("Cannot invoke the keyQueryMetadataForKey(storeName, key, partitioner)"
                                                    + "method when using named topologies, please use the overload that"
                                                    + "accepts a topologyName parameter to identify the correct store");
         }
