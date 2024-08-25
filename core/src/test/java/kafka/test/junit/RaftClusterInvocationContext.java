@@ -29,20 +29,15 @@ import kafka.testkit.TestKitNodes;
 import kafka.zk.EmbeddedZookeeper;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
-import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -246,26 +241,16 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         public void format() throws Exception {
             if (formated.compareAndSet(false, true)) {
-                List<ApiMessageAndVersion> records = new ArrayList<>();
-                records.add(
-                    new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(clusterConfig.metadataVersion().featureLevel()), (short) 0));
-
-                clusterConfig.features().forEach((feature, version) -> {
-                    records.add(
-                        new ApiMessageAndVersion(new FeatureLevelRecord().
-                            setName(feature.featureName()).
-                            setFeatureLevel(version), (short) 0));
-                });
-
-                TestKitNodes nodes = new TestKitNodes.Builder()
-                        .setBootstrapMetadata(BootstrapMetadata.fromRecords(records, "testkit"))
+                TestKitNodes.Builder nodesBuilder = new TestKitNodes.Builder()
+                        .setBootstrapMetadataVersion(clusterConfig.metadataVersion())
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
                         .setPerServerProperties(clusterConfig.perServerOverrideProperties())
-                        .setNumControllerNodes(clusterConfig.numControllers()).build();
+                        .setNumControllerNodes(clusterConfig.numControllers());
+                clusterConfig.features().forEach((feature, version) ->
+                    nodesBuilder.setFeature(feature.featureName(), version));
+                TestKitNodes nodes = nodesBuilder.build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 if (Boolean.parseBoolean(clusterConfig.serverProperties()
                         .getOrDefault("zookeeper.metadata.migration.enable", "false"))) {

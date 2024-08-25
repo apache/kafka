@@ -51,8 +51,15 @@ public class TestKitNodes {
         private int numBrokerNodes;
         private int numDisksPerBroker = 1;
         private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
-        private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-            fromVersion(MetadataVersion.latestTesting(), "testkit");
+        private BootstrapMetadata bootstrapMetadata;
+
+        public Builder() {
+            this(BootstrapMetadata.fromVersion(MetadataVersion.latestTesting(), "testkit"));
+        }
+
+        public Builder(BootstrapMetadata bootstrapMetadata) {
+            this.bootstrapMetadata = bootstrapMetadata;
+        }
 
         public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
@@ -60,12 +67,13 @@ public class TestKitNodes {
         }
 
         public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
-            this.bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "testkit");
+            this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
+                    MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
             return this;
         }
 
-        public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
-            this.bootstrapMetadata = bootstrapMetadata;
+        public Builder setFeature(String featureName, short level) {
+            this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(featureName, level);
             return this;
         }
 
