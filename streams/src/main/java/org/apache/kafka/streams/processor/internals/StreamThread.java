@@ -318,7 +318,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
-    private final Optional<String> getGroupInstanceID;
+    private final Optional<String> groupInstanceID;
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -629,7 +629,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
         this.nonFatalExceptionsToHandle = nonFatalExceptionsToHandle;
-        this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
+        this.groupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -1586,8 +1586,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
     }
 
-    public Optional<String> getGroupInstanceID() {
-        return getGroupInstanceID;
+    public Optional<String> groupInstanceID() {
+        return groupInstanceID;
     }
 
     public void requestLeaveGroupDuringShutdown() {

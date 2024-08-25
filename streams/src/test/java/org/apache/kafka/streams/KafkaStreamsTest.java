@@ -734,7 +734,7 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
-        when(streamThreadOne.getGroupInstanceID()).thenReturn(Optional.empty());
+        when(streamThreadOne.groupInstanceID()).thenReturn(Optional.empty());
         when(streamThreadOne.waitOnThreadState(isA(StreamThread.State.class), anyLong())).thenReturn(true);
         when(streamThreadOne.isThreadAlive()).thenReturn(true);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
