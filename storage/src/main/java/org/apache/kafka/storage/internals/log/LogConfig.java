@@ -108,13 +108,13 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    public static class RemoteLogConfig {
+    private static class RemoteLogConfig {
 
-        public final boolean remoteStorageEnable;
-        public final boolean remoteLogDeleteOnDisable;
-        public final boolean remoteLogCopyDisable;
-        public final long localRetentionMs;
-        public final long localRetentionBytes;
+        private final boolean remoteStorageEnable;
+        private final boolean remoteLogDeleteOnDisable;
+        private final boolean remoteLogCopyDisable;
+        private final long localRetentionMs;
+        private final long localRetentionBytes;
 
         private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
@@ -375,8 +375,8 @@ public class LogConfig extends AbstractConfig {
     public final List<String> leaderReplicationThrottledReplicas;
     public final List<String> followerReplicationThrottledReplicas;
     public final boolean messageDownConversionEnable;
-    public final RemoteLogConfig remoteLogConfig;
 
+    private final RemoteLogConfig remoteLogConfig;
     private final int maxMessageSize;
     private final Map<?, ?> props;
 
