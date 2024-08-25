@@ -776,7 +776,7 @@ subprojects {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
-        targetExclude('src/generated/**/*.java','src/generated-test/**/*.java')
+        targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
         importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
         removeUnusedImports()
       }
@@ -1312,7 +1312,7 @@ project(':metadata') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.metadata",
-             "-o", "src/generated/java/org/apache/kafka/common/metadata",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/common/metadata",
              "-i", "src/main/resources/common/metadata",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator"
@@ -1321,7 +1321,7 @@ project(':metadata') {
         .withPropertyName("messages")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated/java/org/apache/kafka/common/metadata")
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/common/metadata")
   }
 
   compileJava.dependsOn 'processMessages'
@@ -1330,7 +1330,7 @@ project(':metadata') {
   sourceSets {
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
@@ -1446,7 +1446,7 @@ project(':group-coordinator') {
   sourceSets {
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
@@ -1468,7 +1468,7 @@ project(':group-coordinator') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.coordinator.group.generated",
-             "-o", "src/generated/java/org/apache/kafka/coordinator/group/generated",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/group/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
     ]
@@ -1476,7 +1476,7 @@ project(':group-coordinator') {
         .withPropertyName("messages")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated/java/org/apache/kafka/coordinator/group/generated")
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/group/generated")
   }
 
   compileJava.dependsOn 'processMessages'
@@ -1501,7 +1501,7 @@ project(':transaction-coordinator') {
   sourceSets {
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
@@ -1519,7 +1519,7 @@ project(':transaction-coordinator') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.coordinator.transaction.generated",
-             "-o", "src/generated/java/org/apache/kafka/coordinator/transaction/generated",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/transaction/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
     ]
@@ -1527,7 +1527,7 @@ project(':transaction-coordinator') {
             .withPropertyName("messages")
             .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated/java/org/apache/kafka/coordinator/transaction/generated")
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/transaction/generated")
   }
 
   compileJava.dependsOn 'processMessages'
@@ -1602,7 +1602,7 @@ project(':share-coordinator') {
   sourceSets {
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
@@ -1620,7 +1620,7 @@ project(':share-coordinator') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.coordinator.share.generated",
-             "-o", "src/generated/java/org/apache/kafka/coordinator/share/generated",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/share/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
     ]
@@ -1628,7 +1628,7 @@ project(':share-coordinator') {
             .withPropertyName("messages")
             .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated/java/org/apache/kafka/coordinator/share/generated")
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/coordinator/share/generated")
   }
 
   compileJava.dependsOn 'processMessages'
@@ -1777,7 +1777,7 @@ project(':clients') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.message",
-             "-o", "src/generated/java/org/apache/kafka/common/message",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/common/message",
              "-i", "src/main/resources/common/message",
              "-t", "ApiMessageTypeGenerator",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
@@ -1786,14 +1786,14 @@ project(':clients') {
         .withPropertyName("messages")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated/java/org/apache/kafka/common/message")
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/common/message")
   }
 
   task processTestMessages(type:JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.common.message",
-             "-o", "src/generated-test/java/org/apache/kafka/common/message",
+             "-o", "${projectDir}/build/generated/test/java/org/apache/kafka/common/message",
              "-i", "src/test/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"
            ]
@@ -1801,18 +1801,18 @@ project(':clients') {
         .withPropertyName("testMessages")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
+    outputs.dir("${projectDir}/build/generated/test/java/org/apache/kafka/common/message")
   }
 
   sourceSets {
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
       java {
-        srcDirs = ["src/generated-test/java", "src/test/java"]
+        srcDirs = ["src/test/java", "${projectDir}/build/generated/test/java"]
       }
     }
   }
@@ -1903,20 +1903,20 @@ project(':raft') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.raft.generated",
-             "-o", "src/generated/java/org/apache/kafka/raft/generated",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/raft/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator"]
     inputs.dir("src/main/resources/common/message")
         .withPropertyName("messages")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated/java/org/apache/kafka/raft/generated")
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/raft/generated")
   }
 
   sourceSets {
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
@@ -2144,7 +2144,7 @@ project(':storage') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.server.log.remote.metadata.storage.generated",
-             "-o", "src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/server/log/remote/metadata/storage/generated",
              "-i", "src/main/resources/message",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
              "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator" ]
@@ -2152,7 +2152,7 @@ project(':storage') {
         .withPropertyName("messages")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/server/log/remote/metadata/storage/generated")
   }
 
   task genRemoteLogManagerConfigDoc(type: JavaExec) {
@@ -2172,7 +2172,7 @@ project(':storage') {
   sourceSets {
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
@@ -2493,7 +2493,7 @@ project(':streams') {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.streams.internals.generated",
-             "-o", "src/generated/java/org/apache/kafka/streams/internals/generated",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/streams/internals/generated",
              "-i", "src/main/resources/common/message",
              "-m", "MessageDataGenerator"
            ]
@@ -2501,13 +2501,13 @@ project(':streams') {
         .withPropertyName("messages")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.cacheIf { true }
-    outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/streams/internals/generated")
   }
 
   sourceSets {
     main {
       java {
-        srcDirs = ["src/generated/java", "src/main/java"]
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
       }
     }
     test {
