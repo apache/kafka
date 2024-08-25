@@ -134,31 +134,31 @@ class DefaultMessageFormatter implements MessageFormatter {
                 } else {
                     output.print("NO_TIMESTAMP");
                 }
-                writeSeparator(output, anyTrue(printPartition, printOffset, printDelivery, printEpoch, printHeaders, printKey, printValue));
+                writeSeparator(output, printPartition || printOffset || printDelivery || printEpoch || printHeaders || printKey || printValue);
             }
 
             if (printPartition) {
                 output.print("Partition:");
                 output.print(consumerRecord.partition());
-                writeSeparator(output, anyTrue(printOffset, printDelivery, printEpoch, printHeaders, printKey, printValue));
+                writeSeparator(output, printOffset || printDelivery || printEpoch || printHeaders || printKey || printValue);
             }
 
             if (printOffset) {
                 output.print("Offset:");
                 output.print(consumerRecord.offset());
-                writeSeparator(output, anyTrue(printDelivery, printEpoch, printHeaders, printKey, printValue));
+                writeSeparator(output, printDelivery || printEpoch || printHeaders || printKey || printValue);
             }
 
             if (printDelivery) {
                 output.print("Delivery:");
                 output.print(consumerRecord.deliveryCount().map(delivery -> Short.toString(delivery)).orElse("NOT_PRESENT"));
-                writeSeparator(output, anyTrue(printEpoch, printHeaders, printKey, printValue));
+                writeSeparator(output, printEpoch || printHeaders || printKey || printValue);
             }
 
             if (printEpoch) {
                 output.print("Epoch:");
                 output.print(consumerRecord.leaderEpoch().map(epoch -> Integer.toString(epoch)).orElse("NOT_PRESENT"));
-                writeSeparator(output, anyTrue(printHeaders, printKey, printValue));
+                writeSeparator(output, printHeaders || printKey || printValue);
             }
 
             if (printHeaders) {
@@ -190,15 +190,6 @@ class DefaultMessageFormatter implements MessageFormatter {
         } catch (IOException ioe) {
             LOG.error("Unable to write the consumer record to the output", ioe);
         }
-    }
-
-    private boolean anyTrue(boolean... array) {
-        for (boolean element : array) {
-            if (element) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private Map<String, ?> propertiesWithKeyPrefixStripped(String prefix, Map<String, ?> configs) {
