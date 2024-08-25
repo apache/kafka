@@ -1263,7 +1263,7 @@ project(':core') {
         srcDirs = []
       }
       scala {
-        srcDirs = ["src/generated/java", "src/main/java", "src/main/scala"]
+        srcDirs = ["src/main/java", "src/main/scala"]
       }
     }
     test {
