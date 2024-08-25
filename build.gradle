@@ -669,7 +669,21 @@ subprojects {
   tasks.withType(ScalaCompile) {
 
     scalaCompileOptions.keepAliveMode = userKeepAliveMode
-
+    scalaCompileOptions.forkOptions.jvmArgs = [
+      "-Xlint:constant",
+      "-Xlint:delayedinit-select",
+      "-Xlint:doc-detached",
+      "-Xlint:missing-interpolator",
+      "-Xlint:nullary-unit",
+      "-Xlint:option-implicit",
+      "-Xlint:package-object-classes",
+      "-Xlint:poly-implicit-overload",
+      "-Xlint:private-shadow",
+      "-Xlint:stars-align",
+      "-Xlint:type-parameter-shadow",
+      "-Xlint:unused"
+    ]
+    
     scalaCompileOptions.additionalParameters = [
       "-deprecation:false",
       "-unchecked",
