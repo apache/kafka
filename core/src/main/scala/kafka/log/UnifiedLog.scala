@@ -1586,7 +1586,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       startMs - segment.largestTimestamp > retentionMs
     }
 
-    deleteOldSegments(shouldDelete, RetentionMsBreach(this, remoteLogEnabled()))
+    deleteOldSegments(shouldDelete, RetentionMsBreach(this, remoteLogEnabledAndRemoteCopyEnabled()))
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
@@ -1602,7 +1602,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       }
     }
 
-    deleteOldSegments(shouldDelete, RetentionSizeBreach(this, remoteLogEnabled()))
+    deleteOldSegments(shouldDelete, RetentionSizeBreach(this, remoteLogEnabledAndRemoteCopyEnabled()))
   }
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
@@ -2347,11 +2347,11 @@ object UnifiedLog extends Logging {
   }
 
   private[log] def localRetentionMs(config: LogConfig, remoteLogEnabledAndRemoteCopyEnabled: Boolean): Long = {
-    if (remoteLogEnabledAndRemoteCopyEnabled) config.remoteLogConfig.localRetentionMs else config.retentionMs
+    if (remoteLogEnabledAndRemoteCopyEnabled) config.localRetentionMs else config.retentionMs
   }
 
   private[log] def localRetentionSize(config: LogConfig, remoteLogEnabledAndRemoteCopyEnabled: Boolean): Long = {
-    if (remoteLogEnabledAndRemoteCopyEnabled) config.remoteLogConfig.localRetentionBytes else config.retentionSize
+    if (remoteLogEnabledAndRemoteCopyEnabled) config.localRetentionBytes else config.retentionSize
   }
 
 }
@@ -2367,19 +2367,19 @@ object LogMetricNames {
   }
 }
 
-case class RetentionMsBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends SegmentDeletionReason {
+case class RetentionMsBreach(log: UnifiedLog, remoteLogEnabledAndRemoteCopyEnabled: Boolean) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
-    val retentionMs = UnifiedLog.localRetentionMs(log.config, remoteLogEnabled)
+    val retentionMs = UnifiedLog.localRetentionMs(log.config, remoteLogEnabledAndRemoteCopyEnabled)
     toDelete.foreach { segment =>
       if (segment.largestRecordTimestamp.isPresent)
-        if (remoteLogEnabled)
+        if (remoteLogEnabledAndRemoteCopyEnabled)
           log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the largest " +
             s"record timestamp in the segment")
         else
           log.info(s"Deleting segment $segment due to log retention time ${retentionMs}ms breach based on the largest " +
             s"record timestamp in the segment")
       else {
-        if (remoteLogEnabled)
+        if (remoteLogEnabledAndRemoteCopyEnabled)
           log.info(s"Deleting segment $segment due to local log retention time ${retentionMs}ms breach based on the " +
             s"last modified time of the segment")
         else
@@ -2390,12 +2390,12 @@ case class RetentionMsBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends
   }
 }
 
-case class RetentionSizeBreach(log: UnifiedLog, remoteLogEnabled: Boolean) extends SegmentDeletionReason {
+case class RetentionSizeBreach(log: UnifiedLog, remoteLogEnabledAndRemoteCopyEnabled: Boolean) extends SegmentDeletionReason {
   override def logReason(toDelete: List[LogSegment]): Unit = {
     var size = log.size
     toDelete.foreach { segment =>
       size -= segment.size
-      if (remoteLogEnabled) log.info(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config, remoteLogEnabled)} breach. " +
+      if (remoteLogEnabledAndRemoteCopyEnabled) log.info(s"Deleting segment $segment due to local log retention size ${UnifiedLog.localRetentionSize(log.config, remoteLogEnabledAndRemoteCopyEnabled)} breach. " +
         s"Local log size after deletion will be $size.")
       else log.info(s"Deleting segment $segment due to log retention size ${log.config.retentionSize} breach. Log size " +
         s"after deletion will be $size.")
