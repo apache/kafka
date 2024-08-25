@@ -2317,11 +2317,11 @@ object UnifiedLog extends Logging {
   }
 
   private[log] def localRetentionMs(config: LogConfig, remoteLogEnabled: Boolean): Long = {
-    if (remoteLogEnabled) config.remoteLogConfig.localRetentionMs else config.retentionMs
+    if (remoteLogEnabled) config.localRetentionMs else config.retentionMs
   }
 
   private[log] def localRetentionSize(config: LogConfig, remoteLogEnabled: Boolean): Long = {
-    if (remoteLogEnabled) config.remoteLogConfig.localRetentionBytes else config.retentionSize
+    if (remoteLogEnabled) config.localRetentionBytes else config.retentionSize
   }
 
 }
