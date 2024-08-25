@@ -124,6 +124,12 @@ public class ConfigCommandIntegrationTest {
                 "--entity-name", "group",
                 "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
             errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
+
+        // Test for the --group alias
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
+                "--group", "group",
+                "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
+            errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
@@ -144,7 +150,13 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
         String message = captureStandardMsg(run(command));
+        assertTrue(StringUtils.isBlank(message), message);
 
+        // Test for the --group alias
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--group", "group",
+            "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
+        message = captureStandardMsg(run(command));
         assertTrue(StringUtils.isBlank(message), message);
     }
 
@@ -284,7 +296,14 @@ public class ConfigCommandIntegrationTest {
     })
     public void testGroupConfigUpdateUsingKraft() throws Exception {
         alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "groups", "--alter");
+        verifyGroupConfigUpdate();
 
+        // Test for the --group alias
+        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--group", "--alter");
+        verifyGroupConfigUpdate();
+    }
+
+    private void verifyGroupConfigUpdate() throws Exception {
         try (Admin client = cluster.createAdminClient()) {
             // Add config
             Map<String, String> configs = new HashMap<>();

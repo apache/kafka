@@ -123,6 +123,7 @@ public class MockAdminClient extends AdminClient {
         private Map<String, Short> featureLevels = Collections.emptyMap();
         private Map<String, Short> minSupportedFeatureLevels = Collections.emptyMap();
         private Map<String, Short> maxSupportedFeatureLevels = Collections.emptyMap();
+        private Map<String, String> defaultGroupConfigs = Collections.emptyMap();
 
         @SuppressWarnings("this-escape")
         public Builder() {
@@ -193,6 +194,11 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
+        public Builder defaultGroupConfigs(Map<String, String> defaultGroupConfigs) {
+            this.defaultGroupConfigs = defaultGroupConfigs;
+            return this;
+        }
+
         public MockAdminClient build() {
             return new MockAdminClient(brokers,
                 controller == null ? brokers.get(0) : controller,
@@ -203,7 +209,8 @@ public class MockAdminClient extends AdminClient {
                 usingRaftController,
                 featureLevels,
                 minSupportedFeatureLevels,
-                maxSupportedFeatureLevels);
+                maxSupportedFeatureLevels,
+                defaultGroupConfigs);
         }
     }
 
@@ -221,6 +228,7 @@ public class MockAdminClient extends AdminClient {
             false,
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.emptyMap(),
             Collections.emptyMap());
     }
 
@@ -235,7 +243,8 @@ public class MockAdminClient extends AdminClient {
         boolean usingRaftController,
         Map<String, Short> featureLevels,
         Map<String, Short> minSupportedFeatureLevels,
-        Map<String, Short> maxSupportedFeatureLevels
+        Map<String, Short> maxSupportedFeatureLevels,
+        Map<String, String> defaultGroupConfigs
     ) {
         this.brokers = brokers;
         controller(controller);
@@ -246,7 +255,7 @@ public class MockAdminClient extends AdminClient {
         this.brokerConfigs = new ArrayList<>();
         this.clientMetricsConfigs = new HashMap<>();
         this.groupConfigs = new HashMap<>();
-        this.defaultGroupConfigs = generateDefaultGroupConfigs();
+        this.defaultGroupConfigs = new HashMap<>(defaultGroupConfigs);
         for (int i = 0; i < brokers.size(); i++) {
             final Map<String, String> config = new HashMap<>();
             config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
@@ -1474,12 +1483,5 @@ public class MockAdminClient extends AdminClient {
 
     public synchronized Node broker(int index) {
         return brokers.get(index);
-    }
-
-    private Map<String, String> generateDefaultGroupConfigs() {
-        Map<String, String> defaultGroupConfigs = new HashMap<>();
-        defaultGroupConfigs.put("consumer.session.timeout.ms", "45000");
-        defaultGroupConfigs.put("consumer.heartbeat.interval.ms", "5000");
-        return defaultGroupConfigs;
     }
 }

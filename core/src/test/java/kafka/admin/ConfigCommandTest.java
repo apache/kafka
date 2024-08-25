@@ -1946,12 +1946,14 @@ public class ConfigCommandTest {
     @Test
     public void shouldAlterGroupConfig() {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterGroupConfig(node, "group", Arrays.asList("--entity-name", "group"));
+        verifyAlterGroupConfig(node, "group", Arrays.asList("--entity-type", "groups", "--entity-name", "group"));
+
+        // Test for the --group alias
+        verifyAlterGroupConfig(node, "groupUsingAlias", Arrays.asList("--group", "groupUsingAlias"));
     }
 
     private void verifyAlterGroupConfig(Node node, String resourceName, List<String> resourceOpts) {
         List<String> optsList = concat(Arrays.asList("--bootstrap-server", "localhost:9092",
-            "--entity-type", "groups",
             "--alter",
             "--delete-config", "consumer.session.timeout.ms",
             "--add-config", "consumer.heartbeat.interval.ms=6000"), resourceOpts);
@@ -2012,9 +2014,17 @@ public class ConfigCommandTest {
     public void shouldDescribeGroupConfigWithoutEntityName() {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "groups",
+            "--entity-name", "group",
             "--describe"));
+        verifyDescribeGroupConfig(describeOpts, "group");
 
-        ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.GROUP, "group");
+        // Test for the --group alias
+        describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092", "--group", "groupUsingAlias", "--describe"));
+        verifyDescribeGroupConfig(describeOpts, "groupUsingAlias");
+    }
+
+    private void verifyDescribeGroupConfig(ConfigCommand.ConfigCommandOptions describeOpts, String resourceName) {
+        ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.GROUP, resourceName);
         ConfigEntry configEntry = new ConfigEntry("consumer.heartbeat.interval.ms", "6000");
         KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
@@ -2060,6 +2070,16 @@ public class ConfigCommandTest {
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
         assertEquals("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+
+        // Test for the --group alias
+        alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--group", "group",
+            "--alter",
+            "--add-config", "consumer.heartbeat.interval.ms=6000"));
+
+        exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
+        assertEquals("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+
     }
 
     @Test
@@ -2071,6 +2091,15 @@ public class ConfigCommandTest {
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
         assertEquals("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+
+        // Test for the --group alias
+        describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--group", "group",
+            "--describe"));
+
+        exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
+        assertEquals("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage());
+
     }
 
     @Test
@@ -2083,6 +2112,16 @@ public class ConfigCommandTest {
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, alterOpts, DUMMY_ADMIN_ZK_CLIENT));
         assertEquals("groups is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage());
+
+        // Test for the --group alias
+        ConfigCommand.ConfigCommandOptions alterOptsUsingAlias = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--group", "group",
+            "--alter",
+            "--add-config", "consumer.heartbeat.interval.ms=6000"));
+
+        exception = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, alterOptsUsingAlias, DUMMY_ADMIN_ZK_CLIENT));
+        assertEquals("groups is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage());
+
     }
 
     public static String[] toArray(String... first) {
