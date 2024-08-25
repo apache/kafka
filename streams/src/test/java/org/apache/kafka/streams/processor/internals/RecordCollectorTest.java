@@ -572,7 +572,7 @@ public class RecordCollectorTest {
     public void shouldUseDefaultPartitionerAsPartitionReturnsNull() {
 
         final StreamPartitioner<String, Object> streamPartitioner =
-                (topic, key, value, numPartitions) -> null;
+                (topic, key, value, numPartitions) -> Optional.empty();
 
         final SinkNode<?, ?> sinkNode = new SinkNode<>(
                 sinkNodeName,
