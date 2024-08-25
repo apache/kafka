@@ -68,7 +68,11 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
                     "Deprecated. Use " + ConfigName.INCLUDE + " instead.")
             .define(ConfigName.RENAME, ConfigDef.Type.LIST, Collections.emptyList(),
                 ConfigDef.LambdaValidator.with(
-                    (name, value) -> parseRenameMappings((List<String>) value),
+                    (name, value) -> {
+                        @SuppressWarnings("unchecked")
+                        List<String> valueList = (List<String>) value;
+                        parseRenameMappings(valueList);
+                    },
                     () -> "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>"),
                 ConfigDef.Importance.MEDIUM, "Field rename mappings.")
             .define(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,

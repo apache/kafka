@@ -73,6 +73,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(SPEC_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.LambdaValidator.with(
                     (name, valueObject) -> {
+                        @SuppressWarnings("unchecked")
                         List<String> value = (List<String>) valueObject;
                         if (value == null || value.isEmpty()) {
                             throw new ConfigException("Must specify at least one field to cast.");
