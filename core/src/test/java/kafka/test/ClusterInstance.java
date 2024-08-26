@@ -188,7 +188,7 @@ public interface ClusterInstance {
         waitForTopic(topic, 0);
     }
 
-    long waitForMeatdataSync() throws InterruptedException;
+    void waitForMeatdataSync(String topic, int partition, int isrSize) throws InterruptedException;
 
     default void createTopic(String topicName, int partitions, short replicas) {
         try (Admin admin = createAdminClient()) {

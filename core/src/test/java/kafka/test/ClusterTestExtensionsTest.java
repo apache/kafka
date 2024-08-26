@@ -254,16 +254,19 @@ public class ClusterTestExtensionsTest {
     @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 3)
     public void testWaitForMetadataSync(ClusterInstance clusterInstance) throws Exception {
         String topicName = "test";
-        int partitions = 3;
+        int partitions = 1;
         short replicas = 3;
+
         clusterInstance.createTopic(topicName, partitions, replicas);
         clusterInstance.waitForTopic(topicName, partitions);
 
-        long offset = clusterInstance.waitForMeatdataSync();
-        if (clusterInstance.isKRaftTest()) {
-            Assertions.assertTrue(offset > 0);
-        } else {
-            Assertions.assertEquals(-1, offset);
+
+        try (Admin admin = clusterInstance.createAdminClient()) {
+            Assertions.assertEquals(replicas, admin.describeTopics(Collections.singletonList(topicName)).allTopicNames().get()
+                    .get(topicName).partitions().get(0).replicas().size());
+            clusterInstance.shutdownBroker(0);
+
+            clusterInstance.waitForMeatdataSync(topicName, 0, 2);
         }
     }
 
