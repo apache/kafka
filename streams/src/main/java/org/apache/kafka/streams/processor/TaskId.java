@@ -33,10 +33,8 @@ public class TaskId implements Comparable<TaskId> {
     public static final String NAMED_TOPOLOGY_DELIMITER = "__";
 
     /** The ID of the subtopology, aka topicGroupId. */
-    @Deprecated
     private final int topicGroupId;
     /** The ID of the partition. */
-    @Deprecated
     private final int partition;
 
     /** The namedTopology that this task belongs to, or null if it does not belong to one */
