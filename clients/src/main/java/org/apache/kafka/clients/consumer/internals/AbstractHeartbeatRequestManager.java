@@ -465,7 +465,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
          */
         private long heartbeatIntervalMs;
 
-        public HeartbeatRequestState(
+        HeartbeatRequestState(
                 final LogContext logContext,
                 final Time time,
                 final long heartbeatIntervalMs,
@@ -481,7 +481,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             this.heartbeatTimer.update(currentTimeMs);
         }
 
-        public void resetTimer() {
+        void resetTimer() {
             this.heartbeatTimer.reset(heartbeatIntervalMs);
         }
 
@@ -503,13 +503,14 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             return heartbeatTimer.isExpired() && super.canSendRequest(currentTimeMs);
         }
 
-        public long timeToNextHeartbeatMs(final long currentTimeMs) {
+        long timeToNextHeartbeatMs(final long currentTimeMs) {
             if (heartbeatTimer.isExpired()) {
                 return this.remainingBackoffMs(currentTimeMs);
             }
             return heartbeatTimer.remainingMs();
         }
 
+        @Override
         public void onFailedAttempt(final long currentTimeMs) {
             // Reset timer to allow sending HB after a failure without waiting for the interval.
             // After a failure, a next HB may be needed with backoff (ex. errors that lead to
