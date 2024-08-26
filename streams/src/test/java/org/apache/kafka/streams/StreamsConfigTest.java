@@ -471,6 +471,22 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldResetToDefaultIfConsumerGroupProtocolIsOverridden() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), "consumer");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs("a", "b", threadIdx);
+        assertEquals("classic", consumerConfigs.get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void shouldResetToDefaultIfRestoreConsumerGroupProtocolIsOverridden() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), "consumer");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
+        assertEquals("classic", consumerConfigs.get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+    }
+
+    @Test
     public void testGetRestoreConsumerConfigsWithRestoreConsumerOverriddenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
@@ -516,6 +532,14 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getGlobalConsumerConfigs(clientId);
         assertEquals("false", consumerConfigs.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+    }
+
+    @Test
+    public void shouldResetToDefaultIfGlobalConsumerGroupProtocolIsOverridden() {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), "consumer");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getGlobalConsumerConfigs(clientId);
+        assertEquals("classic", consumerConfigs.get(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
     }
 
     @Test
