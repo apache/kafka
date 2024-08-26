@@ -77,6 +77,7 @@ import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_I
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch, ShareFetchContext}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
