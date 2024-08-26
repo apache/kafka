@@ -569,7 +569,7 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldUseDefaultPartitionerAsPartitionReturnsNull() {
+    public void shouldUseDefaultPartitionerAsPartitionReturnsEmptyOptional() {
 
         final StreamPartitioner<String, Object> streamPartitioner =
                 (topic, key, value, numPartitions) -> Optional.empty();
