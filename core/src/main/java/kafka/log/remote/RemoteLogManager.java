@@ -188,7 +188,6 @@ public class RemoteLogManager implements Closeable {
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderExpirationRLMTasks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> followerRLMTasks = new ConcurrentHashMap<>();
     private final Set<RemoteLogSegmentId> segmentIdsBeingCopied = ConcurrentHashMap.newKeySet();
-    private final Set<RemoteLogSegmentId> segmentIdsCopyStarted = ConcurrentHashMap.newKeySet();
 
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
@@ -952,7 +951,18 @@ public class RemoteLogManager implements Closeable {
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
             brokerTopicStats.topicStats(log.topicPartition().topic()).remoteCopyRequestRate().mark();
             brokerTopicStats.allTopicsStats().remoteCopyRequestRate().mark();
-            Optional<CustomMetadata> customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+            Optional<CustomMetadata> customMetadata = Optional.empty();
+            try {
+                customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+            } catch (RemoteStorageException e) {
+                try {
+                    remoteLogStorageManager.deleteLogSegmentData(copySegmentStartedRlsm);
+                    logger.info("Successfully cleaned segment after failing to copy segment");
+                } catch (RemoteStorageException e1) {
+                    logger.error("Error while cleaning segment, consider cleaning manually", e1);
+                }
+                throw e;
+            }
 
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
                     customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
@@ -1238,7 +1248,6 @@ public class RemoteLogManager implements Closeable {
             Iterator<Integer> epochIterator = epochWithOffsets.navigableKeySet().iterator();
             boolean canProcess = true;
             List<RemoteLogSegmentMetadata> segmentsToDelete = new ArrayList<>();
-            List<RemoteLogSegmentMetadata> danglingSegments = new ArrayList<>();
             long sizeOfDeletableSegmentsBytes = 0L;
             while (canProcess && epochIterator.hasNext()) {
                 Integer epoch = epochIterator.next();
@@ -1256,24 +1265,10 @@ public class RemoteLogManager implements Closeable {
                         canProcess = false;
                         continue;
                     }
-
-                    if (RemoteLogSegmentState.COPY_SEGMENT_STARTED.equals(metadata.state())) {
-                        // Double check with `segmentIdsCopyStarted` set to avoid the race condition that before the loop,
-                        // it's under copying process, but then completed during the loop. In this case,
-                        // segmentIdsBeingCopied will not contain this id, so we might delete this segment unexpectedly.
-                        if (segmentIdsCopyStarted.contains(metadata.remoteLogSegmentId())) {
-                            // If the previous run and current run state are both COPY_SEGMENT_STARTED and it's not currently
-                            // under copying process, this must be the previously failed copied state. We should clean it up directly.
-                            segmentIdsCopyStarted.remove(metadata.remoteLogSegmentId());
-                            danglingSegments.add(metadata);
-                        } else {
-                            segmentIdsCopyStarted.add(metadata.remoteLogSegmentId());
-                        }
-                        continue;
-                    }
-                    // remove this segment from segmentIdsCopyStarted since it already moves to other state.
-                    segmentIdsCopyStarted.remove(metadata.remoteLogSegmentId());
-                    if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state())) {
+                    // skip the COPY_SEGMENT_STARTED segments since they might be the dangling segments that failed before
+                    // and blocks the normal segment deletion, ex: it failed `isRemoteSegmentWithinLeaderEpochs` check... etc
+                    if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state()) ||
+                            RemoteLogSegmentState.COPY_SEGMENT_STARTED.equals(metadata.state())) {
                         continue;
                     }
                     if (segmentsToDelete.contains(metadata)) {
@@ -1318,11 +1313,6 @@ public class RemoteLogManager implements Closeable {
             int segmentsLeftToDelete = segmentsToDelete.size();
             updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
             List<String> undeletedSegments = new ArrayList<>();
-            for (RemoteLogSegmentMetadata segmentMetadata : danglingSegments) {
-                if (!remoteLogRetentionHandler.deleteRemoteLogSegment(segmentMetadata, x -> !isCancelled())) {
-                    undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());
-                }
-            }
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
                 if (!remoteLogRetentionHandler.deleteRemoteLogSegment(segmentMetadata, x -> !isCancelled())) {
                     undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());

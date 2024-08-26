@@ -165,7 +165,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -678,10 +677,90 @@ public class RemoteLogManagerTest {
         // The metadata update should not be posted.
         verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
 
-        // Verify the metric for remote writes are not updated.
+        // Verify the metrics
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
         assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyBytesRate().count());
-        // Verify we did not report any failure for remote writes
+        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteCopyRequestRate().count());
+        // Verify aggregate metrics
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
+        assertEquals(0, brokerTopicStats.allTopicsStats().remoteCopyBytesRate().count());
+        assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
+    }
+
+    @Test
+    void testFailedCopyShouldDeleteTheDanglingSegment() throws Exception {
+        long oldSegmentStartOffset = 0L;
+        long nextSegmentStartOffset = 150L;
+        long lastStableOffset = 150L;
+        long logEndOffset = 150L;
+
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+
+        // leader epoch preparation
+        checkpoint.write(totalEpochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(-1L));
+
+        File tempFile = TestUtils.tempFile();
+        File mockProducerSnapshotIndex = TestUtils.tempFile();
+        File tempDir = TestUtils.tempDirectory();
+        // create 2 log segments, with 0 and 150 as log start offset
+        LogSegment oldSegment = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
+        when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+        verify(oldSegment, times(0)).readNextOffset();
+        verify(activeSegment, times(0)).readNextOffset();
+
+        FileRecords fileRecords = mock(FileRecords.class);
+        when(oldSegment.log()).thenReturn(fileRecords);
+        when(fileRecords.file()).thenReturn(tempFile);
+        when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
+
+        when(mockLog.activeSegment()).thenReturn(activeSegment);
+        when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(JavaConverters.collectionAsScalaIterable(Arrays.asList(oldSegment, activeSegment)));
+
+        ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
+        when(mockLog.producerStateManager()).thenReturn(mockStateManager);
+        when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
+        when(mockLog.lastStableOffset()).thenReturn(lastStableOffset);
+        when(mockLog.logEndOffset()).thenReturn(logEndOffset);
+
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
+        File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
+        txnFile.createNewFile();
+        TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
+        when(oldSegment.txnIndex()).thenReturn(txnIndex);
+
+        CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
+        dummyFuture.complete(null);
+        when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
+        when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
+
+        // throw exception when copyLogSegmentData
+        when(remoteStorageManager.copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class)))
+                .thenThrow(new RemoteStorageException("test"));
+        RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, 128);
+        task.copyLogSegmentsToRemote(mockLog);
+
+        ArgumentCaptor<RemoteLogSegmentMetadata> remoteLogSegmentMetadataArg = ArgumentCaptor.forClass(RemoteLogSegmentMetadata.class);
+        verify(remoteLogMetadataManager).addRemoteLogSegmentMetadata(remoteLogSegmentMetadataArg.capture());
+        // verify the segment is deleted
+        verify(remoteStorageManager, times(1)).deleteLogSegmentData(eq(remoteLogSegmentMetadataArg.getValue()));
+
+        // The metadata update should not be posted.
+        verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
+
+        // Verify the metrics
+        assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyBytesRate().count());
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteCopyRequestRate().count());
         // Verify aggregate metrics
         assertEquals(1, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
@@ -2342,13 +2421,11 @@ public class RemoteLogManagerTest {
 
         // creating remote log metadata list:
         // s1. One segment with "COPY_SEGMENT_STARTED" state to simulate the segment was failing on copying to remote storage.
-        //     In the 1st run, this segment should be noted in `segmentIdsCopyStarted` set, and in the 2nd run,
-        //     it should deleted even though retention.ms/bytes are disabled (-1).
+        //     it should be ignored for both remote log size calculation and deletion.
         // s2. Another segment with "COPY_SEGMENT_STARTED" state to simulate the segment is copying to remote storage.
         //     The segment state will change to "COPY_SEGMENT_FINISHED" state before checking deletion.
-        //     In the 1st run, this segment will be noted in `segmentIdsCopyStarted` set.
-        //     In the 2nd run, this segment should not be deleted because it has changed to "COPY_SEGMENT_FINISHED".
-        //     In the 3rd run, we should count it in when calculating remote storage log size.
+        //     In the 1st run, this segment should be ignored.
+        //     In the 2nd run, we should count it in when calculating remote storage log size.
         // s3. One segment with "DELETE_SEGMENT_FINISHED" state to simulate the remoteLogMetadataManager doesn't filter it out and returned.
         //     We should filter it out when calculating remote storage log size and deletion
         // s4. One segment with "DELETE_SEGMENT_STARTED" state to simulate the segment was failing on deleting remote log.
@@ -2357,8 +2434,7 @@ public class RemoteLogManagerTest {
         //
         // Expected results:
         // In the 1st run, no segment will be deleted.
-        // In the 2nd run, only s1 will be deleted.
-        // In the 3rd run, set retention.size to 10240 (10 segments), and the total remote storage size should be 1024 * 13 (s2, s4, s5)
+        // In the 2nd run, set retention.size to 10240 (10 segments), and the total remote storage size should be 1024 * 13 (s2, s4, s5)
         // so 3 segments will be deleted due to retention size breached.
         RemoteLogSegmentMetadata s1 = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 99, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_STARTED);
@@ -2392,32 +2468,17 @@ public class RemoteLogManagerTest {
         verify(remoteStorageManager, never()).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
 
         // RUN 2
-        // update the s2 to "COPY_SEGMENT_FINISHED" state
-        metadataList.remove(1);
-        metadataList.add(1, s2CopyFinished);
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
-                .thenReturn(metadataList.iterator());
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
-                .thenReturn(metadataList.iterator());
-
-        task.cleanupExpiredRemoteLogSegments();
-        // verify s1 segment is deleted because in a 2 consecutive run, this segment is in "COPY_SEGMENT_STARTED" state
-        // and is not copying in progress.
-        verify(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
-        verify(remoteStorageManager).deleteLogSegmentData(s1);
-        clearInvocations(remoteStorageManager);
-
-        // RUN 3
         // update the retention.bytes to 10 segment size
         logProps.put("retention.bytes", segmentSize * 10L);
         when(mockLog.config()).thenReturn(new LogConfig(logProps));
 
         // update the metadata list to remove the deleted s1
-        List<RemoteLogSegmentMetadata> updatedMetadataList = metadataList.subList(1, metadataList.size());
+        metadataList.remove(1);
+        metadataList.add(1, s2CopyFinished);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
-                .thenReturn(updatedMetadataList.iterator());
+                .thenReturn(metadataList.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
-                .thenAnswer(ans -> updatedMetadataList.iterator());
+                .thenAnswer(ans -> metadataList.iterator());
 
         // The RemoteDeleteLagBytes should still be 3072 -> 2048 -> 1024 -> 0 on each deletion
         // And the RemoteDeleteLagSegments should still be 3 -> 2 -> 1 -> 0
