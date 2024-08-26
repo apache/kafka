@@ -272,14 +272,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     }
 
     /**
-     * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
-     * this is a static member.
-     */
-    public Optional<String> groupInstanceId() {
-        return Optional.empty();
-    }
-
-    /**
      * Update member info and transition member state based on a successful heartbeat response.
      *
      * @param response Heartbeat response to extract member info and errors from.

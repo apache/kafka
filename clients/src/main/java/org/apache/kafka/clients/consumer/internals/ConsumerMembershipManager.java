@@ -151,17 +151,17 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      Time time,
                                      Metrics metrics) {
         this(groupId,
-                groupInstanceId,
-                rebalanceTimeoutMs,
-                serverAssignor,
-                subscriptions,
-                commitRequestManager,
-                metadata,
-                logContext,
-                clientTelemetryReporter,
-                backgroundEventHandler,
-                time,
-                new ConsumerRebalanceMetricsManager(metrics));
+            groupInstanceId,
+            rebalanceTimeoutMs,
+            serverAssignor,
+            subscriptions,
+            commitRequestManager,
+            metadata,
+            logContext,
+            clientTelemetryReporter,
+            backgroundEventHandler,
+            time,
+            new ConsumerRebalanceMetricsManager(metrics));
     }
 
     // Visible for testing
@@ -178,12 +178,12 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               Time time,
                               RebalanceMetricsManager metricsManager) {
         super(groupId,
-                subscriptions,
-                metadata,
-                logContext.logger(ConsumerMembershipManager.class),
-                clientTelemetryReporter,
-                time,
-                metricsManager);
+            subscriptions,
+            metadata,
+            logContext.logger(ConsumerMembershipManager.class),
+            clientTelemetryReporter,
+            time,
+            metricsManager);
         this.groupInstanceId = groupInstanceId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.serverAssignor = serverAssignor;
@@ -192,9 +192,9 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
-     * {@inheritDoc}
+     * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
+     * this is a static member.
      */
-    @Override
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
     }
