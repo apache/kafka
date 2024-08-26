@@ -823,7 +823,7 @@ public class StreamsConfig extends AbstractConfig {
 
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
-        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
         new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
     private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
@@ -1003,7 +1003,9 @@ public class StreamsConfig extends AbstractConfig {
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
-                    (name, value) -> verifyTopologyOptimizationConfigs((String) value),
+                    ConfigDef.LambdaValidator.with(
+                        (name, value) -> verifyTopologyOptimizationConfigs((String) value),
+                        TOPOLOGY_OPTIMIZATION_CONFIGS::toString),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
 
@@ -1215,6 +1217,7 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
+        tempConsumerDefaultOverrides.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic");
         CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
@@ -1252,14 +1255,14 @@ public class StreamsConfig extends AbstractConfig {
         // Private API to enable the state updater (i.e. state updating on a dedicated thread)
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
 
-        public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
+        public static boolean stateUpdaterEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
         }
         
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
-        public static boolean getProcessingThreadsEnabled(final Map<String, Object> configs) {
+        public static boolean processingThreadsEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
         }
 

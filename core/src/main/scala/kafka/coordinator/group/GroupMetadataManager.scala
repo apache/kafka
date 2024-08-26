@@ -330,7 +330,7 @@ class GroupMetadataManager(brokerId: Int,
     // call replica manager to append the group message
     replicaManager.appendRecords(
       timeout = config.offsetCommitTimeoutMs.toLong,
-      requiredAcks = config.offsetCommitRequiredAcks,
+      requiredAcks = -1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = records,

@@ -31,7 +31,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.SensorAccess
 import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ZooKeeperInternals}
-import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
+import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType, ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.network.Session
 

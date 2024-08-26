@@ -28,7 +28,7 @@ import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 
 import org.apache.kafka.server.common.Features;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.server.util.timer.SystemTimer;
 
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
@@ -48,10 +48,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * This class is a custom JUnit extension that will generate some number of test invocations depending on the processing
@@ -101,7 +102,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
     private static final Set<String> SKIPPED_THREAD_PREFIX = Collections.unmodifiableSet(Stream.of(
             METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX, FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX,
-            ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX, RMI_THREAD_PREFIX)
+            ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX, RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX)
             .collect(Collectors.toSet()));
 
     @Override
@@ -148,18 +149,14 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     @Override
-    public void afterEach(ExtensionContext context) throws InterruptedException {
+    public void afterEach(ExtensionContext context) {
         DetectThreadLeak detectThreadLeak = getStore(context).remove(DETECT_THREAD_LEAK_KEY, DetectThreadLeak.class);
         if (detectThreadLeak == null) {
             return;
         }
-        AtomicReference<List<Thread>> lastThread = new AtomicReference<>(Collections.emptyList());
-        TestUtils.waitForCondition(() -> {
-            List<Thread> threads = detectThreadLeak.newThreads();
-            lastThread.set(threads);
-            return threads.isEmpty();
-        }, () -> "Thread leak detected: " +
-                lastThread.get().stream().map(Thread::getName).collect(Collectors.joining(", ")));
+        List<Thread> threads = detectThreadLeak.newThreads();
+        assertTrue(threads.isEmpty(), "Thread leak detected: " +
+                threads.stream().map(Thread::getName).collect(Collectors.joining(", ")));
     }
 
     private Store getStore(ExtensionContext context) {

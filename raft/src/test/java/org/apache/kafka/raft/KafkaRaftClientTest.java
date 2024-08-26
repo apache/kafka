@@ -4232,6 +4232,36 @@ public class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
+    public void testHandleLeaderChangeFiresAfterResignRegistration(boolean withKip853Rpc) throws Exception {
+        // When registering a listener while the replica is resigned, it should not get notified with
+        // the current leader and epoch
+        int localId = randomReplicaId();
+        int otherNodeId = localId + 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, localId)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.client.poll();
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(LeaderAndEpoch.UNKNOWN, context.listener.currentLeaderAndEpoch());
+
+        // Register another listener and verify that it is not notified of latest leader and epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        assertTrue(context.client.quorum().isResigned());
+        assertEquals(LeaderAndEpoch.UNKNOWN, secondListener.currentLeaderAndEpoch());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     public void testObserverFetchWithNoLocalId(boolean withKip853Rpc) throws Exception {
         // When no `localId` is defined, the client will behave as an observer.
         // This is designed for tooling/debugging use cases.
