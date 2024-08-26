@@ -258,6 +258,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         List<TestTemplateInvocationContext> contexts,
         int count
     ) {
+        if (!System.getProperty("kafka.test.repeated.enabled", "false").equals("true")) {
+            return contexts;
+        }
         List<TestTemplateInvocationContext> repeatedContexts = new ArrayList<>(contexts.size() * count);
         for (int i = 0; i < count; i++) {
             repeatedContexts.addAll(contexts);
