@@ -3328,7 +3328,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally client.close(time.Duration.ZERO)
   }
-
+  
   /**
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
