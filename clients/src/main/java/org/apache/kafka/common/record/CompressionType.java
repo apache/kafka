@@ -52,22 +52,14 @@ public enum CompressionType {
 
         @Override
         public ConfigDef.Validator levelValidator() {
-            return new ConfigDef.Validator() {
-                @Override
-                public void ensureValid(String name, Object o) {
-                    if (o == null)
-                        throw new ConfigException(name, null, "Value must be non-null");
-                    int level = ((Number) o).intValue();
-                    if (level > MAX_LEVEL || (level < MIN_LEVEL && level != DEFAULT_LEVEL)) {
-                        throw new ConfigException(name, o, "Value must be between " + MIN_LEVEL + " and " + MAX_LEVEL + " or equal to " + DEFAULT_LEVEL);
-                    }
+            return ConfigDef.LambdaValidator.with((name, value) -> {
+                if (value == null)
+                    throw new ConfigException(name, null, "Value must be non-null");
+                int level = ((Number) value).intValue();
+                if (level > MAX_LEVEL || (level < MIN_LEVEL && level != DEFAULT_LEVEL)) {
+                    throw new ConfigException(name, value, "Value must be between " + MIN_LEVEL + " and " + MAX_LEVEL + " or equal to " + DEFAULT_LEVEL);
                 }
-
-                @Override
-                public String toString() {
-                    return "[" + MIN_LEVEL + ",...," + MAX_LEVEL + "] or " + DEFAULT_LEVEL;
-                }
-            };
+            }, () -> "[" + MIN_LEVEL + ",...," + MAX_LEVEL + "] or " + DEFAULT_LEVEL);
         }
     },
 

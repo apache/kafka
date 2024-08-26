@@ -14,28 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.quota;
 
-package org.apache.kafka.server.group.share;
-
-import org.apache.kafka.common.Uuid;
-
-import java.util.Objects;
-
-public class ShareGroupHelper {
-
-    /**
-     * Calculates the coordinator key for finding a share coordinator.
-     *
-     * @param groupId Group ID
-     * @param topicId Topic ID
-     * @param partition Partition index
-     *
-     * @return The coordinator key
-     */
-    public static String coordinatorKey(String groupId, Uuid topicId, int partition) {
-        Objects.requireNonNull(groupId);
-        Objects.requireNonNull(topicId);
-
-        return String.format("%s:%s:%d", groupId, topicId, partition);
-    }
+public interface ThrottleCallback {
+    void startThrottling();
+    void endThrottling();
 }
