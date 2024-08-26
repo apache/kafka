@@ -1043,16 +1043,15 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates the online downgrade if a consumer member is fenced from the consumer group.
+     * Validates whether the group id is eligible for an online downgrade.
      *
-     * @param consumerGroup The ConsumerGroup.
-     * @param memberId      The fenced member id.
+     * @param consumerGroup The group to downgrade.
      * @return A boolean indicating whether it's valid to online downgrade the consumer group.
      */
-    private boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
-        if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
+    private boolean validateOnlineDowngrade(ConsumerGroup consumerGroup) {
+        if (!consumerGroup.allMembersUseClassic()) {
             return false;
-        } else if (consumerGroup.numMembers() <= 1) {
+        } else if (consumerGroup.isEmpty()) {
             log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
                 consumerGroup.groupId());
             return false;
@@ -1060,7 +1059,7 @@ public class GroupMetadataManager {
             log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
             return false;
-        } else if (consumerGroup.numMembers() - 1 > classicGroupMaxSize) {
+        } else if (consumerGroup.numMembers() > classicGroupMaxSize) {
             log.info("Cannot downgrade consumer group {} to classic group because its group size is greater than classic group max size.",
                 consumerGroup.groupId());
             return false;
@@ -1069,17 +1068,33 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Maybe downgrade the consumer group to a classic group if it's valid for online downgrade.
+     *
+     * @param groupId   The group id.
+     * @return The CoordinatorResult to be applied.
+     */
+    private <T> CoordinatorResult<T, CoordinatorRecord> consumerGroupDowngradeOperation(
+        String groupId
+    ) {
+        try {
+            ConsumerGroup consumerGroup = consumerGroup(groupId);
+            if (validateOnlineDowngrade(consumerGroup)) {
+                return convertToClassicGroup(consumerGroup);
+            }
+        } catch (GroupIdNotFoundException e) {
+            log.info("Cannot downgrade group {} because the group doesn't exist or it's not a consumer group.");
+        }
+        return new CoordinatorResult<>(Collections.emptyList());
+    }
+
+    /**
      * Creates a ClassicGroup corresponding to the given ConsumerGroup.
      *
      * @param consumerGroup     The converted ConsumerGroup.
-     * @param leavingMemberId   The leaving member that triggers the downgrade validation.
-     * @param response          The response of the returned CoordinatorResult.
      * @return A CoordinatorResult.
      */
     private <T> CoordinatorResult<T, CoordinatorRecord> convertToClassicGroup(
-        ConsumerGroup consumerGroup,
-        String leavingMemberId,
-        T response
+        ConsumerGroup consumerGroup
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
         consumerGroup.createGroupTombstoneRecords(records);
@@ -1088,7 +1103,6 @@ public class GroupMetadataManager {
         try {
             classicGroup = ClassicGroup.fromConsumerGroup(
                 consumerGroup,
-                leavingMemberId,
                 logContext,
                 time,
                 metrics,
@@ -1118,7 +1132,7 @@ public class GroupMetadataManager {
             metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
             return null;
         });
-        return new CoordinatorResult<>(records, response, appendFuture, false);
+        return new CoordinatorResult<>(records, null, appendFuture, false);
     }
 
     /**
@@ -2049,6 +2063,10 @@ public class GroupMetadataManager {
                 scheduleConsumerGroupSyncTimeout(groupId, response.memberId(), request.rebalanceTimeoutMs());
 
                 responseFuture.complete(response);
+
+                // Maybe downgrade the consumer group if the last member using the
+                // consumer protocol is replaced by the joining member.
+                scheduleConsumerGroupDowngradeTimeout(groupId);
             }
         });
 
@@ -2727,33 +2745,36 @@ public class GroupMetadataManager {
         ConsumerGroupMember member,
         T response
     ) {
-        if (validateOnlineDowngrade(group, member.memberId())) {
-            return convertToClassicGroup(group, member.memberId(), response);
-        } else {
-            List<CoordinatorRecord> records = new ArrayList<>();
-            removeMember(records, group.groupId(), member.memberId());
+        List<CoordinatorRecord> records = new ArrayList<>();
+        removeMember(records, group.groupId(), member.memberId());
 
-            // We update the subscription metadata without the leaving member.
-            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
-                group.computeSubscribedTopicNames(member, null),
-                metadataImage.topics(),
-                metadataImage.cluster()
-            );
+        // We update the subscription metadata without the leaving member.
+        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+            group.computeSubscribedTopicNames(member, null),
+            metadataImage.topics(),
+            metadataImage.cluster()
+        );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    group.groupId(), subscriptionMetadata);
-                records.add(newConsumerGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
-            }
-
-            // We bump the group epoch.
-            int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
-
-            cancelTimers(group.groupId(), member.memberId());
-
-            return new CoordinatorResult<>(records, response);
+        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                group.groupId(), subscriptionMetadata);
+            records.add(newConsumerGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
         }
+
+        // We bump the group epoch.
+        int groupEpoch = group.groupEpoch() + 1;
+        records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
+
+        cancelTimers(group.groupId(), member.memberId());
+
+        CompletableFuture<Void> appendFuture = new CompletableFuture<>();
+        appendFuture.whenComplete((__, t) -> {
+            if (t == null) {
+                scheduleConsumerGroupDowngradeTimeout(group.groupId());
+            }
+        });
+
+        return new CoordinatorResult<>(records, response, appendFuture, true);
     }
 
     /**
@@ -3126,6 +3147,23 @@ public class GroupMetadataManager {
         String memberId
     ) {
         timer.cancel(consumerGroupSyncKey(groupId, memberId));
+    }
+
+    /**
+     * Schedules the downgrade timeout for the consumer group.
+     *
+     * @param groupId The group id to downgrade.
+     */
+    private void scheduleConsumerGroupDowngradeTimeout(
+        String groupId
+    ) {
+        timer.schedule(
+            consumerGroupDowngradeKey(groupId),
+            0,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> consumerGroupDowngradeOperation(groupId)
+        );
     }
 
     /**
@@ -3751,6 +3789,7 @@ public class GroupMetadataManager {
                             );
                         }
                     });
+                    scheduleConsumerGroupDowngradeTimeout(groupId);
                     break;
 
                 case CLASSIC:
@@ -6077,5 +6116,18 @@ public class GroupMetadataManager {
      */
     static String consumerGroupSyncKey(String groupId, String memberId) {
         return "sync-" + groupId + "-" + memberId;
+    }
+
+    /**
+     * Generate a consumer group downgrade key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     *
+     * @return the downgrade key.
+     */
+    static String consumerGroupDowngradeKey(String groupId) {
+        return "downgrade-" + groupId;
     }
 }

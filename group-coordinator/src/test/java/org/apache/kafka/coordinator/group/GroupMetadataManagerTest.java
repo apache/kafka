@@ -94,6 +94,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.opentest4j.AssertionFailedError;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -105,6 +106,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -130,6 +132,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGrou
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupDowngradeKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessionTimeoutKey;
@@ -3125,25 +3128,34 @@ public class GroupMetadataManagerTest {
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(45000 + 1);
 
         // Verify the expired timeout.
+        assertEquals(1, timeouts.size());
+        ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
+        assertEquals(groupSessionTimeoutKey(groupId, memberId), timeout.key);
         assertEquals(
-            Collections.singletonList(new ExpiredTimeout<Void, CoordinatorRecord>(
-                groupSessionTimeoutKey(groupId, memberId),
-                new CoordinatorResult<>(
-                    Arrays.asList(
-                        GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2)
-                    )
-                )
-            )),
-            timeouts
+            Arrays.asList(
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
+                GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()),
+                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2)
+            ),
+            timeout.result.records()
         );
 
-        // Verify that there are no timers.
+        // Verify that there is a downgrade timer scheduled if the append future is completed without exception.
+        timeout.result.appendFuture().complete(null);
         context.assertNoSessionTimeout(groupId, memberId);
         context.assertNoRebalanceTimeout(groupId, memberId);
+        context.assertDowngradeTimeout(groupId);
+
+        // The downgrade is not triggered.
+        assertEquals(
+            new ExpiredTimeout<Void, CoordinatorRecord>(
+                consumerGroupDowngradeKey(groupId),
+                new CoordinatorResult<>(Collections.emptyList())
+            ),
+            context.sleep(0).get(0)
+        );
     }
 
     @Test
@@ -3206,25 +3218,34 @@ public class GroupMetadataManagerTest {
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(45000 + 1);
 
         // Verify the expired timeout.
+        assertEquals(1, timeouts.size());
+        ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
+        assertEquals(groupSessionTimeoutKey(groupId, memberId), timeout.key);
         assertEquals(
-            Collections.singletonList(new ExpiredTimeout<Void, CoordinatorRecord>(
-                groupSessionTimeoutKey(groupId, memberId),
-                new CoordinatorResult<>(
-                    Arrays.asList(
-                        GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2)
-                    )
-                )
-            )),
-            timeouts
+            Arrays.asList(
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId),
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId),
+                GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()),
+                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 2)
+            ),
+            timeout.result.records()
         );
 
-        // Verify that there are no timers.
+        // Verify that there is a downgrade timer scheduled if the append future is completed without exception.
+        timeout.result.appendFuture().complete(null);
         context.assertNoSessionTimeout(groupId, memberId);
         context.assertNoRebalanceTimeout(groupId, memberId);
+        context.assertDowngradeTimeout(groupId);
+
+        // The downgrade is not triggered.
+        assertEquals(
+            new ExpiredTimeout<Void, CoordinatorRecord>(
+                consumerGroupDowngradeKey(groupId),
+                new CoordinatorResult<>(Collections.emptyList())
+            ),
+            context.sleep(0).get(0)
+        );
     }
 
     @Test
@@ -3503,24 +3524,33 @@ public class GroupMetadataManagerTest {
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(10000 + 1);
 
         // Verify the expired timeout.
+        assertEquals(1, timeouts.size());
+        ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
+        assertEquals(consumerGroupRebalanceTimeoutKey(groupId, memberId1), timeout.key);
         assertEquals(
-            Collections.singletonList(new ExpiredTimeout<Void, CoordinatorRecord>(
-                consumerGroupRebalanceTimeoutKey(groupId, memberId1),
-                new CoordinatorResult<>(
-                    Arrays.asList(
-                        GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
-                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3)
-                    )
-                )
-            )),
-            timeouts
+            Arrays.asList(
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
+                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3)
+            ),
+            timeout.result.records()
         );
 
-        // Verify that there are no timers.
+        // Verify that there is a downgrade timer scheduled if the append future is completed without exception.
+        timeout.result.appendFuture().complete(null);
         context.assertNoSessionTimeout(groupId, memberId1);
         context.assertNoRebalanceTimeout(groupId, memberId1);
+        context.assertDowngradeTimeout(groupId);
+
+        // The downgrade is not triggered.
+        assertEquals(
+            new ExpiredTimeout<Void, CoordinatorRecord>(
+                consumerGroupDowngradeKey(groupId),
+                new CoordinatorResult<>(Collections.emptyList())
+            ),
+            context.sleep(0).get(0)
+        );
     }
 
     @Test
@@ -3574,6 +3604,9 @@ public class GroupMetadataManagerTest {
 
         // foo-1 should also have a revocation timeout in place.
         assertNotNull(context.timer.timeout(consumerGroupRebalanceTimeoutKey("foo", "foo-1")));
+
+        // The group has a downgrade timeout scheduled.
+        assertNotNull(context.timer.timeout(consumerGroupDowngradeKey("foo")));
     }
 
     @Test
@@ -10858,7 +10891,7 @@ public class GroupMetadataManagerTest {
         context.commit();
         ConsumerGroup consumerGroup = context.groupMetadataManager.consumerGroup(groupId);
 
-        // Member 2 leaves the consumer group, triggering the downgrade.
+        // Member 2 leaves the consumer group, scheduling the downgrade.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -10868,6 +10901,11 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
 
+        // Simulate a successful write to the log. The downgrade operation is scheduled.
+        context.commit();
+        result.appendFuture().complete(null);
+        ExpiredTimeout<Void, CoordinatorRecord> downgradeTimeout = context.sleep(0).get(0);
+        assertEquals(consumerGroupDowngradeKey(groupId), downgradeTimeout.key);
 
         byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
             new TopicPartition(fooTopicName, 0),
@@ -10877,6 +10915,197 @@ public class GroupMetadataManagerTest {
             new TopicPartition(barTopicName, 1)
         ))));
         Map<String, byte[]> assignments = Collections.singletonMap(memberId1, assignment);
+
+        ClassicGroup expectedClassicGroup = new ClassicGroup(
+            new LogContext(),
+            groupId,
+            STABLE,
+            context.time,
+            context.metrics,
+            11,
+            Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
+            Optional.of("range"),
+            Optional.of(memberId1),
+            Optional.of(context.time.milliseconds())
+        );
+        expectedClassicGroup.add(
+            new ClassicGroupMember(
+                memberId1,
+                Optional.ofNullable(member1.instanceId()),
+                member1.clientId(),
+                member1.clientHost(),
+                member1.rebalanceTimeoutMs(),
+                member1.classicProtocolSessionTimeout().get(),
+                ConsumerProtocol.PROTOCOL_TYPE,
+                member1.supportedJoinGroupRequestProtocols(),
+                assignment
+            )
+        );
+
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
+
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId),
+
+            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
+            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId),
+            GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId),
+
+            GroupCoordinatorRecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments, MetadataVersion.latestTesting())
+        );
+        assertRecordsEquals(expectedRecords, downgradeTimeout.result.records());
+
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, null);
+        verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
+
+        // The new classic member 1 has a heartbeat timeout.
+        ScheduledTimeout<Void, CoordinatorRecord> heartbeatTimeout = context.timer.timeout(
+            classicGroupHeartbeatKey(groupId, memberId1)
+        );
+        assertNotNull(heartbeatTimeout);
+        // The new rebalance has a groupJoin timeout.
+        ScheduledTimeout<Void, CoordinatorRecord> groupJoinTimeout = context.timer.timeout(
+            classicGroupJoinKey(groupId)
+        );
+        assertNotNull(groupJoinTimeout);
+
+        // A new rebalance is triggered.
+        ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
+        assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
+
+        // Simulate a failed conversion.
+        downgradeTimeout.result.appendFuture().completeExceptionally(new NotLeaderOrFollowerException());
+        context.rollback();
+
+        // The group is reverted back to the consumer group.
+        assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
+        verify(context.metrics, times(1)).onClassicGroupStateTransition(PREPARING_REBALANCE, null);
+    }
+
+    @Test
+    public void testLastStaticConsumerProtocolMemberReplacedByClassicProtocolMember() throws ExecutionException, InterruptedException {
+        String groupId = "group-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String instanceId = "instance-id";
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
+                    Arrays.asList(fooTopicName, barTopicName),
+                    null,
+                    Arrays.asList(
+                        new TopicPartition(fooTopicName, 0),
+                        new TopicPartition(fooTopicName, 1),
+                        new TopicPartition(fooTopicName, 2),
+                        new TopicPartition(barTopicName, 0),
+                        new TopicPartition(barTopicName, 1)
+                    )
+                ))))
+        );
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(5000)
+                    .setSupportedProtocols(protocols)
+            )
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2),
+                mkTopicAssignment(barTopicId, 0, 1)))
+            .build();
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setInstanceId(instanceId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setServerAssignorName("range")
+            .setRebalanceTimeoutMs(45000)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)))
+            .build();
+
+        // Consumer group with two members.
+        // Member 1 uses the classic protocol and static member 2 uses the consumer protocol.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withConsumerGroupAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 2)
+                .addRacks()
+                .build())
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2),
+                    mkTopicAssignment(barTopicId, 0, 1)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withAssignmentEpoch(10))
+            .build();
+
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+            {
+                put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 2, mkMapOfPartitionRacks(2)));
+            }
+        }));
+
+        context.commit();
+        ConsumerGroup consumerGroup = context.groupMetadataManager.consumerGroup(groupId);
+
+        // A new member using classic protocol with the same instance id joins, scheduling the downgrade.
+        JoinGroupRequestData joinRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withGroupInstanceId(instanceId)
+            .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        GroupMetadataManagerTestContext.JoinResult result = context.sendClassicGroupJoin(joinRequest);
+        result.appendFuture.complete(null);
+        memberId2 = result.joinFuture.get().memberId();
+
+        ExpiredTimeout<Void, CoordinatorRecord> downgradeTimeout = context.sleep(0).get(0);
+        assertEquals(consumerGroupDowngradeKey(groupId), downgradeTimeout.key);
+
+        byte[] assignment1 = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
+            new TopicPartition(fooTopicName, 0),
+            new TopicPartition(fooTopicName, 1),
+            new TopicPartition(fooTopicName, 2),
+            new TopicPartition(barTopicName, 0),
+            new TopicPartition(barTopicName, 1)
+        ))));
+        byte[] assignment2 = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
+            new TopicPartition(fooTopicName, 3),
+            new TopicPartition(fooTopicName, 4),
+            new TopicPartition(fooTopicName, 5)
+        ))));
+        Map<String, byte[]> assignments = new HashMap<>();
+        assignments.put(memberId1, assignment1);
+        assignments.put(memberId2, assignment2);
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(
             new LogContext(),
@@ -10900,7 +11129,20 @@ public class GroupMetadataManagerTest {
                 member1.classicProtocolSessionTimeout().get(),
                 ConsumerProtocol.PROTOCOL_TYPE,
                 member1.supportedJoinGroupRequestProtocols(),
-                assignment
+                assignment1
+            )
+        );
+        expectedClassicGroup.add(
+            new ClassicGroupMember(
+                memberId2,
+                Optional.ofNullable(member2.instanceId()),
+                DEFAULT_CLIENT_ID,
+                DEFAULT_CLIENT_ADDRESS.toString(),
+                joinRequest.rebalanceTimeoutMs(),
+                joinRequest.sessionTimeoutMs(),
+                joinRequest.protocolType(),
+                joinRequest.protocols(),
+                assignment2
             )
         );
 
@@ -10920,11 +11162,23 @@ public class GroupMetadataManagerTest {
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments, MetadataVersion.latestTesting())
         );
 
-        assertUnorderedListEquals(expectedRecords.subList(0, 2), result.records().subList(0, 2));
-        assertUnorderedListEquals(expectedRecords.subList(2, 4), result.records().subList(2, 4));
-        assertRecordEquals(expectedRecords.get(4), result.records().get(4));
-        assertUnorderedListEquals(expectedRecords.subList(5, 7), result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 10), result.records().subList(7, 10));
+        assertEquals(expectedRecords.size(), downgradeTimeout.result.records().size());
+        assertUnorderedListEquals(expectedRecords.subList(0, 2), downgradeTimeout.result.records().subList(0, 2));
+        assertUnorderedListEquals(expectedRecords.subList(2, 4), downgradeTimeout.result.records().subList(2, 4));
+        assertRecordEquals(expectedRecords.get(4), downgradeTimeout.result.records().get(4));
+        assertUnorderedListEquals(expectedRecords.subList(5, 7), downgradeTimeout.result.records().subList(5, 7));
+        assertRecordsEquals(expectedRecords.subList(7, 9), downgradeTimeout.result.records().subList(7, 9));
+
+        // Leader can be either member 1 or member 2.
+        try {
+            assertRecordEquals(expectedRecords.get(9), downgradeTimeout.result.records().get(9));
+        } catch (AssertionFailedError e) {
+            expectedClassicGroup.setLeaderId(Optional.of(memberId2));
+            assertRecordEquals(
+                GroupCoordinatorRecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments, MetadataVersion.latestTesting()),
+                downgradeTimeout.result.records().get(9)
+            );
+        }
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
@@ -10943,14 +11197,6 @@ public class GroupMetadataManagerTest {
         // A new rebalance is triggered.
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
         assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
-
-        // Simulate a failed write to the log.
-        result.appendFuture().completeExceptionally(new NotLeaderOrFollowerException());
-        context.rollback();
-
-        // The group is reverted back to the consumer group.
-        assertEquals(consumerGroup, context.groupMetadataManager.consumerGroup(groupId));
-        verify(context.metrics, times(1)).onClassicGroupStateTransition(PREPARING_REBALANCE, null);
     }
 
     @Test
@@ -11058,9 +11304,14 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId2, 45000);
 
         // Advance time past the session timeout.
-        // Member 2 should be fenced from the group, thus triggering the downgrade.
-        ExpiredTimeout<Void, CoordinatorRecord> timeout = context.sleep(45000 + 1).get(0);
-        assertEquals(groupSessionTimeoutKey(groupId, memberId2), timeout.key);
+        // Member 2 should be fenced from the group.
+        ExpiredTimeout<Void, CoordinatorRecord> sessionTimeout = context.sleep(45000 + 1).get(0);
+        assertEquals(groupSessionTimeoutKey(groupId, memberId2), sessionTimeout.key);
+
+        // Simulate a successful write to the log. The downgrade operation is scheduled.
+        sessionTimeout.result.appendFuture().complete(null);
+        ExpiredTimeout<Void, CoordinatorRecord> downgradeTimeout = context.sleep(0).get(0);
+        assertEquals(consumerGroupDowngradeKey(groupId), downgradeTimeout.key);
 
         byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
             new TopicPartition(fooTopicName, 0),
@@ -11077,7 +11328,7 @@ public class GroupMetadataManagerTest {
             STABLE,
             context.time,
             context.metrics,
-            10,
+            11,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
             Optional.of(memberId1),
@@ -11098,27 +11349,20 @@ public class GroupMetadataManagerTest {
         );
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId2),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId2),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId2),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId),
 
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments, MetadataVersion.latestTesting())
         );
 
-        assertUnorderedListEquals(expectedRecords.subList(0, 2), timeout.result.records().subList(0, 2));
-        assertUnorderedListEquals(expectedRecords.subList(2, 4), timeout.result.records().subList(2, 4));
-        assertRecordEquals(expectedRecords.get(4), timeout.result.records().get(4));
-        assertUnorderedListEquals(expectedRecords.subList(5, 7), timeout.result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
+        assertRecordsEquals(expectedRecords, downgradeTimeout.result.records());
 
-        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, null);
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
@@ -11248,8 +11492,9 @@ public class GroupMetadataManagerTest {
             }
         ));
 
-        // Member 2 heartbeats with a different subscribedTopicNames. The assignor computes a new assignment
-        // where member 2 will need to revoke topic partition bar-2 thus transitions to the REVOKING state.
+        // Member 2 heartbeats with a different subscribedTopicNames. A rebalance is triggered and the
+        // group epoch is bumped to 11. The assignor computes a new assignment where member 2 will need
+        // to revoke topic partition bar-2 thus transitions to the REVOKING state.
         context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -11270,9 +11515,13 @@ public class GroupMetadataManagerTest {
         context.assertRebalanceTimeout(groupId, memberId2, 30000);
 
         // Advance time past the session timeout.
-        // Member 2 should be fenced from the group, thus triggering the downgrade.
-        ExpiredTimeout<Void, CoordinatorRecord> timeout = context.sleep(30000 + 1).get(0);
-        assertEquals(consumerGroupRebalanceTimeoutKey(groupId, memberId2), timeout.key);
+        // Member 2 should be fenced from the group.
+        ExpiredTimeout<Void, CoordinatorRecord> rebalanceTimeout = context.sleep(30000 + 1).get(0);
+
+        // Simulate a successful write to the log. The downgrade operation is scheduled.
+        rebalanceTimeout.result.appendFuture().complete(null);
+        ExpiredTimeout<Void, CoordinatorRecord> downgradeTimeout = context.sleep(0).get(0);
+        assertEquals(consumerGroupDowngradeKey(groupId), downgradeTimeout.key);
 
         byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
             new TopicPartition(fooTopicName, 0),
@@ -11289,7 +11538,7 @@ public class GroupMetadataManagerTest {
             STABLE,
             context.time,
             context.metrics,
-            11,
+            12,
             Optional.of(ConsumerProtocol.PROTOCOL_TYPE),
             Optional.of("range"),
             Optional.of(memberId1),
@@ -11311,27 +11560,19 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId2),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId2),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId),
 
             GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId2),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId),
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId),
 
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments, MetadataVersion.latestTesting())
         );
+        assertRecordsEquals(expectedRecords, downgradeTimeout.result.records());
 
-        assertUnorderedListEquals(expectedRecords.subList(0, 2), timeout.result.records().subList(0, 2));
-        assertUnorderedListEquals(expectedRecords.subList(2, 4), timeout.result.records().subList(2, 4));
-        assertRecordEquals(expectedRecords.get(4), timeout.result.records().get(4));
-        assertUnorderedListEquals(expectedRecords.subList(5, 7), timeout.result.records().subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 10), timeout.result.records().subList(7, 10));
-
-        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, null);
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, null);
         verify(context.metrics, times(1)).onClassicGroupStateTransition(null, STABLE);
 
         // The new classic member 1 has a heartbeat timeout.
