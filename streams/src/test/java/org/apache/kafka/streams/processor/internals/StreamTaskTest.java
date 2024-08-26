@@ -255,6 +255,7 @@ public class StreamTaskTest {
         return createConfig(eosConfig, enforcedProcessingValue, deserializationExceptionHandler, LogAndFailProcessingExceptionHandler.class.getName());
     }
 
+    @SuppressWarnings("deprecation")
     private static StreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -1156,6 +1157,75 @@ public class GlobalStateManagerImplTest {
 
         stateManager.registerStore(store5, stateRestoreCallback, null);
         assertEquals(0, stateRestoreCallback.restored.size());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void verifyExceptionHandlerAcceptNewConfigWhenBothArePresent() {
+        final StreamsConfig streamsConfigLocal = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+                put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailExceptionHandler.class);
+                put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+            }
+        });
+        final GlobalStateManagerImpl stateManagerLocal = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            topology,
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            streamsConfigLocal
+        );
+        assertEquals(LogAndContinueExceptionHandler.class, stateManagerLocal.getDeserializationExceptionHandler().getClass());
+    }
+
+    @Test
+    public void verifyExceptionHandlerAcceptNewConfig() {
+        final StreamsConfig streamsConfigLocal = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+                put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+            }
+        });
+        final GlobalStateManagerImpl stateManagerLocal = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            topology,
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            streamsConfigLocal
+        );
+        assertEquals(LogAndContinueExceptionHandler.class, stateManagerLocal.getDeserializationExceptionHandler().getClass());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void verifyExceptionHandlerOldConfig() {
+        final StreamsConfig streamsConfigLocal = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+                put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailExceptionHandler.class);
+            }
+        });
+        final GlobalStateManagerImpl stateManagerLocal = new GlobalStateManagerImpl(
+            new LogContext("test"),
+            time,
+            topology,
+            consumer,
+            stateDirectory,
+            stateRestoreListener,
+            streamsConfigLocal
+        );
+        assertEquals(LogAndFailExceptionHandler.class, stateManagerLocal.getDeserializationExceptionHandler().getClass());
     }
 
     private void writeCorruptCheckpoint() throws IOException {

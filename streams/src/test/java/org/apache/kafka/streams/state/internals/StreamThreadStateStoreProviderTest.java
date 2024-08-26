@@ -442,7 +442,7 @@ public class StreamThreadStateStoreProviderTest {
                 logContext,
                 Time.SYSTEM
             ),
-            streamsConfig.defaultProductionExceptionHandler(),
+            streamsConfig.getProductionExceptionHandler(),
             new MockStreamsMetrics(metrics),
             topology
         );

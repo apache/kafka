@@ -533,12 +533,24 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code default.deserialization.exception.handler} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
+    @Deprecated
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
+    /** {@code deserialization.exception.handler} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "deserialization.exception.handler";
+
+    protected static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
     /** {@code default.production.exception.handler} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.production.exception.handler";
+
+    /** {@code production.exception.handler} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "production.exception.handler";
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
     /** {@code default.dsl.store} */
@@ -893,6 +905,11 @@ public class StreamsConfig extends AbstractConfig {
                     LogAndFailExceptionHandler.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+            .define(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                    Type.CLASS,
+                    LogAndFailExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
@@ -919,6 +936,11 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC)
             .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                    Type.CLASS,
+                    DefaultProductionExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
+            .define(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     DefaultProductionExceptionHandler.class.getName(),
                     Importance.MEDIUM,
@@ -1910,14 +1932,40 @@ public class StreamsConfig extends AbstractConfig {
         return getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
     }
 
+    public DeserializationExceptionHandler getDeserializationExceptionHandler() {
+        if (getClass(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) != null) {
+            return deserializationExceptionHandler();
+        } else {
+            return defaultDeserializationExceptionHandler();
+        }
+    }
+
     @SuppressWarnings("WeakerAccess")
-    public DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
+    private DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
         return getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
     }
 
     @SuppressWarnings("WeakerAccess")
-    public ProductionExceptionHandler defaultProductionExceptionHandler() {
+    public DeserializationExceptionHandler deserializationExceptionHandler() {
+        return getConfiguredInstance(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
+    }
+
+    public ProductionExceptionHandler getProductionExceptionHandler() {
+        if (getClass(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG) != null) {
+            return productionExceptionHandler();
+        } else {
+            return defaultProductionExceptionHandler();
+        }
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    private ProductionExceptionHandler defaultProductionExceptionHandler() {
         return getConfiguredInstance(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    private ProductionExceptionHandler productionExceptionHandler() {
+        return getConfiguredInstance(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
     }
 
     public ProcessingExceptionHandler processingExceptionHandler() {
