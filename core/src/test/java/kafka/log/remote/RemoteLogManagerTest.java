@@ -2342,27 +2342,33 @@ public class RemoteLogManagerTest {
 
         // creating remote log metadata list:
         // s1. One segment with "COPY_SEGMENT_STARTED" state to simulate the segment was failing on copying to remote storage.
-        //     In the 1st run, this dangling segment should be deleted even though retention.ms/bytes are disabled (-1).
+        //     In the 1st run, this segment should be noted in `segmentIdsCopyStarted` set, and in the 2nd run,
+        //     it should deleted even though retention.ms/bytes are disabled (-1).
         // s2. Another segment with "COPY_SEGMENT_STARTED" state to simulate the segment is copying to remote storage.
         //     The segment state will change to "COPY_SEGMENT_FINISHED" state before checking deletion.
-        //     In the 1st run, this segment should not be deleted because it has changed to "COPY_SEGMENT_FINISHED".
-        //     In the 2nd run, we should count it in when calculating remote storage log size.
+        //     In the 1st run, this segment will be noted in `segmentIdsCopyStarted` set.
+        //     In the 2nd run, this segment should not be deleted because it has changed to "COPY_SEGMENT_FINISHED".
+        //     In the 3rd run, we should count it in when calculating remote storage log size.
         // s3. One segment with "DELETE_SEGMENT_FINISHED" state to simulate the remoteLogMetadataManager doesn't filter it out and returned.
         //     We should filter it out when calculating remote storage log size and deletion
         // s4. One segment with "DELETE_SEGMENT_STARTED" state to simulate the segment was failing on deleting remote log.
         //     We should count it in when calculating remote storage log size.
         // s5. 11 segments with "COPY_SEGMENT_FINISHED" state. These are expected to be counted in when calculating remote storage log size
         //
-        // In the 1st run, because retention.ms/bytes are disabled (-1), only s1 will be deleted.
-        // In the 2nd run, the total remote storage size should be 1024 * 13 (s2, s4, s5), and the retention size is 10240,
+        // Expected results:
+        // In the 1st run, no segment will be deleted.
+        // In the 2nd run, only s1 will be deleted.
+        // In the 3rd run, set retention.size to 10240 (10 segments), and the total remote storage size should be 1024 * 13 (s2, s4, s5)
         // so 3 segments will be deleted due to retention size breached.
-        RemoteLogSegmentMetadata s1 = createRemoteLogSegmentMetadata(leaderTopicIdPartition,
+        RemoteLogSegmentMetadata s1 = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 99, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_STARTED);
-        RemoteLogSegmentMetadata s2CopyStarted = createRemoteLogSegmentMetadata(leaderTopicIdPartition,
+        RemoteLogSegmentMetadata s2CopyStarted = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 200, 299, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_STARTED);
-        RemoteLogSegmentMetadata s3 = createRemoteLogSegmentMetadata(leaderTopicIdPartition,
+        RemoteLogSegmentMetadata s2CopyFinished = createRemoteLogSegmentMetadata(s2CopyStarted.remoteLogSegmentId(),
+                s2CopyStarted.startOffset(), s2CopyStarted.endOffset(), segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        RemoteLogSegmentMetadata s3 = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 99, segmentSize, epochEntries, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED);
-        RemoteLogSegmentMetadata s4 = createRemoteLogSegmentMetadata(leaderTopicIdPartition,
+        RemoteLogSegmentMetadata s4 = createRemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 99, segmentSize, epochEntries, RemoteLogSegmentState.DELETE_SEGMENT_STARTED);
         List<RemoteLogSegmentMetadata> s5 =
                 listRemoteLogSegmentMetadata(leaderTopicIdPartition, 11, 100, 1024, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
@@ -2374,41 +2380,44 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
                 .thenReturn(metadataList.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
-                .thenAnswer(ans -> metadataList.iterator());
-        when(remoteLogMetadataManager.remoteLogSegmentMetadata(leaderTopicIdPartition, 0, 0))
-                .thenReturn(Optional.of(metadataList.get(0)));
+                .thenReturn(metadataList.iterator());
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
                 .thenReturn(CompletableFuture.runAsync(() -> { }));
-
-        // returning "COPY_SEGMENT_FINISHED" state when checking s2 during deletion, to simulate the segment has completed copy process.
-        // We should not treat it as dangling segment.
-        RemoteLogSegmentMetadata s2CopyFinished = createRemoteLogSegmentMetadata(leaderTopicIdPartition,
-                s2CopyStarted.startOffset(), s2CopyStarted.endOffset(), segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
-        when(remoteLogMetadataManager.remoteLogSegmentMetadata(leaderTopicIdPartition, 0, s2CopyStarted.startOffset()))
-                .thenReturn(Optional.of(s2CopyFinished));
         doNothing().when(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
 
         // RUN 1
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
         task.cleanupExpiredRemoteLogSegments();
+        // verify no segment is deleted
+        verify(remoteStorageManager, never()).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
 
-        // verify only s1 segment to be deleted
-        verify(remoteStorageManager, times(1)).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
+        // RUN 2
+        // update the s2 to "COPY_SEGMENT_FINISHED" state
+        metadataList.remove(1);
+        metadataList.add(1, s2CopyFinished);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+                .thenReturn(metadataList.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
+                .thenReturn(metadataList.iterator());
+
+        task.cleanupExpiredRemoteLogSegments();
+        // verify s1 segment is deleted because in a 2 consecutive run, this segment is in "COPY_SEGMENT_STARTED" state
+        // and is not copying in progress.
+        verify(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
         verify(remoteStorageManager).deleteLogSegmentData(s1);
         clearInvocations(remoteStorageManager);
 
-        // RUN 2
+        // RUN 3
         // update the retention.bytes to 10 segment size
         logProps.put("retention.bytes", segmentSize * 10L);
         when(mockLog.config()).thenReturn(new LogConfig(logProps));
 
-        // update the metadata list, to remove the deleted s1, and update the s2 to "COPY_SEGMENT_FINISHED" state
-        List<RemoteLogSegmentMetadata> subMetadataList = metadataList.subList(2, metadataList.size());
-        subMetadataList.add(0, s2CopyFinished);
+        // update the metadata list to remove the deleted s1
+        List<RemoteLogSegmentMetadata> updatedMetadataList = metadataList.subList(1, metadataList.size());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
-                .thenReturn(subMetadataList.iterator());
+                .thenReturn(updatedMetadataList.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
-                .thenAnswer(ans -> subMetadataList.iterator());
+                .thenAnswer(ans -> updatedMetadataList.iterator());
 
         // The RemoteDeleteLagBytes should still be 3072 -> 2048 -> 1024 -> 0 on each deletion
         // And the RemoteDeleteLagSegments should still be 3 -> 2 -> 1 -> 0
@@ -2639,12 +2648,12 @@ public class RemoteLogManagerTest {
         assertEquals(remoteDeleteLagBytes, safeLongYammerMetricValue("RemoteDeleteLagBytes"),
                 String.format("Expected to find %d for RemoteDeleteLagBytes metric value, but found %d",
                         remoteDeleteLagBytes, safeLongYammerMetricValue("RemoteDeleteLagBytes")));
-        assertEquals(remoteDeleteLagBytes, safeLongYammerMetricValue("RemoteDeleteLagBytes"),
-                String.format("Expected to find %d for RemoteDeleteLagBytes metric value, but found %d",
-                        remoteDeleteLagBytes, safeLongYammerMetricValue("RemoteDeleteLagBytes")));
-        assertEquals(remoteDeleteLagSegments, safeLongYammerMetricValue("RemoteDeleteLagSegments,topic=" + leaderTopic),
-                String.format("Expected to find %d for RemoteDeleteLagSegments for 'Leader' topic metric value, but found %d",
-                        remoteDeleteLagSegments, safeLongYammerMetricValue("RemoteDeleteLagSegments,topic=" + leaderTopic)));
+        assertEquals(remoteDeleteLagSegments, safeLongYammerMetricValue("RemoteDeleteLagSegments"),
+                String.format("Expected to find %d for RemoteDeleteLagSegments metric value, but found %d",
+                        remoteDeleteLagSegments, safeLongYammerMetricValue("RemoteDeleteLagSegments")));
+        assertEquals(remoteDeleteLagBytes, safeLongYammerMetricValue("RemoteDeleteLagBytes,topic=" + leaderTopic),
+                String.format("Expected to find %d for RemoteDeleteLagBytes for 'Leader' topic metric value, but found %d",
+                        remoteDeleteLagBytes, safeLongYammerMetricValue("RemoteDeleteLagBytes,topic=" + leaderTopic)));
         assertEquals(remoteDeleteLagSegments, safeLongYammerMetricValue("RemoteDeleteLagSegments,topic=" + leaderTopic),
                 String.format("Expected to find %d for RemoteDeleteLagSegments for 'Leader' topic metric value, but found %d",
                         remoteDeleteLagSegments, safeLongYammerMetricValue("RemoteDeleteLagSegments,topic=" + leaderTopic)));
@@ -2784,14 +2793,14 @@ public class RemoteLogManagerTest {
         return segmentMetadataList;
     }
 
-    private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
+    private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata(RemoteLogSegmentId segmentID,
                                                                     long startOffset,
                                                                     long endOffset,
                                                                     int segmentSize,
                                                                     List<EpochEntry> epochEntries,
                                                                     RemoteLogSegmentState state) {
         return new RemoteLogSegmentMetadata(
-                new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
+                segmentID,
                 startOffset,
                 endOffset,
                 time.milliseconds(),

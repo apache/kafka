@@ -188,6 +188,7 @@ public class RemoteLogManager implements Closeable {
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderExpirationRLMTasks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> followerRLMTasks = new ConcurrentHashMap<>();
     private final Set<RemoteLogSegmentId> segmentIdsBeingCopied = ConcurrentHashMap.newKeySet();
+    private final Set<RemoteLogSegmentId> segmentIdsCopyStarted = ConcurrentHashMap.newKeySet();
 
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
@@ -1257,18 +1258,21 @@ public class RemoteLogManager implements Closeable {
                     }
 
                     if (RemoteLogSegmentState.COPY_SEGMENT_STARTED.equals(metadata.state())) {
-                        // get the current segment state here to avoid the race condition that before the loop, it's under copying process,
-                        // but then completed. In this case, segmentIdsBeingCopied will not contain this id, so we might
-                        // delete this segment unexpectedly.
-                        Optional<RemoteLogSegmentMetadata> curMetadata = remoteLogMetadataManager.remoteLogSegmentMetadata(
-                                metadata.topicIdPartition(), metadata.segmentLeaderEpochs().firstKey(), metadata.startOffset());
-                        if (curMetadata.isPresent() && RemoteLogSegmentState.COPY_SEGMENT_STARTED.equals(curMetadata.get().state())) {
-                            // If the current state is COPY_SEGMENT_STARTED and it's not under copying process, this must be the previously
-                            // failed copied state. We should clean it up directly.
+                        // Double check with `segmentIdsCopyStarted` set to avoid the race condition that before the loop,
+                        // it's under copying process, but then completed during the loop. In this case,
+                        // segmentIdsBeingCopied will not contain this id, so we might delete this segment unexpectedly.
+                        if (segmentIdsCopyStarted.contains(metadata.remoteLogSegmentId())) {
+                            // If the previous run and current run state are both COPY_SEGMENT_STARTED and it's not currently
+                            // under copying process, this must be the previously failed copied state. We should clean it up directly.
+                            segmentIdsCopyStarted.remove(metadata.remoteLogSegmentId());
                             danglingSegments.add(metadata);
-                            continue;
+                        } else {
+                            segmentIdsCopyStarted.add(metadata.remoteLogSegmentId());
                         }
+                        continue;
                     }
+                    // remove this segment from segmentIdsCopyStarted since it already moves to other state.
+                    segmentIdsCopyStarted.remove(metadata.remoteLogSegmentId());
                     if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state())) {
                         continue;
                     }
