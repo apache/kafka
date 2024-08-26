@@ -71,7 +71,7 @@ public class GroupCoordinatorConfig {
     /** New group coordinator configs */
     public static final String NEW_GROUP_COORDINATOR_ENABLE_CONFIG = "group.coordinator.new.enable";
     public static final String NEW_GROUP_COORDINATOR_ENABLE_DOC = "Enable the new group coordinator.";
-    public static final boolean NEW_GROUP_COORDINATOR_ENABLE_DEFAULT = false;
+    public static final boolean NEW_GROUP_COORDINATOR_ENABLE_DEFAULT = true;
 
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " +

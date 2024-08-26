@@ -2401,7 +2401,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"End transaction marker append for producer id $producerId completed with status: $currentErrors")
       updateErrors(producerId, currentErrors)
 
-      if (!config.isNewGroupCoordinatorEnabled) {
+      if (!groupCoordinator.isNewGroupCoordinator) {
         val successfulOffsetsPartitions = currentErrors.asScala.filter { case (topicPartition, error) =>
           topicPartition.topic == GROUP_METADATA_TOPIC_NAME && error == Errors.NONE
         }.keys
@@ -2468,7 +2468,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         val controlRecords = mutable.Map.empty[TopicPartition, MemoryRecords]
         partitionsWithCompatibleMessageFormat.foreach { partition =>
-          if (config.isNewGroupCoordinatorEnabled && partition.topic == GROUP_METADATA_TOPIC_NAME) {
+          if (groupCoordinator.isNewGroupCoordinator && partition.topic == GROUP_METADATA_TOPIC_NAME) {
             // When the new group coordinator is used, writing the end marker is fully delegated
             // to the group coordinator.
             groupCoordinator.completeTransaction(
@@ -3809,7 +3809,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isConsumerGroupProtocolEnabled(): Boolean = {
-    config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
+    groupCoordinator.isNewGroupCoordinator && config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
   }
 
   def handleConsumerGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -4727,7 +4727,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isShareGroupProtocolEnabled: Boolean = {
-    config.isNewGroupCoordinatorEnabled && config.shareGroupConfig.isShareGroupEnabled
+    groupCoordinator.isNewGroupCoordinator && config.shareGroupConfig.isShareGroupEnabled
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

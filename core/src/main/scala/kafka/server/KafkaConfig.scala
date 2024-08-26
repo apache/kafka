@@ -567,6 +567,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def isFeatureVersioningSupported = interBrokerProtocolVersion.isFeatureVersioningSupported
 
   /** New group coordinator configs */
+  val isNewGroupCoordinatorEnabled = getBoolean(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG)
   val groupCoordinatorRebalanceProtocols = {
     val protocols = getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
       .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
@@ -577,23 +578,22 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (processRoles.isEmpty) {
         throw new ConfigException(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported in KRaft cluster.")
       }
-      warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is enabled along with the new group coordinator. " +
-        "This is part of the preview of KIP-848 and MUST NOT be used in production.")
+      if (!isNewGroupCoordinatorEnabled) {
+        throw new ConfigException(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported by the new group coordinator.")
+      }
     }
     if (protocols.contains(GroupType.SHARE)) {
-      // The CONSUMER protocol enables the new group coordinator, and that's a prerequisite for share groups.
-      if (!protocols.contains(GroupType.CONSUMER)) {
-        throw new ConfigException(s"Enabling the new '${GroupType.SHARE}' rebalance protocol requires '${GroupType.CONSUMER}' to be enabled also.")
+      if (processRoles.isEmpty) {
+        throw new ConfigException(s"The new '${GroupType.SHARE}' rebalance protocol is only supported in KRaft cluster.")
+      }
+      if (!isNewGroupCoordinatorEnabled) {
+        throw new ConfigException(s"The new '${GroupType.SHARE}' rebalance protocol is only supported by the new group coordinator.")
       }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
     }
     protocols
   }
-  // The new group coordinator is enabled in two cases: 1) The internal configuration to enable
-  // it is explicitly set; or 2) the consumer rebalance protocol is enabled.
-  val isNewGroupCoordinatorEnabled = getBoolean(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG) ||
-    groupCoordinatorRebalanceProtocols.contains(GroupType.CONSUMER)
 
   /** ********* Transaction management configuration ***********/
   val transactionalIdExpirationMs = getInt(TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG)
