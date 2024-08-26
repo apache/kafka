@@ -547,11 +547,19 @@ public class SharePartitionManager implements AutoCloseable {
                 });
             });
 
+            if (shareFetchPartitionData.partitionMaxBytes.isEmpty()) {
+                // If there are no partitions to fetch then complete the future with an empty map.
+                shareFetchPartitionData.future.complete(Collections.emptyMap());
+                // Release the lock so that other threads can process the queue.
+                releaseProcessFetchQueueLock();
+                if (!fetchQueue.isEmpty())
+                    maybeProcessFetchQueue();
+                return;
+            }
             Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-            delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(
-                shareFetchPartitionData.partitionMaxBytes.keySet(),
-                shareFetchPartitionData.groupId,
-                shareFetchPartitionData.memberId));
+            shareFetchPartitionData.partitionMaxBytes.keySet().forEach(
+                    topicIdPartition -> delayedShareFetchWatchKeys.add(
+                            new DelayedShareFetchKey(topicIdPartition, shareFetchPartitionData.groupId)));
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
             addDelayedShareFetch(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap),

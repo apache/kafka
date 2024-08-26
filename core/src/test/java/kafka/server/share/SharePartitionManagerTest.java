@@ -93,6 +93,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
@@ -1004,19 +1005,16 @@ public class SharePartitionManagerTest {
         doAnswer(invocation -> {
             releaseFetchQueueAndPartitionsLock(sharePartitionManager, groupId, partitionMaxBytes.keySet());
             return null;
-        }).when(replicaManager).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
+        }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, partitionMaxBytes);
-        Mockito.verify(replicaManager, times(1)).fetchMessages(
-            any(), any(), any(ReplicaQuota.class), any());
+        Mockito.verify(replicaManager, times(1)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, partitionMaxBytes);
-        Mockito.verify(replicaManager, times(2)).fetchMessages(
-            any(), any(), any(ReplicaQuota.class), any());
+        Mockito.verify(replicaManager, times(2)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, partitionMaxBytes);
-        Mockito.verify(replicaManager, times(3)).fetchMessages(
-            any(), any(), any(ReplicaQuota.class), any());
+        Mockito.verify(replicaManager, times(3)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         Map<MetricName, Consumer<Double>> expectedMetrics = new HashMap<>();
         expectedMetrics.put(
@@ -1122,7 +1120,7 @@ public class SharePartitionManagerTest {
             assertEquals(16, sp3.nextFetchOffset());
             releaseFetchQueueAndPartitionsLock(sharePartitionManager, groupId, partitionMaxBytes.keySet());
             return null;
-        }).when(replicaManager).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
+        }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         int threadCount = 100;
         ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
@@ -1140,11 +1138,9 @@ public class SharePartitionManagerTest {
             if (!executorService.awaitTermination(50, TimeUnit.MILLISECONDS))
                 executorService.shutdown();
         }
-        // We are checking the number of replicaManager fetchMessages() calls
-        Mockito.verify(replicaManager, atMost(100)).fetchMessages(
-            any(), any(), any(ReplicaQuota.class), any());
-        Mockito.verify(replicaManager, atLeast(10)).fetchMessages(
-            any(), any(), any(ReplicaQuota.class), any());
+        // We are checking the number of replicaManager readFromLog calls
+        Mockito.verify(replicaManager, atMost(100)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        Mockito.verify(replicaManager, atLeast(10)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
     }
 
     @Test
@@ -1178,8 +1174,8 @@ public class SharePartitionManagerTest {
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
             sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
-        Mockito.verify(replicaManager, times(0)).fetchMessages(
-            any(), any(), any(ReplicaQuota.class), any());
+        Mockito.verify(replicaManager, times(0)).readFromLog(
+            any(), any(), any(ReplicaQuota.class), anyBoolean());
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = future.join();
         assertEquals(0, result.size());
     }
@@ -1213,9 +1209,9 @@ public class SharePartitionManagerTest {
 
         sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         // Since the nextFetchOffset does not point to endOffset + 1, i.e. some of the records in the cachedState are AVAILABLE,
-        // even though the maxInFlightMessages limit is exceeded, replicaManager.fetchMessages should be called
-        Mockito.verify(replicaManager, times(1)).fetchMessages(
-            any(), any(), any(ReplicaQuota.class), any());
+        // even though the maxInFlightMessages limit is exceeded, replicaManager.readFromLog should be called
+        Mockito.verify(replicaManager, times(1)).readFromLog(
+            any(), any(), any(ReplicaQuota.class), anyBoolean());
     }
 
     @Test
@@ -1586,14 +1582,9 @@ public class SharePartitionManagerTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
         SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData1 = new SharePartitionManager.ShareFetchPartitionData(
-                fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes);
+                fetchParams, groupId, memberId, new CompletableFuture<>(), Collections.emptyMap());
         SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData2 = new SharePartitionManager.ShareFetchPartitionData(
             fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes);
-
-        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
-        partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
-                key -> new SharePartition(groupId, tp0, MAX_IN_FLIGHT_MESSAGES, MAX_DELIVERY_COUNT,
-                        RECORD_LOCK_DURATION_MS, mockTimer, time, NoOpShareStatePersister.getInstance()));
 
         ConcurrentLinkedQueue<SharePartitionManager.ShareFetchPartitionData> fetchQueue = new ConcurrentLinkedQueue<>();
         // First request added to fetch queue is empty i.e. no topic partitions to fetch.
@@ -1606,12 +1597,17 @@ public class SharePartitionManagerTest {
                 DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withPartitionCacheMap(partitionCacheMap).withReplicaManager(replicaManager).withTime(time)
-            .withFetchQueue(fetchQueue).withTimer(mockTimer).withDelayedShareFetchPurgatory(delayedShareFetchPurgatory).build();
+            .withReplicaManager(replicaManager)
+            .withTime(time)
+            .withFetchQueue(fetchQueue)
+            .withTimer(mockTimer)
+            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
+            .build();
+
         sharePartitionManager.maybeProcessFetchQueue();
 
         // Verifying that the second item in the fetchQueue is processed, even though the first item is empty.
-        verify(replicaManager, times(1)).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
+        verify(replicaManager, times(1)).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
     }
 
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {

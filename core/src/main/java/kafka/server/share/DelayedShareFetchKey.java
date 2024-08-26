@@ -21,20 +21,17 @@ import kafka.server.DelayedOperationKey;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * A key for delayed operations that fetch data for share consumers.
  */
 public class DelayedShareFetchKey implements DelayedOperationKey {
-    private final Set<TopicIdPartition> topicIdPartitions;
+    private final TopicIdPartition topicIdPartition;
     private final String groupId;
-    private final String memberId;
 
-    DelayedShareFetchKey(Set<TopicIdPartition> topicIdPartitions, String groupId, String memberId) {
-        this.topicIdPartitions = topicIdPartitions;
+    DelayedShareFetchKey(TopicIdPartition topicIdPartition, String groupId) {
+        this.topicIdPartition = topicIdPartition;
         this.groupId = groupId;
-        this.memberId = memberId;
     }
 
     @Override
@@ -42,24 +39,23 @@ public class DelayedShareFetchKey implements DelayedOperationKey {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         DelayedShareFetchKey that = (DelayedShareFetchKey) o;
-        return topicIdPartitions.equals(that.topicIdPartitions) && groupId.equals(that.groupId) && memberId.equals(that.memberId);
+        return topicIdPartition.equals(that.topicIdPartition) && groupId.equals(that.groupId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicIdPartitions, groupId, memberId);
+        return Objects.hash(topicIdPartition, groupId);
     }
 
     @Override
     public String toString() {
-        return "SharePartitionOperationKey(topicIdPartitions=" + topicIdPartitions +
+        return "SharePartitionOperationKey(topicIdPartition=" + topicIdPartition +
                 ", groupId=" + groupId +
-                ", memberId=" + memberId +
                 ")";
     }
 
     @Override
     public String keyLabel() {
-        return String.format("groupId=%s, memberId=%s, topicIdPartitions=%s", groupId, memberId, topicIdPartitions);
+        return String.format("groupId=%s, topicIdPartition=%s", groupId, topicIdPartition);
     }
 }

@@ -22,10 +22,7 @@ import org.apache.kafka.common.Uuid;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,17 +32,17 @@ public class DelayedShareFetchKeyTest {
 
     @Test
     public void testDelayedShareFetchEqualsAndHashcode() {
-        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic", 0));
-        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic", 1));
+        Uuid topicUuid = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(topicUuid, new TopicPartition("topic", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(topicUuid, new TopicPartition("topic", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic2", 0));
 
         Map<String, DelayedShareFetchKey> keyMap = new HashMap<>();
-        keyMap.put("key0", new DelayedShareFetchKey(new HashSet<>(Collections.singletonList(tp0)), "grp", "member1"));
-        keyMap.put("key1", new DelayedShareFetchKey(new HashSet<>(Collections.singletonList(tp1)), "grp", "member1"));
-        keyMap.put("key2", new DelayedShareFetchKey(new HashSet<>(Collections.singletonList(tp2)), "grp", "member1"));
-        keyMap.put("key3", new DelayedShareFetchKey(new HashSet<>(Arrays.asList(tp0, tp1)), "grp", "member1"));
-        keyMap.put("key4", new DelayedShareFetchKey(new HashSet<>(Collections.singletonList(tp0)), "grp2", "member1"));
-        keyMap.put("key5", new DelayedShareFetchKey(new HashSet<>(Collections.singletonList(tp1)), "grp", "member2"));
+        keyMap.put("key0", new DelayedShareFetchKey(tp0, "grp"));
+        keyMap.put("key1", new DelayedShareFetchKey(tp1, "grp"));
+        keyMap.put("key2", new DelayedShareFetchKey(tp2, "grp"));
+        keyMap.put("key3", new DelayedShareFetchKey(tp0, "grp2"));
+        keyMap.put("key4", new DelayedShareFetchKey(tp1, "grp2"));
 
         keyMap.forEach((key1, value1) -> keyMap.forEach((key2, value2) -> {
             if (key1.equals(key2)) {

@@ -17,6 +17,7 @@
 package kafka.server.share;
 
 import kafka.server.DelayedOperation;
+import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
@@ -31,6 +32,7 @@ import org.apache.kafka.storage.internals.log.FetchPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -43,6 +45,7 @@ import java.util.stream.Collectors;
 
 import scala.Option;
 import scala.Tuple2;
+import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 import scala.runtime.BoxedUnit;
 
@@ -78,7 +81,7 @@ public class DelayedShareFetch extends DelayedOperation {
      */
     @Override
     public void onComplete() {
-        log.trace("onCompletion of delayed share fetch request for group {}, member {}, " +
+        log.trace("Completing the delayed share fetch request for group {}, member {}, " +
                         "topic partitions {}", shareFetchPartitionData.groupId(),
                 shareFetchPartitionData.memberId(), shareFetchPartitionData.partitionMaxBytes().keySet());
 
@@ -92,30 +95,36 @@ public class DelayedShareFetch extends DelayedOperation {
             log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
                     topicPartitionData, shareFetchPartitionData.groupId(), shareFetchPartitionData.fetchParams());
 
-            replicaManager.fetchMessages(
-                    shareFetchPartitionData.fetchParams(),
-                    CollectionConverters.asScala(
-                            topicPartitionData.entrySet().stream().map(entry ->
-                                    new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
-                    ),
-                    QuotaFactory.UnboundedQuota$.MODULE$,
-                    responsePartitionData -> {
-                        log.trace("Data successfully retrieved by replica manager: {}", responsePartitionData);
-                        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
-                                responsePartitionData);
-                        processFetchResponse(shareFetchPartitionData, responseData).whenComplete(
-                                (result, throwable) -> {
-                                    if (throwable != null) {
-                                        log.error("Error processing fetch response for share partitions", throwable);
-                                        shareFetchPartitionData.future().completeExceptionally(throwable);
-                                    } else {
-                                        shareFetchPartitionData.future().complete(result);
-                                    }
-                                    // Releasing the lock to move ahead with the next request in queue.
-                                    releasePartitionsLock(shareFetchPartitionData.groupId(), topicPartitionData.keySet());
-                                });
-                        return BoxedUnit.UNIT;
-                    });
+            Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
+                shareFetchPartitionData.fetchParams(),
+                CollectionConverters.asScala(
+                    topicPartitionData.entrySet().stream().map(entry ->
+                        new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
+                ),
+                QuotaFactory.UnboundedQuota$.MODULE$,
+                true);
+
+            List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = new ArrayList<>();
+            responseLogResult.foreach(tpLogResult -> {
+                TopicIdPartition topicIdPartition = tpLogResult._1();
+                LogReadResult logResult = tpLogResult._2();
+                FetchPartitionData fetchPartitionData = logResult.toFetchPartitionData(false);
+                responseData.add(new Tuple2<>(topicIdPartition, fetchPartitionData));
+                return BoxedUnit.UNIT;
+            });
+
+            log.trace("Data successfully retrieved by replica manager: {}", responseData);
+            processFetchResponse(shareFetchPartitionData, responseData).whenComplete((result, throwable) -> {
+                if (throwable != null) {
+                    log.error("Error processing fetch response for share partitions", throwable);
+                    shareFetchPartitionData.future().completeExceptionally(throwable);
+                } else {
+                    shareFetchPartitionData.future().complete(result);
+                }
+                // Releasing the lock to move ahead with the next request in queue.
+                releasePartitionsLock(shareFetchPartitionData.groupId(), topicPartitionData.keySet());
+            });
+
         } catch (Exception e) {
             // Release the locks acquired for the partitions in the share fetch request in case there is an exception
             log.error("Error processing delayed share fetch request", e);
@@ -129,7 +138,7 @@ public class DelayedShareFetch extends DelayedOperation {
      */
     @Override
     public boolean tryComplete() {
-        log.trace("onTry of delayed share fetch request for group {}, member {}, topic partitions {}",
+        log.trace("Try to complete the delayed share fetch request for group {}, member {}, topic partitions {}",
                 shareFetchPartitionData.groupId(), shareFetchPartitionData.memberId(),
                 shareFetchPartitionData.partitionMaxBytes().keySet());
 

@@ -53,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -164,10 +165,10 @@ public class DelayedShareFetchTest {
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
 
-        // Since no partition could be acquired, the future should be empty and replicaManager.fetchMessages should not be called.
+        // Since no partition could be acquired, the future should be empty and replicaManager.readFromLog should not be called.
         assertEquals(0, shareFetchPartitionData.future().join().size());
-        Mockito.verify(replicaManager, times(0)).fetchMessages(
-                any(), any(), any(ReplicaQuota.class), any());
+        Mockito.verify(replicaManager, times(0)).readFromLog(
+                any(), any(), any(ReplicaQuota.class), anyBoolean());
         assertTrue(delayedShareFetch.isCompleted());
     }
 
@@ -203,9 +204,9 @@ public class DelayedShareFetchTest {
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
 
-        // Since we can acquire records from sp0, replicaManager.fetchMessages should be called once and only for sp0.
-        Mockito.verify(replicaManager, times(1)).fetchMessages(
-                any(), any(), any(ReplicaQuota.class), any());
+        // Since we can acquire records from sp0, replicaManager.readFromLog should be called once and only for sp0.
+        Mockito.verify(replicaManager, times(1)).readFromLog(
+                any(), any(), any(ReplicaQuota.class), anyBoolean());
         Mockito.verify(sp0, times(1)).nextFetchOffset();
         Mockito.verify(sp1, times(0)).nextFetchOffset();
         assertTrue(delayedShareFetch.isCompleted());
