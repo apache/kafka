@@ -1757,7 +1757,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(SessionWindows.with(ofMillis(1)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
             .count();
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
@@ -1781,7 +1781,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(SessionWindows.with(ofMillis(1)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
             .count(Materialized.<Object, Long, SessionStore<Bytes, byte[]>>as("count-store")
                 .withStoreType(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
@@ -1806,7 +1806,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(SessionWindows.with(ofMillis(1)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
             .count(Materialized.<Object, Long, SessionStore<Bytes, byte[]>>with(null, Serdes.Long())
                 .withStoreType(Materialized.StoreType.ROCKS_DB));
         final Topology topology = builder.build();
@@ -1831,7 +1831,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(SessionWindows.with(ofMillis(1)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
             .count(Materialized.as(Materialized.StoreType.IN_MEMORY));
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
@@ -1856,7 +1856,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(SessionWindows.with(ofMillis(1)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
             .count();
         final Topology topology = builder.build();
         final TopologyDescription describe = topology.describe();
