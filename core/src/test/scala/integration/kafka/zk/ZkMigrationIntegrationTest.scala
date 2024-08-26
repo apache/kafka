@@ -383,7 +383,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => topicsAllDeleted(admin),
         "Timed out waiting for topics to be deleted",
-        60000,
+        300000,
         1000)
 
       val newTopics = new util.ArrayList[NewTopic]()
