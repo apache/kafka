@@ -16,12 +16,11 @@
  */
 package kafka.server
 
-import kafka.network
-import kafka.network.RequestChannel
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
+import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.FinalizedFeatures
 
@@ -38,7 +37,7 @@ trait ApiVersionManager {
   def isApiEnabled(apiKey: ApiKeys, apiVersion: Short): Boolean = {
     apiKey != null && apiKey.inScope(listenerType) && apiKey.isVersionEnabled(apiVersion, enableUnstableLastVersion)
   }
-  def newRequestMetrics: RequestChannel.Metrics = new network.RequestChannel.Metrics(enabledApis)
+  def newRequestMetrics: RequestChannelMetrics = new RequestChannelMetrics(enabledApis.asJava)
 
   def features: FinalizedFeatures
 }
