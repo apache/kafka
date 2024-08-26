@@ -55,8 +55,8 @@ public class WindowedWordCountProcessorTest {
                   .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                   .withCachingDisabled() // Caching is not supported by MockProcessorContext.
                   .build();
-        store.init(context.getStateStoreContext(), store);
-        context.getStateStoreContext().register(store, null);
+        store.init(context.getInternalProcessorContext(), store);
+        context.getInternalProcessorContext().register(store, null);
 
         // Create and initialize the processor under test
         final Processor<String, String, String, String> processor = new WindowedWordCountProcessorSupplier().get();
@@ -111,8 +111,8 @@ public class WindowedWordCountProcessorTest {
                       .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                       .withCachingDisabled() // Caching is not supported by MockProcessorContext.
                       .build();
-            store.init(context.getStateStoreContext(), store);
-            context.getStateStoreContext().register(store, null);
+            store.init(context.getInternalProcessorContext(), store);
+            context.getInternalProcessorContext().register(store, null);
 
             // Create and initialize the processor under test
             final Processor<String, String, String, String> processor = new WindowedWordCountProcessorSupplier().get();

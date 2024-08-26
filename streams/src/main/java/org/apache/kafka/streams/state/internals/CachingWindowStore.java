@@ -72,14 +72,9 @@ class CachingWindowStore
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        initInternal(asInternalProcessorContext(context), changelogTopic);
-        super.init(context, root);
-    }
-
-    private void initInternal(final InternalProcessorContext<?, ?> context, final String changelogTopic) {
-        this.context = context;
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        final String changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
+        this.context = asInternalProcessorContext(stateStoreContext);
         bytesSerdes = new StateSerdes<>(
             changelogTopic,
             Serdes.Bytes(),
@@ -91,6 +86,8 @@ class CachingWindowStore
                 putAndMaybeForward(entry, context);
             }
         });
+
+        super.init(stateStoreContext, root);
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,

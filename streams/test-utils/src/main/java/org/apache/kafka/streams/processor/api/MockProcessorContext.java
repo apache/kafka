@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -33,11 +35,20 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorMetadata;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.time.Duration;
@@ -530,6 +541,239 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
             @Override
             public Map<String, Object> appConfigsWithPrefix(final String prefix) {
                 return MockProcessorContext.this.appConfigsWithPrefix(prefix);
+            }
+        };
+    }
+
+
+    public InternalProcessorContext getInternalProcessorContext() {
+        return new InternalProcessorContext() {
+            @Override
+            public void forward(final Record record, final String childName) {
+
+            }
+
+            @Override
+            public void forward(final Record record) {
+
+            }
+
+            @Override
+            public void forward(final FixedKeyRecord record, final String childName) {
+
+            }
+
+            @Override
+            public void forward(final FixedKeyRecord record) {
+
+            }
+
+            @Override
+            public String applicationId() {
+                return MockProcessorContext.this.applicationId();
+            }
+
+            @Override
+            public TaskId taskId() {
+                return MockProcessorContext.this.taskId();
+            }
+
+            @Override
+            public Optional<RecordMetadata> recordMetadata() {
+                return MockProcessorContext.this.recordMetadata();
+            }
+
+            @Override
+            public Serde<?> keySerde() {
+                return MockProcessorContext.this.keySerde();
+            }
+
+            @Override
+            public Serde<?> valueSerde() {
+                return MockProcessorContext.this.valueSerde();
+            }
+
+            @Override
+            public File stateDir() {
+                return MockProcessorContext.this.stateDir();
+            }
+
+            @Override
+            public StreamsMetricsImpl metrics() {
+                return (StreamsMetricsImpl) MockProcessorContext.this.metrics();
+            }
+
+            @Override
+            public void setSystemTimeMs(final long timeMs) {
+
+            }
+
+            @Override
+            public ProcessorRecordContext recordContext() {
+                return null;
+            }
+
+            @Override
+            public void setRecordContext(final ProcessorRecordContext recordContext) {
+
+            }
+
+            @Override
+            public ProcessorNode<?, ?, ?, ?> currentNode() {
+                return null;
+            }
+
+            @Override
+            public ThreadCache cache() {
+                return null;
+            }
+
+            @Override
+            public void initialize() {
+
+            }
+
+            @Override
+            public void uninitialize() {
+
+            }
+
+            @Override
+            public Task.TaskType taskType() {
+                return null;
+            }
+
+            @Override
+            public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+
+            }
+
+            @Override
+            public void transitionToStandby(final ThreadCache newCache) {
+
+            }
+
+            @Override
+            public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) {
+
+            }
+
+            @Override
+            public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Position position) {
+
+            }
+
+            @Override
+            public String changelogFor(final String storeName) {
+                return null;
+            }
+
+            @Override
+            public void addProcessorMetadataKeyValue(final String key, final long value) {
+
+            }
+
+            @Override
+            public Long processorMetadataForKey(final String key) {
+                return null;
+            }
+
+            @Override
+            public void setProcessorMetadata(final ProcessorMetadata metadata) {
+
+            }
+
+            @Override
+            public ProcessorMetadata getProcessorMetadata() {
+                return null;
+            }
+
+            @Override
+            public void setCurrentNode(final ProcessorNode currentNode) {
+
+            }
+
+            @Override
+            public void register(final StateStore store,
+                                 final StateRestoreCallback stateRestoreCallback) {
+                register(store, stateRestoreCallback, () -> { });
+            }
+
+            @Override
+            public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+                return null;
+            }
+
+            @Override
+            public void commit() {
+
+            }
+
+            @Override
+            public String topic() {
+                return null;
+            }
+
+            @Override
+            public int partition() {
+                return 0;
+            }
+
+            @Override
+            public long offset() {
+                return 0;
+            }
+
+            @Override
+            public Headers headers() {
+                return null;
+            }
+
+            @Override
+            public long timestamp() {
+                return 0;
+            }
+
+            @Override
+            public void forward(final Object key, final Object value, final To to) {
+
+            }
+
+            @Override
+            public void forward(final Object key, final Object value) {
+
+            }
+
+            @Override
+            public <S extends StateStore> S getStateStore(final String name) {
+                return null;
+            }
+
+            @Override
+            public void register(final StateStore store,
+                                 final StateRestoreCallback stateRestoreCallback,
+                                 final CommitCallback checkpoint) {
+                stateStores.put(store.name(), store);
+            }
+
+            @Override
+            public Map<String, Object> appConfigs() {
+                return MockProcessorContext.this.appConfigs();
+            }
+
+            @Override
+            public Map<String, Object> appConfigsWithPrefix(final String prefix) {
+                return MockProcessorContext.this.appConfigsWithPrefix(prefix);
+            }
+
+            @Override
+            public long currentSystemTimeMs() {
+                return 0;
+            }
+
+            @Override
+            public long currentStreamTimeMs() {
+                return 0;
             }
         };
     }

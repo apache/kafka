@@ -174,7 +174,7 @@ public class MockProcessorContextStateStoreTest {
                     () -> store.init(context.getStateStoreContext(), store)
                 );
             } else {
-                store.init(context.getStateStoreContext(), store);
+                store.init(context.getInternalProcessorContext(), store);
                 store.close();
             }
         } finally {
