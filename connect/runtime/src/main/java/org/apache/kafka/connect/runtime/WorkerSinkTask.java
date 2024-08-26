@@ -89,7 +89,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     private final boolean isTopicTrackingEnabled;
     private final Consumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
-    private final List<SinkRecord> messageBatch;
+    private List<SinkRecord> messageBatch;
     private final Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
     private final Map<TopicPartition, OffsetAndMetadata> currentOffsets;
     private final Map<TopicPartition, OffsetAndMetadata> origOffsets;
@@ -600,20 +600,21 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     private void deliverMessages() {
         // Finally, deliver this batch to the sink
         try {
-            // Since we reuse the messageBatch buffer, ensure we give the task its own copy
-            log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
+            // As when we reuse messageBatch, we don't need it's original content, we don't need to give sink task its own copy
+            int messageBatchSize = messageBatch.size();
+            log.trace("{} Delivering batch of {} messages to task", this, messageBatchSize);
             long start = time.milliseconds();
-            task.put(new ArrayList<>(messageBatch));
+            task.put(messageBatch);
             // if errors raised from the operator were swallowed by the task implementation, an
             // exception needs to be thrown to kill the task indicating the tolerance was exceeded
             if (workerErrantRecordReporter != null) {
                 workerErrantRecordReporter.maybeThrowAsyncError();
             }
-            recordBatch(messageBatch.size());
+            recordBatch(messageBatchSize);
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
             origOffsets.clear();
-            messageBatch.clear();
+            messageBatch = new ArrayList<>();
             // If we had paused all consumer topic partitions to try to redeliver data, then we should resume any that
             // the task had not explicitly paused
             if (pausedForRedelivery) {
