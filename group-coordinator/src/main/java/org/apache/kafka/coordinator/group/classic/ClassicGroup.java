@@ -1356,11 +1356,8 @@ public class ClassicGroup implements Group {
 
     /**
      * Convert the given ConsumerGroup to a corresponding ClassicGroup.
-     * The member with leavingMemberId will not be converted to the new ClassicGroup as it's the last
-     * member using new consumer protocol that left and triggered the downgrade.
      *
      * @param consumerGroup                 The converted ConsumerGroup.
-     * @param leavingMemberId               The member that will not be converted in the ClassicGroup.
      * @param logContext                    The logContext to create the ClassicGroup.
      * @param time                          The time to create the ClassicGroup.
      * @param metadataImage                 The MetadataImage.
@@ -1368,7 +1365,6 @@ public class ClassicGroup implements Group {
      */
     public static ClassicGroup fromConsumerGroup(
         ConsumerGroup consumerGroup,
-        String leavingMemberId,
         LogContext logContext,
         Time time,
         GroupCoordinatorMetricsShard metrics,
@@ -1387,23 +1383,21 @@ public class ClassicGroup implements Group {
             Optional.of(time.milliseconds())
         );
 
-        consumerGroup.members().forEach((memberId, member) -> {
-            if (!memberId.equals(leavingMemberId)) {
-                classicGroup.add(
-                    new ClassicGroupMember(
-                        memberId,
-                        Optional.ofNullable(member.instanceId()),
-                        member.clientId(),
-                        member.clientHost(),
-                        member.rebalanceTimeoutMs(),
-                        member.classicProtocolSessionTimeout().get(),
-                        ConsumerProtocol.PROTOCOL_TYPE,
-                        member.supportedJoinGroupRequestProtocols(),
-                        null
-                    )
-                );
-            }
-        });
+        consumerGroup.members().forEach((memberId, member) ->
+            classicGroup.add(
+                new ClassicGroupMember(
+                    memberId,
+                    Optional.ofNullable(member.instanceId()),
+                    member.clientId(),
+                    member.clientHost(),
+                    member.rebalanceTimeoutMs(),
+                    member.classicProtocolSessionTimeout().get(),
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    member.supportedJoinGroupRequestProtocols(),
+                    null
+                )
+            )
+        );
 
         classicGroup.setProtocolName(Optional.of(classicGroup.selectProtocol()));
         classicGroup.setSubscribedTopics(classicGroup.computeSubscribedTopics());
@@ -1456,6 +1450,13 @@ public class ClassicGroup implements Group {
                 targetState.validPreviousStates() + " states before moving to " + targetState +
                 " state. Instead it is in " + state + " state.");
         }
+    }
+
+    /**
+     * For testing only.
+     */
+    public void setLeaderId(Optional<String> leaderId) {
+        this.leaderId = leaderId;
     }
 
     @Override
