@@ -36,8 +36,6 @@
               files="MessageGenerator.java"/>
 
     <!-- core -->
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="core[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="NPathComplexity" files="(ClusterTestExtensions|KafkaApisBuilder|SharePartition).java"/>
     <suppress checks="NPathComplexity|ClassFanOutComplexity|ClassDataAbstractionCoupling" files="(RemoteLogManager|RemoteLogManagerTest).java"/>
     <suppress checks="MethodLength" files="RemoteLogManager.java"/>
@@ -109,9 +107,6 @@
               files="CoordinatorClient.java"/>
     <suppress checks="(UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>
-
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-            files="clients[\\/]build[\\/]generated[\\/].+.java$"/>
 
     <suppress checks="NPathComplexity"
             files="MessageTest.java|OffsetFetchRequest.java"/>
@@ -221,18 +216,7 @@
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
 
     <!-- Generated code -->
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="streams[\\/]build[\\/]generated[\\/].+.java$"/>
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="raft[\\/]build[\\/]generated[\\/].+.java$"/>
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="storage[\\/]build[\\/]generated[\\/].+.java$"/>
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="group-coordinator[\\/]build[\\/]generated[\\/].+.java$"/>
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="transaction-coordinator[\\/]build[\\/]generated[\\/].+.java$"/>
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-              files="share-coordinator[\\/]build[\\/]generated[\\/].+.java$"/>
+    <suppress checks="[a-zA-Z0-9]*" files="[\\/]generated[\\/]"/>
 
     <suppress checks="ImportControl" files="FetchResponseData.java"/>
     <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
@@ -282,7 +266,7 @@
     <suppress checks="CyclomaticComplexity"
               files="(ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance|Agent).java"/>
     <suppress checks="BooleanExpressionComplexity"
-              files="StreamsResetter.java"/>
+              files="(StreamsResetter|DefaultMessageFormatter).java"/>
     <suppress checks="NPathComplexity"
               files="(DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool).java"/>
     <suppress checks="ImportControl"
@@ -330,8 +314,6 @@
               files="(ClientQuotasImage|KafkaEventQueue|MetadataDelta|QuorumController|ReplicationControlManager|KRaftMigrationDriver|ClusterControlManager|MetaPropertiesEnsemble).java"/>
     <suppress checks="NPathComplexity"
               files="(ClientQuotasImage|KafkaEventQueue|ReplicationControlManager|FeatureControlManager|KRaftMigrationDriver|ScramControlManager|ClusterControlManager|MetadataDelta|MetaPropertiesEnsemble).java"/>
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
-            files="metadata[\\/]build[\\/]generated[\\/].+.java$"/>
     <suppress checks="BooleanExpressionComplexity"
               files="(MetadataImage).java"/>
     <suppress checks="ImportControl"
@@ -341,7 +323,7 @@
 
     <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerGroupMember|GroupMetadataManager|GeneralUniformAssignmentBuilder).java"/>
+              files="(ConsumerGroupMember|GroupMetadataManager|GeneralUniformAssignmentBuilder|GroupCoordinatorRecordSerde).java"/>
     <suppress checks="(NPathComplexity|MethodLength)"
               files="(GroupMetadataManager|ConsumerGroupTest|ShareGroupTest|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GeneralUniformAssignmentBuilder).java"/>
     <suppress checks="ClassFanOutComplexity"
@@ -349,7 +331,7 @@
     <suppress checks="ParameterNumber"
               files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorConfig).java"/>
     <suppress checks="ClassDataAbstractionCouplingCheck"
-              files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest).java"/>
+              files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest|GroupCoordinatorRecordSerde).java"/>
     <suppress checks="JavaNCSS"
               files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
 

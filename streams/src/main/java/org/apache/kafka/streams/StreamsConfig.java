@@ -823,7 +823,7 @@ public class StreamsConfig extends AbstractConfig {
 
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
-        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
         new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
     private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
@@ -1003,17 +1003,9 @@ public class StreamsConfig extends AbstractConfig {
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
-                    new ConfigDef.Validator() {
-                        @Override
-                        public void ensureValid(final String name, final Object value) {
-                            verifyTopologyOptimizationConfigs((String) value);
-                        }
-
-                        @Override
-                        public String toString() {
-                            return TOPOLOGY_OPTIMIZATION_CONFIGS.toString();
-                        }
-                    },
+                    ConfigDef.LambdaValidator.with(
+                        (name, value) -> verifyTopologyOptimizationConfigs((String) value),
+                        TOPOLOGY_OPTIMIZATION_CONFIGS::toString),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
 
@@ -1225,6 +1217,7 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
+        tempConsumerDefaultOverrides.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic");
         CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
