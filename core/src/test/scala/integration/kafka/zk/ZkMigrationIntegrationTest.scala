@@ -296,13 +296,27 @@ class ZkMigrationIntegrationTest {
   def testMigrateTopicDeletions(zkCluster: ClusterInstance): Unit = {
     // Create some topics in ZK mode
     var admin = zkCluster.createAdminClient()
-    val newTopics = new util.ArrayList[NewTopic]()
-    newTopics.add(new NewTopic("test-topic-1", 10, 3.toShort))
-    newTopics.add(new NewTopic("test-topic-2", 10, 3.toShort))
-    newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
-    val createTopicResult = admin.createTopics(newTopics)
-    createTopicResult.all().get(300, TimeUnit.SECONDS)
-    admin.close()
+    try {
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic("test-topic-1", 10, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-2", 10, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(300, TimeUnit.SECONDS)
+      TestUtils.waitUntilTrue(() => {
+        val topicDescribe = admin.describeTopics(Seq("test-topic-1", "test-topic-2", "test-topic-3").asJava)
+        if (topicDescribe.topicNameValues() == null || topicDescribe.topicNameValues().size() < 3) {
+          false
+        } else {
+          topicDescribe.topicNameValues().values().stream().allMatch {
+            topic => topic.get(30, TimeUnit.SECONDS).partitions().stream().allMatch(part => part.leader() != null)
+          }
+        }
+      }, msg="waiting for topics to be available", waitTimeMs=300)
+    } finally {
+      admin.close()
+    }
+
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
 
     // Bootstrap the ZK cluster ID into KRaft
