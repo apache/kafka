@@ -46,7 +46,7 @@ public class ShareCoordinatorRecordHelpers {
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
                     .collect(Collectors.toList())),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+                (short) 0)
         );
     }
 
@@ -68,7 +68,7 @@ public class ShareCoordinatorRecordHelpers {
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
                     .collect(Collectors.toList())),
-                ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION)
+                (short) 0)
         );
     }
 }

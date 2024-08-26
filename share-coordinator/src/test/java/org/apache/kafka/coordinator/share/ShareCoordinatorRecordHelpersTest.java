@@ -69,7 +69,7 @@ public class ShareCoordinatorRecordHelpersTest {
                             .setLastOffset(10L)
                             .setDeliveryState((byte) 0)
                             .setDeliveryCount((short) 1))),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION));
+                (short) 0));
 
         assertEquals(expectedRecord, record);
     }
@@ -111,7 +111,7 @@ public class ShareCoordinatorRecordHelpersTest {
                             .setLastOffset(10L)
                             .setDeliveryState((byte) 0)
                             .setDeliveryCount((short) 1))),
-                ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION));
+                (short) 0));
 
         assertEquals(expectedRecord, record);
     }

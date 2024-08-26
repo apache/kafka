@@ -241,7 +241,7 @@ public class ShareCoordinatorRecordSerdeTest {
                         .setLastOffset(10)
                         .setDeliveryState((byte) 0)
                         .setDeliveryCount((short) 1))),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION
+                (short) 0
             )
         );
     }
