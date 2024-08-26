@@ -48,4 +48,5 @@ public @interface ClusterTest {
     // users can add tags that they want to display in test
     String[] tags() default {};
     ClusterFeature[] features() default {};
+    int repeated() default 1;
 }

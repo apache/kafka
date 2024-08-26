@@ -55,4 +55,5 @@ public @interface ClusterTemplate {
      * Specify the static method used for generating cluster configs
      */
     String value();
+    int repeated() default 1;
 }

@@ -42,4 +42,5 @@ public @interface ClusterTestDefaults {
     boolean autoStart() default true;
     // Set default server properties for all @ClusterTest(s)
     ClusterConfigProperty[] serverProperties() default {};
+    int repeated() default 1;
 }

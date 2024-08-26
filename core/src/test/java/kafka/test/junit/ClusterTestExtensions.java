@@ -177,6 +177,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
         }
 
+        if (annot.repeated() > 1) {
+            return repeatTestContexts(contexts, annot.repeated());
+        }
+
         return contexts;
     }
 
@@ -188,12 +192,15 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     private List<TestTemplateInvocationContext> processClusterTests(ExtensionContext context, ClusterTests annots, ClusterTestDefaults defaults) {
-
         List<TestTemplateInvocationContext> ret = Arrays.stream(annots.value())
                 .flatMap(annot -> processClusterTestInternal(context, annot, defaults).stream()).collect(Collectors.toList());
 
         if (ret.isEmpty()) {
             throw new IllegalStateException("processClusterTests method should provide at least one config");
+        }
+
+        if (annots.repeated() > 1 || defaults.repeated() > 1) {
+            return repeatTestContexts(ret, Math.max(annots.repeated(), defaults.repeated()));
         }
 
         return ret;
@@ -206,9 +213,15 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("processClusterTest method should provide at least one config");
         }
 
+        if (annot.repeated() > 1 || defaults.repeated() > 1) {
+            return repeatTestContexts(ret, Math.max(annot.repeated(), defaults.repeated()));
+        }
         return ret;
     }
+
     private List<TestTemplateInvocationContext> processClusterTestInternal(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults) {
+        // Does not parse the repeated annotation parameter
+
         Type[] types = annot.types().length == 0 ? defaults.types() : annot.types();
         Map<String, String> serverProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
                 .filter(e -> e.id() == -1)
@@ -239,6 +252,17 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         return Arrays.stream(types).map(type -> type.invocationContexts(context.getRequiredTestMethod().getName(), config))
                 .collect(Collectors.toList());
+    }
+
+    private List<TestTemplateInvocationContext> repeatTestContexts(
+        List<TestTemplateInvocationContext> contexts,
+        int count
+    ) {
+        List<TestTemplateInvocationContext> repeatedContexts = new ArrayList<>(contexts.size() * count);
+        for (int i = 0; i < count; i++) {
+            repeatedContexts.addAll(contexts);
+        }
+        return repeatedContexts;
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

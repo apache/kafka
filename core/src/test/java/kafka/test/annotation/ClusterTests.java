@@ -34,4 +34,5 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Tag("integration")
 public @interface ClusterTests {
     ClusterTest[] value();
+    int repeated() default 1;
 }
