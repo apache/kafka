@@ -65,7 +65,7 @@ public interface ShareCoordinator {
      * Handle write share state call
      * @param context - represents the incoming write request context
      * @param request - actual RPC request object
-     * @return completable future comprizing of write RPC response data
+     * @return completable future comprising write RPC response data
      */
     CompletableFuture<WriteShareGroupStateResponseData> writeState(RequestContext context, WriteShareGroupStateRequestData request);
 
@@ -74,7 +74,7 @@ public interface ShareCoordinator {
      * Handle read share state call
      * @param context - represents the incoming read request context
      * @param request - actual RPC request object
-     * @return completable future comprising of read RPC response data
+     * @return completable future comprising read RPC response data
      */
     CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request);
 
