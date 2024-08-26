@@ -580,7 +580,7 @@ public class RestoreIntegrationTest {
         validateReceivedMessages(sampleData, outputTopic);
 
         // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
-        kafkaStreams.close(Duration.ofMillis(5000L));
+        kafkaStreams.close(Duration.ofMillis(30_000L));
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
@@ -637,12 +637,12 @@ public class RestoreIntegrationTest {
                                            final StateRestoreListener stateRestoreListener,
                                            final Map<String, Object> extraConfiguration) {
         final Properties streamsConfiguration = props(mkObjectProperties(extraConfiguration));
-        final KafkaStreams kafkaStreams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
+        final KafkaStreams kstreams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
-        kafkaStreams.setGlobalStateRestoreListener(stateRestoreListener);
-        kafkaStreams.start();
+        kstreams.setGlobalStateRestoreListener(stateRestoreListener);
+        kstreams.start();
 
-        return kafkaStreams;
+        return kstreams;
     }
 
     private static final class TestStateRestoreListener implements StateRestoreListener {
