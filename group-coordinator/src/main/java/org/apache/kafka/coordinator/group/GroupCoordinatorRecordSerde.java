@@ -52,8 +52,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 
 public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
     @Override
-    protected ApiMessage apiMessageKeyFor(short recordType) {
-        switch (recordType) {
+    protected ApiMessage apiMessageKeyFor(short recordVersion) {
+        switch (recordVersion) {
             case 0:
             case 1:
                 return new OffsetCommitKey();
@@ -86,13 +86,13 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
             case 15:
                 return new ShareGroupStatePartitionMetadataKey();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
+                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
         }
     }
 
     @Override
-    protected ApiMessage apiMessageValueFor(short recordType) {
-        switch (recordType) {
+    protected ApiMessage apiMessageValueFor(short recordVersion) {
+        switch (recordVersion) {
             case 0:
             case 1:
                 return new OffsetCommitValue();
@@ -125,7 +125,7 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
             case 15:
                 return new ShareGroupStatePartitionMetadataValue();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
+                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
         }
     }
 }

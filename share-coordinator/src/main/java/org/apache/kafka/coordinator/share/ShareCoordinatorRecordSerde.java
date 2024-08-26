@@ -27,26 +27,26 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 
 public class ShareCoordinatorRecordSerde extends CoordinatorRecordSerde {
     @Override
-    protected ApiMessage apiMessageKeyFor(short recordType) {
-        switch (recordType) {
+    protected ApiMessage apiMessageKeyFor(short recordVersion) {
+        switch (recordVersion) {
             case ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION:
                 return new ShareSnapshotKey();
             case ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION:
                 return new ShareUpdateKey();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
+                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
         }
     }
 
     @Override
-    protected ApiMessage apiMessageValueFor(short recordType) {
-        switch (recordType) {
+    protected ApiMessage apiMessageValueFor(short recordVersion) {
+        switch (recordVersion) {
             case ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION:
                 return new ShareSnapshotValue();
             case ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION:
                 return new ShareUpdateValue();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
+                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
         }
     }
 }
