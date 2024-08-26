@@ -24,6 +24,7 @@
   //
   // Version 3 adds owner principal
   "validVersions": "0-3",
+  "deprecatedVersions": "0",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "OwnerPrincipalType", "type": "string", "versions": "3+", "nullableVersions": "3+",

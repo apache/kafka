@@ -17,20 +17,30 @@
 
 package org.apache.kafka.metadata.publisher;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.FinalizedFeatures;
+
+import org.slf4j.Logger;
 
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
 
 
 public class FeaturesPublisher implements MetadataPublisher {
-    private volatile Features features = Features.fromKRaftVersion(MINIMUM_KRAFT_VERSION);
+    private final Logger log;
+    private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.fromKRaftVersion(MINIMUM_KRAFT_VERSION);
 
-    public Features features() {
-        return features;
+    public FeaturesPublisher(
+        LogContext logContext
+    ) {
+        log = logContext.logger(FeaturesPublisher.class);
+    }
+
+    public FinalizedFeatures features() {
+        return finalizedFeatures;
     }
 
     @Override
@@ -45,10 +55,14 @@ public class FeaturesPublisher implements MetadataPublisher {
         LoaderManifest manifest
     ) {
         if (delta.featuresDelta() != null) {
-            features = new Features(newImage.features().metadataVersion(),
+            FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersion(),
                     newImage.features().finalizedVersions(),
                     newImage.provenance().lastContainedOffset(),
                     true);
+            if (!newFinalizedFeatures.equals(finalizedFeatures)) {
+                log.info("Loaded new metadata {}.", newFinalizedFeatures);
+                finalizedFeatures = newFinalizedFeatures;
+            }
         }
     }
 }

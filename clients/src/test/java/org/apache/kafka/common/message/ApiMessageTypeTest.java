@@ -19,6 +19,7 @@ package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.types.Schema;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -27,9 +28,9 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(120)
 public class ApiMessageTypeTest {
@@ -105,7 +106,8 @@ public class ApiMessageTypeTest {
         for (ApiMessageType type : ApiMessageType.values()) {
             assertEquals(0, type.lowestSupportedVersion());
 
-            assertEquals(type.requestSchemas().length, type.responseSchemas().length);
+            assertEquals(type.requestSchemas().length, type.responseSchemas().length,
+                    "request and response schemas must be the same length for " + type.name());
             for (Schema schema : type.requestSchemas())
                 assertNotNull(schema);
             for (Schema schema : type.responseSchemas())

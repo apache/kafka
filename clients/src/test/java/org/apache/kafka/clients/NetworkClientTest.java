@@ -26,25 +26,35 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.message.PushTelemetryRequestData;
+import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.PushTelemetryRequest;
+import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -71,6 +81,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class NetworkClientTest {
 
@@ -113,7 +129,16 @@ public class NetworkClientTest {
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext());
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
+    }
+
+    private NetworkClient createNetworkClientWithMaxInFlightRequestsPerConnection(
+            int maxInFlightRequestsPerConnection, long reconnectBackoffMaxMs) {
+        return new NetworkClient(selector, metadataUpdater, "mock", maxInFlightRequestsPerConnection,
+                reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
     }
 
     private NetworkClient createNetworkClientWithMultipleNodes(long reconnectBackoffMaxMs, long connectionSetupTimeoutMsTest, int nodeNumber) {
@@ -121,26 +146,30 @@ public class NetworkClientTest {
         TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(nodes);
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext());
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
         return new NetworkClient(selector, metadataUpdater,
                 "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
-                connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext());
+                connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata) {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext());
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
-                connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext());
+                connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
     }
 
     @BeforeEach
@@ -329,7 +358,7 @@ public class NetworkClientTest {
         ByteBuffer buffer = selector.completedSendBuffers().get(0).buffer();
         RequestHeader header = parseHeader(buffer);
         assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
-        assertEquals(3, header.apiVersion());
+        assertEquals(4, header.apiVersion());
 
         // prepare response
         ApiVersionCollection apiKeys = new ApiVersionCollection();
@@ -401,7 +430,7 @@ public class NetworkClientTest {
         ByteBuffer buffer = selector.completedSendBuffers().get(0).buffer();
         RequestHeader header = parseHeader(buffer);
         assertEquals(ApiKeys.API_VERSIONS, header.apiKey());
-        assertEquals(3, header.apiVersion());
+        assertEquals(4, header.apiVersion());
 
         // prepare response
         delayedApiVersionsResponse(0, (short) 0,
@@ -475,7 +504,7 @@ public class NetworkClientTest {
      * @param requestTimeoutMs Timeout in ms
      */
     private void testRequestTimeout(int requestTimeoutMs) {
-        Metadata metadata = new Metadata(50, 5000, new LogContext(), new ClusterResourceListeners());
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
 
@@ -543,6 +572,38 @@ public class NetworkClientTest {
         client.poll(0, time.milliseconds());
         assertTrue(client.connectionFailed(node),
             "Expected the connections to fail due to the socket connection setup timeout");
+    }
+
+    @Test
+    public void testConnectionTimeoutAfterThrottling() {
+        awaitReady(client, node);
+        short requestVersion = PRODUCE.latestVersion();
+        int timeoutMs = 1000;
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(
+            requestVersion,
+            requestVersion,
+            new ProduceRequestData()
+                .setAcks((short) 1)
+                .setTimeoutMs(timeoutMs));
+        TestCallbackHandler handler = new TestCallbackHandler();
+        ClientRequest r1 = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
+                defaultRequestTimeoutMs, handler);
+
+        client.send(r1, time.milliseconds());
+        client.poll(0, time.milliseconds());
+
+        // Throttle long enough to ensure other inFlight requests timeout.
+        ProduceResponse pr = new ProduceResponse(new ProduceResponseData().setThrottleTimeMs(timeoutMs));
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(pr, requestVersion, r1.correlationId());
+        selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
+        ClientRequest r2 = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
+                defaultRequestTimeoutMs, handler);
+        client.send(r2, time.milliseconds());
+        time.sleep(timeoutMs);
+        client.poll(0, time.milliseconds());
+
+        assertEquals(1, client.inFlightRequestCount(node.idString()));
+        assertFalse(client.connectionFailed(node), "Connection should not have failed due to the extra time spent throttling.");
     }
 
     @Test
@@ -651,14 +712,18 @@ public class NetworkClientTest {
     public void testLeastLoadedNode() {
         client.ready(node, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
-        assertEquals(node, client.leastLoadedNode(time.milliseconds()));
+        LeastLoadedNode leastLoadedNode = client.leastLoadedNode(time.milliseconds());
+        assertEquals(node, leastLoadedNode.node());
+        assertTrue(leastLoadedNode.hasNodeAvailableOrConnectionReady());
 
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
 
         // leastloadednode should be our single node
-        Node leastNode = client.leastLoadedNode(time.milliseconds());
+        leastLoadedNode = client.leastLoadedNode(time.milliseconds());
+        assertTrue(leastLoadedNode.hasNodeAvailableOrConnectionReady());
+        Node leastNode = leastLoadedNode.node();
         assertEquals(leastNode.id(), node.id(), "There should be one leastloadednode");
 
         // sleep for longer than reconnect backoff
@@ -669,8 +734,29 @@ public class NetworkClientTest {
 
         client.poll(1, time.milliseconds());
         assertFalse(client.ready(node, time.milliseconds()), "After we forced the disconnection the client is no longer ready.");
-        leastNode = client.leastLoadedNode(time.milliseconds());
-        assertNull(leastNode, "There should be NO leastloadednode");
+        leastLoadedNode = client.leastLoadedNode(time.milliseconds());
+        assertFalse(leastLoadedNode.hasNodeAvailableOrConnectionReady());
+        assertNull(leastLoadedNode.node(), "There should be NO leastloadednode");
+    }
+
+    @Test
+    public void testHasNodeAvailableOrConnectionReady() {
+        NetworkClient client = createNetworkClientWithMaxInFlightRequestsPerConnection(1, reconnectBackoffMaxMsTest);
+        awaitReady(client, node);
+
+        long now = time.milliseconds();
+        LeastLoadedNode leastLoadedNode = client.leastLoadedNode(now);
+        assertEquals(node, leastLoadedNode.node());
+        assertTrue(leastLoadedNode.hasNodeAvailableOrConnectionReady());
+
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.emptyList(), true);
+        ClientRequest request = client.newClientRequest(node.idString(), builder, now, true);
+        client.send(request, now);
+        client.poll(defaultRequestTimeoutMs, now);
+
+        leastLoadedNode = client.leastLoadedNode(now);
+        assertNull(leastLoadedNode.node());
+        assertTrue(leastLoadedNode.hasNodeAvailableOrConnectionReady());
     }
 
     @Test
@@ -680,7 +766,7 @@ public class NetworkClientTest {
 
         Set<Node> providedNodeIds = new HashSet<>();
         for (int i = 0; i < nodeNumber * 10; i++) {
-            Node node = client.leastLoadedNode(time.milliseconds());
+            Node node = client.leastLoadedNode(time.milliseconds()).node();
             assertNotNull(node, "Should provide a node");
             providedNodeIds.add(node);
             client.ready(node, time.milliseconds());
@@ -701,7 +787,7 @@ public class NetworkClientTest {
         int refreshBackoffMs = 50;
 
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
-        Metadata metadata = new Metadata(refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
 
         Cluster cluster = metadata.fetch();
@@ -712,7 +798,7 @@ public class NetworkClientTest {
 
         awaitReady(client, node1);
 
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         time.sleep(refreshBackoffMs);
 
         client.poll(0, time.milliseconds());
@@ -753,7 +839,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
 
         // leastloadednode should return null since the node is throttled
-        assertNull(client.leastLoadedNode(time.milliseconds()));
+        assertNull(client.leastLoadedNode(time.milliseconds()).node());
     }
 
     @Test
@@ -992,32 +1078,49 @@ public class NetworkClientTest {
             return (mockHostResolver.useNewAddresses() && newAddresses.contains(inetAddress)) ||
                    (!mockHostResolver.useNewAddresses() && initialAddresses.contains(inetAddress));
         });
+
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
+                MetadataRecoveryStrategy.NONE);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        // First poll should try to update the node but couldn't because node remains in connecting state
+        // i.e. connection handling is completed after telemetry update.
+        assertNull(client.telemetryConnectedNode());
+
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         mockHostResolver.changeAddresses();
         selector.serverDisconnect(node.idString());
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
 
         time.sleep(reconnectBackoffMaxMsTest);
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
+
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         // We should have tried to connect to one initial address and one new address, and resolved DNS twice
         assertEquals(1, initialAddressConns.get());
         assertEquals(1, newAddressConns.get());
         assertEquals(2, mockHostResolver.resolutionCount());
+        verify(mockClientTelemetrySender, times(5)).timeToNextUpdate(anyLong());
     }
 
     @Test
@@ -1036,16 +1139,22 @@ public class NetworkClientTest {
             // Refuse first connection attempt
             return initialAddressConns.get() > 1;
         });
+
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
+                MetadataRecoveryStrategy.NONE);
 
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
 
         // Second connection attempt should succeed
         time.sleep(reconnectBackoffMaxMsTest);
@@ -1053,12 +1162,18 @@ public class NetworkClientTest {
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
+
+        // Next client poll after handling connection setup should update telemetry node.
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         // We should have tried to connect to two of the initial addresses, none of the new address, and should
         // only have resolved DNS once
         assertEquals(2, initialAddressConns.get());
         assertEquals(0, newAddressConns.get());
         assertEquals(1, mockHostResolver.resolutionCount());
+        verify(mockClientTelemetrySender, times(3)).timeToNextUpdate(anyLong());
     }
 
     @Test
@@ -1077,21 +1192,31 @@ public class NetworkClientTest {
             // Refuse first connection attempt to the new addresses
             return initialAddresses.contains(inetAddress) || newAddressConns.get() > 1;
         });
+
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
+                MetadataRecoveryStrategy.NONE);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
+        // Next client poll after handling connection setup should update telemetry node.
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         mockHostResolver.changeAddresses();
         selector.serverDisconnect(node.idString());
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
 
         // First connection attempt to new addresses should fail
         time.sleep(reconnectBackoffMaxMsTest);
@@ -1099,6 +1224,7 @@ public class NetworkClientTest {
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
 
         // Second connection attempt to new addresses should succeed
         time.sleep(reconnectBackoffMaxMsTest);
@@ -1106,12 +1232,18 @@ public class NetworkClientTest {
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
+
+        // Next client poll after handling connection setup should update telemetry node.
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         // We should have tried to connect to one of the initial addresses and two of the new addresses (the first one
         // failed), and resolved DNS twice, once for each set of addresses
         assertEquals(1, initialAddressConns.get());
         assertEquals(2, newAddressConns.get());
         assertEquals(2, mockHostResolver.resolutionCount());
+        verify(mockClientTelemetrySender, times(6)).timeToNextUpdate(anyLong());
     }
 
     @Test
@@ -1168,6 +1300,62 @@ public class NetworkClientTest {
         assertTrue(client.connectionFailed(node));
     }
 
+    @Test
+    public void testTelemetryRequest() {
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
+            reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+            defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+            time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), mockClientTelemetrySender,
+            MetadataRecoveryStrategy.NONE);
+
+        // Send the ApiVersionsRequest
+        client.ready(node, time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertNull(client.telemetryConnectedNode());
+        assertTrue(client.hasInFlightRequests(node.idString()));
+        delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(), TestUtils.defaultApiVersionsResponse(
+            ApiMessageType.ListenerType.BROKER));
+        // handle ApiVersionsResponse
+        client.poll(0, time.milliseconds());
+        // the ApiVersionsRequest is gone
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        selector.clear();
+
+        GetTelemetrySubscriptionsRequest.Builder getRequest = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData(), true);
+        when(mockClientTelemetrySender.createRequest()).thenReturn(Optional.of(getRequest));
+
+        GetTelemetrySubscriptionsResponse getResponse = new GetTelemetrySubscriptionsResponse(new GetTelemetrySubscriptionsResponseData());
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(getResponse, ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.latestVersion(), 1);
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+
+        // Initiate poll to send GetTelemetrySubscriptions request
+        client.poll(0, time.milliseconds());
+        assertTrue(client.isReady(node, time.milliseconds()));
+        assertEquals(node, client.telemetryConnectedNode());
+        verify(mockClientTelemetrySender, times(1)).handleResponse(any(GetTelemetrySubscriptionsResponse.class));
+        selector.clear();
+
+        PushTelemetryRequest.Builder pushRequest = new PushTelemetryRequest.Builder(
+            new PushTelemetryRequestData(), true);
+        when(mockClientTelemetrySender.createRequest()).thenReturn(Optional.of(pushRequest));
+
+        PushTelemetryResponse pushResponse = new PushTelemetryResponse(new PushTelemetryResponseData());
+        ByteBuffer pushBuffer = RequestTestUtils.serializeResponseWithHeader(pushResponse, ApiKeys.PUSH_TELEMETRY.latestVersion(), 2);
+        selector.completeReceive(new NetworkReceive(node.idString(), pushBuffer));
+
+        // Initiate poll to send PushTelemetry request
+        client.poll(0, time.milliseconds());
+        assertTrue(client.isReady(node, time.milliseconds()));
+        assertEquals(node, client.telemetryConnectedNode());
+        verify(mockClientTelemetrySender, times(1)).handleResponse(any(PushTelemetryResponse.class));
+        verify(mockClientTelemetrySender, times(4)).timeToNextUpdate(anyLong());
+        verify(mockClientTelemetrySender, times(2)).createRequest();
+    }
+
     private RequestHeader parseHeader(ByteBuffer buffer) {
         buffer.getInt(); // skip size
         return RequestHeader.parse(buffer.slice());
@@ -1206,17 +1394,17 @@ public class NetworkClientTest {
 
         @Override
         public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeAuthException) {
-            maybeAuthException.ifPresent(exception -> {
-                failure = exception;
-            });
+            maybeAuthException.ifPresent(exception ->
+                failure = exception
+            );
             super.handleServerDisconnect(now, destinationId, maybeAuthException);
         }
 
         @Override
         public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
-            maybeFatalException.ifPresent(exception -> {
-                failure = exception;
-            });
+            maybeFatalException.ifPresent(exception ->
+                failure = exception
+            );
         }
 
         public KafkaException getAndClearFailure() {

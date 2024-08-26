@@ -16,22 +16,38 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.streams.kstream.internals.StreamJoinedInternal
+import org.apache.kafka.streams.kstream.internals.{InternalStreamsBuilder, StreamJoinedInternal}
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder
 import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.state.Stores
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.mockito.Mockito.{mock, when}
+import org.mockito.junit.jupiter.{MockitoExtension, MockitoSettings}
+import org.mockito.quality.Strictness
 
 import java.time.Duration
 
+@ExtendWith(Array(classOf[MockitoExtension]))
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 class StreamJoinedTest {
+
+  val builder: InternalStreamsBuilder = mock(classOf[InternalStreamsBuilder])
+  val topoBuilder: InternalTopologyBuilder = mock(classOf[InternalTopologyBuilder])
+
+  @BeforeEach
+  def before(): Unit = {
+    when(builder.internalTopologyBuilder()).thenReturn(topoBuilder)
+    when(topoBuilder.topologyConfigs()).thenReturn(null)
+  }
 
   @Test
   def testCreateStreamJoinedWithSerdes(): Unit = {
     val streamJoined: StreamJoined[String, String, Long] = StreamJoined.`with`[String, String, Long]
 
-    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
+    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined, builder)
     assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
     assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
     assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)
@@ -47,7 +63,7 @@ class StreamJoinedTest {
     val streamJoined: StreamJoined[String, String, Long] =
       StreamJoined.`with`[String, String, Long](storeSupplier, otherStoreSupplier)
 
-    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
+    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined, builder)
     assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
     assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
     assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)
@@ -59,7 +75,7 @@ class StreamJoinedTest {
   def testCreateStreamJoinedWithSerdesAndStateStoreName(): Unit = {
     val streamJoined: StreamJoined[String, String, Long] = StreamJoined.as[String, String, Long]("myStoreName")
 
-    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
+    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined, builder)
     assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
     assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
     assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)

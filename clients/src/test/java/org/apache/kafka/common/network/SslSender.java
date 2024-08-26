@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.common.network;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 public class SslSender extends Thread {
 
@@ -33,6 +34,7 @@ public class SslSender extends Thread {
     private final byte[] payload;
     private final CountDownLatch handshaked = new CountDownLatch(1);
 
+    @SuppressWarnings("this-escape")
     public SslSender(String tlsProtocol, InetSocketAddress serverAddress, byte[] payload) {
         this.tlsProtocol = tlsProtocol;
         this.serverAddress = serverAddress;

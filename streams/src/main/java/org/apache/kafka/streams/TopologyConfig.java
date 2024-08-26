@@ -20,14 +20,20 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
-import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
 
@@ -36,21 +42,25 @@ import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTIT
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
-import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
-import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DEFAULT;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
+import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
+import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 
 /**
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
@@ -103,9 +113,16 @@ public class TopologyConfig extends AbstractConfig {
                 ROCKS_DB,
                 in(ROCKS_DB, IN_MEMORY),
                 Importance.LOW,
-                DEFAULT_DSL_STORE_DOC);
+                DEFAULT_DSL_STORE_DOC)
+            .define(DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+                Type.CLASS,
+                DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
+                Importance.LOW,
+                DSL_STORE_SUPPLIERS_CLASS_DOC);
     }
-    private final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
+    private static final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
+
+    private final StreamsConfig globalAppConfigs;
 
     public final String topologyName;
     public final boolean eosEnabled;
@@ -118,21 +135,26 @@ public class TopologyConfig extends AbstractConfig {
     public final long maxTaskIdleMs;
     public final long taskTimeoutMs;
     public final String storeType;
+    public final Class<?> dslStoreSuppliers;
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
+    public final Supplier<ProcessingExceptionHandler> processingExceptionHandlerSupplier;
 
     public TopologyConfig(final StreamsConfig globalAppConfigs) {
         this(null, globalAppConfigs, new Properties());
     }
 
+    @SuppressWarnings("this-escape")
     public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {
         super(CONFIG, topologyOverrides, false);
 
+        this.globalAppConfigs = globalAppConfigs;
         this.topologyName = topologyName;
         this.eosEnabled = StreamsConfigUtils.eosEnabled(globalAppConfigs);
 
         this.applicationConfigs = globalAppConfigs;
         this.topologyOverrides = topologyOverrides;
+        this.processingExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
 
         if (isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides)) {
             maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -145,7 +167,7 @@ public class TopologyConfig extends AbstractConfig {
         final boolean cacheMaxBytesBufferingOverridden = isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides);
 
         if (!stateStoreCacheMaxBytesOverridden && !cacheMaxBytesBufferingOverridden) {
-            cacheSize = getTotalCacheSize(globalAppConfigs);
+            cacheSize = totalCacheSize(globalAppConfigs);
         } else {
             if (stateStoreCacheMaxBytesOverridden && cacheMaxBytesBufferingOverridden) {
                 cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
@@ -214,13 +236,32 @@ public class TopologyConfig extends AbstractConfig {
         } else {
             storeType = globalAppConfigs.getString(DEFAULT_DSL_STORE_CONFIG);
         }
+
+        if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides)) {
+            dslStoreSuppliers = getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, DSL_STORE_SUPPLIERS_CLASS_CONFIG, dslStoreSuppliers);
+        } else {
+            dslStoreSuppliers = globalAppConfigs.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+        }
     }
 
+    @Deprecated
     public Materialized.StoreType parseStoreType() {
-        if (storeType.equals(IN_MEMORY)) {
-            return Materialized.StoreType.IN_MEMORY;
+        return MaterializedInternal.parse(storeType);
+    }
+
+    /**
+     * @return the DslStoreSuppliers if the value was explicitly configured (either by
+     *         {@link StreamsConfig#DEFAULT_DSL_STORE} or {@link StreamsConfig#DSL_STORE_SUPPLIERS_CLASS_CONFIG})
+     */
+    public Optional<DslStoreSuppliers> resolveDslStoreSuppliers() {
+        if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides) || globalAppConfigs.originals().containsKey(DSL_STORE_SUPPLIERS_CLASS_CONFIG)) {
+            return Optional.of(Utils.newInstance(dslStoreSuppliers, DslStoreSuppliers.class));
+        } else if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides) || globalAppConfigs.originals().containsKey(DEFAULT_DSL_STORE_CONFIG)) {
+            return Optional.of(MaterializedInternal.parse(storeType));
+        } else {
+            return Optional.empty();
         }
-        return Materialized.StoreType.ROCKS_DB;
     }
 
     public boolean isNamedTopology() {
@@ -244,6 +285,7 @@ public class TopologyConfig extends AbstractConfig {
             maxBufferedSize,
             timestampExtractorSupplier.get(),
             deserializationExceptionHandlerSupplier.get(),
+            processingExceptionHandlerSupplier.get(),
             eosEnabled
         );
     }
@@ -254,6 +296,7 @@ public class TopologyConfig extends AbstractConfig {
         public final int maxBufferedSize;
         public final TimestampExtractor timestampExtractor;
         public final DeserializationExceptionHandler deserializationExceptionHandler;
+        public final ProcessingExceptionHandler processingExceptionHandler;
         public final boolean eosEnabled;
 
         private TaskConfig(final long maxTaskIdleMs,
@@ -261,12 +304,14 @@ public class TopologyConfig extends AbstractConfig {
                            final int maxBufferedSize,
                            final TimestampExtractor timestampExtractor,
                            final DeserializationExceptionHandler deserializationExceptionHandler,
+                           final ProcessingExceptionHandler processingExceptionHandler,
                            final boolean eosEnabled) {
             this.maxTaskIdleMs = maxTaskIdleMs;
             this.taskTimeoutMs = taskTimeoutMs;
             this.maxBufferedSize = maxBufferedSize;
             this.timestampExtractor = timestampExtractor;
             this.deserializationExceptionHandler = deserializationExceptionHandler;
+            this.processingExceptionHandler = processingExceptionHandler;
             this.eosEnabled = eosEnabled;
         }
     }

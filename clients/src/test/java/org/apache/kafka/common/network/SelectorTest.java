@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
@@ -28,10 +27,12 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.MockedConstruction;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -48,12 +49,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -66,9 +69,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -258,7 +265,7 @@ public class SelectorTest {
         } else {
             waitForCondition(() -> cipherMetrics(metrics).size() == 1,
                 "Waiting for cipher metrics to be created.");
-            assertEquals(Integer.valueOf(5), cipherMetrics(metrics).get(0).metricValue());
+            assertEquals(5, cipherMetrics(metrics).get(0).metricValue());
         }
     }
 
@@ -266,7 +273,7 @@ public class SelectorTest {
         return metrics.metrics().entrySet().stream().
             filter(e -> e.getKey().description().
                 contains("The number of connections with this SSL cipher and protocol.")).
-            map(e -> e.getValue()).
+            map(Map.Entry::getValue).
             collect(Collectors.toList());
     }
 
@@ -408,8 +415,8 @@ public class SelectorTest {
                     @Override
                     public void close() throws IOException {
                         closedChannelsCount.getAndIncrement();
+                        super.close();
                         if (index == 0) throw new RuntimeException("you should fail");
-                        else super.close();
                     }
                 };
             }
@@ -424,20 +431,26 @@ public class SelectorTest {
 
     @Test
     public void registerFailure() throws Exception {
-        ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
-            @Override
-            public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                    MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
-                throw new RuntimeException("Test exception");
-            }
-        };
-        Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
-        SocketChannel socketChannel = SocketChannel.open();
-        socketChannel.configureBlocking(false);
-        IOException e = assertThrows(IOException.class, () -> selector.register("1", socketChannel));
-        assertTrue(e.getCause().getMessage().contains("Test exception"), "Unexpected exception: " + e);
-        assertFalse(socketChannel.isOpen(), "Socket not closed");
-        selector.close();
+        final String channelId = "1";
+
+        final ChannelBuilder channelBuilder = mock(ChannelBuilder.class);
+
+        when(channelBuilder.buildChannel(eq(channelId), any(SelectionKey.class), anyInt(), any(MemoryPool.class),
+                any(ChannelMetadataRegistry.class))).thenThrow(new RuntimeException("Test exception"));
+
+        try (MockedConstruction<Selector.SelectorChannelMetadataRegistry> mockedMetadataRegistry =
+                     mockConstruction(Selector.SelectorChannelMetadataRegistry.class)) {
+            Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+            final SocketChannel socketChannel = SocketChannel.open();
+            socketChannel.configureBlocking(false);
+            IOException e = assertThrows(IOException.class, () -> selector.register(channelId, socketChannel));
+            assertTrue(e.getCause().getMessage().contains("Test exception"), "Unexpected exception: " + e);
+            assertFalse(socketChannel.isOpen(), "Socket not closed");
+            // Ideally, metadataRegistry is closed by the KafkaChannel but if the KafkaChannel is not created due to
+            // an error such as in a case like this, the Selector should be closing the metadataRegistry instead.
+            verify(mockedMetadataRegistry.constructed().get(0)).close();
+            selector.close();
+        }
     }
 
     @Test
@@ -627,7 +640,7 @@ public class SelectorTest {
             // Poll until one or more receives complete and then close the server-side connection
             waitForCondition(() -> {
                 selector.poll(1000);
-                return selector.completedReceives().size() > 0;
+                return !selector.completedReceives().isEmpty();
             }, 5000, "Receive not completed");
             server.closeConnections();
             while (selector.disconnected().isEmpty()) {
@@ -768,7 +781,8 @@ public class SelectorTest {
 
         SelectionKey selectionKey = mock(SelectionKey.class);
         when(kafkaChannel.selectionKey()).thenReturn(selectionKey);
-        when(selectionKey.channel()).thenReturn(SocketChannel.open());
+        SocketChannel socket = SocketChannel.open();
+        when(selectionKey.channel()).thenReturn(socket);
         when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_CONNECT);
         when(selectionKey.attachment()).thenReturn(kafkaChannel);
 
@@ -782,6 +796,7 @@ public class SelectorTest {
         verify(kafkaChannel).disconnect();
         verify(kafkaChannel).close();
         verify(selectionKey).cancel();
+        socket.close();
     }
 
     @Test
@@ -816,10 +831,12 @@ public class SelectorTest {
             for (int i = 0; i < conns; i++) {
                 Thread sender = createSender(serverAddress, randomPayload(1));
                 sender.start();
-                SocketChannel channel = ss.accept();
-                channel.configureBlocking(false);
-
-                selector.register(Integer.toString(i), channel);
+                try (SocketChannel channel = ss.accept()) {
+                    channel.configureBlocking(false);
+                    selector.register(Integer.toString(i), channel);
+                } finally {
+                    sender.join();
+                }
             }
         }
 
@@ -918,6 +935,7 @@ public class SelectorTest {
         Selector selector = new ImmediatelyConnectingSelector(CONNECTION_MAX_IDLE_MS, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
             @Override
             public void close(String id) {
+                super.close(id);
                 throw new RuntimeException();
             }
         };
@@ -940,7 +958,7 @@ public class SelectorTest {
         NetworkSend send = new NetworkSend("destination", new ByteBufferSend(ByteBuffer.allocate(0)));
         when(channel.maybeCompleteSend()).thenReturn(send);
         selector.write(channel);
-        assertEquals(asList(send), selector.completedSends());
+        assertEquals(Collections.singletonList(send), selector.completedSends());
     }
 
     /**
@@ -999,6 +1017,34 @@ public class SelectorTest {
         assertEquals(0, selector.completedReceives().size());
     }
 
+    /**
+     * Validate that correct subset of io metrics marked deprecated in docs
+     */
+    @Test
+    public void testIoMetricsHaveCorrectDoc() {
+        Predicate<MetricName> docDeprecated =
+                mName -> mName.description().toLowerCase(Locale.ROOT).contains("deprecated");
+
+        List<String> actual = asList("io-ratio", "io-wait-ratio");
+        assertEquals(
+                actual.size(),
+                metrics.metrics().keySet().stream()
+                        .filter(m -> actual.contains(m.name()))
+                        .filter(m -> !docDeprecated.test(m))
+                        .count(),
+                "Metrics " + actual + " should be registered as non-deprecated"
+        );
+
+        List<String> deprecated = asList("iotime-total", "io-waittime-total");
+        assertEquals(
+                deprecated.size(),
+                metrics.metrics().keySet().stream()
+                        .filter(m -> deprecated.contains(m.name()))
+                        .filter(docDeprecated)
+                        .count(),
+                "Metrics " + deprecated + " should be registered as deprecated"
+        );
+    }
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

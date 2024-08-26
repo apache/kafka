@@ -32,7 +32,7 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<RemoveMembersFromConsumerGroupOptions> {
 
-    private Set<MemberToRemove> members;
+    private final Set<MemberToRemove> members;
     private String reason;
 
     public RemoveMembersFromConsumerGroupOptions(Collection<MemberToRemove> members) {

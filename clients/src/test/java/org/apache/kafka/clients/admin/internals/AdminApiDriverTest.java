@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import java.util.concurrent.ConcurrentHashMap;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -46,6 +47,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -60,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 class AdminApiDriverTest {
     private static final int API_TIMEOUT_MS = 30000;
     private static final int RETRY_BACKOFF_MS = 100;
+    private static final int RETRY_BACKOFF_MAX_MS = 1000;
 
     @Test
     public void testCoalescedLookup() {
@@ -398,13 +401,14 @@ class AdminApiDriverTest {
         Set<String> groupIds = new HashSet<>(Arrays.asList("g1", "g2"));
         DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(lc);
         AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
-                groupIds.stream().map(g -> CoordinatorKey.byGroupId(g)).collect(Collectors.toSet()));
+                groupIds.stream().map(CoordinatorKey::byGroupId).collect(Collectors.toSet()));
 
         AdminApiDriver<CoordinatorKey, Void> driver = new AdminApiDriver<>(
             handler,
             future,
             time.milliseconds() + API_TIMEOUT_MS,
             RETRY_BACKOFF_MS,
+            RETRY_BACKOFF_MAX_MS,
             new LogContext()
         );
 
@@ -542,7 +546,8 @@ class AdminApiDriverTest {
 
         RequestSpec<String> retrySpec = retrySpecs.get(0);
         assertEquals(1, retrySpec.tries);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retrySpec.nextAllowedTryMs,
+                (long) (RETRY_BACKOFF_MS * CommonClientConfigs.RETRY_BACKOFF_JITTER));
     }
 
     private static void assertMappedKey(
@@ -651,16 +656,17 @@ class AdminApiDriverTest {
                 future,
                 time.milliseconds() + API_TIMEOUT_MS,
                 RETRY_BACKOFF_MS,
+                RETRY_BACKOFF_MAX_MS,
                 new LogContext()
             );
 
-            staticKeys.forEach((key, brokerId) -> {
-                assertMappedKey(this, key, brokerId);
-            });
+            staticKeys.forEach((key, brokerId) ->
+                assertMappedKey(this, key, brokerId)
+            );
 
-            dynamicKeys.keySet().forEach(key -> {
-                assertUnmappedKey(this, key);
-            });
+            dynamicKeys.keySet().forEach(key ->
+                assertUnmappedKey(this, key)
+            );
         }
 
         public static TestContext staticMapped(Map<String, Integer> staticKeys) {
@@ -675,22 +681,22 @@ class AdminApiDriverTest {
             RequestSpec<String> requestSpec,
             LookupResult<String> result
         ) {
-            requestSpec.keys.forEach(key -> {
-                assertUnmappedKey(this, key);
-            });
+            requestSpec.keys.forEach(key ->
+                assertUnmappedKey(this, key)
+            );
 
             // The response is just a placeholder. The result is all we are interested in
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
                 ApiKeys.METADATA.latestVersion());
             driver.onResponse(time.milliseconds(), requestSpec, response, Node.noNode());
 
-            result.mappedKeys.forEach((key, brokerId) -> {
-                assertMappedKey(this, key, brokerId);
-            });
+            result.mappedKeys.forEach((key, brokerId) ->
+                assertMappedKey(this, key, brokerId)
+            );
 
-            result.failedKeys.forEach((key, exception) -> {
-                assertFailedKey(this, key, exception);
-            });
+            result.failedKeys.forEach((key, exception) ->
+                assertFailedKey(this, key, exception)
+            );
         }
 
         private void assertResponse(
@@ -701,9 +707,9 @@ class AdminApiDriverTest {
             int brokerId = requestSpec.scope.destinationBrokerId().orElseThrow(() ->
                 new AssertionError("Fulfillment requests must specify a target brokerId"));
 
-            requestSpec.keys.forEach(key -> {
-                assertMappedKey(this, key, brokerId);
-            });
+            requestSpec.keys.forEach(key ->
+                assertMappedKey(this, key, brokerId)
+            );
 
             // The response is just a placeholder. The result is all we are interested in
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
@@ -711,17 +717,17 @@ class AdminApiDriverTest {
 
             driver.onResponse(time.milliseconds(), requestSpec, response, node);
 
-            result.unmappedKeys.forEach(key -> {
-                assertUnmappedKey(this, key);
-            });
+            result.unmappedKeys.forEach(key ->
+                assertUnmappedKey(this, key)
+            );
 
-            result.failedKeys.forEach((key, exception) -> {
-                assertFailedKey(this, key, exception);
-            });
+            result.failedKeys.forEach((key, exception) ->
+                assertFailedKey(this, key, exception)
+            );
 
-            result.completedKeys.forEach((key, value) -> {
-                assertCompletedKey(this, key, value);
-            });
+            result.completedKeys.forEach((key, value) ->
+                assertCompletedKey(this, key, value)
+            );
         }
 
         private MockLookupStrategy<String> lookupStrategy() {

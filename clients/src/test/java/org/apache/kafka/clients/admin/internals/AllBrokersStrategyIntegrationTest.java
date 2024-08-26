@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -58,6 +59,7 @@ public class AllBrokersStrategyIntegrationTest {
             new MockApiHandler(),
             result,
             time.milliseconds() + TIMEOUT_MS,
+            RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MS,
             logContext
         );

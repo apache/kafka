@@ -70,19 +70,6 @@ public class VoteRequest extends AbstractRequest {
     }
 
     public static VoteRequestData singletonRequest(TopicPartition topicPartition,
-                                                   int candidateEpoch,
-                                                   int candidateId,
-                                                   int lastEpoch,
-                                                   long lastEpochEndOffset) {
-        return singletonRequest(topicPartition,
-            null,
-            candidateEpoch,
-            candidateId,
-            lastEpoch,
-            lastEpochEndOffset);
-    }
-
-    public static VoteRequestData singletonRequest(TopicPartition topicPartition,
                                                    String clusterId,
                                                    int candidateEpoch,
                                                    int candidateId,
@@ -102,5 +89,4 @@ public class VoteRequest extends AbstractRequest {
                                    .setLastOffset(lastEpochEndOffset))
                            )));
     }
-
 }

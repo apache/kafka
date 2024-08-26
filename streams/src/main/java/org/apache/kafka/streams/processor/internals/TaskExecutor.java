@@ -27,6 +27,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -37,10 +38,9 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.emptyMap;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
-
-import static java.util.Collections.emptyMap;
 
 /**
  * Single-threaded executor class for the active tasks assigned to this thread.
@@ -178,7 +178,7 @@ public class TaskExecutor {
         final Set<TaskId> corruptedTasks = new HashSet<>();
 
         if (executionMetadata.processingMode() == EXACTLY_ONCE_ALPHA) {
-            for (final Task task : taskManager.activeTaskIterable()) {
+            for (final Task task : taskManager.activeRunningTaskIterable()) {
                 final Map<TopicPartition, OffsetAndMetadata> taskOffsetsToCommit = offsetsPerTask.getOrDefault(task, emptyMap());
                 if (!taskOffsetsToCommit.isEmpty() || taskManager.streamsProducerForTask(task.id()).transactionInFlight()) {
                     try {

@@ -55,7 +55,7 @@ object TransactionCoordinator {
       config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
       config.requestTimeoutMs)
 
-    val txnStateManager = new TransactionStateManager(config.brokerId, scheduler, replicaManager, txnConfig,
+    val txnStateManager = new TransactionStateManager(config.brokerId, scheduler, replicaManager, metadataCache, txnConfig,
       time, metrics)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
@@ -94,16 +94,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   import TransactionCoordinator._
 
-  type InitProducerIdCallback = InitProducerIdResult => Unit
-  type AddPartitionsCallback = Errors => Unit
-  type VerifyPartitionsCallback = AddPartitionsToTxnResult => Unit
-  type EndTxnCallback = Errors => Unit
-  type ApiResult[T] = Either[Errors, T]
+  private type InitProducerIdCallback = InitProducerIdResult => Unit
+  private type AddPartitionsCallback = Errors => Unit
+  private type VerifyPartitionsCallback = AddPartitionsToTxnResult => Unit
+  private type EndTxnCallback = Errors => Unit
+  private type ApiResult[T] = Either[Errors, T]
 
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
 
-  val producerIdManager = createProducerIdManager()
+  val producerIdManager: ProducerIdManager = createProducerIdManager()
 
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,
@@ -278,12 +278,13 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   def handleListTransactions(
     filteredProducerIds: Set[Long],
-    filteredStates: Set[String]
+    filteredStates: Set[String],
+    filteredDuration: Long = -1L
   ): ListTransactionsResponseData = {
     if (!isActive.get()) {
       new ListTransactionsResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code)
     } else {
-      txnManager.listTransactionStates(filteredProducerIds, filteredStates)
+      txnManager.listTransactionStates(filteredProducerIds, filteredStates, filteredDuration)
     }
   }
 
@@ -368,7 +369,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   if (txnMetadata.topicPartitions.contains(part))
                     (part, Errors.NONE)
                   else
-                    (part, Errors.INVALID_TXN_STATE)
+                    (part, Errors.TRANSACTION_ABORTABLE)
                 }.toMap)
               }
             }

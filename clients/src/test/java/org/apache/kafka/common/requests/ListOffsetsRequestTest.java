@@ -16,17 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
@@ -36,9 +30,24 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicR
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.apache.kafka.common.requests.ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
+import static org.apache.kafka.common.requests.ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 public class ListOffsetsRequestTest {
+
+    private final NodeApiVersions versionInfo = new NodeApiVersions(new ApiVersionsResponseData.ApiVersionCollection(), Collections.emptyList(), false);
 
     @Test
     public void testDuplicatePartitions() {
@@ -60,14 +69,14 @@ public class ListOffsetsRequestTest {
     @Test
     public void testGetErrorResponse() {
         for (short version = 1; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
-            List<ListOffsetsTopic> topics = Arrays.asList(
+            List<ListOffsetsTopic> topics = Collections.singletonList(
                     new ListOffsetsTopic()
                         .setName("topic")
                         .setPartitions(Collections.singletonList(
                                 new ListOffsetsPartition()
                                     .setPartitionIndex(0))));
             ListOffsetsRequest request = ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(topics)
                     .build(version);
             ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
@@ -93,14 +102,14 @@ public class ListOffsetsRequestTest {
 
     @Test
     public void testGetErrorResponseV0() {
-        List<ListOffsetsTopic> topics = Arrays.asList(
+        List<ListOffsetsTopic> topics = Collections.singletonList(
                 new ListOffsetsTopic()
                     .setName("topic")
                     .setPartitions(Collections.singletonList(
                             new ListOffsetsPartition()
                                 .setPartitionIndex(0))));
         ListOffsetsRequest request = ListOffsetsRequest.Builder
-                .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false)
+                .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                 .setTargetTimes(topics)
                 .build((short) 0);
         ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
@@ -145,4 +154,34 @@ public class ListOffsetsRequestTest {
         assertTrue(topic.partitions().contains(lop1));
     }
 
+    @Test
+    public void testCheckEarliestLocalTimestampVersion() {
+        int maxVersion = ApiKeys.LIST_OFFSETS.latestVersion();
+        for (int i = 0; i <= maxVersion; i++) {
+            testUnsupportedVersion(i, EARLIEST_LOCAL_TIMESTAMP);
+        }
+    }
+
+    @Test
+    public void testCheckLatestTieredTimestampVersion() {
+        int maxVersion = ApiKeys.LIST_OFFSETS.latestVersion();
+        for (int i = 0; i <= maxVersion; i++) {
+            testUnsupportedVersion(i, LATEST_TIERED_TIMESTAMP);
+        }
+    }
+
+    private void testUnsupportedVersion(int version, long timestamp) {
+        if (timestamp == EARLIEST_LOCAL_TIMESTAMP && version < 8) {
+            assertUnsupportedVersion(version);
+        } else if (timestamp == LATEST_TIERED_TIMESTAMP && version < 9) {
+            assertUnsupportedVersion(version);
+        }
+    }
+
+    private void assertUnsupportedVersion(int version) {
+        ApiKeys apiKey = ApiKeys.LIST_OFFSETS;
+        UnsupportedVersionException exception = assertThrows(UnsupportedVersionException.class,
+                () -> versionInfo.latestUsableVersion(apiKey, (short) version, apiKey.latestVersion()));
+        assertEquals("The node does not support " + apiKey, exception.getMessage());
+    }
 }

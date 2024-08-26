@@ -17,9 +17,9 @@
 
 package org.apache.kafka.metadata.util;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -34,7 +34,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.List;
-import java.util.OptionalLong;
 
 import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
 
@@ -62,11 +61,11 @@ public class BatchFileWriter implements AutoCloseable {
     }
 
     public void append(ApiMessageAndVersion apiMessageAndVersion) {
-        batchAccumulator.append(0, Collections.singletonList(apiMessageAndVersion), OptionalLong.empty(), false);
+        batchAccumulator.append(0, Collections.singletonList(apiMessageAndVersion), false);
     }
 
     public void append(List<ApiMessageAndVersion> messageBatch) {
-        batchAccumulator.append(0, messageBatch, OptionalLong.empty(), false);
+        batchAccumulator.append(0, messageBatch, false);
     }
 
     public void close() throws IOException {
@@ -95,9 +94,10 @@ public class BatchFileWriter implements AutoCloseable {
             0,
             Integer.MAX_VALUE,
             MAX_BATCH_SIZE_BYTES,
+            Integer.MAX_VALUE,
             new BatchMemoryPool(5, MAX_BATCH_SIZE_BYTES),
             time,
-            CompressionType.NONE,
+            Compression.NONE,
             new MetadataRecordSerde()
         );
 

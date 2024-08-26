@@ -17,8 +17,9 @@
 
 package org.apache.kafka.tools.reassign;
 
-import joptsimple.OptionSpec;
 import org.apache.kafka.server.util.CommandDefaultOptions;
+
+import joptsimple.OptionSpec;
 
 public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     // Actions
@@ -108,69 +109,5 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.");
 
         options = parser.parse(args);
-    }
-
-    public OptionSpec<?> verifyOpt() {
-        return verifyOpt;
-    }
-
-    public OptionSpec<?> generateOpt() {
-        return generateOpt;
-    }
-
-    public OptionSpec<?> executeOpt() {
-        return executeOpt;
-    }
-
-    public OptionSpec<?> cancelOpt() {
-        return cancelOpt;
-    }
-
-    public OptionSpec<?> listOpt() {
-        return listOpt;
-    }
-
-    public OptionSpec<String> bootstrapServerOpt() {
-        return bootstrapServerOpt;
-    }
-
-    public OptionSpec<String> commandConfigOpt() {
-        return commandConfigOpt;
-    }
-
-    public OptionSpec<String> reassignmentJsonFileOpt() {
-        return reassignmentJsonFileOpt;
-    }
-
-    public OptionSpec<String> topicsToMoveJsonFileOpt() {
-        return topicsToMoveJsonFileOpt;
-    }
-
-    public OptionSpec<String> brokerListOpt() {
-        return brokerListOpt;
-    }
-
-    public OptionSpec<?> disableRackAware() {
-        return disableRackAware;
-    }
-
-    public OptionSpec<Long> interBrokerThrottleOpt() {
-        return interBrokerThrottleOpt;
-    }
-
-    public OptionSpec<Long> replicaAlterLogDirsThrottleOpt() {
-        return replicaAlterLogDirsThrottleOpt;
-    }
-
-    public OptionSpec<Long> timeoutOpt() {
-        return timeoutOpt;
-    }
-
-    public OptionSpec<?> additionalOpt() {
-        return additionalOpt;
-    }
-
-    public OptionSpec<?> preserveThrottlesOpt() {
-        return preserveThrottlesOpt;
     }
 }

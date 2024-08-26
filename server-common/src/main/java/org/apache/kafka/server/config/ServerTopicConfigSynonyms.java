@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.server.config;
 
-import static java.util.Arrays.asList;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,25 +26,25 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.utils.Utils;
+
+import static java.util.Arrays.asList;
 
 public final class ServerTopicConfigSynonyms {
-    private static final String LOG_PREFIX = "log.";
-    private static final String LOG_CLEANER_PREFIX = LOG_PREFIX + "cleaner.";
+    public static final String LOG_PREFIX = "log.";
+    public static final String LOG_CLEANER_PREFIX = LOG_PREFIX + "cleaner.";
 
     /**
      * Maps topic configurations to their equivalent broker configurations.
-     *
+     * <br>
      * Topics can be configured either by setting their dynamic topic configurations, or by
      * setting equivalent broker configurations. For historical reasons, the equivalent broker
      * configurations have different names. This table maps each topic configuration to its
      * equivalent broker configurations.
-     *
+     * <br>
      * In some cases, the equivalent broker configurations must be transformed before they
      * can be used. For example, log.roll.hours must be converted to milliseconds before it
      * can be used as the value of segment.ms.
-     *
+     * <br>
      * The broker configurations will be used in the order specified here. In other words, if
      * both the first and the second synonyms are configured, we will use only the value of
      * the first synonym and ignore the second.
@@ -79,10 +80,15 @@ public final class ServerTopicConfigSynonyms {
         sameName(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG),
         sameName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG),
         sameName(TopicConfig.COMPRESSION_TYPE_CONFIG),
+        sameName(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG),
+        sameName(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG),
+        sameName(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG),
         sameNameWithLogPrefix(TopicConfig.PREALLOCATE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG),
+        sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG),
+        sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG),
         sameNameWithLogPrefix(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG)

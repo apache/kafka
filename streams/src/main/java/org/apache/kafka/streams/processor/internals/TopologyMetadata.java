@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.errors.UnknownTopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -29,8 +30,10 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
-import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopology;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -55,9 +58,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.emptySet;
 
@@ -189,7 +189,7 @@ public class TopologyMetadata {
     public void maybeNotifyTopologyVersionListeners() {
         try {
             lock();
-            final long minThreadVersion = getMinimumThreadVersion();
+            final long minThreadVersion = minimumThreadVersion();
             final Iterator<TopologyVersionListener> iterator = version.activeTopologyUpdateListeners.listIterator();
             TopologyVersionListener topologyVersionListener;
             while (iterator.hasNext()) {
@@ -207,7 +207,7 @@ public class TopologyMetadata {
     }
 
     // Return the minimum version across all live threads, or Long.MAX_VALUE if there are no threads running
-    private long getMinimumThreadVersion() {
+    private long minimumThreadVersion() {
         final Optional<Long> minVersion = threadVersions.values().stream().min(Long::compare);
         return minVersion.orElse(Long.MAX_VALUE);
     }
@@ -312,7 +312,7 @@ public class TopologyMetadata {
         return removeTopologyFuture;
     }
 
-    public TaskConfig getTaskConfigFor(final TaskId taskId) {
+    public TaskConfig taskConfig(final TaskId taskId) {
         final InternalTopologyBuilder builder = lookupBuilderForTask(taskId);
         return builder.topologyConfigs().getTaskConfig();
     }
@@ -360,7 +360,7 @@ public class TopologyMetadata {
         allInputTopics.addAll(newInputTopics);
     }
 
-    public int getNumStreamThreads(final StreamsConfig config) {
+    public int numStreamThreads(final StreamsConfig config) {
         final int configuredNumStreamThreads = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
 
         // If there are named topologies but some are empty, this indicates a bug in user code
@@ -521,13 +521,17 @@ public class TopologyMetadata {
         return lookupBuilderForNamedTopology(topologyName).stateStoreNameToFullSourceTopicNames();
     }
 
+    public Set<String> stateStoreNamesForSubtopology(final String topologyName, final int subtopologyId) {
+        return lookupBuilderForNamedTopology(topologyName).stateStoreNamesForSubtopology(subtopologyId);
+    }
+
     public Map<String, List<String>> stateStoreNameToSourceTopics() {
         final Map<String, List<String>> stateStoreNameToSourceTopics = new HashMap<>();
         applyToEachBuilder(b -> stateStoreNameToSourceTopics.putAll(b.stateStoreNameToFullSourceTopicNames()));
         return stateStoreNameToSourceTopics;
     }
 
-    public String getStoreForChangelogTopic(final String topicName) {
+    public String storeForChangelogTopic(final String topicName) {
         for (final InternalTopologyBuilder builder : builders.values()) {
             final String store = builder.getStoreForChangelogTopic(topicName);
             if (store != null) {
@@ -610,7 +614,7 @@ public class TopologyMetadata {
         }
     }
 
-    public Collection<NamedTopology> getAllNamedTopologies() {
+    public Collection<NamedTopology> allNamedTopologies() {
         return builders.values()
             .stream()
             .map(InternalTopologyBuilder::namedTopology)
@@ -646,7 +650,7 @@ public class TopologyMetadata {
         }
     }
 
-    public static class Subtopology {
+    public static class Subtopology implements Comparable<Subtopology> {
         final int nodeGroupId;
         final String namedTopology;
 
@@ -671,6 +675,22 @@ public class TopologyMetadata {
         @Override
         public int hashCode() {
             return Objects.hash(nodeGroupId, namedTopology);
+        }
+
+        @Override
+        public int compareTo(final Subtopology other) {
+            if (nodeGroupId != other.nodeGroupId) {
+                return Integer.compare(nodeGroupId, other.nodeGroupId);
+            }
+            if (namedTopology == null) {
+                return other.namedTopology == null ? 0 : -1;
+            }
+            if (other.namedTopology == null) {
+                return 1;
+            }
+
+            // Both not null
+            return namedTopology.compareTo(other.namedTopology);
         }
     }
 }

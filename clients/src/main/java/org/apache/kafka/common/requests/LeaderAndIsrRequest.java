@@ -20,16 +20,15 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveLeader;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.FlattenedIterator;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -40,28 +39,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class LeaderAndIsrRequest extends AbstractControlRequest {
+public final class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
 
         private final List<LeaderAndIsrPartitionState> partitionStates;
         private final Map<String, Uuid> topicIds;
         private final Collection<Node> liveLeaders;
+        private final Type updateType;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
             this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds,
-                liveLeaders, false);
+                liveLeaders, false, Type.UNKNOWN);
         }
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
-                       Collection<Node> liveLeaders, boolean kraftController) {
+                       Collection<Node> liveLeaders, boolean kraftController, Type updateType) {
             super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.partitionStates = partitionStates;
             this.topicIds = topicIds;
             this.liveLeaders = liveLeaders;
+            this.updateType = updateType;
         }
 
         @Override
@@ -80,6 +81,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
             if (version >= 7) {
                 data.setIsKRaftController(kraftController);
+            }
+
+            if (version >= 5) {
+                data.setType(updateType.toByte());
             }
 
             if (version >= 2) {
@@ -107,23 +112,21 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=LeaderAndIsRequest")
-                .append(", controllerId=").append(controllerId)
-                .append(", controllerEpoch=").append(controllerEpoch)
-                .append(", brokerEpoch=").append(brokerEpoch)
-                .append(", partitionStates=").append(partitionStates)
-                .append(", topicIds=").append(topicIds)
-                .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
-                .append(")");
-            return bld.toString();
+            return "(type=LeaderAndIsRequest" +
+                    ", controllerId=" + controllerId +
+                    ", controllerEpoch=" + controllerEpoch +
+                    ", brokerEpoch=" + brokerEpoch +
+                    ", partitionStates=" + partitionStates +
+                    ", topicIds=" + topicIds +
+                    ", liveLeaders=(" + liveLeaders.stream().map(Node::toString).collect(Collectors.joining(", ")) + ")" +
+                    ")";
 
         }
     }
 
     private final LeaderAndIsrRequestData data;
 
-    LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
+    public LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
         super(ApiKeys.LEADER_AND_ISR, version);
         this.data = data;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)
@@ -208,6 +211,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public List<LeaderAndIsrLiveLeader> liveLeaders() {
         return Collections.unmodifiableList(data.liveLeaders());
+    }
+
+    public Type requestType() {
+        return Type.fromByte(data.type());
     }
 
     @Override

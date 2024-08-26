@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -36,13 +37,14 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -66,10 +68,12 @@ public class PurgeRepartitionTopicIntegrationTest {
     private static KafkaStreams kafkaStreams;
     private static final Integer PURGE_INTERVAL_MS = 10;
     private static final Integer PURGE_SEGMENT_BYTES = 2000;
+    private static final Integer INITIAL_TASK_DELAY_MS = 0;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
         {
             put("log.retention.check.interval.ms", PURGE_INTERVAL_MS);
+            put("log.initial.task.delay.ms", INITIAL_TASK_DELAY_MS);
             put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 0);
         }
     });
@@ -86,11 +90,11 @@ public class PurgeRepartitionTopicIntegrationTest {
     }
 
 
-    private final Time time = CLUSTER.time;
+    private final Time time = new MockTime(1);
 
     private class RepartitionTopicCreatedWithExpectedConfigs implements TestCondition {
         @Override
-        final public boolean conditionMet() {
+        public final boolean conditionMet() {
             try {
                 final Set<String> topics = adminClient.listTopics().names().get();
 
@@ -180,6 +184,9 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     @AfterEach
     public void shutdown() {
+        if (adminClient != null) {
+            adminClient.close();
+        }
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));
         }
@@ -210,12 +217,12 @@ public class PurgeRepartitionTopicIntegrationTest {
             60000,
             "Repartition topic " + REPARTITION_TOPIC + " not received more than " + PURGE_SEGMENT_BYTES + "B of data after 60000 ms."
         );
-
-        // we need long enough timeout to by-pass the log manager's InitialTaskDelayMs, which is hard-coded on server side
+        
+        final long waitForPurgeMs = 60000;
         TestUtils.waitForCondition(
             new RepartitionTopicVerified(currentSize -> currentSize <= PURGE_SEGMENT_BYTES),
-            60000,
-            "Repartition topic " + REPARTITION_TOPIC + " not purged data after 60000 ms."
+            waitForPurgeMs,
+            "Repartition topic " + REPARTITION_TOPIC + " not purged data after " + waitForPurgeMs + " ms."
         );
     }
 }

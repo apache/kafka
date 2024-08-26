@@ -17,23 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.TreeMap;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.impl.Arguments;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
-import net.sourceforge.argparse4j.inf.Subparser;
-import net.sourceforge.argparse4j.inf.Subparsers;
-import net.sourceforge.argparse4j.internal.HelpScreenException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
@@ -43,6 +26,27 @@ import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.util.CommandLineUtils;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.impl.Arguments;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
+import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.Subparser;
+import net.sourceforge.argparse4j.inf.Subparsers;
+import net.sourceforge.argparse4j.internal.HelpScreenException;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static net.sourceforge.argparse4j.impl.Arguments.append;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -73,13 +77,12 @@ public class FeatureCommand {
                 .newArgumentParser("kafka-features")
                 .defaultHelp(true)
                 .description("This tool manages feature flags in Kafka.");
-        parser
-                .addArgument("--bootstrap-server")
-                .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka cluster.")
-                .required(true);
-
-        parser
-                .addArgument("--command-config")
+        MutuallyExclusiveGroup bootstrapGroup = parser.addMutuallyExclusiveGroup().required(true);
+        bootstrapGroup.addArgument("--bootstrap-server")
+                .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka cluster.");
+        bootstrapGroup.addArgument("--bootstrap-controller")
+                .help("A comma-separated list of host:port pairs to use for establishing the connection to the KRaft quorum.");
+        parser.addArgument("--command-config")
                 .type(Arguments.fileType())
                 .help("Property file containing configs to be passed to Admin Client.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
@@ -93,13 +96,9 @@ public class FeatureCommand {
         String configPath = namespace.getString("command_config");
         Properties properties = (configPath == null) ? new Properties() : Utils.loadProps(configPath);
 
-        String bootstrapServer = namespace.getString("bootstrap_server");
-        if (bootstrapServer != null) {
-            properties.setProperty("bootstrap.servers", bootstrapServer);
-        }
-        if (properties.getProperty("bootstrap.servers") == null) {
-            throw new TerseException("Please specify --bootstrap-server.");
-        }
+        CommandLineUtils.initializeBootstrapProperties(properties,
+            Optional.ofNullable(namespace.getString("bootstrap_server")),
+            Optional.ofNullable(namespace.getString("bootstrap_controller")));
 
         try (Admin adminClient = Admin.create(properties)) {
             switch (command) {
@@ -245,9 +244,9 @@ public class FeatureCommand {
             try {
                 version = MetadataVersion.fromVersionString(metadata);
             } catch (Throwable e) {
-                throw new TerseException("Unsupported metadata version " + metadata +
-                        ". Supported metadata versions are " + metadataVersionsToString(
-                        MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latest()));
+                throw new TerseException("Unsupported metadata.version " + metadata +
+                        ". Supported metadata.version are " + metadataVersionsToString(
+                        MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
             }
             updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(version.featureLevel(), upgradeType));
         }

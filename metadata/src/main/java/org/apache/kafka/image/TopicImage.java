@@ -24,8 +24,8 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
 
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 
@@ -68,7 +68,7 @@ public final class TopicImage {
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();
-            writer.write(partition.toRecord(id, partitionId));
+            writer.write(partition.toRecord(id, partitionId, options));
         }
     }
 

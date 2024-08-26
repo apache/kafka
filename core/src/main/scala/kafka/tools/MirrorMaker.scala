@@ -30,7 +30,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.errors.{TimeoutException, WakeupException}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
@@ -239,7 +239,7 @@ object MirrorMaker extends Logging {
           exitingOnSendFailure = true
           fatal("Mirror maker thread failure due to ", t)
       } finally {
-        CoreUtils.swallow ({
+        CoreUtils.swallow({
           info("Flushing producer.")
           producer.flush()
 
@@ -527,7 +527,7 @@ object MirrorMaker extends Logging {
       offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
       val numStreams = options.valueOf(numStreamsOpt).intValue()
 
-      Exit.addShutdownHook("MirrorMakerShutdownHook", cleanShutdown())
+      Exit.addShutdownHook("MirrorMakerShutdownHook", () => cleanShutdown())
 
       // create producer
       val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))

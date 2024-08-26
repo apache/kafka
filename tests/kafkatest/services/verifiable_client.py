@@ -60,8 +60,8 @@ Common requirements for both:
  * Log/debug to stderr
 
 Common communication for both:
- * `{ "name": "startup_complete" }` - Client succesfully started
- * `{ "name": "shutdown_complete" }` - Client succesfully terminated (after receiving SIGINT/SIGTERM)
+ * `{ "name": "startup_complete" }` - Client successfully started
+ * `{ "name": "shutdown_complete" }` - Client successfully terminated (after receiving SIGINT/SIGTERM)
 
 
 ==================

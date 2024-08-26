@@ -23,6 +23,7 @@ import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -63,8 +64,9 @@ public class BootstrapDirectory {
     }
 
     public BootstrapMetadata read() throws Exception {
-        if (!Files.isDirectory(Paths.get(directoryPath))) {
-            if (Files.exists(Paths.get(directoryPath))) {
+        Path path = Paths.get(directoryPath);
+        if (!Files.isDirectory(path)) {
+            if (Files.exists(path)) {
                 throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
                         "a directory.");
             } else {
@@ -81,7 +83,7 @@ public class BootstrapDirectory {
 
     BootstrapMetadata readFromConfiguration() {
         if (!ibp.isPresent()) {
-            return BootstrapMetadata.fromVersion(MetadataVersion.latest(), "the default bootstrap");
+            return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
         }
         MetadataVersion version = MetadataVersion.fromVersionString(ibp.get());
         if (version.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
@@ -107,7 +109,7 @@ public class BootstrapDirectory {
                 "the binary bootstrap metadata file: " + binaryPath);
     }
 
-    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws Exception {
+    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException {
         if (!Files.isDirectory(Paths.get(directoryPath))) {
             throw new RuntimeException("No such directory as " + directoryPath);
         }

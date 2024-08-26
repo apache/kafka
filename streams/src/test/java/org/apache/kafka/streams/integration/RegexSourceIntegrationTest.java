@@ -46,14 +46,15 @@ import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -137,7 +138,7 @@ public class RegexSourceIntegrationTest {
         properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-            IntegrationTestUtils.safeUniqueTestName(RegexSourceIntegrationTest.class, testInfo),
+            IntegrationTestUtils.safeUniqueTestName(testInfo),
             CLUSTER.bootstrapServers(),
             STRING_SERDE_CLASSNAME,
             STRING_SERDE_CLASSNAME,
@@ -289,7 +290,7 @@ public class RegexSourceIntegrationTest {
             streams.start();
             TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
         } finally {
-            CLUSTER.deleteTopic("TEST-TOPIC-A");
+            CLUSTER.deleteTopicAndWait("TEST-TOPIC-A");
         }
 
         TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);

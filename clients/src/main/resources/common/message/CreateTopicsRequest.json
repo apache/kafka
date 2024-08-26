@@ -30,6 +30,7 @@
   //
   // Version 7 is the same as version 6.
   "validVersions": "0-7",
+  "deprecatedVersions": "0-1",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
@@ -47,7 +48,7 @@
         { "name": "BrokerIds", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The brokers to place the partition on." }
       ]},
-      { "name": "Configs", "type": "[]CreateableTopicConfig", "versions": "0+",
+      { "name": "Configs", "type": "[]CreatableTopicConfig", "versions": "0+",
         "about": "The custom topic configurations to set.", "fields": [
         { "name": "Name", "type": "string", "versions": "0+" , "mapKey": true,
           "about": "The configuration name." },

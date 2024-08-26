@@ -25,87 +25,158 @@ import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.DescribeLogDirsResult;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.junit.jupiter.api.AfterEach;
+
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
-@ClusterTestDefaults(clusterType = Type.ZK)   // Set defaults for a few params in @ClusterTest(s)
+import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
+import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
+
+@ClusterTestDefaults(types = {Type.ZK}, serverProperties = {
+    @ClusterConfigProperty(key = "default.key", value = "default.value"),
+    @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "100"),
+})  // Set defaults for a few params in @ClusterTest(s)
 @ExtendWith(ClusterTestExtensions.class)
 public class ClusterTestExtensionsTest {
 
     private final ClusterInstance clusterInstance;
-    private final ClusterConfig config;
 
-    ClusterTestExtensionsTest(ClusterInstance clusterInstance, ClusterConfig config) {     // Constructor injections
+    ClusterTestExtensionsTest(ClusterInstance clusterInstance) {     // Constructor injections
         this.clusterInstance = clusterInstance;
-        this.config = config;
     }
 
     // Static methods can generate cluster configurations
-    static void generate1(ClusterGenerator clusterGenerator) {
-        clusterGenerator.accept(ClusterConfig.defaultClusterBuilder().name("Generated Test").build());
-    }
-
-    // BeforeEach run after class construction, but before cluster initialization and test invocation
-    @BeforeEach
-    public void beforeEach(ClusterConfig config) {
-        Assertions.assertSame(this.config, config, "Injected objects should be the same");
-        config.serverProperties().put("before", "each");
-    }
-
-    // AfterEach runs after test invocation and cluster teardown
-    @AfterEach
-    public void afterEach(ClusterConfig config) {
-        Assertions.assertSame(this.config, config, "Injected objects should be the same");
+    static List<ClusterConfig> generate1() {
+        Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.put("foo", "bar");
+        return Collections.singletonList(ClusterConfig.defaultBuilder()
+                .setTypes(Collections.singleton(Type.ZK))
+                .setServerProperties(serverProperties)
+                .setTags(Collections.singletonList("Generated Test"))
+                .build());
     }
 
     // With no params, configuration comes from the annotation defaults as well as @ClusterTestDefaults (if present)
     @ClusterTest
-    public void testClusterTest(ClusterConfig config, ClusterInstance clusterInstance) {
-        Assertions.assertSame(this.config, config, "Injected objects should be the same");
+    public void testClusterTest(ClusterInstance clusterInstance) {
         Assertions.assertSame(this.clusterInstance, clusterInstance, "Injected objects should be the same");
-        Assertions.assertEquals(clusterInstance.clusterType(), ClusterInstance.ClusterType.ZK); // From the class level default
-        Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("before"), "each");
+        Assertions.assertEquals(Type.ZK, clusterInstance.type()); // From the class level default
+        Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
     }
 
     // generate1 is a template method which generates any number of cluster configs
     @ClusterTemplate("generate1")
     public void testClusterTemplate() {
-        Assertions.assertEquals(clusterInstance.clusterType(), ClusterInstance.ClusterType.ZK,
+        Assertions.assertEquals(Type.ZK, clusterInstance.type(),
             "generate1 provided a Zk cluster, so we should see that here");
-        Assertions.assertEquals(clusterInstance.config().name().orElse(""), "Generated Test",
-            "generate1 named this cluster config, so we should see that here");
-        Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("before"), "each");
+        Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
+        Assertions.assertEquals(Collections.singletonList("Generated Test"), clusterInstance.config().tags());
     }
 
     // Multiple @ClusterTest can be used with @ClusterTests
     @ClusterTests({
-        @ClusterTest(name = "cluster-tests-1", clusterType = Type.ZK, serverProperties = {
+        @ClusterTest(types = {Type.ZK}, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "bar"),
+            @ClusterConfigProperty(key = "spam", value = "eggs"),
+            @ClusterConfigProperty(id = 86400, key = "baz", value = "qux"), // this one will be ignored as there is no broker id is 86400
             @ClusterConfigProperty(key = "spam", value = "eggs")
+        }, tags = {
+                "default.display.key1", "default.display.key2"
         }),
-        @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
+        @ClusterTest(types = {Type.KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
-            @ClusterConfigProperty(key = "spam", value = "eggz")
+            @ClusterConfigProperty(key = "spam", value = "eggz"),
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value"),
+            @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "200"),
+            @ClusterConfigProperty(id = 3000, key = "queued.max.requests", value = "300"),
+            @ClusterConfigProperty(key = "spam", value = "eggs"),
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
+        }, tags = {
+                "default.display.key1", "default.display.key2"
         }),
-        @ClusterTest(name = "cluster-tests-3", clusterType = Type.CO_KRAFT, serverProperties = {
+        @ClusterTest(types = {Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
-            @ClusterConfigProperty(key = "spam", value = "eggz")
+            @ClusterConfigProperty(key = "spam", value = "eggz"),
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value"),
+            @ClusterConfigProperty(id = 0, key = "queued.max.requests", value = "200"),
+            @ClusterConfigProperty(key = "spam", value = "eggs"),
+            @ClusterConfigProperty(key = "default.key", value = "overwrite.value")
+        }, tags = {
+                "default.display.key1", "default.display.key2"
         })
     })
-    public void testClusterTests() {
-        if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.ZK)) {
-            Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "bar");
-            Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggs");
-        } else if (clusterInstance.clusterType().equals(ClusterInstance.ClusterType.RAFT)) {
-            Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("foo"), "baz");
-            Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("spam"), "eggz");
+    public void testClusterTests() throws ExecutionException, InterruptedException {
+        if (!clusterInstance.isKRaftTest()) {
+            Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
+            Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
+            Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
+            Assertions.assertEquals(Arrays.asList("default.display.key1", "default.display.key2"), clusterInstance.config().tags());
+
+            // assert broker server 0 contains property queued.max.requests 100 from ClusterTestDefaults
+            try (Admin admin = clusterInstance.createAdminClient()) {
+                ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+                Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                Assertions.assertEquals(1, configs.size());
+                Assertions.assertEquals("100", configs.get(configResource).get("queued.max.requests").value());
+            }
         } else {
-            Assertions.fail("Unknown cluster type " + clusterInstance.clusterType());
+            Assertions.assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
+            Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
+            Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
+            Assertions.assertEquals(Arrays.asList("default.display.key1", "default.display.key2"), clusterInstance.config().tags());
+
+            // assert broker server 0 contains property queued.max.requests 200 from ClusterTest which overrides
+            // the value 100 in server property in ClusterTestDefaults
+            try (Admin admin = clusterInstance.createAdminClient()) {
+                ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+                Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                Assertions.assertEquals(1, configs.size());
+                Assertions.assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
+            }
+            // In KRaft cluster non-combined mode, assert the controller server 3000 contains the property queued.max.requests 300
+            if (clusterInstance.type() == Type.KRAFT) {
+                try (Admin admin = Admin.create(Collections.singletonMap(
+                        AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
+                    ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
+                    Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singletonList(configResource)).all().get();
+                    Assertions.assertEquals(1, configs.size());
+                    Assertions.assertEquals("300", configs.get(configResource).get("queued.max.requests").value());
+                }
+            }
         }
+    }
+
+    @ClusterTests({
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}),
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, disksPerBroker = 2),
+    })
+    public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
+        Admin admin = clusterInstance.createAdminClient();
+
+        DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
+        result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) -> {
+            Assertions.assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size());
+        });
     }
 
     @ClusterTest(autoStart = AutoStart.NO)
@@ -116,7 +187,82 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTest
-    public void testDefaults(ClusterConfig config) {
-        Assertions.assertEquals(MetadataVersion.IBP_3_6_IV2, config.metadataVersion());
+    public void testDefaults(ClusterInstance clusterInstance) {
+        Assertions.assertEquals(MetadataVersion.latestTesting(), clusterInstance.config().metadataVersion());
+    }
+
+    @ClusterTests({
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+        }),
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+        }),
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+        }, tags = {"disable-new-coordinator-and-enable-new-consumer-rebalance-coordinator"}),
+    })
+    public void testSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
+        Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
+        supportedGroupProtocols.add(CLASSIC);
+        supportedGroupProtocols.add(CONSUMER);
+        Assertions.assertTrue(clusterInstance.supportedGroupProtocols().containsAll(supportedGroupProtocols));
+        Assertions.assertEquals(2, clusterInstance.supportedGroupProtocols().size());
+    }
+
+    @ClusterTests({
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+        }),
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+        }),
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+        }),
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+        }),
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+        }, tags = {"disable-new-coordinator-and-disable-new-consumer-rebalance-coordinator"}),
+    })
+    public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
+        Assertions.assertTrue(clusterInstance.supportedGroupProtocols().contains(CLASSIC));
+        Assertions.assertEquals(1, clusterInstance.supportedGroupProtocols().size());
+    }
+
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
+    public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
+        clusterInstance.waitForReadyBrokers();
+
+        // Remove broker id 0
+        clusterInstance.shutdownBroker(0);
+        Assertions.assertFalse(clusterInstance.aliveBrokers().containsKey(0));
+        Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
+
+        // add broker id 0 back
+        clusterInstance.startBroker(0);
+        Assertions.assertTrue(clusterInstance.aliveBrokers().containsKey(0));
+        Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
+    }
+
+
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
+    public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = clusterInstance.createAdminClient()) {
+            String testTopic = "testTopic";
+            admin.createTopics(Collections.singletonList(new NewTopic(testTopic, 1, (short) 1)));
+            clusterInstance.waitForTopic(testTopic, 1);
+            admin.deleteTopics(Collections.singletonList(testTopic));
+            clusterInstance.waitTopicDeletion(testTopic);
+            Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
+                    topic -> topic.name().equals(testTopic)
+            ));
+        }
     }
 }

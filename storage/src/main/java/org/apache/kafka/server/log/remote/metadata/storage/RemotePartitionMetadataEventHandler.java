@@ -22,8 +22,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 
-import java.io.IOException;
-
 public abstract class RemotePartitionMetadataEventHandler {
 
     public void handleRemoteLogMetadata(RemoteLogMetadata remoteLogMetadata) {
@@ -44,10 +42,17 @@ public abstract class RemotePartitionMetadataEventHandler {
 
     protected abstract void handleRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata);
 
-    public abstract void syncLogMetadataSnapshot(TopicIdPartition topicIdPartition,
-                                                 int metadataPartition,
-                                                 Long metadataPartitionOffset) throws IOException;
+    public void syncLogMetadataSnapshot(TopicIdPartition topicIdPartition,
+                                        int metadataPartition,
+                                        Long metadataPartitionOffset) {
+        // no-op by default
+    }
 
     public abstract void clearTopicPartition(TopicIdPartition topicIdPartition);
 
+    public abstract void markInitialized(TopicIdPartition partition);
+
+    public abstract boolean isInitialized(TopicIdPartition partition);
+
+    public abstract void maybeLoadPartition(TopicIdPartition partition);
 }

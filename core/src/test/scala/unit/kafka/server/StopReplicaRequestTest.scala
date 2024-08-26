@@ -17,13 +17,13 @@
 
 package kafka.server
 
-import kafka.api.LeaderAndIsr
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -41,25 +41,25 @@ class StopReplicaRequestTest extends BaseRequestTest {
 
   @Test
   def testStopReplicaRequest(): Unit = {
-    createTopic(topic, partitionNum, 1)
+    createTopic(topic, partitionNum)
     TestUtils.generateAndProduceMessages(servers, topic, 10)
 
     val server = servers.head
     val offlineDir = server.logManager.getLog(tp1).get.dir.getParent
-    server.replicaManager.handleLogDirFailure(offlineDir, sendZkNotification = false)
+    server.replicaManager.handleLogDirFailure(offlineDir, notifyController = false)
 
     val topicStates = Seq(
       new StopReplicaTopicState()
         .setTopicName(tp0.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp0.partition())
-          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.INITIAL_LEADER_EPOCH + 2)
           .setDeletePartition(true)).asJava),
       new StopReplicaTopicState()
         .setTopicName(tp1.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp1.partition())
-          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.INITIAL_LEADER_EPOCH + 2)
           .setDeletePartition(true)).asJava)
     ).asJava
 

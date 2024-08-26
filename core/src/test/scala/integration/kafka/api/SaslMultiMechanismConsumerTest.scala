@@ -12,17 +12,21 @@
   */
 package kafka.api
 
-import kafka.server.KafkaConfig
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.security.JaasTestUtils
+import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.config.ZkConfigs
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
+@Timeout(600)
 class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List("GSSAPI", "PLAIN")
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
@@ -31,7 +35,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
-      JaasTestUtils.KafkaServerContextName))
+      JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
   }
 
@@ -41,8 +45,9 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     closeSasl()
   }
 
-  @Test
-  def testMultipleBrokerMechanisms(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testMultipleBrokerMechanisms(quorum: String): Unit = {
     val plainSaslProducer = createProducer()
     val plainSaslConsumer = createConsumer()
 

@@ -25,10 +25,10 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import java.nio.ByteBuffer;
 
 /**
- * This class provides conversion of {@code ApiMessageAndVersion} to bytes and vice versa.. This can be used as serialization protocol for any
+ * This class provides conversion of {@code ApiMessageAndVersion} to bytes and vice versa. This can be used as serialization protocol for any
  * metadata records derived of {@code ApiMessage}s. It internally uses {@link AbstractApiMessageSerde} for serialization/deserialization
  * mechanism.
- * <p></p>
+ * <br><br>
  * Implementors need to extend this class and implement {@link #apiMessageFor(short)} method to return a respective
  * {@code ApiMessage} for the given {@code apiKey}. This is required to deserialize the bytes to build the respective
  * {@code ApiMessage} instance.

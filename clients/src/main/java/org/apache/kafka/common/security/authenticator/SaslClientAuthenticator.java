@@ -51,12 +51,9 @@ import org.apache.kafka.common.security.kerberos.KerberosError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
-import javax.security.auth.Subject;
-import javax.security.sasl.Sasl;
-import javax.security.sasl.SaslClient;
-import javax.security.sasl.SaslException;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -73,6 +70,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+
+import javax.security.auth.Subject;
+import javax.security.sasl.Sasl;
+import javax.security.sasl.SaslClient;
+import javax.security.sasl.SaslException;
 
 public class SaslClientAuthenticator implements Authenticator {
     /**
@@ -167,6 +169,7 @@ public class SaslClientAuthenticator implements Authenticator {
     // Version of SaslHandshake request/responses
     private short saslHandshakeVersion;
 
+    @SuppressWarnings("this-escape")
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    AuthenticateCallbackHandler callbackHandler,
                                    String node,
@@ -341,8 +344,7 @@ public class SaslClientAuthenticator implements Authenticator {
         previousSaslClientAuthenticator.close();
         reauthInfo.reauthenticating(apiVersionsResponseFromOriginalAuthentication,
                 reauthenticationContext.reauthenticationBeginNanos());
-        NetworkReceive netInBufferFromChannel = reauthenticationContext.networkReceive();
-        netInBuffer = netInBufferFromChannel;
+        netInBuffer = reauthenticationContext.networkReceive();
         setSaslState(SaslState.REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE); // Will set immediately
         authenticate();
     }
@@ -681,7 +683,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
         public void setAuthenticationEndAndSessionReauthenticationTimes(long nowNanos) {
             authenticationEndNanos = nowNanos;
-            long sessionLifetimeMsToUse = 0;
+            long sessionLifetimeMsToUse;
             if (positiveSessionLifetimeMs != null) {
                 // pick a random percentage between 85% and 95% for session re-authentication
                 double pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount = 0.85;

@@ -33,6 +33,11 @@ public class LogTruncationException extends OffsetOutOfRangeException {
 
     private final Map<TopicPartition, OffsetAndMetadata> divergentOffsets;
 
+    public LogTruncationException(Map<TopicPartition, Long> fetchOffsets,
+                                  Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
+        this("Truncated partitions detected with divergent offsets " + divergentOffsets, fetchOffsets, divergentOffsets);
+    }
+
     public LogTruncationException(String message,
                                   Map<TopicPartition, Long> fetchOffsets,
                                   Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {

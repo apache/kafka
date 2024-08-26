@@ -25,32 +25,31 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class KStreamTransformTest {
     private static final String TOPIC_NAME = "topic";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransform() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
-            () -> new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+        final org.apache.kafka.streams.kstream.TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
+            () -> new org.apache.kafka.streams.kstream.Transformer<Number, Number, KeyValue<Integer, Integer>>() {
                 private int total = 0;
 
                 @Override
@@ -74,7 +73,7 @@ public class KStreamTransformTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        final MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, Integer, Void, Void> processor = new MockProcessorSupplier<>();
         final KStream<Integer, Integer> stream = builder.stream(TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 
@@ -107,13 +106,12 @@ public class KStreamTransformTest {
         }
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransformWithNewDriverAndPunctuator() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
-            () -> new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+        final org.apache.kafka.streams.kstream.TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
+            () -> new org.apache.kafka.streams.kstream.Transformer<Number, Number, KeyValue<Integer, Integer>>() {
                 private int total = 0;
 
                 @Override
@@ -136,7 +134,7 @@ public class KStreamTransformTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        final MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, Integer, Void, Void> processor = new MockProcessorSupplier<>();
         final KStream<Integer, Integer> stream = builder.stream(TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 

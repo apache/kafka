@@ -22,6 +22,7 @@
   //
   // Version 2 is the first flexible version.
   "validVersions": "0-2",
+  "deprecatedVersions": "0",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "GroupsNames", "type": "[]string", "versions": "0+", "entityType": "groupId",

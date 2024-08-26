@@ -19,6 +19,8 @@ package kafka.server
 
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.metadata.VersionRange
+import org.apache.kafka.server.common.Features.PRODUCTION_FEATURES
 import org.apache.kafka.server.common.MetadataVersion
 
 import java.util
@@ -44,7 +46,12 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    */
   def defaultFinalizedFeatures: Map[String, Short] = {
     supportedFeatures.features.asScala.map {
-      case(name, versionRange) => (name, versionRange.max)
+      case(name, versionRange) =>
+        if (name.equals("kraft.version")) {
+          (name, 0.toShort)
+        } else {
+          (name, versionRange.max)
+        }
     }.toMap
   }
 
@@ -70,14 +77,38 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
 
 object BrokerFeatures extends Logging {
 
-  def createDefault(): BrokerFeatures = {
-    new BrokerFeatures(defaultSupportedFeatures())
+  def createDefault(unstableFeatureVersionsEnabled: Boolean): BrokerFeatures = {
+    new BrokerFeatures(defaultSupportedFeatures(unstableFeatureVersionsEnabled))
   }
 
-  def defaultSupportedFeatures(): Features[SupportedVersionRange] = {
-    Features.supportedFeatures(
-      java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
-        new SupportedVersionRange(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), MetadataVersion.latest().featureLevel())))
+  def createDefaultFeatureMap(features: BrokerFeatures): Map[String, VersionRange] = {
+    features.supportedFeatures.features.asScala.map {
+      case (name, versionRange) =>
+        (name, VersionRange.of(versionRange.min, versionRange.max))
+    }.toMap
+  }
+
+  def defaultSupportedFeatures(unstableFeatureVersionsEnabled: Boolean): Features[SupportedVersionRange] = {
+    val features = new util.HashMap[String, SupportedVersionRange]()
+      features.put(MetadataVersion.FEATURE_NAME,
+        new SupportedVersionRange(
+          MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+          if (unstableFeatureVersionsEnabled) {
+            MetadataVersion.latestTesting.featureLevel
+          } else {
+            MetadataVersion.latestProduction.featureLevel
+          }))
+    PRODUCTION_FEATURES.forEach {
+      feature =>
+        val maxVersion = if (unstableFeatureVersionsEnabled)
+          feature.latestTesting
+        else
+          feature.latestProduction
+        if (maxVersion > 0) {
+          features.put(feature.featureName, new SupportedVersionRange(feature.minimumProduction(), maxVersion))
+        }
+    }
+    Features.supportedFeatures(features)
   }
 
   def createEmpty(): BrokerFeatures = {

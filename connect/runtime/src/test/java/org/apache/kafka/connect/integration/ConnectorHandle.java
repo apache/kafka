@@ -18,6 +18,7 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,16 +101,6 @@ public class ConnectorHandle {
      */
     public Collection<TaskHandle> tasks() {
         return taskHandles.values();
-    }
-
-    /**
-     * Delete the task handle for this task id.
-     *
-     * @param taskId the task id.
-     */
-    public void deleteTask(String taskId) {
-        log.info("Removing handle for {} task in connector {}", taskId, connectorName);
-        taskHandles.remove(taskId);
     }
 
     /**

@@ -21,20 +21,21 @@ import java.util
 import java.util.{Collections, Optional}
 
 import org.junit.jupiter.api.TestInfo
+import org.apache.kafka.clients.consumer.GroupProtocol
 
 class EmptyTestInfo extends TestInfo {
   override def getDisplayName: String = ""
   override def getTags: util.Set[String] = Collections.emptySet()
-  override def getTestClass: (Optional[Class[_]]) = Optional.empty()
+  override def getTestClass: Optional[Class[_]] = Optional.empty()
   override def getTestMethod: Optional[Method] = Optional.empty()
 }
 
 object TestInfoUtils {
   def isKRaft(testInfo: TestInfo): Boolean = {
-    if (testInfo.getDisplayName().contains("quorum=")) {
-      if (testInfo.getDisplayName().contains("quorum=kraft")) {
+    if (testInfo.getDisplayName.contains("quorum=")) {
+      if (testInfo.getDisplayName.contains("quorum=kraft")) {
         true
-      } else if (testInfo.getDisplayName().contains("quorum=zk")) {
+      } else if (testInfo.getDisplayName.contains("quorum=zk")) {
         false
       } else {
         throw new RuntimeException(s"Unknown quorum value")
@@ -48,8 +49,26 @@ object TestInfoUtils {
     if (!isKRaft(testInfo)) {
       false
     } else {
-      testInfo.getDisplayName().contains("quorum=zkMigration")
+      testInfo.getDisplayName.contains("quorum=zkMigration")
     }
   }
-  final val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
+
+  final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
+
+  def isNewGroupCoordinatorEnabled(testInfo: TestInfo): Boolean = {
+    testInfo.getDisplayName.contains("kraft+kip848")
+  }
+
+  def isShareGroupTest(testInfo: TestInfo): Boolean = {
+    testInfo.getDisplayName.contains("kraft+kip932")
+  }
+
+  def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
+    if (testInfo.getDisplayName.contains("groupProtocol=classic"))
+      Some(GroupProtocol.CLASSIC)
+    else if (testInfo.getDisplayName.contains("groupProtocol=consumer"))
+      Some(GroupProtocol.CONSUMER)
+    else
+      None
+  }
 }

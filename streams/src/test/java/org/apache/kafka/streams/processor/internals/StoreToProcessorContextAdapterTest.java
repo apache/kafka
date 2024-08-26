@@ -21,85 +21,90 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.To;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 
-@RunWith(EasyMockRunner.class)
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StoreToProcessorContextAdapterTest {
-    @Mock(MockType.NICE)
+    @Mock
     private StateStoreContext delegate;
     private ProcessorContext context;
-    @Mock(MockType.NICE)
+    @Mock
     private Punctuator punctuator;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         context = StoreToProcessorContextAdapter.adapt(delegate);
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnCurrentSystemTime() {
-        context.currentSystemTimeMs();
+        assertThrows(UnsupportedOperationException.class, () -> context.currentSystemTimeMs());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnCurrentStreamTime() {
-        context.currentStreamTimeMs();
+        assertThrows(UnsupportedOperationException.class, () -> context.currentStreamTimeMs());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnGetStateStore() {
-        context.getStateStore("store");
+        assertThrows(UnsupportedOperationException.class, () -> context.getStateStore("store"));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnScheduleWithDuration() {
-        context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator);
+        assertThrows(UnsupportedOperationException.class, () -> context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnForward() {
-        context.forward("key", "value");
+        assertThrows(UnsupportedOperationException.class, () -> context.forward("key", "value"));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnForwardWithTo() {
-        context.forward("key", "value", To.all());
+        assertThrows(UnsupportedOperationException.class, () -> context.forward("key", "value", To.all()));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnCommit() {
-        context.commit();
+        assertThrows(UnsupportedOperationException.class, () -> context.commit());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnTopic() {
-        context.topic();
+        assertThrows(UnsupportedOperationException.class, () -> context.topic());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnPartition() {
-        context.partition();
+        assertThrows(UnsupportedOperationException.class, () -> context.partition());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnOffset() {
-        context.offset();
+        assertThrows(UnsupportedOperationException.class, () -> context.offset());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnHeaders() {
-        context.headers();
+        assertThrows(UnsupportedOperationException.class, () -> context.headers());
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnTimestamp() {
-        context.timestamp();
+        assertThrows(UnsupportedOperationException.class, () -> context.timestamp());
     }
 }

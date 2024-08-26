@@ -17,35 +17,26 @@
 package kafka.coordinator.group
 
 import kafka.server.ReplicaManager
-import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{NotLeaderOrFollowerException, RecordTooLargeException}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.utils.{MockTime, Time}
-import org.apache.kafka.coordinator.group.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
+import org.apache.kafka.coordinator.common.runtime.PartitionWriter
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
+import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.nio.charset.Charset
-import java.util.{Collections, Properties}
+import java.util.Collections
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
-
-class StringKeyValueSerializer extends PartitionWriter.Serializer[(String, String)] {
-  override def serializeKey(record: (String, String)): Array[Byte] = {
-    record._1.getBytes(Charset.defaultCharset())
-  }
-
-  override def serializeValue(record: (String, String)): Array[Byte] = {
-    record._2.getBytes(Charset.defaultCharset())
-  }
-}
 
 class CoordinatorPartitionWriterTest {
   @Test
@@ -53,10 +44,7 @@ class CoordinatorPartitionWriterTest {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
     val partitionRecordWriter = new CoordinatorPartitionWriter(
-      replicaManager,
-      new StringKeyValueSerializer(),
-      CompressionType.NONE,
-      Time.SYSTEM
+      replicaManager
     )
 
     val listener = new PartitionWriter.Listener {
@@ -80,21 +68,28 @@ class CoordinatorPartitionWriterTest {
   }
 
   @Test
+  def testConfig(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+
+    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(Map.empty.asJava)))
+    assertEquals(new LogConfig(Map.empty.asJava), partitionRecordWriter.config(tp))
+
+    when(replicaManager.getLogConfig(tp)).thenReturn(None)
+    assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.config(tp))
+  }
+
+
+  @Test
   def testWriteRecords(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
-    val time = new MockTime()
     val partitionRecordWriter = new CoordinatorPartitionWriter(
-      replicaManager,
-      new StringKeyValueSerializer(),
-      CompressionType.NONE,
-      time
+      replicaManager
     )
-
-    when(replicaManager.getLogConfig(tp)).thenReturn(Some(LogConfig.fromProps(
-      Collections.emptyMap(),
-      new Properties()
-    )))
 
     val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
@@ -112,8 +107,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any()
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
     )).thenAnswer( _ => {
       callbackCapture.getValue.apply(Map(
         tp -> new PartitionResponse(
@@ -128,44 +122,83 @@ class CoordinatorPartitionWriterTest {
       ))
     })
 
-    val records = List(
-      ("k0", "v0"),
-      ("k1", "v1"),
-      ("k2", "v2"),
+    val batch = MemoryRecords.withRecords(
+      Compression.NONE,
+      new SimpleRecord(
+        0L,
+        "foo".getBytes(Charset.defaultCharset()),
+        "bar".getBytes(Charset.defaultCharset())
+      )
     )
 
-    assertEquals(11, partitionRecordWriter.append(tp, records.asJava))
+    assertEquals(11, partitionRecordWriter.append(
+      tp,
+      VerificationGuard.SENTINEL,
+      batch
+    ))
 
-    val batch = recordsCapture.getValue.getOrElse(tp,
-      throw new AssertionError(s"No records for $tp"))
-    assertEquals(1, batch.batches().asScala.toList.size)
+    assertEquals(
+      batch,
+      recordsCapture.getValue.getOrElse(tp,
+        throw new AssertionError(s"No records for $tp"))
+    )
+  }
 
-    val receivedRecords = batch.records.asScala.map { record =>
-      (
-        Charset.defaultCharset().decode(record.key).toString,
-        Charset.defaultCharset().decode(record.value).toString,
-      )
-    }.toList
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array("NONE", "NOT_ENOUGH_REPLICAS"))
+  def testMaybeStartTransactionVerification(error: Errors): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager
+    )
 
-    assertEquals(records, receivedRecords)
+    val verificationGuard = if (error == Errors.NONE) {
+      new VerificationGuard()
+    } else {
+      VerificationGuard.SENTINEL
+    }
+
+    val callbackCapture: ArgumentCaptor[((Errors, VerificationGuard)) => Unit] =
+      ArgumentCaptor.forClass(classOf[((Errors, VerificationGuard)) => Unit])
+
+    when(replicaManager.maybeStartTransactionVerificationForPartition(
+      ArgumentMatchers.eq(tp),
+      ArgumentMatchers.eq("transactional-id"),
+      ArgumentMatchers.eq(10L),
+      ArgumentMatchers.eq(5.toShort),
+      ArgumentMatchers.eq(RecordBatch.NO_SEQUENCE),
+      callbackCapture.capture(),
+      ArgumentMatchers.any()
+    )).thenAnswer(_ => {
+      callbackCapture.getValue.apply((
+        error,
+        verificationGuard
+      ))
+    })
+
+    val future = partitionRecordWriter.maybeStartTransactionVerification(
+      tp,
+      "transactional-id",
+      10L,
+      5.toShort,
+      ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
+    )
+
+    if (error == Errors.NONE) {
+      assertEquals(verificationGuard, future.get)
+    } else {
+      assertFutureThrows(future, error.exception.getClass)
+    }
   }
 
   @Test
   def testWriteRecordsWithFailure(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
-    val time = new MockTime()
     val partitionRecordWriter = new CoordinatorPartitionWriter(
-      replicaManager,
-      new StringKeyValueSerializer(),
-      CompressionType.NONE,
-      time
+      replicaManager
     )
-
-    when(replicaManager.getLogConfig(tp)).thenReturn(Some(LogConfig.fromProps(
-      Collections.emptyMap(),
-      new Properties()
-    )))
 
     val recordsCapture: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
@@ -183,93 +216,26 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any()
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply(Map(
         tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER)
       ))
     })
 
-    val records = List(
-      ("k0", "v0"),
-      ("k1", "v1"),
-      ("k2", "v2"),
+    val batch = MemoryRecords.withRecords(
+      Compression.NONE,
+      new SimpleRecord(
+        0L,
+        "foo".getBytes(Charset.defaultCharset()),
+        "bar".getBytes(Charset.defaultCharset())
+      )
     )
 
-    assertThrows(classOf[NotLeaderOrFollowerException],
-      () => partitionRecordWriter.append(tp, records.asJava))
-  }
-
-  @Test
-  def testWriteRecordTooLarge(): Unit = {
-    val tp = new TopicPartition("foo", 0)
-    val replicaManager = mock(classOf[ReplicaManager])
-    val partitionRecordWriter = new CoordinatorPartitionWriter(
-      replicaManager,
-      new StringKeyValueSerializer(),
-      CompressionType.NONE,
-      Time.SYSTEM
-    )
-
-    val maxBatchSize = 16384
-    when(replicaManager.getLogConfig(tp)).thenReturn(Some(LogConfig.fromProps(
-      Map(TopicConfig.MAX_MESSAGE_BYTES_CONFIG -> maxBatchSize).asJava,
-      new Properties()
-    )))
-
-    val randomBytes = TestUtils.randomBytes(maxBatchSize + 1)
-    // We need more than one record here because the first record
-    // is always allowed by the MemoryRecordsBuilder.
-    val records = List(
-      ("k0", new String(randomBytes)),
-      ("k1", new String(randomBytes)),
-    )
-
-    assertThrows(classOf[RecordTooLargeException],
-      () => partitionRecordWriter.append(tp, records.asJava))
-  }
-
-  @Test
-  def testWriteEmptyRecordList(): Unit = {
-    val tp = new TopicPartition("foo", 0)
-    val replicaManager = mock(classOf[ReplicaManager])
-    val partitionRecordWriter = new CoordinatorPartitionWriter(
-      replicaManager,
-      new StringKeyValueSerializer(),
-      CompressionType.NONE,
-      Time.SYSTEM
-    )
-
-    when(replicaManager.getLogConfig(tp)).thenReturn(Some(LogConfig.fromProps(
-      Collections.emptyMap(),
-      new Properties()
-    )))
-
-    assertThrows(classOf[IllegalStateException],
-      () => partitionRecordWriter.append(tp, List.empty.asJava))
-  }
-
-  @Test
-  def testNonexistentPartition(): Unit = {
-    val tp = new TopicPartition("foo", 0)
-    val replicaManager = mock(classOf[ReplicaManager])
-    val partitionRecordWriter = new CoordinatorPartitionWriter(
-      replicaManager,
-      new StringKeyValueSerializer(),
-      CompressionType.NONE,
-      Time.SYSTEM
-    )
-
-    when(replicaManager.getLogConfig(tp)).thenReturn(None)
-
-    val records = List(
-      ("k0", "v0"),
-      ("k1", "v1"),
-      ("k2", "v2"),
-    )
-
-    assertThrows(classOf[NotLeaderOrFollowerException],
-      () => partitionRecordWriter.append(tp, records.asJava))
+    assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.append(
+      tp,
+      VerificationGuard.SENTINEL,
+      batch
+    ))
   }
 }

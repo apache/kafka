@@ -20,7 +20,6 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDownLatch, Executors, Semaphore, TimeUnit}
-
 import scala.collection.Seq
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
 import kafka.server.KafkaConfig
@@ -28,6 +27,7 @@ import kafka.utils.TestUtils
 import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
@@ -35,7 +35,7 @@ import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
 import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertThrows, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 
@@ -103,7 +103,7 @@ class ZooKeeperClientTest extends QuorumTestHarness {
     // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
     // to kafka.zk.EmbeddedZookeeper
     val clientConfig = new ZKClientConfig()
-    val propKey = KafkaConfig.ZkClientCnxnSocketProp
+    val propKey = ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
     KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = newZooKeeperClient(clientConfig = clientConfig)
@@ -254,7 +254,7 @@ class ZooKeeperClientTest extends QuorumTestHarness {
       "Response code for getData should be OK"))
     getDataResponses.zipWithIndex.foreach { case (getDataResponse, i) =>
       assertEquals(Code.OK, getDataResponse.resultCode, "Response code for getData should be OK")
-      assertEquals(((i + 1) * 2), Integer.valueOf(new String(getDataResponse.data)), "Data for getData should match")
+      assertEquals((i + 1) * 2, Integer.valueOf(new String(getDataResponse.data)), "Data for getData should match")
     }
   }
 
@@ -333,6 +333,7 @@ class ZooKeeperClientTest extends QuorumTestHarness {
   }
 
   @Test
+  @Timeout(60)
   def testBlockOnRequestCompletionFromStateChangeHandler(): Unit = {
     // This tests the scenario exposed by KAFKA-6879 in which the expiration callback awaits
     // completion of a request which is handled by another thread
@@ -716,7 +717,7 @@ class ZooKeeperClientTest extends QuorumTestHarness {
 
   private def cleanMetricsRegistry(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry
-    metrics.allMetrics.keySet.forEach(metrics.removeMetric)
+    metrics.allMetrics.keySet.forEach(m => metrics.removeMetric(m))
   }
 
   private def bytes = UUID.randomUUID().toString.getBytes(StandardCharsets.UTF_8)

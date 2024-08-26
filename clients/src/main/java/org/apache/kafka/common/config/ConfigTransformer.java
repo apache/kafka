@@ -81,11 +81,11 @@ public class ConfigTransformer {
         // Collect the variables from the given configs that need transformation
         for (Map.Entry<String, String> config : configs.entrySet()) {
             if (config.getValue() != null) {
-                List<ConfigVariable> vars = getVars(config.getValue(), DEFAULT_PATTERN);
-                for (ConfigVariable var : vars) {
-                    Map<String, Set<String>> keysByPath = keysByProvider.computeIfAbsent(var.providerName, k -> new HashMap<>());
-                    Set<String> keys = keysByPath.computeIfAbsent(var.path, k -> new HashSet<>());
-                    keys.add(var.variable);
+                List<ConfigVariable> configVars = getVars(config.getValue(), DEFAULT_PATTERN);
+                for (ConfigVariable configVar : configVars) {
+                    Map<String, Set<String>> keysByPath = keysByProvider.computeIfAbsent(configVar.providerName, k -> new HashMap<>());
+                    Set<String> keys = keysByPath.computeIfAbsent(configVar.path, k -> new HashSet<>());
+                    keys.add(configVar.variable);
                 }
             }
         }

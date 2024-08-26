@@ -17,13 +17,14 @@
 
 package kafka.admin
 
-import joptsimple.{ArgumentAcceptingOptionSpec, OptionSet}
+import joptsimple.{OptionSet, OptionSpec, OptionSpecBuilder}
 import kafka.server.KafkaConfig
-import kafka.utils.{Exit, Logging, ToolsUtils}
 import kafka.utils.Implicits._
+import kafka.utils.{Logging, ToolsUtils}
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
+import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
 import org.apache.zookeeper.KeeperException
@@ -32,8 +33,8 @@ import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Queue
 import scala.concurrent._
 import scala.concurrent.duration._
 
@@ -62,10 +63,10 @@ import scala.concurrent.duration._
  */
 
 object ZkSecurityMigrator extends Logging {
-  val usageMessage = ("ZooKeeper Migration Tool Help. This tool updates the ACLs of "
+  private val usageMessage = ("ZooKeeper Migration Tool Help. This tool updates the ACLs of "
                       + "znodes as part of the process of setting up ZooKeeper "
                       + "authentication.")
-  val tlsConfigFileOption = "zk-tls-config-file"
+  private val tlsConfigFileOption = "zk-tls-config-file"
 
   def run(args: Array[String]): Unit = {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
@@ -81,12 +82,12 @@ object ZkSecurityMigrator extends Logging {
     if (jaasFile == null && !tlsClientAuthEnabled) {
       val errorMsg = s"No JAAS configuration file has been specified and no TLS client certificate has been specified. Please make sure that you set " +
         s"the system property ${JaasUtils.JAVA_LOGIN_CONFIG_PARAM} or provide a ZooKeeper client TLS configuration via --$tlsConfigFileOption <filename> " +
-        s"identifying at least ${KafkaConfig.ZkSslClientEnableProp}, ${KafkaConfig.ZkClientCnxnSocketProp}, and ${KafkaConfig.ZkSslKeyStoreLocationProp}"
+        s"identifying at least ${ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG}, ${ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG}, and ${ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG}"
       System.err.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration")
     }
 
-    if (!tlsClientAuthEnabled && !JaasUtils.isZkSaslEnabled()) {
+    if (!tlsClientAuthEnabled && !JaasUtils.isZkSaslEnabled) {
       val errorMsg = "Security isn't enabled, most likely the file isn't set properly: %s".format(jaasFile)
       System.out.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration")
@@ -106,7 +107,7 @@ object ZkSecurityMigrator extends Logging {
     val zkSessionTimeout = opts.options.valueOf(opts.zkSessionTimeoutOpt).intValue
     val zkConnectionTimeout = opts.options.valueOf(opts.zkConnectionTimeoutOpt).intValue
     val zkClient = KafkaZkClient(zkUrl, zkAcl, zkSessionTimeout, zkConnectionTimeout,
-      Int.MaxValue, Time.SYSTEM, zkClientConfig = zkClientConfig, name = "ZkSecurityMigrator")
+      Int.MaxValue, Time.SYSTEM, zkClientConfig = zkClientConfig, name = "ZkSecurityMigrator", enableEntityConfigControllerCheck = false)
     val enablePathCheck = opts.options.has(opts.enablePathCheckOpt)
     val migrator = new ZkSecurityMigrator(zkClient)
     migrator.run(enablePathCheck)
@@ -116,16 +117,15 @@ object ZkSecurityMigrator extends Logging {
     try {
       run(args)
     } catch {
-        case e: Exception => {
+        case e: Exception =>
           e.printStackTrace()
           // must exit with non-zero status so system tests will know we failed
           Exit.exit(1)
-        }
     }
   }
 
   def createZkClientConfigFromFile(filename: String) : ZKClientConfig = {
-    val zkTlsConfigFileProps = Utils.loadProps(filename, KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.asJava)
+    val zkTlsConfigFileProps = Utils.loadProps(filename, ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.asJava)
     val zkClientConfig = new ZKClientConfig() // Initializes based on any system properties that have been set
     // Now override any set system properties with explicitly-provided values from the config file
     // Emit INFO logs due to camel-case property names encouraging mistakes -- help people see mistakes they make
@@ -137,27 +137,27 @@ object ZkSecurityMigrator extends Logging {
     zkClientConfig
   }
 
-  private[admin] def createZkClientConfigFromOption(options: OptionSet, option: ArgumentAcceptingOptionSpec[String]) : Option[ZKClientConfig] =
+  private[admin] def createZkClientConfigFromOption(options: OptionSet, option: OptionSpec[String]) : Option[ZKClientConfig] =
     if (!options.has(option))
       None
     else
       Some(createZkClientConfigFromFile(options.valueOf(option)))
 
-  class ZkSecurityMigratorOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    val zkAclOpt = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
+  private class ZkSecurityMigratorOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+    val zkAclOpt: OptionSpec[String] = parser.accepts("zookeeper.acl", "Indicates whether to make the Kafka znodes in ZooKeeper secure or unsecure."
       + " The options are 'secure' and 'unsecure'").withRequiredArg().ofType(classOf[String])
-    val zkUrlOpt = parser.accepts("zookeeper.connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
+    val zkUrlOpt: OptionSpec[String] = parser.accepts("zookeeper.connect", "Sets the ZooKeeper connect string (ensemble). This parameter " +
       "takes a comma-separated list of host:port pairs.").withRequiredArg().defaultsTo("localhost:2181").
       ofType(classOf[String])
-    val zkSessionTimeoutOpt = parser.accepts("zookeeper.session.timeout", "Sets the ZooKeeper session timeout.").
+    val zkSessionTimeoutOpt: OptionSpec[Integer] = parser.accepts("zookeeper.session.timeout", "Sets the ZooKeeper session timeout.").
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
-    val zkConnectionTimeoutOpt = parser.accepts("zookeeper.connection.timeout", "Sets the ZooKeeper connection timeout.").
+    val zkConnectionTimeoutOpt: OptionSpec[Integer] = parser.accepts("zookeeper.connection.timeout", "Sets the ZooKeeper connection timeout.").
       withRequiredArg().ofType(classOf[java.lang.Integer]).defaultsTo(30000)
-    val enablePathCheckOpt = parser.accepts("enable.path.check", "Checks if all the root paths exist in ZooKeeper " +
+    val enablePathCheckOpt: OptionSpecBuilder = parser.accepts("enable.path.check", "Checks if all the root paths exist in ZooKeeper " +
       "before migration. If not, exit the command.")
-    val zkTlsConfigFile = parser.accepts(tlsConfigFileOption,
+    val zkTlsConfigFile: OptionSpec[String] = parser.accepts(tlsConfigFileOption,
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.mkString(", ") + " are ignored.")
+        ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
   }
@@ -165,14 +165,14 @@ object ZkSecurityMigrator extends Logging {
 
 class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   private val zkSecurityMigratorUtils = new ZkSecurityMigratorUtils(zkClient)
-  private val futures = new Queue[Future[String]]
+  private val futures = new mutable.Queue[Future[String]]
 
   private def setAcl(path: String, setPromise: Promise[String]): Unit = {
     info("Setting ACL for path %s".format(path))
     zkSecurityMigratorUtils.currentZooKeeper.setACL(path, zkClient.defaultAcls(path).asJava, -1, SetACLCallback, setPromise)
   }
 
-  private def getChildren(path: String, childrenPromise: Promise[String]): Unit = {
+  private def retrieveChildren(path: String, childrenPromise: Promise[String]): Unit = {
     info("Getting children to set ACLs for path %s".format(path))
     zkSecurityMigratorUtils.currentZooKeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
   }
@@ -193,7 +193,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
       futures += childrenPromise.future
     }
     setAcl(path, setPromise)
-    getChildren(path, childrenPromise)
+    retrieveChildren(path, childrenPromise)
   }
 
   private object GetChildrenCallback extends ChildrenCallback {

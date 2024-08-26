@@ -27,7 +27,4 @@ public class IndexOffsetOverflowException extends KafkaException {
         super(message);
     }
 
-    public IndexOffsetOverflowException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

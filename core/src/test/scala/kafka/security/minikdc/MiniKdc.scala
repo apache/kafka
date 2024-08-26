@@ -25,7 +25,7 @@ import java.nio.file.Files
 import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 
-import kafka.utils.{CoreUtils, Exit, Logging}
+import kafka.utils.{CoreUtils, Logging}
 
 import scala.jdk.CollectionConverters._
 import org.apache.commons.lang.text.StrSubstitutor
@@ -49,7 +49,7 @@ import org.apache.directory.server.kerberos.shared.keytab.{Keytab, KeytabEntry}
 import org.apache.directory.server.protocol.shared.transport.{TcpTransport, UdpTransport}
 import org.apache.directory.server.xdbm.Index
 import org.apache.directory.shared.kerberos.KerberosTime
-import org.apache.kafka.common.utils.{Java, Utils}
+import org.apache.kafka.common.utils.{Exit, Java, Utils}
 
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -132,7 +132,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val instanceLayout = ds.getInstanceLayout
     val schemaPartitionDirectory = new File(instanceLayout.getPartitionsDirectory, "schema")
     val extractor = new DefaultSchemaLdifExtractor(instanceLayout.getPartitionsDirectory)
-    extractor.extractOrCopy
+    extractor.extractOrCopy()
 
     val loader = new LdifSchemaLoader(schemaPartitionDirectory)
     val schemaManager = new DefaultSchemaManager(loader)
@@ -178,6 +178,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
     // And start the ds
     ds.setInstanceId(config.getProperty(MiniKdc.Instance))
+    ds.setShutdownHookEnabled(false)
     ds.startup()
 
     // context entry, after ds.startup()
@@ -274,6 +275,12 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       if (kdc != null) {
         System.clearProperty(MiniKdc.JavaSecurityKrb5Conf)
         System.clearProperty(MiniKdc.SunSecurityKrb5Debug)
+
+        // Close kdc acceptors and wait for them to terminate, ensuring that sockets are closed before returning.
+        for (transport <- kdc.getTransports) {
+          val acceptor = transport.getAcceptor
+          if (acceptor != null) acceptor.dispose(true)
+        }
         kdc.stop()
         try ds.shutdown()
         catch {
@@ -303,7 +310,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       |sn: $principal
       |uid: $principal
       |userPassword: $password
-      |krb5PrincipalName: ${principal}@${realm}
+      |krb5PrincipalName: $principal@$realm
       |krb5KeyVersionNumber: 0""".stripMargin
     addEntriesToDirectoryService(ldifContent)
   }
@@ -321,7 +328,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val keytab = new Keytab
     val entries = principals.flatMap { principal =>
       createPrincipal(principal, generatedPassword)
-      val principalWithRealm = s"${principal}@${realm}"
+      val principalWithRealm = s"$principal@$realm"
       val timestamp = new KerberosTime
       KerberosKeyFactory.getKerberosKeys(principalWithRealm, generatedPassword).asScala.values.map { encryptionKey =>
         val keyVersion = encryptionKey.getKeyVersion.toByte
@@ -390,7 +397,7 @@ object MiniKdc {
       |
     """.stripMargin
     println(infoMessage)
-    Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc.stop())
+    Exit.addShutdownHook("minikdc-shutdown-hook", () => miniKdc.stop())
     miniKdc
   }
 

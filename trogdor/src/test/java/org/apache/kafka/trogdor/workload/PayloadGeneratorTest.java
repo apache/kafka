@@ -17,21 +17,21 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class PayloadGeneratorTest {
 
     @Test

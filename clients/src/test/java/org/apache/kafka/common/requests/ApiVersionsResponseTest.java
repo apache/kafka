@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.requests;
 
-import java.util.Collections;
-import java.util.HashSet;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -32,10 +30,14 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -103,7 +105,8 @@ public class ApiVersionsResponseTest {
             ApiMessageType.ListenerType.ZK_BROKER,
             RecordVersion.current(),
             activeControllerApiVersions,
-            true
+            true,
+            false
         );
 
         verifyVersions(forwardableAPIKey.id, minVersion, maxVersion, commonResponse);
@@ -114,17 +117,17 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
-        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
-            10,
-            RecordVersion.V1,
-            Features.emptySupportedFeatures(),
-            Collections.emptyMap(),
-            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            null,
-            ListenerType.ZK_BROKER,
-            true,
-            false
-        );
+        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
+            setThrottleTimeMs(10).
+            setApiVersions(ApiVersionsResponse.filterApis(
+                RecordVersion.V1,
+                ListenerType.ZK_BROKER,
+                true,
+                true)).
+            setSupportedFeatures(Features.emptySupportedFeatures()).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            build();
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
         assertTrue(response.data().supportedFeatures().isEmpty());
@@ -134,18 +137,18 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
-            10,
-            RecordVersion.V1,
-            Features.supportedFeatures(
-                Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4)))),
-            Utils.mkMap(Utils.mkEntry("feature", (short) 3)),
-            10L,
-            null,
-            ListenerType.ZK_BROKER,
-            true,
-            false
-        );
+        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
+            setThrottleTimeMs(10).
+            setApiVersions(ApiVersionsResponse.filterApis(
+                RecordVersion.V1,
+                ListenerType.ZK_BROKER,
+                true,
+                true)).
+            setSupportedFeatures(Features.supportedFeatures(
+                Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4))))).
+            setFinalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", (short) 3))).
+            setFinalizedFeaturesEpoch(10L).
+            build();
 
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
@@ -165,17 +168,17 @@ public class ApiVersionsResponseTest {
     @ParameterizedTest
     @EnumSource(names = {"ZK_BROKER", "BROKER"})
     public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(ListenerType listenerType) {
-        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
-            AbstractResponse.DEFAULT_THROTTLE_TIME,
-            RecordVersion.current(),
-            Features.emptySupportedFeatures(),
-            Collections.emptyMap(),
-            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            null,
-            listenerType,
-            true,
-            false
-        );
+        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
+            setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
+            setApiVersions(ApiVersionsResponse.filterApis(
+                RecordVersion.current(),
+                listenerType,
+                true,
+                true)).
+            setSupportedFeatures(Features.emptySupportedFeatures()).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            build();
         assertEquals(new HashSet<>(ApiKeys.apisForListener(listenerType)), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data().supportedFeatures().isEmpty());
@@ -184,19 +187,50 @@ public class ApiVersionsResponseTest {
     }
 
     @Test
-    public void testMetadataQuorumApisAreDisabled() {
-        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
-            AbstractResponse.DEFAULT_THROTTLE_TIME,
-            RecordVersion.current(),
-            Features.emptySupportedFeatures(),
-            Collections.emptyMap(),
-            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            null,
-            ListenerType.ZK_BROKER,
-            true,
-            false
-        );
+    public void shouldCreateApiResponseWithTelemetryWhenEnabled() {
+        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
+            setThrottleTimeMs(10).
+            setApiVersions(ApiVersionsResponse.filterApis(
+                RecordVersion.V1,
+                ListenerType.BROKER,
+                true,
+                true)).
+            setSupportedFeatures(Features.emptySupportedFeatures()).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            build();
+        verifyApiKeysForTelemetry(response, 2);
+    }
 
+    @Test
+    public void shouldNotCreateApiResponseWithTelemetryWhenDisabled() {
+        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
+            setThrottleTimeMs(10).
+            setApiVersions(ApiVersionsResponse.filterApis(
+                RecordVersion.V1,
+                ListenerType.BROKER,
+                true,
+                false)).
+            setSupportedFeatures(Features.emptySupportedFeatures()).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            build();
+        verifyApiKeysForTelemetry(response, 0);
+    }
+
+    @Test
+    public void testMetadataQuorumApisAreDisabled() {
+        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
+            setThrottleTimeMs(AbstractResponse.DEFAULT_THROTTLE_TIME).
+            setApiVersions(ApiVersionsResponse.filterApis(
+                RecordVersion.current(),
+                ListenerType.ZK_BROKER,
+                true,
+                true)).
+            setSupportedFeatures(Features.emptySupportedFeatures()).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            build();
         // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them
         HashSet<ApiKeys> exposedApis = apiKeysInResponse(response);
         assertFalse(exposedApis.contains(ApiKeys.VOTE));
@@ -236,6 +270,38 @@ public class ApiVersionsResponseTest {
         assertEquals(expected, ApiVersionsResponse.intersect(other, thisVersion).get());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testAlterV0Features(boolean alterV0Features) {
+        Features<SupportedVersionRange> supported =
+            Features.supportedFeatures(Collections.singletonMap("my.feature",
+                new SupportedVersionRange((short) 0, (short) 1)));
+        ApiVersionsResponse response = new ApiVersionsResponse.Builder().
+            setApiVersions(ApiVersionsResponse.filterApis(
+                RecordVersion.current(),
+                ListenerType.BROKER,
+                true,
+                true)).
+            setSupportedFeatures(supported).
+            setFinalizedFeatures(Collections.emptyMap()).
+            setFinalizedFeaturesEpoch(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH).
+            setAlterFeatureLevel0(alterV0Features).
+            build();
+        if (alterV0Features) {
+            assertEquals(new SupportedFeatureKey().
+                setName("my.feature").
+                setMinVersion((short) 1).
+                setMaxVersion((short) 1),
+                response.data().supportedFeatures().find("my.feature"));
+        } else {
+            assertEquals(new SupportedFeatureKey().
+                setName("my.feature").
+                setMinVersion((short) 0).
+                setMaxVersion((short) 1),
+                response.data().supportedFeatures().find("my.feature"));
+        }
+    }
+
     private void verifyVersions(short forwardableAPIKey,
                                 short minVersion,
                                 short maxVersion,
@@ -252,6 +318,16 @@ public class ApiVersionsResponseTest {
         for (ApiVersion version : response.data().apiKeys()) {
             assertTrue(ApiKeys.forId(version.apiKey()).minRequiredInterBrokerMagic <= maxMagic);
         }
+    }
+
+    private void verifyApiKeysForTelemetry(ApiVersionsResponse response, int expectedCount) {
+        int count = 0;
+        for (ApiVersion version : response.data().apiKeys()) {
+            if (version.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.id || version.apiKey() == ApiKeys.PUSH_TELEMETRY.id) {
+                count++;
+            }
+        }
+        assertEquals(expectedCount, count);
     }
 
     private HashSet<ApiKeys> apiKeysInResponse(ApiVersionsResponse apiVersions) {

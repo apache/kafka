@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -25,6 +26,9 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
 
@@ -35,6 +39,7 @@ public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
 
     public static class ErrantRecordSinkTask extends MonitorableSinkTask {
         private ErrantRecordReporter reporter;
+        private ExecutorService executorService;
 
         public ErrantRecordSinkTask() {
             super();
@@ -44,6 +49,12 @@ public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
         public void start(Map<String, String> props) {
             super.start(props);
             reporter = context.errantRecordReporter();
+            executorService = Executors.newSingleThreadExecutor();
+        }
+
+        @Override
+        public void stop() {
+            ThreadUtils.shutdownExecutorServiceQuietly(executorService, 4, TimeUnit.SECONDS);
         }
 
         @Override
@@ -54,7 +65,16 @@ public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
                     .computeIfAbsent(rec.topic(), v -> new HashMap<>())
                     .computeIfAbsent(rec.kafkaPartition(), v -> new TopicPartition(rec.topic(), rec.kafkaPartition()));
                 committedOffsets.put(tp, committedOffsets.getOrDefault(tp, 0) + 1);
-                reporter.report(rec, new Throwable());
+                Throwable error = new Throwable();
+                // Test synchronous and asynchronous reporting, allowing for re-ordering the errant reports
+                if (rec.originalKafkaOffset() % 2 == 0) {
+                    reporter.report(rec, error);
+                } else {
+                    executorService.submit(() -> {
+                        Thread.yield();
+                        reporter.report(rec, error);
+                    });
+                }
             }
         }
     }

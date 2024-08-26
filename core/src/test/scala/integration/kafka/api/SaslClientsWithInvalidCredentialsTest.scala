@@ -12,6 +12,7 @@
   */
 package kafka.api
 
+import kafka.security.JaasTestUtils
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
@@ -23,15 +24,15 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
-import kafka.server.KafkaConfig
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with SaslSetup {
+class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   override protected val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -41,9 +42,9 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   val producerCount = 1
   val brokerCount = 1
 
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.TransactionsTopicMinISRProp, "1")
+  this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+  this.serverConfig.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+  this.serverConfig.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, "1")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
   val topic = "topic"
@@ -54,18 +55,18 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     super.configureSecurityBeforeServersStart(testInfo)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker credentials before starting brokers
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+    createScramCredentials(zkConnect, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   override def createPrivilegedAdminClient() = {
     createAdminClient(bootstrapServers(), securityProtocol, trustStoreFile, clientSaslProperties,
-      kafkaClientSaslMechanism, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+      kafkaClientSaslMechanism, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
-      JaasTestUtils.KafkaServerContextName))
+      JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
     createTopic(topic, numPartitions, brokerCount)
   }
@@ -148,7 +149,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
       try {
         val response = adminClient.describeTopics(Collections.singleton(topic)).allTopicNames.get
         assertEquals(1, response.size)
-        response.forEach { (topic, description) =>
+        response.forEach { (_, description) =>
           assertEquals(numPartitions, description.partitions.size)
         }
       } catch {
@@ -166,47 +167,8 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     }
   }
 
-  @Test
-  def testConsumerGroupServiceWithAuthenticationFailure(): Unit = {
-    val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
-
-    val consumer = createConsumer()
-    try {
-      consumer.subscribe(List(topic).asJava)
-
-      verifyAuthenticationException(consumerGroupService.listGroups())
-    } finally consumerGroupService.close()
-  }
-
-  @Test
-  def testConsumerGroupServiceWithAuthenticationSuccess(): Unit = {
-    createClientCredential()
-    val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
-
-    val consumer = createConsumer()
-    try {
-      consumer.subscribe(List(topic).asJava)
-
-      verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))
-      assertEquals(1, consumerGroupService.listConsumerGroups().size)
-    }
-    finally consumerGroupService.close()
-  }
-
-  private def prepareConsumerGroupService = {
-    val propsFile = TestUtils.tempPropertiesFile(Map("security.protocol" -> "SASL_PLAINTEXT", "sasl.mechanism" -> kafkaClientSaslMechanism))
-
-    val cgcArgs = Array("--bootstrap-server", bootstrapServers(),
-                        "--describe",
-                        "--group", "test.group",
-                        "--command-config", propsFile.getAbsolutePath)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupService = new ConsumerGroupService(opts)
-    consumerGroupService
-  }
-
   private def createClientCredential(): Unit = {
-    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2)
   }
 
   private def sendOneRecord(producer: KafkaProducer[Array[Byte], Array[Byte]], maxWaitMs: Long = 15000): Unit = {

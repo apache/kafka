@@ -22,7 +22,9 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Configurations shared by Kafka client applications: producer, consumer, connect, etc.
@@ -42,11 +45,11 @@ public class CommonClientConfigs {
      */
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    public static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs to use for establishing the initial connection to the Kafka cluster. The client will make use of all servers irrespective of which servers are specified here for bootstrapping&mdash;this list only impacts the initial hosts used to discover the full set of servers. This list should be in the form "
-                                                       + "<code>host1:port1,host2:port2,...</code>. Since these servers are just used for the initial connection to "
-                                                       + "discover the full cluster membership (which may change dynamically), this list need not contain the full set of "
-                                                       + "servers (you may want more than one, though, in case a server is down).";
-
+    public static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
+                                                        + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
+                                                        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
+                                                        + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
+                                                        + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
     public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
     public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups. "
                                                        + "If set to <code>use_all_dns_ips</code>, connect to each returned IP "
@@ -77,17 +80,36 @@ public class CommonClientConfigs {
     public static final String DEFAULT_CLIENT_RACK = "";
 
     public static final String RECONNECT_BACKOFF_MS_CONFIG = "reconnect.backoff.ms";
-    public static final String RECONNECT_BACKOFF_MS_DOC = "The base amount of time to wait before attempting to reconnect to a given host. This avoids repeatedly connecting to a host in a tight loop. This backoff applies to all connection attempts by the client to a broker.";
+    public static final String RECONNECT_BACKOFF_MS_DOC = "The base amount of time to wait before attempting to reconnect to a given host. " +
+        "This avoids repeatedly connecting to a host in a tight loop. This backoff applies to all connection attempts by the client to a broker. " +
+        "This value is the initial backoff value and will increase exponentially for each consecutive connection failure, up to the <code>reconnect.backoff.max.ms</code> value.";
 
     public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = "reconnect.backoff.max.ms";
-    public static final String RECONNECT_BACKOFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when reconnecting to a broker that has repeatedly failed to connect. If provided, the backoff per host will increase exponentially for each consecutive connection failure, up to this maximum. After calculating the backoff increase, 20% random jitter is added to avoid connection storms.";
+    public static final String RECONNECT_BACKOFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when reconnecting to a broker that has repeatedly failed to connect. " +
+        "If provided, the backoff per host will increase exponentially for each consecutive connection failure, up to this maximum. After calculating the backoff increase, 20% random jitter is added to avoid connection storms.";
 
     public static final String RETRIES_CONFIG = "retries";
     public static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any request that fails with a potentially transient error." +
         " It is recommended to set the value to either zero or `MAX_VALUE` and use corresponding timeout parameters to control how long a client should retry a request.";
 
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
-    public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. This avoids repeatedly sending requests in a tight loop under some failure scenarios.";
+    public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. " +
+        "This avoids repeatedly sending requests in a tight loop under some failure scenarios. This value is the initial backoff value and will increase exponentially for each failed request, " +
+        "up to the <code>retry.backoff.max.ms</code> value.";
+    public static final Long DEFAULT_RETRY_BACKOFF_MS = 100L;
+
+    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = "retry.backoff.max.ms";
+    public static final String RETRY_BACKOFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when retrying a request to the broker that has repeatedly failed. " +
+        "If provided, the backoff per client will increase exponentially for each failed request, up to this maximum. To prevent all clients from being synchronized upon retry, " +
+        "a randomized jitter with a factor of 0.2 will be applied to the backoff, resulting in the backoff falling within a range between 20% below and 20% above the computed value. " +
+        "If <code>retry.backoff.ms</code> is set to be higher than <code>retry.backoff.max.ms</code>, then <code>retry.backoff.max.ms</code> will be used as a constant backoff from the beginning without any exponential increase";
+    public static final Long DEFAULT_RETRY_BACKOFF_MAX_MS = 1000L;
+
+    public static final int RETRY_BACKOFF_EXP_BASE = 2;
+    public static final double RETRY_BACKOFF_JITTER = 0.2;
+
+    public static final String ENABLE_METRICS_PUSH_CONFIG = "enable.metrics.push";
+    public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of client metrics to the cluster, if the cluster has a client metrics subscription which matches this client.";
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
     public static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The window of time a metrics sample is computed over.";
@@ -96,8 +118,13 @@ public class CommonClientConfigs {
     public static final String METRICS_NUM_SAMPLES_DOC = "The number of samples maintained to compute metrics.";
 
     public static final String METRICS_RECORDING_LEVEL_CONFIG = "metrics.recording.level";
-    public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics.";
-
+    public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics. It has three levels for recording metrics - info, debug, and trace.\n" +
+            " \n" +
+            "INFO level records only essential metrics necessary for monitoring system performance and health. It collects vital data without gathering too much detail, making it suitable for production environments where minimal overhead is desired.\n" +
+            "\n" +
+            "DEBUG level records most metrics, providing more detailed information about the system's operation. It's useful for development and testing environments where you need deeper insights to debug and fine-tune the application.\n" +
+            "\n" +
+            "TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.";
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 
@@ -109,15 +136,20 @@ public class CommonClientConfigs {
 
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
-        Utils.join(SecurityProtocol.names(), ", ") + ".";
+        String.join(", ", SecurityProtocol.names()) + ".";
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = "socket.connection.setup.timeout.ms";
-    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC = "The amount of time the client will wait for the socket connection to be established. If the connection is not built before the timeout elapses, clients will close the socket channel.";
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC = "The amount of time the client will wait for the socket connection to be established. " +
+        "If the connection is not built before the timeout elapses, clients will close the socket channel. " +
+        "This value is the initial backoff value and will increase exponentially for each consecutive connection failure, " +
+        "up to the <code>socket.connection.setup.timeout.max.ms</code> value.";
     public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS = 10 * 1000L;
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG = "socket.connection.setup.timeout.max.ms";
-    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC = "The maximum amount of time the client will wait for the socket connection to be established. The connection setup timeout will increase exponentially for each consecutive connection failure up to this maximum. To avoid connection storms, a randomization factor of 0.2 will be applied to the timeout resulting in a random range between 20% below and 20% above the computed value.";
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC = "The maximum amount of time the client will wait for the socket connection to be established. " +
+        "The connection setup timeout will increase exponentially for each consecutive connection failure up to this maximum. To avoid connection storms, " +
+        "a randomization factor of 0.2 will be applied to the timeout resulting in a random range between 20% below and 20% above the computed value.";
     public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS = 30 * 1000L;
 
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
@@ -193,6 +225,19 @@ public class CommonClientConfigs {
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
 
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = "metadata.recovery.strategy";
+    public static final String METADATA_RECOVERY_STRATEGY_DOC = "Controls how the client recovers when none of the brokers known to it is available. " +
+            "If set to <code>none</code>, the client fails. If set to <code>rebootstrap</code>, " +
+            "the client repeats the bootstrap process using <code>bootstrap.servers</code>. " +
+            "Rebootstrapping is useful when a client communicates with brokers so infrequently " +
+            "that the set of brokers may change entirely before the client refreshes metadata. " +
+            "Metadata recovery is triggered when all last-known brokers appear unavailable simultaneously. " +
+            "Brokers appear unavailable when disconnected and no current retry attempt is in-progress. " +
+            "Consider increasing <code>reconnect.backoff.ms</code> and <code>reconnect.backoff.max.ms</code> and " +
+            "decreasing <code>socket.connection.setup.timeout.ms</code> and <code>socket.connection.setup.timeout.max.ms</code> " +
+            "for the client.";
+    public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = MetadataRecoveryStrategy.NONE.name;
+
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.
@@ -203,16 +248,41 @@ public class CommonClientConfigs {
      * @return                          The new values which have been set as described in postProcessParsedConfig.
      */
     public static Map<String, Object> postProcessReconnectBackoffConfigs(AbstractConfig config,
-                                                    Map<String, Object> parsedValues) {
+                                                                         Map<String, Object> parsedValues) {
         HashMap<String, Object> rval = new HashMap<>();
         Map<String, Object> originalConfig = config.originals();
         if ((!originalConfig.containsKey(RECONNECT_BACKOFF_MAX_MS_CONFIG)) &&
             originalConfig.containsKey(RECONNECT_BACKOFF_MS_CONFIG)) {
-            log.debug("Disabling exponential reconnect backoff because {} is set, but {} is not.",
+            log.warn("Disabling exponential reconnect backoff because {} is set, but {} is not.",
                     RECONNECT_BACKOFF_MS_CONFIG, RECONNECT_BACKOFF_MAX_MS_CONFIG);
             rval.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, parsedValues.get(RECONNECT_BACKOFF_MS_CONFIG));
         }
         return rval;
+    }
+
+    /**
+     * Log warning if the exponential backoff is disabled due to initial backoff value is greater than max backoff value.
+     *
+     * @param config                    The config object.
+     */
+    public static void warnDisablingExponentialBackoff(AbstractConfig config) {
+        long retryBackoffMs = config.getLong(RETRY_BACKOFF_MS_CONFIG);
+        long retryBackoffMaxMs = config.getLong(RETRY_BACKOFF_MAX_MS_CONFIG);
+        if (retryBackoffMs > retryBackoffMaxMs) {
+            log.warn("Configuration '{}' with value '{}' is greater than configuration '{}' with value '{}'. " +
+                    "A static backoff with value '{}' will be applied.",
+                RETRY_BACKOFF_MS_CONFIG, retryBackoffMs,
+                RETRY_BACKOFF_MAX_MS_CONFIG, retryBackoffMaxMs, retryBackoffMaxMs);
+        }
+
+        long connectionSetupTimeoutMs = config.getLong(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG);
+        long connectionSetupTimeoutMaxMs = config.getLong(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
+        if (connectionSetupTimeoutMs > connectionSetupTimeoutMaxMs) {
+            log.warn("Configuration '{}' with value '{}' is greater than configuration '{}' with value '{}'. " +
+                    "A static connection setup timeout with value '{}' will be applied.",
+                SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, connectionSetupTimeoutMs,
+                SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, connectionSetupTimeoutMaxMs, connectionSetupTimeoutMaxMs);
+        }
     }
 
     public static void postValidateSaslMechanismConfig(AbstractConfig config) {
@@ -244,5 +314,15 @@ public class CommonClientConfigs {
             reporters.add(jmxReporter);
         }
         return reporters;
+    }
+
+    public static Optional<ClientTelemetryReporter> telemetryReporter(String clientId, AbstractConfig config) {
+        if (!config.getBoolean(CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG)) {
+            return Optional.empty();
+        }
+
+        ClientTelemetryReporter telemetryReporter = new ClientTelemetryReporter(Time.SYSTEM);
+        telemetryReporter.configure(config.originals(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId)));
+        return Optional.of(telemetryReporter);
     }
 }

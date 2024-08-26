@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -27,6 +26,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.CloseOptions;
 import org.apache.kafka.streams.KeyValue;
@@ -37,19 +38,18 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+
+import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
@@ -59,16 +59,10 @@ import java.util.Properties;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class KafkaStreamsCloseOptionsIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-    @Rule
-    public final TestName testName = new TestName();
     private static MockTime mockTime;
-
-    @Rule
-    public final TemporaryFolder testFolder = new TemporaryFolder(TestUtils.tempDirectory());
 
     protected static final String INPUT_TOPIC = "inputTopic";
     protected static final String OUTPUT_TOPIC = "outputTopic";
@@ -79,36 +73,40 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
     protected Properties commonClientConfig;
     private Properties producerConfig;
     protected Properties resultConsumerConfig;
+    private final File testFolder = TestUtils.tempDirectory();
 
     public static final EmbeddedKafkaCluster CLUSTER;
 
     static {
         final Properties brokerProps = new Properties();
-        brokerProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp(), Integer.toString(Integer.MAX_VALUE));
+        brokerProps.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
+        Utils.closeQuietly(adminClient, "admin");
         CLUSTER.stop();
     }
 
-    @Before
-    public void before() throws Exception {
+    @BeforeEach
+    public void before(final TestInfo testName) throws Exception {
         mockTime = CLUSTER.time;
 
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
 
         commonClientConfig = new Properties();
         commonClientConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
         streamsConfig = new Properties();
-        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+        streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "someGroupInstance");
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getPath());
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfig.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -144,28 +142,24 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         add10InputElements();
     }
 
-    @After
+    @AfterEach
     public void after() throws Exception {
         if (streams != null) {
             streams.close(Duration.ofSeconds(30));
         }
+        Utils.delete(testFolder);
     }
 
     @Test
     public void testCloseOptions() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
-        streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "someGroupInstance");
         // Test with two threads to show that each of the threads is being called to remove clients from the CG.
         streamsConfig.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-
-        // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close(new CloseOptions().leaveGroup(true).timeout(Duration.ofSeconds(30)));
-        waitForEmptyConsumerGroup(adminClient, appID, 0);
+        waitForEmptyConsumerGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
     }
 
     protected Topology setupTopologyWithoutIntermediateUserTopic() {

@@ -45,9 +45,10 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -56,15 +57,14 @@ import java.util.Optional;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
-
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RecordQueueTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
@@ -102,12 +102,12 @@ public class RecordQueueTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     @SuppressWarnings("unchecked")
-    @Before
+    @BeforeEach
     public void before() {
         mockSourceNodeWithMetrics.init(context);
     }
 
-    @After
+    @AfterEach
     public void after() {
         mockSourceNodeWithMetrics.close();
     }
@@ -400,11 +400,11 @@ public class RecordQueueTest {
             () -> queue.addRawRecords(records)
         );
         assertThat(exception.getMessage(), equalTo("Input record ConsumerRecord(topic = topic, partition = 1, " +
-            "leaderEpoch = null, offset = 1, CreateTime = -1, serialized key size = 0, serialized value size = 0, " +
-            "headers = RecordHeaders(headers = [], isReadOnly = false), key = 1, value = 10) has invalid (negative) " +
-            "timestamp. Possibly because a pre-0.10 producer client was used to write this record to Kafka without " +
-            "embedding a timestamp, or because the input topic was created before upgrading the Kafka cluster to 0.10+. " +
-            "Use a different TimestampExtractor to process this data."));
+            "leaderEpoch = null, offset = 1, CreateTime = -1, deliveryCount = null, serialized key size = 0, " +
+            "serialized value size = 0, headers = RecordHeaders(headers = [], isReadOnly = false), key = 1, value = 10) " +
+            "has invalid (negative) timestamp. Possibly because a pre-0.10 producer client was used to write this record " +
+            "to Kafka without embedding a timestamp, or because the input topic was created before upgrading the Kafka " +
+            "cluster to 0.10+. Use a different TimestampExtractor to process this data."));
     }
 
     @Test

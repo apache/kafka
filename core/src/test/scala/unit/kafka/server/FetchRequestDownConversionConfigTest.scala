@@ -19,7 +19,7 @@ package kafka.server
 import java.util
 import java.util.{Optional, Properties}
 import kafka.network.RequestMetrics.{MessageConversionsTimeMs, TemporaryMemoryBytes}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.FetchResponseData
@@ -27,6 +27,8 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.server.config.ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -53,7 +55,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     super.brokerPropertyOverrides(properties)
-    properties.put(KafkaConfig.LogMessageDownConversionEnableProp, "false")
+    properties.put(LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, "false")
   }
 
   private def initProducer(): Unit = {
@@ -148,7 +150,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
    * Tests that "message.downconversion.enable" can be set at topic level, and its configuration is obeyed for client
    * fetch requests.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testV1FetchFromConsumer(quorum: String): Unit = {
     testV1Fetch(isFollowerFetch = false)
@@ -157,7 +159,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   /**
    * Tests that "message.downconversion.enable" has no effect on fetch requests from replicas.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testV1FetchFromReplica(quorum: String): Unit = {
     testV1Fetch(isFollowerFetch = true)
@@ -167,7 +169,7 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     val fetchRequest = "request=Fetch"
     val fetchTemporaryMemoryBytesMetricName = s"$TemporaryMemoryBytes,$fetchRequest"
     val fetchMessageConversionsTimeMsMetricName = s"$MessageConversionsTimeMs,$fetchRequest"
-    val initialFetchMessageConversionsPerSec = TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)
+    val initialFetchMessageConversionsPerSec = TestUtils.metersCount(BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC)
     val initialFetchMessageConversionsTimeMs = TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName)
     val initialFetchTemporaryMemoryBytes = TestUtils.metersCount(fetchTemporaryMemoryBytesMetricName)
     val topicWithDownConversionEnabled = "foo"
@@ -223,9 +225,9 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
     }
 
     def verifyMetrics(): Unit = {
-      TestUtils.waitUntilTrue(() => TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec) > initialFetchMessageConversionsPerSec,
+      TestUtils.waitUntilTrue(() => TestUtils.metersCount(BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC) > initialFetchMessageConversionsPerSec,
         s"The `FetchMessageConversionsPerSec` metric count is not incremented after 5 seconds. " +
-          s"init: $initialFetchMessageConversionsPerSec final: ${TestUtils.metersCount(BrokerTopicStats.FetchMessageConversionsPerSec)}", 5000)
+          s"init: $initialFetchMessageConversionsPerSec final: ${TestUtils.metersCount(BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC)}", 5000)
 
       TestUtils.waitUntilTrue(() => TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName) > initialFetchMessageConversionsTimeMs,
         s"The `MessageConversionsTimeMs` in fetch request metric count is not incremented after 5 seconds. " +

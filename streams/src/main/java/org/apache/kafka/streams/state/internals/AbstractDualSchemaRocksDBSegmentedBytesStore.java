@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -33,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
@@ -42,6 +42,7 @@ import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 
@@ -126,7 +127,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         }
     }
 
-    abstract protected KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
+    protected abstract KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
 
     // isTimeFirstWindowSchema true implies ON_WINDOW_CLOSE semantics. There's an edge case
     // when retentionPeriod = grace Period. If we add 1, then actualFrom > to which would
@@ -193,17 +194,19 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
+            synchronized (position) {
+                StoreQueryUtils.updatePosition(position, stateStoreContext);
 
-            // Put to index first so that if put to base failed, when we iterate index, we will
-            // find no base value. If put to base first but putting to index fails, when we iterate
-            // index, we can't find the key but if we iterate over base store, we can find the key
-            // which lead to inconsistency.
-            if (hasIndex()) {
-                final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
-                segment.put(indexKeyValue.key, indexKeyValue.value);
+                // Put to index first so that if put to base failed, when we iterate index, we will
+                // find no base value. If put to base first but putting to index fails, when we iterate
+                // index, we can't find the key but if we iterate over base store, we can find the key
+                // which lead to inconsistency.
+                if (hasIndex()) {
+                    final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
+                    segment.put(indexKeyValue.key, indexKeyValue.value);
+                }
+                segment.put(rawBaseKey, value);
             }
-            segment.put(rawBaseKey, value);
         }
     }
 
@@ -244,7 +247,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
                      final StateStore root) {
         this.context = context;
 
-        final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
+        final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 
@@ -254,11 +257,12 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             metrics
         );
 
-        segments.openExisting(context, observedStreamTime);
-
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        segments.setPosition(this.position);
+
+        segments.openExisting(context, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
@@ -310,16 +314,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     // Visible for testing
     void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        try {
-            final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
-            for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
-                final S segment = entry.getKey();
-                final WriteBatch batch = entry.getValue();
-                segment.write(batch);
-                batch.close();
+        synchronized (position) {
+            try {
+                final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
+                for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
+                    final S segment = entry.getKey();
+                    final WriteBatch batch = entry.getValue();
+                    segment.write(batch);
+                    batch.close();
+                }
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
             }
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
         }
     }
 

@@ -52,7 +52,7 @@ trait KafkaMetricsReporter {
 }
 
 object KafkaMetricsReporter {
-  val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
+  private val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
   private var reporters: ArrayBuffer[KafkaMetricsReporter] = _
 
   def startReporters(verifiableProps: VerifiableProperties): Seq[KafkaMetricsReporter] = {

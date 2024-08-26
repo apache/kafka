@@ -18,19 +18,19 @@ package kafka.admin
 
 import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, TestInfoUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager,
-  RemoteLogManagerConfig, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentState}
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentState}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
@@ -73,55 +73,55 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     testTopicName = s"${info.getTestMethod.get().getName}-${Random.alphanumeric.take(10).mkString}"
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateRemoteTopicWithValidRetentionTime(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "200")
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateRemoteTopicWithValidRetentionSize(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "512")
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "256")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateRemoteTopicWithInheritedLocalRetentionTime(quorum: String): Unit = {
     // inherited local retention ms is 1000
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "1001")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateRemoteTopicWithInheritedLocalRetentionSize(quorum: String): Unit = {
     // inherited local retention bytes is 1024
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1025")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
     verifyRemoteLogTopicConfigs(topicConfig)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateRemoteTopicWithInvalidRetentionTime(quorum: String): Unit = {
     // inherited local retention ms is 1000
@@ -129,11 +129,11 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "200")
     assertThrowsException(classOf[InvalidConfigurationException], () =>
-      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
         topicConfig = topicConfig))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateRemoteTopicWithInvalidRetentionSize(quorum: String): Unit = {
     // inherited local retention bytes is 1024
@@ -141,27 +141,171 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "512")
     assertThrowsException(classOf[InvalidConfigurationException], () =>
-      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
         topicConfig = topicConfig))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateCompactedRemoteStorage(quorum: String): Unit = {
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact")
     assertThrowsException(classOf[InvalidConfigurationException], () =>
-      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, numReplicationFactor,
+      TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
         topicConfig = topicConfig))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  // `remote.log.delete.on.disable` and `remote.log.copy.disable` only works in KRaft mode.
+  @ParameterizedTest
+  @CsvSource(Array("kraft,true,true", "kraft,true,false", "kraft,false,true", "kraft,false,false"))
+  def testCreateRemoteTopicWithCopyDisabledAndDeleteOnDisable(quorum: String, copyDisabled: Boolean, deleteOnDisable: Boolean): Unit = {
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, copyDisabled.toString)
+    topicConfig.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, deleteOnDisable.toString)
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+    verifyRemoteLogTopicConfigs(topicConfig)
+  }
+
+  // `remote.log.delete.on.disable` only works in KRaft mode.
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testCreateTopicRetentionMsValidationWithRemoteCopyDisabled(quorum: String): Unit = {
+    val testTopicName2 = testTopicName + "2"
+    val testTopicName3 = testTopicName + "3"
+    val errorMsgMs = "When `remote.log.copy.disable` is set to true, the `local.retention.ms` and `retention.ms` " +
+      "must be set to the identical value because there will be no more logs copied to the remote storage."
+
+    // 1. create a topic with `remote.log.copy.disable=true` and have different local.retention.ms and retention.ms value,
+    //    it should fail to create the topic
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
+    topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "1000")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+
+    val admin = createAdminClient()
+    val err = assertThrowsException(classOf[InvalidConfigurationException],
+            () => TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions,
+              numReplicationFactor, topicConfig = topicConfig))
+    assertEquals(errorMsgMs, err.getMessage)
+
+    // 2. change the local.retention.ms value to the same value as retention.ms should successfully create the topic
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "1000")
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 3. change the local.retention.ms value to "-2" should also successfully create the topic
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+    TestUtils.createTopicWithAdmin(admin, testTopicName2, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 4. create a topic with `remote.log.copy.disable=false` and have different local.retention.ms and retention.ms value,
+    //    it should successfully creates the topic.
+    topicConfig.clear()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
+    topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "1000")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+    TestUtils.createTopicWithAdmin(admin, testTopicName3, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 5. alter the config to `remote.log.copy.disable=true`, it should fail the config change
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+      ))
+    val err2 = assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get())
+    assertEquals(errorMsgMs, err2.getMessage)
+
+    // 6. alter the config to `remote.log.copy.disable=true` and local.retention.ms == retention.ms, it should work without error
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+        new AlterConfigOp(new ConfigEntry(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "1000"),
+          AlterConfigOp.OpType.SET),
+      ))
+
+    admin.incrementalAlterConfigs(configs).all().get()
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testCreateTopicRetentionBytesValidationWithRemoteCopyDisabled(quorum: String): Unit = {
+    val testTopicName2 = testTopicName + "2"
+    val testTopicName3 = testTopicName + "3"
+    val errorMsgBytes = "When `remote.log.copy.disable` is set to true, the `local.retention.bytes` and `retention.bytes` " +
+      "must be set to the identical value because there will be no more logs copied to the remote storage."
+
+    // 1. create a topic with `remote.log.copy.disable=true` and have different local.retention.bytes and retention.bytes value,
+    //    it should fail to create the topic
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "100")
+    topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+
+    val admin = createAdminClient()
+    val err = assertThrowsException(classOf[InvalidConfigurationException],
+      () => TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions,
+        numReplicationFactor, topicConfig = topicConfig))
+    assertEquals(errorMsgBytes, err.getMessage)
+
+    // 2. change the local.retention.bytes value to the same value as retention.bytes should successfully create the topic
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1000")
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 3. change the local.retention.bytes value to "-2" should also successfully create the topic
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+    TestUtils.createTopicWithAdmin(admin, testTopicName2, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 4. create a topic with `remote.log.copy.disable=false` and have different local.retention.bytes and retention.bytes value,
+    //    it should successfully creates the topic.
+    topicConfig.clear()
+    topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "100")
+    topicConfig.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000")
+    topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+    TestUtils.createTopicWithAdmin(admin, testTopicName3, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    // 5. alter the config to `remote.log.copy.disable=true`, it should fail the config change
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+      ))
+    val err2 = assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get())
+    assertEquals(errorMsgBytes, err2.getMessage)
+
+    // 6. alter the config to `remote.log.copy.disable=true` and local.retention.bytes == retention.bytes, it should work without error
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName3),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+        new AlterConfigOp(new ConfigEntry(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1000"),
+          AlterConfigOp.OpType.SET),
+      ))
+    admin.incrementalAlterConfigs(configs).all().get()
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testEnableRemoteLogOnExistingTopicTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
@@ -174,7 +318,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     verifyRemoteLogTopicConfigs(topicConfig)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testEnableRemoteLogWhenSystemRemoteStorageIsDisabled(quorum: String): Unit = {
     val admin = createAdminClient()
@@ -182,11 +326,11 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     val topicConfigWithRemoteStorage = new Properties()
     topicConfigWithRemoteStorage.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     val message = assertThrowsException(classOf[InvalidConfigurationException],
-      () => TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions,
+      () => TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions,
         numReplicationFactor, topicConfig = topicConfigWithRemoteStorage))
     assertTrue(message.getMessage.contains("Tiered Storage functionality is disabled in the broker"))
 
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor)
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor)
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
       Collections.singleton(
@@ -198,13 +342,13 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     assertTrue(errorMessage.getMessage.contains("Tiered Storage functionality is disabled in the broker"))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUpdateTopicConfigWithValidRetentionTimeTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
@@ -219,13 +363,13 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     verifyRemoteLogTopicConfigs(topicConfig)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUpdateTopicConfigWithValidRetentionSizeTest(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
@@ -240,13 +384,13 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     verifyRemoteLogTopicConfigs(topicConfig)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUpdateTopicConfigWithInheritedLocalRetentionTime(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     // inherited local retention ms is 1000
@@ -260,13 +404,13 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
       () => admin.incrementalAlterConfigs(configs).all().get())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUpdateTopicConfigWithInheritedLocalRetentionSize(quorum: String): Unit = {
     val admin = createAdminClient()
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
-    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, numPartitions, numReplicationFactor,
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
       topicConfig = topicConfig)
 
     // inherited local retention bytes is 1024
@@ -280,25 +424,109 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
       () => admin.incrementalAlterConfigs(configs).all().get(), "Invalid local retention size")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  // The remote storage config validation on controller level only works in KRaft
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testUpdateTopicConfigWithDisablingRemoteStorage(quorum: String): Unit = {
+    val admin = createAdminClient()
+    val topicConfig = new Properties
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"),
+          AlterConfigOp.OpType.SET),
+      ))
+    assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get(), "Disabling remote storage feature on the topic level is not supported.")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk"))
+  def testUpdateInvalidRemoteStorageConfigUnderZK(quorum: String): Unit = {
+    val admin = createAdminClient()
+    val errorMsg = "It is invalid to set `remote.log.delete.on.disable` or `remote.log.copy.disable` under Zookeeper's mode."
+    val topicConfig = new Properties
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+      ))
+    assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get(), errorMsg)
+
+    configs.clear()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET),
+      ))
+    assertThrowsException(classOf[InvalidConfigurationException],
+      () => admin.incrementalAlterConfigs(configs).all().get(), errorMsg)
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testTopicDeletion(quorum: String): Unit = {
+    MyRemoteStorageManager.deleteSegmentEventCounter.set(0)
     val numPartitions = 2
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, "200")
     topicConfig.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "100")
-    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, numPartitions, brokerCount,
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
-    TestUtils.deleteTopicWithAdmin(createAdminClient(), testTopicName, brokers)
+    TestUtils.deleteTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers)
     assertThrowsException(classOf[UnknownTopicOrPartitionException],
       () => TestUtils.describeTopic(createAdminClient(), testTopicName), "Topic should be deleted")
+    TestUtils.waitUntilTrue(() =>
+      numPartitions * MyRemoteLogMetadataManager.segmentCountPerPartition == MyRemoteStorageManager.deleteSegmentEventCounter.get(),
+      "Remote log segments should be deleted only once by the leader")
+  }
 
-    // FIXME: It seems the storage manager is being instantiated in different class loader so couldn't verify the value
-    //  but ensured it by adding a log statement in the storage manager (manually).
-    //    assertEquals(numPartitions * MyRemoteLogMetadataManager.segmentCount,
-    //      MyRemoteStorageManager.deleteSegmentEventCounter.get(),
-    //      "Remote log segments should be deleted only once by the leader")
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClusterWideDisablementOfTieredStorageWithEnabledTieredTopic(quorum: String): Unit = {
+    val topicConfig = new Properties()
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
+      topicConfig = topicConfig)
+
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
+
+    if (isKRaftTest()) {
+      recreateBrokers(startup = true)
+      assertTrue(faultHandler.firstException().getCause.isInstanceOf[ConfigException])
+      // Normally the exception is thrown as part of the TearDown method of the parent class(es). We would like to not do this.
+      faultHandler.setIgnore(true)
+    } else {
+      assertThrows(classOf[ConfigException], () => recreateBrokers(startup = true))
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClusterWithoutTieredStorageStartsSuccessfullyIfTopicWithTieringDisabled(quorum: String): Unit = {
+    val topicConfig = new Properties()
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, false.toString)
+
+    TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
+      topicConfig = topicConfig)
+
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1, zkConnectOrNull).head
+    instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
+
+    recreateBrokers(startup = true)
   }
 
   private def assertThrowsException(exceptionType: Class[_ <: Throwable],
@@ -343,6 +571,16 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
             topicConfig.getProperty(TopicConfig.RETENTION_BYTES_CONFIG).toLong ==
               logBuffer.head.config.retentionSize
         }
+        if (topicConfig.contains(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG)) {
+          result = result &&
+            topicConfig.getProperty(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG).toBoolean ==
+              logBuffer.head.config.remoteLogCopyDisable()
+        }
+        if (topicConfig.contains(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG)) {
+          result = result &&
+            topicConfig.getProperty(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG).toBoolean ==
+              logBuffer.head.config.remoteLogDeleteOnDisable()
+        }
       }
       result
     }, s"Failed to update topic config $topicConfig")
@@ -353,9 +591,9 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
     props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, storageManagerClassName)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, metadataManagerClassName)
-    props.put(KafkaConfig.LogRetentionTimeMillisProp, "2000")
+    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2000")
     props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
-    props.put(KafkaConfig.LogRetentionBytesProp, "2048")
+    props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "2048")
     props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
     props
   }
@@ -365,12 +603,11 @@ object MyRemoteStorageManager {
   val deleteSegmentEventCounter = new AtomicInteger(0)
 }
 
-class MyRemoteStorageManager extends NoOpRemoteStorageManager with Logging {
+class MyRemoteStorageManager extends NoOpRemoteStorageManager {
   import MyRemoteStorageManager._
 
   override def deleteLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {
     deleteSegmentEventCounter.incrementAndGet()
-    info(s"Deleted the remote log segment: $remoteLogSegmentMetadata, counter: ${deleteSegmentEventCounter.get()}")
   }
 }
 
@@ -381,21 +618,19 @@ class MyRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager {
 
   override def listRemoteLogSegments(topicIdPartition: TopicIdPartition): util.Iterator[RemoteLogSegmentMetadata] = {
     val segmentMetadataList = new util.ArrayList[RemoteLogSegmentMetadata]()
-    for (idx <- 0 until segmentCount) {
+    for (idx <- 0 until segmentCountPerPartition) {
       val timestamp = time.milliseconds()
       val startOffset = idx * recordsPerSegment
       val endOffset = startOffset + recordsPerSegment - 1
       val segmentLeaderEpochs: util.Map[Integer, java.lang.Long] = Collections.singletonMap(0, 0L)
-      segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-        startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(),
-        RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs))
+      segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()), startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs))
     }
     segmentMetadataList.iterator()
   }
 }
 
 object MyRemoteLogMetadataManager {
-  val segmentCount = 10
+  val segmentCountPerPartition = 10
   val recordsPerSegment = 100
   val segmentSize = 1024
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,12 +28,13 @@ public class StreamsConfigUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamsConfigUtils.class);
 
+    @SuppressWarnings("deprecation")
     public enum ProcessingMode {
-        AT_LEAST_ONCE("AT_LEAST_ONCE"),
+        AT_LEAST_ONCE(StreamsConfig.AT_LEAST_ONCE),
 
-        EXACTLY_ONCE_ALPHA("EXACTLY_ONCE_ALPHA"),
+        EXACTLY_ONCE_ALPHA(StreamsConfig.EXACTLY_ONCE),
 
-        EXACTLY_ONCE_V2("EXACTLY_ONCE_V2");
+        EXACTLY_ONCE_V2(StreamsConfig.EXACTLY_ONCE_V2);
 
         public final String name;
 
@@ -75,7 +77,7 @@ public class StreamsConfigUtils {
     }
 
     @SuppressWarnings("deprecation")
-    public static long getTotalCacheSize(final StreamsConfig config) {
+    public static long totalCacheSize(final StreamsConfig config) {
         // both deprecated and new config set. Warn and use the new one.
         if (config.originals().containsKey(CACHE_MAX_BYTES_BUFFERING_CONFIG) && config.originals().containsKey(STATESTORE_CACHE_MAX_BYTES_CONFIG)) {
             if (!config.getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG).equals(config.getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG))) {

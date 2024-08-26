@@ -22,7 +22,7 @@ import kafka.coordinator.transaction.TransactionCoordinator
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.LogManager
 import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
@@ -31,13 +31,12 @@ import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTop
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
 import org.apache.kafka.common.utils.Exit
-import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance, TopicImage, TopicsImage}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance}
 import org.apache.kafka.image.loader.LogDeltaManifest
-import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.LeaderAndEpoch
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -55,14 +54,14 @@ class BrokerMetadataPublisherTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    Exit.setExitProcedure((code, _) => exitException.set(new RuntimeException(s"Exit ${code}")))
-    Exit.setHaltProcedure((code, _) => exitException.set(new RuntimeException(s"Halt ${code}")))
+    Exit.setExitProcedure((code, _) => exitException.set(new RuntimeException(s"Exit $code")))
+    Exit.setHaltProcedure((code, _) => exitException.set(new RuntimeException(s"Halt $code")))
   }
 
   @AfterEach
   def tearDown(): Unit = {
-    Exit.resetExitProcedure();
-    Exit.resetHaltProcedure();
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     val exception = exitException.get()
     if (exception != null) {
       throw exception
@@ -85,99 +84,6 @@ class BrokerMetadataPublisherTest {
       "bar",
       MetadataImageTest.IMAGE1,
       MetadataImageTest.DELTA1).isDefined, "Expected to see delta for changed topic")
-  }
-
-  @Test
-  def testFindStrayReplicas(): Unit = {
-    val brokerId = 0
-
-    // Topic has been deleted
-    val deletedTopic = "a"
-    val deletedTopicId = Uuid.randomUuid()
-    val deletedTopicPartition1 = new TopicPartition(deletedTopic, 0)
-    val deletedTopicLog1 = mockLog(deletedTopicId, deletedTopicPartition1)
-    val deletedTopicPartition2 = new TopicPartition(deletedTopic, 1)
-    val deletedTopicLog2 = mockLog(deletedTopicId, deletedTopicPartition2)
-
-    // Topic was deleted and recreated
-    val recreatedTopic = "b"
-    val recreatedTopicPartition = new TopicPartition(recreatedTopic, 0)
-    val recreatedTopicLog = mockLog(Uuid.randomUuid(), recreatedTopicPartition)
-    val recreatedTopicImage = topicImage(Uuid.randomUuid(), recreatedTopic, Map(
-      recreatedTopicPartition.partition -> Seq(0, 1, 2)
-    ))
-
-    // Topic exists, but some partitions were reassigned
-    val reassignedTopic = "c"
-    val reassignedTopicId = Uuid.randomUuid()
-    val reassignedTopicPartition = new TopicPartition(reassignedTopic, 0)
-    val reassignedTopicLog = mockLog(reassignedTopicId, reassignedTopicPartition)
-    val retainedTopicPartition = new TopicPartition(reassignedTopic, 1)
-    val retainedTopicLog = mockLog(reassignedTopicId, retainedTopicPartition)
-
-    val reassignedTopicImage = topicImage(reassignedTopicId, reassignedTopic, Map(
-      reassignedTopicPartition.partition -> Seq(1, 2, 3),
-      retainedTopicPartition.partition -> Seq(0, 2, 3)
-    ))
-
-    val logs = Seq(
-      deletedTopicLog1,
-      deletedTopicLog2,
-      recreatedTopicLog,
-      reassignedTopicLog,
-      retainedTopicLog
-    )
-
-    val image = topicsImage(Seq(
-      recreatedTopicImage,
-      reassignedTopicImage
-    ))
-
-    val expectedStrayPartitions = Set(
-      deletedTopicPartition1,
-      deletedTopicPartition2,
-      recreatedTopicPartition,
-      reassignedTopicPartition
-    )
-
-    val strayPartitions = BrokerMetadataPublisher.findStrayPartitions(brokerId, image, logs).toSet
-    assertEquals(expectedStrayPartitions, strayPartitions)
-  }
-
-  private def mockLog(
-    topicId: Uuid,
-    topicPartition: TopicPartition
-  ): UnifiedLog = {
-    val log = Mockito.mock(classOf[UnifiedLog])
-    Mockito.when(log.topicId).thenReturn(Some(topicId))
-    Mockito.when(log.topicPartition).thenReturn(topicPartition)
-    log
-  }
-
-  private def topicImage(
-    topicId: Uuid,
-    topic: String,
-    partitions: Map[Int, Seq[Int]]
-  ): TopicImage = {
-    val partitionRegistrations = partitions.map { case (partitionId, replicas) =>
-      Int.box(partitionId) -> new PartitionRegistration.Builder().
-        setReplicas(replicas.toArray).
-        setIsr(replicas.toArray).
-        setLeader(replicas.head).
-        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-        setLeaderEpoch(0).
-        setPartitionEpoch(0).
-        build()
-    }
-    new TopicImage(topic, topicId, partitionRegistrations.asJava)
-  }
-
-  private def topicsImage(
-    topics: Seq[TopicImage]
-  ): TopicsImage = {
-    var retval = TopicsImage.EMPTY
-    topics.foreach { t => retval = retval.including(t) }
-    retval
   }
 
   private def newMockDynamicConfigPublisher(
@@ -215,7 +121,7 @@ class BrokerMetadataPublisherTest {
         assertEquals(0, numTimesReloadCalled.get())
         admin.incrementalAlterConfigs(singletonMap(
           new ConfigResource(BROKER, ""),
-          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+          singleton(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "123"), SET)))).all().get()
         TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 0,
           "numTimesConfigured never reached desired value")
 
@@ -223,7 +129,7 @@ class BrokerMetadataPublisherTest {
         // reloadUpdatedFilesWithoutConfigChange will be called.
         admin.incrementalAlterConfigs(singletonMap(
           new ConfigResource(BROKER, broker.config.nodeId.toString),
-          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+          singleton(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "123"), SET)))).all().get()
         TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 1,
           "numTimesConfigured never reached desired value")
       } finally {
@@ -239,7 +145,9 @@ class BrokerMetadataPublisherTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
-        setNumControllerNodes(1).build()).
+        setNumControllerNodes(1).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV1).
+        build()).
       build()
     try {
       cluster.format()
@@ -262,7 +170,7 @@ class BrokerMetadataPublisherTest {
       }
       TestUtils.retry(60000) {
         assertTrue(Option(cluster.nonFatalFaultHandler().firstException()).
-          flatMap(e => Option(e.getMessage())).getOrElse("(none)").contains("injected failure"))
+          flatMap(e => Option(e.getMessage)).getOrElse("(none)").contains("injected failure"))
       }
     } finally {
       cluster.nonFatalFaultHandler().setIgnore(true)
@@ -273,7 +181,7 @@ class BrokerMetadataPublisherTest {
   @Test
   def testNewImagePushedToGroupCoordinator(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, ""))
-    val metadataCache = new KRaftMetadataCache(0)
+    val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_1)
     val logManager = mock(classOf[LogManager])
     val replicaManager = mock(classOf[ReplicaManager])
     val groupCoordinator = mock(classOf[GroupCoordinator])
@@ -307,7 +215,7 @@ class BrokerMetadataPublisherTest {
         .numBatches(1)
         .elapsedNs(100)
         .numBytes(42)
-        .build());
+        .build())
 
     verify(groupCoordinator).onNewMetadataImage(image, delta)
   }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+
 import org.rocksdb.RocksIterator;
 
 import java.util.NoSuchElementException;
@@ -53,7 +54,7 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     }
 
     @Override
-    public KeyValue<Bytes, byte[]> makeNext() {
+    protected KeyValue<Bytes, byte[]> makeNext() {
         if (!iter.isValid()) {
             return allDone();
         } else {

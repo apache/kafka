@@ -21,6 +21,7 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -32,11 +33,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class MetadataImageTest {
-    public final static MetadataImage IMAGE1;
+    public static final MetadataImage IMAGE1;
 
-    public final static MetadataDelta DELTA1;
+    public static final MetadataDelta DELTA1;
 
-    public final static MetadataImage IMAGE2;
+    public static final MetadataImage IMAGE2;
 
     static {
         IMAGE1 = new MetadataImage(
@@ -116,10 +117,6 @@ public class MetadataImageTest {
         testToImage(image, new ImageWriterOptions.Builder()
             .setMetadataVersion(image.features().metadataVersion())
             .build(), Optional.empty());
-    }
-
-    private static void testToImage(MetadataImage image, ImageWriterOptions options) {
-        testToImage(image, options, Optional.empty());
     }
 
     static void testToImage(MetadataImage image, ImageWriterOptions options, Optional<List<ApiMessageAndVersion>> fromRecords) {

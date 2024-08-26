@@ -40,6 +40,8 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -48,6 +50,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Header;
@@ -65,11 +68,15 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
@@ -79,6 +86,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -245,7 +253,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final RecordAccumulator accumulator;
     private final Sender sender;
     private final Thread ioThread;
-    private final CompressionType compressionType;
+    private final Compression compression;
     private final Sensor errors;
     private final Time time;
     private final Serializer<K> keySerializer;
@@ -256,6 +264,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -333,7 +342,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     // visible for testing
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "this-escape"})
     KafkaProducer(ProducerConfig config,
                   Serializer<K> keySerializer,
                   Serializer<V> valueSerializer,
@@ -363,6 +372,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricTags);
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            this.clientTelemetryReporter.ifPresent(reporters::add);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
@@ -374,6 +385,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             warnIfPartitionerDeprecated();
             this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+            long retryBackoffMaxMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
             if (keySerializer == null) {
                 this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                                                                                          Serializer.class);
@@ -404,7 +416,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     Arrays.asList(this.keySerializer, this.valueSerializer));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
-            this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+            this.compression = configureCompression(config);
 
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
@@ -423,9 +435,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int batchSize = Math.max(1, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
             this.accumulator = new RecordAccumulator(logContext,
                     batchSize,
-                    this.compressionType,
+                    compression,
                     lingerMs(config),
                     retryBackoffMs,
+                    retryBackoffMaxMs,
                     deliveryTimeoutMs,
                     partitionerConfig,
                     metrics,
@@ -440,6 +453,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.metadata = metadata;
             } else {
                 this.metadata = new ProducerMetadata(retryBackoffMs,
+                        retryBackoffMaxMs,
                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
@@ -476,7 +490,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   ProducerInterceptors<K, V> interceptors,
                   Partitioner partitioner,
                   Time time,
-                  KafkaThread ioThread) {
+                  KafkaThread ioThread,
+                  Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this.producerConfig = config;
         this.time = time;
         this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
@@ -489,7 +504,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.interceptors = interceptors;
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
         this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
-        this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+        this.compression = configureCompression(config);
         this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
         this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
         this.apiVersions = new ApiVersions();
@@ -499,6 +514,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.metadata = metadata;
         this.sender = sender;
         this.ioThread = ioThread;
+        this.clientTelemetryReporter = clientTelemetryReporter;
     }
 
     // visible for testing
@@ -515,7 +531,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 time,
                 maxInflightRequests,
                 metadata,
-                throttleTimeSensor);
+                throttleTimeSensor,
+                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
 
         short acks = Short.parseShort(producerConfig.getString(ProducerConfig.ACKS_CONFIG));
         return new Sender(logContext,
@@ -532,6 +549,29 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
                 this.transactionManager,
                 apiVersions);
+    }
+
+    private static Compression configureCompression(ProducerConfig config) {
+        CompressionType type = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+        switch (type) {
+            case GZIP: {
+                return Compression.gzip()
+                        .level(config.getInt(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                        .build();
+            }
+            case LZ4: {
+                return Compression.lz4()
+                        .level(config.getInt(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                        .build();
+            }
+            case ZSTD: {
+                return Compression.zstd()
+                        .level(config.getInt(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                        .build();
+            }
+            default:
+                return Compression.of(type).build();
+        }
     }
 
     private static int lingerMs(ProducerConfig config) {
@@ -838,9 +878,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Asynchronously send a record to a topic and invoke the provided callback when the send has been acknowledged.
      * <p>
-     * The send is asynchronous and this method will return immediately once the record has been stored in the buffer of
-     * records waiting to be sent. This allows sending many records in parallel without blocking to wait for the
-     * response after each one.
+     * The send is asynchronous and this method will return immediately (except for rare cases described below)
+     * once the record has been stored in the buffer of records waiting to be sent.
+     * This allows sending many records in parallel without blocking to wait for the response after each one.
+     * Can block for the following cases: 1) For the first record being sent to 
+     * the cluster by this client for the given topic. In this case it will block for up to {@code max.block.ms} milliseconds if 
+     * Kafka cluster is unreachable; 2) Allocating a buffer if buffer pool doesn't have any free buffers.
      * <p>
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
      * it was assigned and the timestamp of the record. If the producer is configured with acks = 0, the {@link RecordMetadata}
@@ -1016,7 +1059,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    compressionType, serializedKey, serializedValue, headers);
+                    compression.type(), serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
 
@@ -1102,12 +1145,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws KafkaException for all Kafka-related exceptions, including the case where this method is called after producer close
      */
     private ClusterAndWaitTime waitOnMetadata(String topic, Integer partition, long nowMs, long maxWaitMs) throws InterruptedException {
-        // add topic to metadata topic list if it is not there already and reset expiry
         Cluster cluster = metadata.fetch();
 
         if (cluster.invalidTopics().contains(topic))
             throw new InvalidTopicException(topic);
 
+        // add topic to metadata topic list if it is not there already and reset expiry
         metadata.add(topic, nowMs);
 
         Integer partitionsCount = cluster.partitionCountForTopic(topic);
@@ -1135,18 +1178,25 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                throw new TimeoutException(
-                        String.format("Topic %s not present in metadata after %d ms.",
-                                topic, maxWaitMs));
+                final String errorMessage = String.format("Topic %s not present in metadata after %d ms.",
+                        topic, maxWaitMs);
+                if (metadata.getError(topic) != null) {
+                    throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
+                }
+                throw new TimeoutException(errorMessage);
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
             if (elapsed >= maxWaitMs) {
-                throw new TimeoutException(partitionsCount == null ?
+                final String errorMessage = partitionsCount == null ?
                         String.format("Topic %s not present in metadata after %d ms.",
                                 topic, maxWaitMs) :
                         String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
-                                partition, topic, partitionsCount, maxWaitMs));
+                                partition, topic, partitionsCount, maxWaitMs);
+                if (metadata.getError(topic) != null && metadata.getError(topic).exception() instanceof RetriableException) {
+                    throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
+                }
+                throw new TimeoutException(errorMessage);
             }
             metadata.maybeThrowExceptionForTopic(topic);
             remainingWaitMs = maxWaitMs - elapsed;
@@ -1250,6 +1300,40 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Determines the client's unique client instance ID used for telemetry. This ID is unique to
+     * this specific client instance and will not change after it is initially generated.
+     * The ID is useful for correlating client operations with telemetry sent to the broker and
+     * to its eventual monitoring destinations.
+     * <p>
+     * If telemetry is enabled, this will first require a connection to the cluster to generate
+     * the unique client instance ID. This method waits up to {@code timeout} for the producer
+     * client to complete the request.
+     * <p>
+     * Client telemetry is controlled by the {@link ProducerConfig#ENABLE_METRICS_PUSH_CONFIG}
+     * configuration option.
+     *
+     * @param timeout The maximum time to wait for producer client to determine its client instance ID.
+     *                The value must be non-negative. Specifying a timeout of zero means do not
+     *                wait for the initial request to complete if it hasn't already.
+     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws KafkaException If an unexpected error occurs while trying to determine the client
+     *                        instance ID, though this error does not necessarily imply the
+     *                        producer client is otherwise unusable.
+     * @throws IllegalArgumentException If the {@code timeout} is negative.
+     * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
+     *                               is set to `{@code false}`.
+     * @return The client's assigned instance id used for metrics collection.
+     */
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        if (!clientTelemetryReporter.isPresent()) {
+            throw new IllegalStateException("Telemetry is not enabled. Set config `" + ProducerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
+        }
+
+        return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
+    }
+
+    /**
      * Close this producer. This method blocks until all previously sent requests complete.
      * This method is equivalent to <code>close(Long.MAX_VALUE, TimeUnit.MILLISECONDS)</code>.
      * <p>
@@ -1307,16 +1391,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         timeoutMs);
             } else {
                 // Try to close gracefully.
-                if (this.sender != null)
+                final Timer closeTimer = time.timer(timeout);
+                if (this.sender != null) {
                     this.sender.initiateClose();
+                    closeTimer.update();
+                }
                 if (this.ioThread != null) {
                     try {
-                        this.ioThread.join(timeoutMs);
+                        this.ioThread.join(closeTimer.remainingMs());
                     } catch (InterruptedException t) {
                         firstException.compareAndSet(null, new InterruptException(t));
                         log.error("Interrupted while joining ioThread", t);
+                    } finally {
+                        closeTimer.update();
                     }
                 }
+                clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(closeTimer.remainingMs()));
             }
         }
 
@@ -1340,6 +1430,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
         Utils.closeQuietly(partitioner, "producer partitioner", firstException);
+        clientTelemetryReporter.ifPresent(reporter -> Utils.closeQuietly(reporter, "producer telemetry reporter", firstException));
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         Throwable exception = firstException.get();
         if (exception != null && !swallowException) {

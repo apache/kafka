@@ -35,14 +35,15 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.StableAssignmentListener;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -50,32 +51,28 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -87,25 +84,11 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-@RunWith(Parameterized.class)
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class EosV2UpgradeIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Boolean[]> data() {
-        return Arrays.asList(new Boolean[][] {
-            {false},
-            {true}
-        });
-    }
-
-    @Parameterized.Parameter
-    public boolean injectError;
-
     private static final int NUM_BROKERS = 3;
     private static final int MAX_POLL_INTERVAL_MS = (int) Duration.ofSeconds(100L).toMillis();
     private static final long MAX_WAIT_TIME_MS = Duration.ofMinutes(1L).toMillis();
@@ -118,10 +101,8 @@ public class EosV2UpgradeIntegrationTest {
             )
         );
     private static final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> CRASH =
-        Collections.unmodifiableList(
-            Collections.singletonList(
+        Collections.singletonList(
                 KeyValue.pair(State.PENDING_ERROR, State.ERROR)
-            )
         );
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
@@ -130,24 +111,24 @@ public class EosV2UpgradeIntegrationTest {
     );
 
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
     private static String applicationId;
-    private final static int NUM_TOPIC_PARTITIONS = 4;
-    private final static String CONSUMER_GROUP_ID = "readCommitted";
-    private final static String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
-    private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
-    private final static String APP_DIR_1 = "appDir1";
-    private final static String APP_DIR_2 = "appDir2";
-    private final static String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception, or " +
+    private static final int NUM_TOPIC_PARTITIONS = 4;
+    private static final String CONSUMER_GROUP_ID = "readCommitted";
+    private static final String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
+    private static final String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
+    private static final String APP_DIR_1 = "appDir1";
+    private static final String APP_DIR_2 = "appDir2";
+    private static final String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception, or " +
         "there are too many exceptions thrown, please check standard error log for more info.";
     private final String storeName = "store";
 
@@ -162,7 +143,7 @@ public class EosV2UpgradeIntegrationTest {
     private final AtomicInteger commitRequested = new AtomicInteger(0);
 
     private int testNumber = 0;
-    private Map<String, Integer> exceptionCounts = new HashMap<String, Integer>() {
+    private final Map<String, Integer> exceptionCounts = new HashMap<String, Integer>() {
         {
             put(APP_DIR_1, 0);
             put(APP_DIR_2, 0);
@@ -171,7 +152,7 @@ public class EosV2UpgradeIntegrationTest {
 
     private volatile boolean hasUnexpectedError = false;
 
-    @Before
+    @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + ++testNumber;
         CLUSTER.deleteTopicsAndWait(
@@ -185,8 +166,9 @@ public class EosV2UpgradeIntegrationTest {
     }
 
     @SuppressWarnings("deprecation")
-    @Test
-    public void shouldUpgradeFromEosAlphaToEosV2() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldUpgradeFromEosAlphaToEosV2(final boolean injectError) throws Exception {
         // We use two KafkaStreams clients that we upgrade from eos-alpha to eos-V2. During the upgrade,
         // we ensure that there are pending transaction and verify that data is processed correctly.
         //
@@ -256,7 +238,7 @@ public class EosV2UpgradeIntegrationTest {
 
         try {
             // phase 1: start both clients
-            streams1Alpha = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE);
+            streams1Alpha = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE, injectError);
             streams1Alpha.setStateListener(
                 (newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState))
             );
@@ -267,7 +249,7 @@ public class EosV2UpgradeIntegrationTest {
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
             waitForRunning(stateTransitions1);
 
-            streams2Alpha = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE);
+            streams2Alpha = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE, injectError);
             streams2Alpha.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
@@ -410,7 +392,7 @@ public class EosV2UpgradeIntegrationTest {
                 errorInjectedClient1.set(false);
                 stateTransitions1.clear();
                 streams1Alpha.close();
-                assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
+                assertFalse(hasUnexpectedError, UNEXPECTED_EXCEPTION_MSG);
             }
 
             // phase 5: (restart first client)
@@ -433,7 +415,7 @@ public class EosV2UpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            streams1V2 = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2);
+            streams1V2 = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2, injectError);
             streams1V2.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
             assignmentListener.prepareForRebalance();
             streams1V2.start();
@@ -548,7 +530,7 @@ public class EosV2UpgradeIntegrationTest {
                 commitErrorInjectedClient2.set(false);
                 stateTransitions2.clear();
                 streams2Alpha.close();
-                assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
+                assertFalse(hasUnexpectedError, UNEXPECTED_EXCEPTION_MSG);
 
                 final List<KeyValue<Long, Long>> expectedCommittedResultAfterFailure =
                     computeExpectedResult(uncommittedInputDataAfterFirstUpgrade, committedState);
@@ -577,7 +559,7 @@ public class EosV2UpgradeIntegrationTest {
                 commitCounterClient2.set(-1);
                 stateTransitions1.clear();
                 stateTransitions2.clear();
-                streams2AlphaTwo = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE);
+                streams2AlphaTwo = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE, true);
                 streams2AlphaTwo.setStateListener(
                     (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
                 );
@@ -639,7 +621,7 @@ public class EosV2UpgradeIntegrationTest {
                 commitErrorInjectedClient1.set(false);
                 stateTransitions1.clear();
                 streams1V2.close();
-                assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
+                assertFalse(hasUnexpectedError, UNEXPECTED_EXCEPTION_MSG);
 
                 final List<KeyValue<Long, Long>> expectedCommittedResultAfterFailure =
                     computeExpectedResult(uncommittedInputDataBetweenUpgrade, committedState);
@@ -649,7 +631,7 @@ public class EosV2UpgradeIntegrationTest {
                 // 7c. restart the first client in eos-V2 mode and wait until rebalance stabilizes
                 stateTransitions1.clear();
                 stateTransitions2.clear();
-                streams1V2Two = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2);
+                streams1V2Two = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2, true);
                 streams1V2Two.setStateListener((newState, oldState) -> stateTransitions1.add(KeyValue.pair(oldState, newState)));
                 assignmentListener.prepareForRebalance();
                 streams1V2Two.start();
@@ -761,7 +743,7 @@ public class EosV2UpgradeIntegrationTest {
                 errorInjectedClient2.set(false);
                 stateTransitions2.clear();
                 streams2AlphaTwo.close();
-                assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
+                assertFalse(hasUnexpectedError, UNEXPECTED_EXCEPTION_MSG);
             }
 
             // phase 10: (restart second client)
@@ -783,7 +765,7 @@ public class EosV2UpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            streams2V2 = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2);
+            streams2V2 = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE_V2, injectError);
             streams2V2.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
@@ -866,9 +848,9 @@ public class EosV2UpgradeIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private KafkaStreams getKafkaStreams(final String appDir,
-                                         final String processingGuarantee) {
+                                         final String processingGuarantee,
+                                         final boolean injectError) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String[] storeNames = new String[] {storeName};
@@ -879,68 +861,64 @@ public class EosV2UpgradeIntegrationTest {
         builder.addStateStore(storeBuilder);
 
         final KStream<Long, Long> input = builder.stream(MULTI_PARTITION_INPUT_TOPIC);
-        input.transform(new TransformerSupplier<Long, Long, KeyValue<Long, Long>>() {
-            @Override
-            public Transformer<Long, Long, KeyValue<Long, Long>> get() {
-                return new Transformer<Long, Long, KeyValue<Long, Long>>() {
-                    ProcessorContext context;
-                    KeyValueStore<Long, Long> state = null;
-                    AtomicBoolean crash;
-                    AtomicInteger sharedCommit;
+        input.process(() -> new Processor<Long, Long, Long, Long>() {
+                ProcessorContext<Long, Long> context;
+                KeyValueStore<Long, Long> state = null;
+                AtomicBoolean crash;
+                AtomicInteger sharedCommit;
 
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        this.context = context;
-                        state = context.getStateStore(storeName);
-                        final String clientId = context.appConfigs().get(StreamsConfig.CLIENT_ID_CONFIG).toString();
-                        if (APP_DIR_1.equals(clientId)) {
-                            crash = errorInjectedClient1;
-                            sharedCommit = commitCounterClient1;
-                        } else {
-                            crash = errorInjectedClient2;
-                            sharedCommit = commitCounterClient2;
+                @Override
+                public void init(final ProcessorContext<Long, Long> context) {
+                    this.context = context;
+                    state = context.getStateStore(storeName);
+                    final String clientId = context.appConfigs().get(StreamsConfig.CLIENT_ID_CONFIG).toString();
+                    if (APP_DIR_1.equals(clientId)) {
+                        crash = errorInjectedClient1;
+                        sharedCommit = commitCounterClient1;
+                    } else {
+                        crash = errorInjectedClient2;
+                        sharedCommit = commitCounterClient2;
+                    }
+                }
+
+                @Override
+                public void process(final Record<Long, Long> record) {
+                    final long key = record.key();
+                    final long value = record.value();
+
+                    if ((value + 1) % 10 == 0) {
+                        if (sharedCommit.get() < 0 ||
+                            sharedCommit.incrementAndGet() == 2) {
+
+                            context.commit();
                         }
+                        commitRequested.incrementAndGet();
                     }
 
-                    @Override
-                    public KeyValue<Long, Long> transform(final Long key, final Long value) {
-                        if ((value + 1) % 10 == 0) {
-                            if (sharedCommit.get() < 0 ||
-                                sharedCommit.incrementAndGet() == 2) {
+                    Long sum = state.get(key);
+                    if (sum == null) {
+                        sum = value;
+                    } else {
+                        sum += value;
+                    }
+                    state.put(key, sum);
+                    state.flush();
 
-                                context.commit();
-                            }
-                            commitRequested.incrementAndGet();
-                        }
-
-                        Long sum = state.get(key);
-                        if (sum == null) {
-                            sum = value;
-                        } else {
-                            sum += value;
-                        }
-                        state.put(key, sum);
-                        state.flush();
-
-                        if (value % 10 == 4 && // potentially crash when processing 5th, 15th, or 25th record (etc.)
-                            crash != null && crash.compareAndSet(true, false)) {
-                            // only crash a single task
-                            throw new RuntimeException("Injected test exception.");
-                        }
-
-                        return new KeyValue<>(key, state.get(key));
+                    if (value % 10 == 4 && // potentially crash when processing 5th, 15th, or 25th record (etc.)
+                        crash != null && crash.compareAndSet(true, false)) {
+                        // only crash a single task
+                        throw new RuntimeException("Injected test exception.");
                     }
 
-                    @Override
-                    public void close() {}
-                };
-            } }, storeNames)
+                    context.forward(record.withValue(state.get(key)));
+                }
+            }, storeNames)
             .to(MULTI_PARTITION_OUTPUT_TOPIC);
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.CLIENT_ID_CONFIG, appDir);
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
-        final long commitInterval = Duration.ofMinutes(1L).toMillis();
+        final long commitInterval = Duration.ofMinutes(5L).toMillis();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), Duration.ofSeconds(1L).toMillis());
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
@@ -968,10 +946,11 @@ public class EosV2UpgradeIntegrationTest {
                 e.printStackTrace(System.err);
                 hasUnexpectedError = true;
             } else {
-                int exceptionCount = (int) exceptionCounts.get(appDir);
+                int exceptionCount = exceptionCounts.get(appDir);
                 // should only have our injected exception or commit exception, and 2 exceptions for each stream
-                if (++exceptionCount > 2 || !(e instanceof RuntimeException) ||
-                    !(e.getMessage().contains("test exception"))) {
+                if (++exceptionCount > 2 ||
+                    !(e instanceof StreamsException) ||
+                    !(e.getCause().getMessage().endsWith(" test exception."))) {
                     // The exception won't cause the test fail since we actually "expected" exception thrown and failed the stream.
                     // So, log to stderr for debugging when the exception is not what we expected, and fail in the main thread
                     e.printStackTrace(System.err);
@@ -1067,7 +1046,7 @@ public class EosV2UpgradeIntegrationTest {
                     LongDeserializer.class,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+                        IsolationLevel.READ_COMMITTED.toString())
                     )
                 ),
                 MULTI_PARTITION_OUTPUT_TOPIC,
@@ -1149,7 +1128,6 @@ public class EosV2UpgradeIntegrationTest {
                         keys.add(row.key);
                     }
                 }
-
                 return true;
             },
             MAX_WAIT_TIME_MS,
@@ -1161,7 +1139,7 @@ public class EosV2UpgradeIntegrationTest {
 
     // must be public to allow KafkaProducer to instantiate it
     public static class KeyPartitioner implements Partitioner {
-        private final static LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
+        private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
         @Override
         public int partition(final String topic,

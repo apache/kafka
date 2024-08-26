@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.MetricNameTemplate;
+
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-
-import org.apache.kafka.common.MetricNameTemplate;
 
 public class FetchMetricsRegistry {
 
@@ -57,16 +57,16 @@ public class FetchMetricsRegistry {
     public MetricNameTemplate partitionPreferredReadReplica;
 
     public FetchMetricsRegistry() {
-        this(new HashSet<String>(), "");
+        this(new HashSet<>(), "");
     }
 
     public FetchMetricsRegistry(String metricGrpPrefix) {
-        this(new HashSet<String>(), metricGrpPrefix);
+        this(new HashSet<>(), metricGrpPrefix);
     }
 
     public FetchMetricsRegistry(Set<String> tags, String metricGrpPrefix) {
 
-        /***** Client level *****/
+        /* Client level */
         String groupName = metricGrpPrefix + "-fetch-manager-metrics";
 
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName,
@@ -105,7 +105,7 @@ public class FetchMetricsRegistry {
         this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", groupName,
                 "The maximum throttle time in ms", tags);
 
-        /***** Topic level *****/
+        /*  Topic level */
         Set<String> topicTags = new LinkedHashSet<>(tags);
         topicTags.add("topic");
 
@@ -125,7 +125,7 @@ public class FetchMetricsRegistry {
         this.topicRecordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
                 "The total number of records consumed for a topic", topicTags);
 
-        /***** Partition level *****/
+        /* Partition level */
         Set<String> partitionTags = new HashSet<>(topicTags);
         partitionTags.add("partition");
         this.partitionRecordsLag = new MetricNameTemplate("records-lag", groupName,

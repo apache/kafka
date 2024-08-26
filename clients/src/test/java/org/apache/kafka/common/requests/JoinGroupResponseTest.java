@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+
 import org.junit.jupiter.params.ParameterizedTest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,6 +31,21 @@ public class JoinGroupResponseTest {
     public void testProtocolNameBackwardCompatibility(short version) {
         JoinGroupResponseData data = new JoinGroupResponseData()
             .setProtocolName(null);
+
+        JoinGroupResponse joinGroupResponse = new JoinGroupResponse(data, version);
+
+        if (version < 7) {
+            assertEquals("", joinGroupResponse.data().protocolName());
+        } else {
+            assertNull(joinGroupResponse.data().protocolName());
+        }
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.JOIN_GROUP)
+    public void testProtocolNameComplianceWithVersion7AndAbove(short version) {
+        JoinGroupResponseData data = new JoinGroupResponseData()
+            .setProtocolName("");
 
         JoinGroupResponse joinGroupResponse = new JoinGroupResponse(data, version);
 

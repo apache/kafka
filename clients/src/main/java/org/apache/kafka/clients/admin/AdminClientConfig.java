@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -48,6 +49,13 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String BOOTSTRAP_SERVERS_DOC = CommonClientConfigs.BOOTSTRAP_SERVERS_DOC;
 
     /**
+     * <code>bootstrap.controllers</code>
+     */
+    public static final String BOOTSTRAP_CONTROLLERS_CONFIG = "bootstrap.controllers";
+    public static final String BOOTSTRAP_CONTROLLERS_DOC = "A list of host/port pairs to use for establishing the initial " +
+            "connection to the KRaft controller quorum. This list should be in the form <code>host1:port1,host2:port2,...</code>.";
+
+    /**
      * <code>client.dns.lookup</code>
      */
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
@@ -69,9 +77,19 @@ public class AdminClientConfig extends AbstractConfig {
      * <code>retry.backoff.ms</code>
      */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
-    private static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to " +
-                "retry a failed request. This avoids repeatedly sending requests in a tight loop under " +
-                "some failure scenarios.";
+    private static final String RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
+
+    /**
+     * <code>retry.backoff.max.ms</code>
+     */
+    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
+    private static final String RETRY_BACKOFF_MAX_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC;
+
+    /**
+     * <code>enable.metrics.push</code>
+     */
+    public static final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+    public static final String ENABLE_METRICS_PUSH_DOC = CommonClientConfigs.ENABLE_METRICS_PUSH_DOC;
 
     /** <code>socket.connection.setup.timeout.ms</code> */
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG;
@@ -122,6 +140,10 @@ public class AdminClientConfig extends AbstractConfig {
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+    public static final String METADATA_RECOVERY_STRATEGY_DOC = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC;
+    public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY;
+
     /**
      * <code>security.providers</code>
      */
@@ -131,8 +153,14 @@ public class AdminClientConfig extends AbstractConfig {
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
+                                        "",
                                         Importance.HIGH,
-                                        BOOTSTRAP_SERVERS_DOC)
+                                        BOOTSTRAP_SERVERS_DOC).
+                                 define(BOOTSTRAP_CONTROLLERS_CONFIG,
+                                         Type.LIST,
+                                         "",
+                                         Importance.HIGH,
+                                         BOOTSTRAP_CONTROLLERS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CLIENT_ID_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), Importance.LOW, METADATA_MAX_AGE_DOC)
                                 .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND), Importance.MEDIUM, SEND_BUFFER_DOC)
@@ -151,10 +179,21 @@ public class AdminClientConfig extends AbstractConfig {
                                         RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
-                                        100L,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                                         atLeast(0L),
                                         Importance.LOW,
                                         RETRY_BACKOFF_MS_DOC)
+                                .define(RETRY_BACKOFF_MAX_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                                        atLeast(0L),
+                                        Importance.LOW,
+                                        RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(ENABLE_METRICS_PUSH_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        ENABLE_METRICS_PUSH_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
                                         Type.INT,
                                         30000,
@@ -228,12 +267,20 @@ public class AdminClientConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
-                                .withClientSaslSupport();
+                                .withClientSaslSupport()
+                                .define(METADATA_RECOVERY_STRATEGY_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_METADATA_RECOVERY_STRATEGY,
+                                        ConfigDef.CaseInsensitiveValidString
+                                                .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
+                                        Importance.LOW,
+                                        METADATA_RECOVERY_STRATEGY_DOC);
     }
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.postValidateSaslMechanismConfig(this);
+        CommonClientConfigs.warnDisablingExponentialBackoff(this);
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
 

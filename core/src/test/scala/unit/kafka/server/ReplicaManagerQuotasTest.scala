@@ -22,15 +22,16 @@ import kafka.cluster.{Partition, PartitionTest}
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, FetchParams, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -261,6 +262,7 @@ class ReplicaManagerQuotasTest {
     when(log.lastStableOffset).thenReturn(5)
     when(log.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(20L))
     when(log.topicId).thenReturn(Some(topicId))
+    when(log.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
     //if we ask for len 1 return a message
     when(log.read(anyLong,
@@ -269,7 +271,7 @@ class ReplicaManagerQuotasTest {
       minOneMessage = anyBoolean)).thenReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(CompressionType.NONE, record)
+        MemoryRecords.withRecords(Compression.NONE, record)
       ))
 
     //if we ask for len = 0, return 0 messages

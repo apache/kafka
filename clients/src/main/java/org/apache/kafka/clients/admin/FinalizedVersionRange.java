@@ -28,14 +28,14 @@ public class FinalizedVersionRange {
 
     /**
      * Raises an exception unless the following condition is met:
-     * minVersionLevel >= 1 and maxVersionLevel >= 1 and maxVersionLevel >= minVersionLevel.
+     * {@code minVersionLevel >= 1} and {@code maxVersionLevel >= 1} and {@code maxVersionLevel >= minVersionLevel}.
      *
      * @param minVersionLevel   The minimum version level value.
      * @param maxVersionLevel   The maximum version level value.
      *
      * @throws IllegalArgumentException   Raised when the condition described above is not met.
      */
-    FinalizedVersionRange(final short minVersionLevel, final short maxVersionLevel) {
+    public FinalizedVersionRange(final short minVersionLevel, final short maxVersionLevel) {
         if (minVersionLevel < 0 || maxVersionLevel < 0 || maxVersionLevel < minVersionLevel) {
             throw new IllegalArgumentException(
                 String.format(

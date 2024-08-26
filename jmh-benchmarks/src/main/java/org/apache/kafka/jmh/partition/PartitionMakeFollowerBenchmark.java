@@ -17,29 +17,31 @@
 
 package org.apache.kafka.jmh.partition;
 
-import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
+import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
-import org.apache.kafka.server.util.KafkaScheduler;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -66,6 +68,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
 import scala.Option;
 import scala.compat.java8.OptionConverters;
 
@@ -76,15 +79,15 @@ import scala.compat.java8.OptionConverters;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class PartitionMakeFollowerBenchmark {
-    private LogManager logManager;
-    private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private Partition partition;
-    private List<Integer> replicas = Arrays.asList(0, 1, 2);
-    private OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-    private DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
-    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
+    private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
+    private final List<Integer> replicas = Arrays.asList(0, 1, 2);
+    private final OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
+    private final DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Option<Uuid> topicId;
+    private Partition partition;
+    private LogManager logManager;
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
@@ -94,7 +97,7 @@ public class PartitionMakeFollowerBenchmark {
         scheduler.startup();
         LogConfig logConfig = new LogConfig(new Properties());
 
-        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManagerBuilder().
             setLogDirs(Collections.singletonList(logDir)).
@@ -108,7 +111,7 @@ public class PartitionMakeFollowerBenchmark {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setProducerStateManagerConfig(60000, false).
-            setInterBrokerProtocolVersion(MetadataVersion.latest()).
+            setInterBrokerProtocolVersion(MetadataVersion.latestTesting()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
@@ -118,14 +121,14 @@ public class PartitionMakeFollowerBenchmark {
         TopicPartition tp = new TopicPartition("topic", 0);
         topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
 
-        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
+        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Optional.of(0L));
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(tp, 100,
-            MetadataVersion.latest(), 0, () -> -1, Time.SYSTEM,
+            MetadataVersion.latestTesting(), 0, () -> -1, Time.SYSTEM,
             alterPartitionListener, delayedOperations,
-            Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
-        partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId);
+            Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
+        partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId, Option.empty());
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
                 new SimpleRecord(1L, "foo".getBytes(StandardCharsets.UTF_8), "1".getBytes(StandardCharsets.UTF_8)),
@@ -133,7 +136,7 @@ public class PartitionMakeFollowerBenchmark {
             };
             int initialOffSet = 0;
             while (true) {
-                MemoryRecords memoryRecords =  MemoryRecords.withRecords(initialOffSet, CompressionType.NONE, 0, simpleRecords);
+                MemoryRecords memoryRecords =  MemoryRecords.withRecords(initialOffSet, Compression.NONE, 0, simpleRecords);
                 partition.appendRecordsToFollowerOrFutureReplica(memoryRecords, false);
                 initialOffSet = initialOffSet + 2;
             }
@@ -143,7 +146,7 @@ public class PartitionMakeFollowerBenchmark {
     @TearDown(Level.Trial)
     public void tearDown() throws IOException, InterruptedException {
         executorService.shutdownNow();
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
         Utils.delete(logDir);
     }
@@ -158,6 +161,6 @@ public class PartitionMakeFollowerBenchmark {
             .setPartitionEpoch(1)
             .setReplicas(replicas)
             .setIsNew(true);
-        return partition.makeFollower(partitionState, offsetCheckpoints, topicId);
+        return partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
     }
 }

@@ -33,10 +33,8 @@ final class BrokerServerMetrics private (
 ) extends AutoCloseable {
   import BrokerServerMetrics._
 
-  private val batchProcessingTimeHistName = KafkaMetricsGroup.explicitMetricName("kafka.server",
-    "BrokerMetadataListener",
-    "MetadataBatchProcessingTimeUs",
-    Collections.emptyMap())
+  private val metricsGroup = new KafkaMetricsGroup("kafka.server","BrokerMetadataListener")
+  private val batchProcessingTimeHistName = metricsGroup.metricName("MetadataBatchProcessingTimeUs", Collections.emptyMap())
 
   /**
    * A histogram tracking the time in microseconds it took to process batches of events.
@@ -44,10 +42,7 @@ final class BrokerServerMetrics private (
   private val batchProcessingTimeHist =
     KafkaYammerMetrics.defaultRegistry().newHistogram(batchProcessingTimeHistName, true)
 
-  private val batchSizeHistName = KafkaMetricsGroup.explicitMetricName("kafka.server",
-    "BrokerMetadataListener",
-    "MetadataBatchSizes",
-    Collections.emptyMap())
+  private val batchSizeHistName = metricsGroup.metricName("MetadataBatchSizes", Collections.emptyMap())
 
   /**
    * A histogram tracking the sizes of batches that we have processed.
@@ -60,31 +55,31 @@ final class BrokerServerMetrics private (
   val metadataLoadErrorCount: AtomicLong = new AtomicLong(0)
   val metadataApplyErrorCount: AtomicLong = new AtomicLong(0)
 
-  val lastAppliedRecordOffsetName = metrics.metricName(
+  val lastAppliedRecordOffsetName: MetricName = metrics.metricName(
     "last-applied-record-offset",
     metricGroupName,
     "The offset of the last record from the cluster metadata partition that was applied by the broker"
   )
 
-  val lastAppliedRecordTimestampName = metrics.metricName(
+  val lastAppliedRecordTimestampName: MetricName = metrics.metricName(
     "last-applied-record-timestamp",
     metricGroupName,
     "The timestamp of the last record from the cluster metadata partition that was applied by the broker"
   )
 
-  val lastAppliedRecordLagMsName = metrics.metricName(
+  val lastAppliedRecordLagMsName: MetricName = metrics.metricName(
     "last-applied-record-lag-ms",
     metricGroupName,
     "The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker"
   )
 
-  val metadataLoadErrorCountName = metrics.metricName(
+  val metadataLoadErrorCountName: MetricName = metrics.metricName(
     "metadata-load-error-count",
     metricGroupName,
     "The number of errors encountered by the BrokerMetadataListener while loading the metadata log and generating a new MetadataDelta based on it."
   )
 
-  val metadataApplyErrorCountName = metrics.metricName(
+  val metadataApplyErrorCountName: MetricName = metrics.metricName(
     "metadata-apply-error-count",
     metricGroupName,
     "The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta."
@@ -136,7 +131,7 @@ final class BrokerServerMetrics private (
 }
 
 
-final object BrokerServerMetrics {
+object BrokerServerMetrics {
   private val metricGroupName = "broker-metadata-metrics"
 
   private def addMetric[T](metrics: Metrics, name: MetricName)(func: Long => T): Unit = {

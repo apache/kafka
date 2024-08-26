@@ -16,21 +16,26 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.Stage;
+import org.apache.kafka.connect.util.StagedTimeoutException;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 
 public class HerderRequestHandler {
 
@@ -38,18 +43,11 @@ public class HerderRequestHandler {
 
     private final RestClient restClient;
 
-    private long requestTimeoutMs;
+    private final RestRequestTimeout requestTimeout;
 
-    public HerderRequestHandler(RestClient restClient, long requestTimeoutMs) {
+    public HerderRequestHandler(RestClient restClient, RestRequestTimeout requestTimeout) {
         this.restClient = restClient;
-        this.requestTimeoutMs = requestTimeoutMs;
-    }
-
-    public void requestTimeoutMs(long requestTimeoutMs) {
-        if (requestTimeoutMs < 1) {
-            throw new IllegalArgumentException("REST request timeout must be positive");
-        }
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.requestTimeout = requestTimeout;
     }
 
     /**
@@ -61,9 +59,15 @@ public class HerderRequestHandler {
      */
     public <T> T completeRequest(FutureCallback<T> cb) throws Throwable {
         try {
-            return cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
+            return cb.get(requestTimeout.timeoutMs(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw e.getCause();
+        } catch (StagedTimeoutException e) {
+            Stage stage = e.stage();
+            String message = "Request timed out. " + stage.summarize();
+            // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
+            // error is the best option
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), message);
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
@@ -129,9 +133,14 @@ public class HerderRequestHandler {
         return completeOrForwardRequest(cb, path, method, headers, null, body, resultType, translator, forward);
     }
 
-    public <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers,
-                                          Object body, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<>(), forward);
+    public <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
+                                                 TypeReference<T> resultType, Boolean forward) throws Throwable {
+        return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<>(), forward);
+    }
+
+    public void completeOrForwardRequest(FutureCallback<Void> cb, String path, String method, HttpHeaders headers, Object body,
+                                          Boolean forward) throws Throwable {
+        completeOrForwardRequest(cb, path, method, headers, body, new TypeReference<Void>() { }, new IdentityTranslator<>(), forward);
     }
 
     public interface Translator<T, U> {

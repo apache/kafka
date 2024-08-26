@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import java.util.HashSet;
@@ -42,11 +43,12 @@ import java.util.Set;
 public class ResignedState implements EpochState {
     private final int localId;
     private final int epoch;
+    private final Endpoints endpoints;
     private final Set<Integer> voters;
     private final long electionTimeoutMs;
     private final Set<Integer> unackedVoters;
     private final Timer electionTimer;
-    private final List<Integer> preferredSuccessors;
+    private final List<ReplicaKey> preferredSuccessors;
     private final Logger log;
 
     public ResignedState(
@@ -55,7 +57,8 @@ public class ResignedState implements EpochState {
         int epoch,
         Set<Integer> voters,
         long electionTimeoutMs,
-        List<Integer> preferredSuccessors,
+        List<ReplicaKey> preferredSuccessors,
+        Endpoints endpoints,
         LogContext logContext
     ) {
         this.localId = localId;
@@ -66,6 +69,7 @@ public class ResignedState implements EpochState {
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
         this.preferredSuccessors = preferredSuccessors;
+        this.endpoints = endpoints;
         this.log = logContext.logger(ResignedState.class);
     }
 
@@ -77,6 +81,11 @@ public class ResignedState implements EpochState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public Endpoints leaderEndpoints() {
+        return endpoints;
     }
 
     /**
@@ -126,14 +135,18 @@ public class ResignedState implements EpochState {
         return electionTimer.remainingMs();
     }
 
-    public List<Integer> preferredSuccessors() {
+    public List<ReplicaKey> preferredSuccessors() {
         return preferredSuccessors;
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we have resigned as candidate/leader in epoch {}",
-            candidateId, epoch);
+    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
+        log.debug(
+            "Rejecting vote request from candidate ({}) since we have resigned as candidate/leader in epoch {}",
+            candidateKey,
+            epoch
+        );
+
         return false;
     }
 

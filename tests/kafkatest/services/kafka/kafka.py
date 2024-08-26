@@ -203,7 +203,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  isolated_kafka=None,
                  controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
-                 quorum_info_provider=None
+                 quorum_info_provider=None,
+                 use_new_coordinator=None
                  ):
         """
         :param context: test context
@@ -264,6 +265,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int controller_num_nodes_override: the number of nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and isolated_kafka is not None; ignored otherwise
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
+        :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
         """
 
         self.zk = zk
@@ -276,6 +278,19 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.controller_quorum = None # will define below if necessary
         self.isolated_controller_quorum = None # will define below if necessary
         self.configured_for_zk_migration = False
+        
+        # Set use_new_coordinator based on context and arguments.
+        default_use_new_coordinator = False
+       
+        if use_new_coordinator is None:
+            arg_name = 'use_new_coordinator'
+            if context.injected_args is not None:
+                use_new_coordinator = context.injected_args.get(arg_name)
+            if use_new_coordinator is None:
+                use_new_coordinator = context.globals.get(arg_name, default_use_new_coordinator)
+        
+        # Assign the determined value.
+        self.use_new_coordinator = use_new_coordinator
 
         if num_nodes < 1:
             raise Exception("Must set a positive number of nodes: %i" % num_nodes)
@@ -394,6 +409,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.interbroker_sasl_mechanism = interbroker_sasl_mechanism
         self._security_config = None
 
+        # When the new group coordinator is enabled, the new consumer rebalance
+        # protocol is enabled too.
+        rebalance_protocols = "classic"
+        if self.use_new_coordinator:
+            rebalance_protocols = "classic,consumer"
+
         for node in self.nodes:
             node_quorum_info = quorum.NodeQuorumInfo(self.quorum_info, node)
 
@@ -407,6 +428,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             kraft_broker_configs = {
                 config_property.PORT: config_property.FIRST_BROKER_PORT,
                 config_property.NODE_ID: self.idx(node),
+                config_property.NEW_GROUP_COORDINATOR_ENABLE: use_new_coordinator,
+                config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS: rebalance_protocols
             }
             kraft_broker_plus_zk_configs = kraft_broker_configs.copy()
             kraft_broker_plus_zk_configs.update(zk_broker_configs)
@@ -764,6 +787,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else:
                 override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
 
+        if self.use_new_coordinator:
+            override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = 'true'
+            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer'
+
         for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
 
@@ -787,7 +814,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return s
 
     def start_cmd(self, node):
-        cmd = "export JMX_PORT=%d; " % self.jmx_port
+        """
+        To bring up kafka using native image, pass following in ducktape options
+        --globals '{"kafka_mode": "native"}'
+        """
+        kafka_mode = self.context.globals.get("kafka_mode", "")
+        cmd = f"export KAFKA_MODE={kafka_mode}; "
+        cmd += "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["kafka_heap_dump_file"]["path"]
@@ -907,7 +940,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "jcmd | grep -e %s | awk '{print $1}'" % self.java_class_name()
+            cmd = "ps ax | grep -i %s | grep -v grep | awk '{print $1}'" % self.java_class_name()
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (RemoteCommandError, ValueError) as e:
@@ -975,7 +1008,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def clean_node(self, node):
         JmxMixin.clean_node(self, node)
         self.security_config.clean_node(node)
-        node.account.kill_java_processes(self.java_class_name(),
+        node.account.kill_process(self.java_class_name(),
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
@@ -1377,12 +1410,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 continue
 
             fields = line.split("\t")
-            # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
-            fields = list(map(lambda x: x.split(" ")[1], fields))
+            fields = dict([field.split(": ") for field in fields if len(field.split(": ")) == 2])
             partitions.append(
-                {"topic": fields[0],
-                 "partition": int(fields[1]),
-                 "replicas": list(map(int, fields[3].split(',')))})
+                {"topic": fields["Topic"],
+                 "partition": int(fields["Partition"]),
+                 "replicas": list(map(int, fields["Replicas"].split(',')))
+                 })
+
         return {"partitions": partitions}
 
 
@@ -1676,7 +1710,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
-    def list_consumer_groups(self, node=None, command_config=None):
+    def list_consumer_groups(self, node=None, command_config=None, state=None, type=None):
         """ Get list of consumer groups.
         """
         if node is None:
@@ -1693,6 +1727,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
                command_config)
+        if state is not None:
+            cmd += " --state %s" % state
+        if type is not None:
+            cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
 
     def describe_consumer_group(self, group, node=None, command_config=None):
@@ -1777,8 +1815,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node = self.nodes[0]
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += self.path.script("kafka-run-class.sh", node)
-        cmd += " kafka.tools.GetOffsetShell"
+        cmd += self.path.script("kafka-get-offsets.sh", node)
         cmd += " --bootstrap-server %s" % self.bootstrap_servers(self.security_protocol)
 
         if time:

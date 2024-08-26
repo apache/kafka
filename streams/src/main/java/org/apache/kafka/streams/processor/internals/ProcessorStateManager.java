@@ -35,6 +35,7 @@ import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -46,6 +47,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -97,8 +99,11 @@ public class ProcessorStateManager implements StateManager {
         //      update blindly with the given offset
         private Long offset;
 
+        // Will be updated on batch restored
+        private Long endOffset;
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
+
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
@@ -137,6 +142,14 @@ public class ProcessorStateManager implements StateManager {
             return this.offset;
         }
 
+        Long endOffset() {
+            return this.endOffset;
+        }
+
+        public void setEndOffset(final Long endOffset) {
+            this.endOffset = endOffset;
+        }
+
         TopicPartition changelogPartition() {
             return this.changelogPartition;
         }
@@ -153,8 +166,7 @@ public class ProcessorStateManager implements StateManager {
 
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
-    private Logger log;
-    private String logPrefix;
+    private final String logPrefix;
 
     private final TaskId taskId;
     private final boolean eosEnabled;
@@ -168,9 +180,11 @@ public class ProcessorStateManager implements StateManager {
 
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
+    private final boolean stateUpdaterEnabled;
 
     private TaskType taskType;
-    private final boolean stateUpdaterEnabled;
+    private Logger log;
+    private Task.State taskState;
 
     public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {
@@ -257,7 +271,7 @@ public class ProcessorStateManager implements StateManager {
                         final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
                         store.setOffset(offset);
 
-                        log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
+                        log.info("State store {} initialized from checkpoint with offset {} at changelog {}",
                                   store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
                         // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
@@ -412,6 +426,14 @@ public class ProcessorStateManager implements StateManager {
         return taskId;
     }
 
+    void transitionTaskState(final Task.State taskState) {
+        this.taskState = taskState;
+    }
+
+    Task.State taskState() {
+        return taskState;
+    }
+
     // used by the changelog reader only
     boolean changelogAsSource(final TopicPartition partition) {
         return sourcePartitions.contains(partition);
@@ -433,7 +455,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // used by the changelog reader only
-    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
+    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords, final OptionalLong optionalLag) {
         if (!stores.containsValue(storeMetadata)) {
             throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
                 "this should not happen.");
@@ -457,6 +479,10 @@ public class ProcessorStateManager implements StateManager {
             }
 
             storeMetadata.setOffset(batchEndOffset);
+            // If null means the lag for this partition is not known yet
+            if (optionalLag.isPresent()) {
+                storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
+            }
         }
     }
 

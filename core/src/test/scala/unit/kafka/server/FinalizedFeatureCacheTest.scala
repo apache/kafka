@@ -29,7 +29,7 @@ class FinalizedFeatureCacheTest {
 
   @Test
   def testEmpty(): Unit = {
-    assertTrue(new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, BrokerFeatures.createDefault()).getFeatureOption.isEmpty)
+    assertTrue(new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, BrokerFeatures.createDefault(true)).getFeatureOption.isEmpty)
   }
 
   def asJava(input: Map[String, Short]): java.util.Map[String, java.lang.Short] = {
@@ -40,7 +40,7 @@ class FinalizedFeatureCacheTest {
   def testUpdateOrThrowFailedDueToInvalidEpoch(): Unit = {
     val supportedFeatures = Map[String, SupportedVersionRange](
       "feature_1" -> new SupportedVersionRange(1, 4))
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 4)
@@ -63,7 +63,7 @@ class FinalizedFeatureCacheTest {
   def testUpdateOrThrowFailedDueToInvalidFeatures(): Unit = {
     val supportedFeatures =
       Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 1))
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 2)
@@ -79,7 +79,7 @@ class FinalizedFeatureCacheTest {
   def testUpdateOrThrowSuccess(): Unit = {
     val supportedFeatures =
       Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 4))
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 3)
@@ -95,7 +95,7 @@ class FinalizedFeatureCacheTest {
   def testClear(): Unit = {
     val supportedFeatures =
       Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 4))
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
     val finalizedFeatures = Map[String, Short]("feature_1" -> 3)

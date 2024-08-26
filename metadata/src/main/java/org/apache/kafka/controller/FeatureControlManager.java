@@ -17,16 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Map;
-import java.util.Optional;
-import java.util.TreeMap;
-import java.util.function.Consumer;
-
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
@@ -42,20 +32,42 @@ import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineObject;
+
 import org.slf4j.Logger;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.function.Consumer;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
 public class FeatureControlManager {
-
     public static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private MetadataVersion metadataVersion = MetadataVersion.latest();
+        private MetadataVersion metadataVersion = MetadataVersion.latestProduction();
         private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
+        private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
+            @Override
+            public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
+                return Collections.emptyIterator();
+            }
+
+            @Override
+            public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
+                return Collections.emptyIterator();
+            }
+        };
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -82,19 +94,28 @@ public class FeatureControlManager {
             return this;
         }
 
+        Builder setClusterFeatureSupportDescriber(ClusterFeatureSupportDescriber clusterSupportDescriber) {
+            this.clusterSupportDescriber = clusterSupportDescriber;
+            return this;
+        }
+
         public FeatureControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (quorumFeatures == null) {
-                quorumFeatures = new QuorumFeatures(0, new ApiVersions(), QuorumFeatures.defaultFeatureMap(),
-                        Collections.emptyList());
+                Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
+                localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+                        MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+                        MetadataVersion.latestProduction().featureLevel()));
+                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
             }
             return new FeatureControlManager(
                 logContext,
                 quorumFeatures,
                 snapshotRegistry,
                 metadataVersion,
-                minimumBootstrapVersion
+                minimumBootstrapVersion,
+                clusterSupportDescriber
             );
         }
     }
@@ -126,12 +147,18 @@ public class FeatureControlManager {
      */
     private final MetadataVersion minimumBootstrapVersion;
 
+    /**
+     * Gives information about the supported versions in the cluster.
+     */
+    private final ClusterFeatureSupportDescriber clusterSupportDescriber;
+
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         MetadataVersion metadataVersion,
-        MetadataVersion minimumBootstrapVersion
+        MetadataVersion minimumBootstrapVersion,
+        ClusterFeatureSupportDescriber clusterSupportDescriber
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
@@ -139,12 +166,12 @@ public class FeatureControlManager {
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
         this.minimumBootstrapVersion = minimumBootstrapVersion;
         this.migrationControlState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
+        this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
         Map<String, Short> updates,
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
-        Map<Integer, Map<String, VersionRange>> brokerFeatures,
         boolean validateOnly
     ) {
         TreeMap<String, ApiError> results = new TreeMap<>();
@@ -152,7 +179,7 @@ public class FeatureControlManager {
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (Entry<String, Short> entry : updates.entrySet()) {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
-                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), brokerFeatures, records));
+                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records));
         }
 
         if (validateOnly) {
@@ -174,7 +201,6 @@ public class FeatureControlManager {
         String featureName,
         short newVersion,
         FeatureUpdate.UpgradeType upgradeType,
-        Map<Integer, Map<String, VersionRange>> brokersAndFeatures,
         List<ApiMessageAndVersion> records
     ) {
         if (upgradeType.equals(FeatureUpdate.UpgradeType.UNKNOWN)) {
@@ -194,21 +220,9 @@ public class FeatureControlManager {
                 "A feature version cannot be less than 0.");
         }
 
-        Optional<String> reasonNotSupported = quorumFeatures.reasonNotSupported(featureName, newVersion);
+        Optional<String> reasonNotSupported = reasonNotSupported(featureName, newVersion);
         if (reasonNotSupported.isPresent()) {
             return invalidUpdateVersion(featureName, newVersion, reasonNotSupported.get());
-        }
-
-        for (Entry<Integer, Map<String, VersionRange>> brokerEntry : brokersAndFeatures.entrySet()) {
-            VersionRange brokerRange = brokerEntry.getValue().get(featureName);
-            if (brokerRange == null) {
-                return invalidUpdateVersion(featureName, newVersion,
-                    "Broker " + brokerEntry.getKey() + " does not support this feature.");
-            } else if (!brokerRange.contains(newVersion)) {
-                return invalidUpdateVersion(featureName, newVersion,
-                    "Broker " + brokerEntry.getKey() + " does not support the given " +
-                    "version. It supports " + brokerRange.min() + " to " + brokerRange.max() + ".");
-            }
         }
 
         if (newVersion < currentVersion) {
@@ -234,9 +248,64 @@ public class FeatureControlManager {
         }
     }
 
+    private Optional<String> reasonNotSupported(
+        String featureName,
+        short newVersion
+    ) {
+        int numBrokersChecked = 0;
+        int numControllersChecked = 0;
+        Optional<String> reason = quorumFeatures.reasonNotLocallySupported(featureName, newVersion);
+        if (reason.isPresent()) return reason;
+        numControllersChecked++;
+        for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
+            clusterSupportDescriber.brokerSupported();
+                iter.hasNext(); ) {
+            Entry<Integer, Map<String, VersionRange>> entry = iter.next();
+            reason = QuorumFeatures.reasonNotSupported(newVersion,
+                    "Broker " + entry.getKey(),
+                    entry.getValue().getOrDefault(featureName, QuorumFeatures.DISABLED));
+            if (reason.isPresent()) return reason;
+            numBrokersChecked++;
+        }
+        String registrationSuffix = "";
+        HashSet<Integer> foundControllers = new HashSet<>();
+        foundControllers.add(quorumFeatures.nodeId());
+        if (metadataVersion.get().isControllerRegistrationSupported()) {
+            for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
+                 clusterSupportDescriber.controllerSupported();
+                 iter.hasNext(); ) {
+                Entry<Integer, Map<String, VersionRange>> entry = iter.next();
+                if (entry.getKey() == quorumFeatures.nodeId()) {
+                    // No need to re-check the features supported by this controller, since we
+                    // already checked that above.
+                    continue;
+                }
+                reason = QuorumFeatures.reasonNotSupported(newVersion,
+                        "Controller " + entry.getKey(),
+                        entry.getValue().getOrDefault(featureName, QuorumFeatures.DISABLED));
+                if (reason.isPresent()) return reason;
+                foundControllers.add(entry.getKey());
+                numControllersChecked++;
+            }
+            for (int id : quorumFeatures.quorumNodeIds()) {
+                if (!foundControllers.contains(id)) {
+                    return Optional.of("controller " + id + " has not registered, and may not " +
+                        "support this feature");
+                }
+            }
+        } else {
+            registrationSuffix = " Note: unable to verify controller support in the current " +
+                "MetadataVersion.";
+        }
+        log.info("Verified that {} broker(s) and {} controller(s) supported changing {} to " +
+                "feature level {}.{}", numBrokersChecked, numControllersChecked, featureName,
+                newVersion, registrationSuffix);
+        return Optional.empty();
+    }
+
     private ApiError invalidUpdateVersion(String feature, short version, String message) {
         String errorMessage = String.format("Invalid update version %d for feature %s. %s", version, feature, message);
-        log.debug(errorMessage);
+        log.warn(errorMessage);
         return new ApiError(Errors.INVALID_UPDATE_VERSION, errorMessage);
     }
 
@@ -273,17 +342,18 @@ public class FeatureControlManager {
             // This is a downgrade
             boolean metadataChanged = MetadataVersion.checkIfMetadataChanged(currentVersion, newVersion);
             if (!metadataChanged) {
-                log.info("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
+                log.warn("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
             } else if (allowUnsafeDowngrade) {
                 return invalidMetadataVersion(newVersionLevel, "Unsafe metadata downgrade is not supported " +
                         "in this version.");
             } else {
+                // The phrase "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed." has been removed
+                // because unsafe metadata downgrades are not yet supported. We can add it back when implemented (KAFKA-13896).
                 return invalidMetadataVersion(newVersionLevel, "Refusing to perform the requested " +
-                        "downgrade because it might delete metadata information. Retry using " +
-                        "UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.");
+                        "downgrade because it might delete metadata information.");
             }
         } else {
-            log.info("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
+            log.warn("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
         }
 
         recordConsumer.accept(new ApiMessageAndVersion(
@@ -296,7 +366,7 @@ public class FeatureControlManager {
 
     private ApiError invalidMetadataVersion(short version, String message) {
         String errorMessage = String.format("Invalid metadata.version %d. %s", version, message);
-        log.error(errorMessage);
+        log.warn(errorMessage);
         return new ApiError(Errors.INVALID_UPDATE_VERSION, errorMessage);
     }
 
@@ -328,7 +398,7 @@ public class FeatureControlManager {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
             metadataVersion.set(mv);
-            log.info("Replayed a FeatureLevelRecord setting metadata version to {}", mv);
+            log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
         } else {
             if (record.featureLevel() == 0) {
                 finalizedVersions.remove(record.name());

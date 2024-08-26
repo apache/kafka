@@ -36,6 +36,12 @@ def doTest(env, target = "test") {
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
+def runTestOnDevBranch(env) {
+  if (!isChangeRequest(env)) {
+    doTest(env)
+  }
+}
+
 def doStreamsArchetype() {
   echo 'Verify that Kafka Streams archetype compiles'
 
@@ -132,7 +138,7 @@ pipeline {
           }
           steps {
             doValidation()
-            doTest(env)
+            runTestOnDevBranch(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
@@ -151,15 +157,15 @@ pipeline {
           }
           steps {
             doValidation()
-            doTest(env)
+            runTestOnDevBranch(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
         }
 
-        stage('JDK 20 and Scala 2.13') {
+        stage('JDK 21 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_20_latest'
+            jdk 'jdk_21_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS')
@@ -171,7 +177,7 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 20'
+            echo 'Skipping Kafka Streams archetype test for Java 21'
           }
         }
       }

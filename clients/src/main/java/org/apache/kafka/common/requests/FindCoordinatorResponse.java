@@ -150,14 +150,23 @@ public class FindCoordinatorResponse extends AbstractResponse {
     public static FindCoordinatorResponse prepareResponse(Errors error, String key, Node node) {
         FindCoordinatorResponseData data = new FindCoordinatorResponseData();
         data.setCoordinators(Collections.singletonList(
-                new FindCoordinatorResponseData.Coordinator()
-                .setErrorCode(error.code())
-                .setErrorMessage(error.message())
-                .setKey(key)
-                .setHost(node.host())
-                .setPort(node.port())
-                .setNodeId(node.id())));
+            prepareCoordinatorResponse(error, key, node)
+        ));
         return new FindCoordinatorResponse(data);
+    }
+
+    public static FindCoordinatorResponseData.Coordinator prepareCoordinatorResponse(
+        Errors error,
+        String key,
+        Node node
+    ) {
+        return new FindCoordinatorResponseData.Coordinator()
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message())
+            .setKey(key)
+            .setHost(node.host())
+            .setPort(node.port())
+            .setNodeId(node.id());
     }
 
     public static FindCoordinatorResponse prepareErrorResponse(Errors error, List<String> keys) {

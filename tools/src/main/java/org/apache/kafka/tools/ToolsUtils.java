@@ -18,12 +18,19 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.PrintStream;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionParser;
 
 public class ToolsUtils {
     /**
@@ -98,5 +105,70 @@ public class ToolsUtils {
 
         printRow(columnLengths, headers, out);
         rows.forEach(row -> printRow(columnLengths, row, out));
+    }
+
+    public static void validateBootstrapServer(String hostPort) throws IllegalArgumentException {
+        if (hostPort == null || hostPort.trim().isEmpty()) {
+            throw new IllegalArgumentException("Error while validating the bootstrap address\n");
+        }
+
+        String[] hostPorts;
+
+        if (hostPort.contains(",")) {
+            hostPorts = hostPort.split(",");
+        } else {
+            hostPorts = new String[] {hostPort};
+        }
+
+        String[] validHostPort = Arrays.stream(hostPorts)
+                .filter(hostPortData -> Utils.getPort(hostPortData) != null)
+                .toArray(String[]::new);
+
+        if (validHostPort.length == 0 || validHostPort.length != hostPorts.length) {
+            throw new IllegalArgumentException("Please provide valid host:port like host1:9091,host2:9092\n");
+        }
+    }
+
+    /**
+     * Return all duplicates in a list. A duplicated element will appear only once.
+     */
+    public static <T> Set<T> duplicates(List<T> s) {
+        Set<T> set = new HashSet<>();
+        Set<T> duplicates = new HashSet<>();
+
+        s.forEach(element -> {
+            if (!set.add(element)) {
+                duplicates.add(element);
+            }
+        });
+        return duplicates;
+    }
+
+    /**
+     * @param set Source set.
+     * @param toRemove Elements to remove.
+     * @return {@code set} copy without {@code toRemove} elements.
+     * @param <T> Element type.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Set<T> minus(Set<T> set, T...toRemove) {
+        Set<T> res = new HashSet<>(set);
+        for (T t : toRemove)
+            res.remove(t);
+        return res;
+    }
+
+    /**
+     * This is a simple wrapper around `CommandLineUtils.printUsageAndExit`.
+     * It is needed for tools migration (KAFKA-14525), as there is no Java equivalent for return type `Nothing`.
+     * Can be removed once [[kafka.tools.ConsoleConsumer]]
+     * and [[kafka.tools.ConsoleProducer]] are migrated.
+     *
+     * @param parser Command line options parser.
+     * @param message Error message.
+     */
+    public static void printUsageAndExit(OptionParser parser, String message) {
+        CommandLineUtils.printUsageAndExit(parser, message);
+        throw new AssertionError("printUsageAndExit should not return, but it did.");
     }
 }

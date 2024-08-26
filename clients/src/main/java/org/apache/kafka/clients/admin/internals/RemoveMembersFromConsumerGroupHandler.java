@@ -16,6 +16,18 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.apache.kafka.common.utils.LogContext;
+
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -23,17 +35,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
-import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.requests.LeaveGroupRequest;
-import org.apache.kafka.common.requests.LeaveGroupResponse;
-import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
-import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
 
 public class RemoveMembersFromConsumerGroupHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<MemberIdentity, Errors>> {
 

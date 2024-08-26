@@ -22,24 +22,27 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterPartitionRequestData;
-import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
-import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
@@ -388,6 +391,32 @@ public interface Controller extends AclMutator, AutoCloseable {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics,
         boolean validateOnly
+    );
+
+    /**
+     * Attempt to register the given controller.
+     *
+     * @param context       The controller request context.
+     * @param request       The registration request.
+     *
+     * @return              A future yielding the broker registration reply.
+     */
+    CompletableFuture<Void> registerController(
+        ControllerRequestContext context,
+        ControllerRegistrationRequestData request
+    );
+
+    /**
+     * Assign replicas to directories.
+     *
+     * @param context       The controller request context.
+     * @param request       The assign replicas to dirs request.
+     *
+     * @return              A future yielding the results.
+     */
+    CompletableFuture<AssignReplicasToDirsResponseData> assignReplicasToDirs(
+        ControllerRequestContext context,
+        AssignReplicasToDirsRequestData request
     );
 
     /**

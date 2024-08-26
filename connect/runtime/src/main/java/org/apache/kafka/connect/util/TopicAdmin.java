@@ -47,9 +47,9 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,10 +92,6 @@ public class TopicAdmin implements AutoCloseable {
             return created;
         }
 
-        public Set<String> existingTopics() {
-            return existing;
-        }
-
         public boolean isCreated(String topicName) {
             return created.contains(topicName);
         }
@@ -135,8 +131,6 @@ public class TopicAdmin implements AutoCloseable {
 
     private static final String CLEANUP_POLICY_CONFIG = TopicConfig.CLEANUP_POLICY_CONFIG;
     private static final String CLEANUP_POLICY_COMPACT = TopicConfig.CLEANUP_POLICY_COMPACT;
-    private static final String MIN_INSYNC_REPLICAS_CONFIG = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
-    private static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 
     /**
      * A builder of {@link NewTopic} instances.
@@ -208,29 +202,6 @@ public class TopicAdmin implements AutoCloseable {
         }
 
         /**
-         * Specify the minimum number of in-sync replicas required for this topic.
-         *
-         * @param minInSyncReplicas the minimum number of in-sync replicas allowed for the topic; must be positive
-         * @return this builder to allow methods to be chained; never null
-         */
-        public NewTopicBuilder minInSyncReplicas(short minInSyncReplicas) {
-            this.configs.put(MIN_INSYNC_REPLICAS_CONFIG, Short.toString(minInSyncReplicas));
-            return this;
-        }
-
-        /**
-         * Specify whether the broker is allowed to elect a leader that was not an in-sync replica when no ISRs
-         * are available.
-         *
-         * @param allow true if unclean leaders can be elected, or false if they are not allowed
-         * @return this builder to allow methods to be chained; never null
-         */
-        public NewTopicBuilder uncleanLeaderElection(boolean allow) {
-            this.configs.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, Boolean.toString(allow));
-            return this;
-        }
-
-        /**
          * Specify the configuration properties for the topic, overwriting any previously-set properties.
          *
          * @param configs the desired topic configuration properties, or null if all existing properties should be cleared
@@ -286,18 +257,28 @@ public class TopicAdmin implements AutoCloseable {
      * @param adminConfig the configuration for the {@link Admin}
      */
     public TopicAdmin(Map<String, Object> adminConfig) {
-        this(adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG), Admin.create(adminConfig));
+        this(adminConfig, Admin.create(adminConfig));
     }
 
-    public TopicAdmin(Object bootstrapServers, Admin adminClient) {
-        this(bootstrapServers, adminClient, true);
+    public TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
+        this(bootstrapServers(adminConfig), adminClient, true);
     }
 
     // visible for testing
-    TopicAdmin(Object bootstrapServers, Admin adminClient, boolean logCreation) {
+    TopicAdmin(Admin adminClient) {
+        this(null, adminClient, true);
+    }
+
+    // visible for testing
+    TopicAdmin(String bootstrapServers, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
-        this.bootstrapServers = bootstrapServers != null ? bootstrapServers.toString() : "<unknown>";
+        this.bootstrapServers = bootstrapServers != null ? bootstrapServers : "<unknown>";
         this.logCreation = logCreation;
+    }
+
+    private static String bootstrapServers(Map<String, Object> adminConfig) {
+        Object result = adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
+        return result != null ? result.toString() : null;
     }
 
    /**
@@ -418,7 +399,7 @@ public class TopicAdmin implements AutoCloseable {
             }
         }
         if (topicsByName.isEmpty()) return EMPTY_CREATION;
-        String topicNameList = Utils.join(topicsByName.keySet(), "', '");
+        String topicNameList = String.join("', '", topicsByName.keySet());
 
         // Attempt to create any missing topics
         CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
@@ -720,23 +701,23 @@ public class TopicAdmin implements AutoCloseable {
                 String topic = partition.topic();
                 if (cause instanceof AuthorizationException) {
                     String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new ConnectException(msg, e);
+                    throw new ConnectException(msg, cause);
                 } else if (cause instanceof UnsupportedVersionException) {
                     // Should theoretically never happen, because this method is the same as what the consumer uses and therefore
                     // should exist in the broker since before the admin client was added
                     String msg = String.format("API to get the get the end offsets for topic '%s' is unsupported on brokers at %s", topic, bootstrapServers);
-                    throw new UnsupportedVersionException(msg, e);
+                    throw new UnsupportedVersionException(msg, cause);
                 } else if (cause instanceof TimeoutException) {
                     String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new TimeoutException(msg, e);
+                    throw new TimeoutException(msg, cause);
                 } else if (cause instanceof LeaderNotAvailableException) {
                     String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new LeaderNotAvailableException(msg, e);
+                    throw new LeaderNotAvailableException(msg, cause);
                 } else if (cause instanceof org.apache.kafka.common.errors.RetriableException) {
                     throw (org.apache.kafka.common.errors.RetriableException) cause;
                 } else {
                     String msg = String.format("Error while getting end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new ConnectException(msg, e);
+                    throw new ConnectException(msg, cause);
                 }
             } catch (InterruptedException e) {
                 Thread.interrupted();
@@ -774,7 +755,7 @@ public class TopicAdmin implements AutoCloseable {
             // Older brokers don't support this admin method, so rethrow it without wrapping it
             throw e;
         } catch (Exception e) {
-            throw new ConnectException("Failed to list offsets for topic partitions.", e);
+            throw ConnectUtils.maybeWrap(e, "Failed to list offsets for topic partitions");
         }
     }
 

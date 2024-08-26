@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.describeTopic;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.describeTopic;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public final class ExpectTopicIdToMatchInRemoteStorageAction implements TieredStorageTestAction {

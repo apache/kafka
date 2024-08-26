@@ -24,10 +24,11 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
-import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.DelegationTokenData;
+import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -43,20 +44,20 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(value = 40)
 public class DelegationTokenImageTest {
-    public final static DelegationTokenImage IMAGE1;
+    public static final DelegationTokenImage IMAGE1;
 
-    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    final static DelegationTokenDelta DELTA1;
+    static final DelegationTokenDelta DELTA1;
 
-    final static DelegationTokenImage IMAGE2;
+    static final DelegationTokenImage IMAGE2;
 
     static DelegationTokenData randomDelegationTokenData(String tokenId, long expireTimestamp) {
         TokenInformation ti = new TokenInformation(
             tokenId,
             SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
             SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
-            new ArrayList<KafkaPrincipal>(),
+            new ArrayList<>(),
             0,
             1000,
             expireTimestamp);

@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionRequestData.PartitionData;
 import org.apache.kafka.common.message.AlterPartitionRequestData.TopicData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Arrays;
@@ -65,6 +66,19 @@ class AlterPartitionRequestTest {
         assertEquals(1, alterPartitionRequest.data().topics().size());
         assertEquals(1, alterPartitionRequest.data().topics().get(0).partitions().size());
         PartitionData partitionData = alterPartitionRequest.data().topics().get(0).partitions().get(0);
+        if (version < 3) {
+            assertEquals(Arrays.asList(1, 2, 3), partitionData.newIsr());
+            assertTrue(partitionData.newIsrWithEpochs().isEmpty());
+        } else {
+            assertEquals(newIsrWithBrokerEpoch, partitionData.newIsrWithEpochs());
+            assertTrue(partitionData.newIsr().isEmpty());
+        }
+
+        // Build the request again to make sure build() is idempotent.
+        alterPartitionRequest = builder.build(version);
+        assertEquals(1, alterPartitionRequest.data().topics().size());
+        assertEquals(1, alterPartitionRequest.data().topics().get(0).partitions().size());
+        alterPartitionRequest.data().topics().get(0).partitions().get(0);
         if (version < 3) {
             assertEquals(Arrays.asList(1, 2, 3), partitionData.newIsr());
             assertTrue(partitionData.newIsrWithEpochs().isEmpty());

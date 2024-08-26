@@ -17,10 +17,11 @@
 
 package kafka.zk.migration
 
-import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
-import kafka.utils.{Logging, PasswordEncoder}
+import kafka.server.{DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
+import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
+import kafka.zk.migration.ZkConfigMigrationClient.getSanitizedClientQuotaZNodeName
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.config.types.Password
@@ -29,8 +30,11 @@ import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.{ConfigMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
+import org.apache.kafka.security.PasswordEncoder
+import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
@@ -47,44 +51,54 @@ class ZkConfigMigrationClient(
 
   val adminZkClient = new AdminZkClient(zkClient)
 
-
   /**
-   * In ZK, we use the special string "&lt;default&gt;" to represent the default entity.
-   * In KRaft, we use an empty string. This method builds an EntityData that converts the special ZK string
-   * to the special KRaft string.
+   * In ZK, we use the special string "&lt;default&gt;" to represent the default config entity.
+   * In KRaft, we use an empty string. This method converts the between the two conventions.
    */
-  private def fromZkEntityName(entityName: String): String = {
-    if (entityName.equals(ConfigEntityName.Default)) {
+  private def fromZkConfigfEntityName(entityName: String): String = {
+    if (entityName.equals(ZooKeeperInternals.DEFAULT_STRING)) {
       ""
     } else {
       entityName
     }
   }
 
-  private def toZkEntityName(entityName: String): String = {
+  private def toZkConfigEntityName(entityName: String): String = {
     if (entityName.isEmpty) {
-      ConfigEntityName.Default
+      ZooKeeperInternals.DEFAULT_STRING
     } else {
       entityName
     }
   }
 
-  private def buildEntityData(entityType: String, entityName: String): EntityData = {
-    new EntityData().setEntityType(entityType).setEntityName(fromZkEntityName(entityName))
+  private def buildClientQuotaEntityData(
+    entityType: String,
+    znodeName: String
+  ): EntityData = {
+    val result = new EntityData().setEntityType(entityType)
+    if (znodeName.equals(ZooKeeperInternals.DEFAULT_STRING)) {
+      // Default __client quota__ entity names are null. This is different than default __configs__,
+      // which have their names set to the empty string instead.
+      result.setEntityName(null)
+    } else {
+      // ZNode names are sanitized before being stored in ZooKeeper.
+      // For example, @ is turned into %40. Undo the sanitization here.
+      result.setEntityName(Sanitizer.desanitize(znodeName))
+    }
+    result
   }
-
 
   override def iterateClientQuotas(visitor: ClientQuotaVisitor): Unit = {
     def migrateEntityType(zkEntityType: String, entityType: String): Unit = {
-      adminZkClient.fetchAllEntityConfigs(zkEntityType).foreach { case (name, props) =>
-        val entity = List(buildEntityData(entityType, name)).asJava
+      adminZkClient.fetchAllEntityConfigs(zkEntityType).foreach { case (znodeName, props) =>
+        val entity = List(buildClientQuotaEntityData(entityType, znodeName)).asJava
 
         ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach { mechanism =>
           val propertyValue = props.getProperty(mechanism.mechanismName)
           if (propertyValue != null) {
             val scramCredentials = ScramCredentialUtils.credentialFromString(propertyValue)
             logAndRethrow(this, s"Error in client quota visitor for SCRAM credential. User was $entity.") {
-              visitor.visitScramCredential(name, mechanism, scramCredentials)
+              visitor.visitScramCredential(Sanitizer.desanitize(znodeName), mechanism, scramCredentials)
             }
             props.remove(mechanism.mechanismName)
           }
@@ -102,17 +116,17 @@ class ZkConfigMigrationClient(
       }
     }
 
-    migrateEntityType(ConfigType.User, ClientQuotaEntity.USER)
-    migrateEntityType(ConfigType.Client, ClientQuotaEntity.CLIENT_ID)
+    migrateEntityType(ConfigType.USER, ClientQuotaEntity.USER)
+    migrateEntityType(ConfigType.CLIENT, ClientQuotaEntity.CLIENT_ID)
 
-    adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).foreach { case (name, props) =>
+    adminZkClient.fetchAllChildEntityConfigs(ConfigType.USER, ConfigType.CLIENT).foreach { case (znodePath, props) =>
       // Taken from ZkAdminManager
-      val components = name.split("/")
+      val components = znodePath.split("/")
       if (components.size != 3 || components(1) != "clients")
-        throw new IllegalArgumentException(s"Unexpected config path: ${name}")
+        throw new IllegalArgumentException(s"Unexpected config path: $znodePath")
       val entity = List(
-        buildEntityData(ClientQuotaEntity.USER, components(0)),
-        buildEntityData(ClientQuotaEntity.CLIENT_ID, components(2))
+        buildClientQuotaEntityData(ClientQuotaEntity.USER, components(0)),
+        buildClientQuotaEntityData(ClientQuotaEntity.CLIENT_ID, components(2))
       )
       val quotaMap = props.asScala.map { case (key, value) =>
         val doubleValue = try lang.Double.valueOf(value) catch {
@@ -126,13 +140,13 @@ class ZkConfigMigrationClient(
       }
     }
 
-    migrateEntityType(ConfigType.Ip, ClientQuotaEntity.IP)
+    migrateEntityType(ConfigType.IP, ClientQuotaEntity.IP)
   }
 
   override def iterateBrokerConfigs(configConsumer: BiConsumer[String, util.Map[String, String]]): Unit = {
-    val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Broker)
-    zkClient.getEntitiesConfigs(ConfigType.Broker, brokerEntities.toSet).foreach { case (broker, props) =>
-      val brokerResource = fromZkEntityName(broker)
+    val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.BROKER)
+    zkClient.getEntitiesConfigs(ConfigType.BROKER, brokerEntities.toSet).foreach { case (broker, props) =>
+      val brokerResource = fromZkConfigfEntityName(broker)
       val decodedProps = props.asScala.map { case (key, value) =>
         if (DynamicBrokerConfig.isPasswordConfig(key))
           key -> passwordEncoder.decode(value).value
@@ -147,15 +161,15 @@ class ZkConfigMigrationClient(
   }
 
   override def iterateTopicConfigs(configConsumer: BiConsumer[String, util.Map[String, String]]): Unit = {
-    val topicEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Topic)
+    val topicEntities = zkClient.getAllEntitiesWithConfig(ConfigType.TOPIC)
     topicEntities.foreach { topic =>
       readTopicConfigs(topic, props => configConsumer.accept(topic, props))
     }
   }
 
   override def readTopicConfigs(topicName: String, configConsumer: Consumer[util.Map[String, String]]): Unit = {
-    val topicResource = fromZkEntityName(topicName)
-    val props = zkClient.getEntityConfigs(ConfigType.Topic, topicResource)
+    val topicResource = fromZkConfigfEntityName(topicName)
+    val props = zkClient.getEntityConfigs(ConfigType.TOPIC, topicResource)
     val decodedProps = props.asScala.map { case (key, value) =>
       if (DynamicBrokerConfig.isPasswordConfig(key))
         key -> passwordEncoder.decode(value).value
@@ -174,12 +188,12 @@ class ZkConfigMigrationClient(
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
     val configType = configResource.`type`() match {
-      case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
-      case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
+      case ConfigResource.Type.BROKER => Some(ConfigType.BROKER)
+      case ConfigResource.Type.TOPIC => Some(ConfigType.TOPIC)
       case _ => None
     }
 
-    val configName = toZkEntityName(configResource.name())
+    val configName = toZkConfigEntityName(configResource.name())
     if (configType.isDefined) {
       val props = new Properties()
       configMap.forEach { case (key, value) =>
@@ -213,24 +227,24 @@ class ZkConfigMigrationClient(
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
     val configType = configResource.`type`() match {
-      case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
-      case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
+      case ConfigResource.Type.BROKER => Some(ConfigType.BROKER)
+      case ConfigResource.Type.TOPIC => Some(ConfigType.TOPIC)
       case _ => None
     }
 
-    val configName = toZkEntityName(configResource.name())
+    val configName = toZkConfigEntityName(configResource.name())
     if (configType.isDefined) {
       val path = ConfigEntityZNode.path(configType.get, configName)
       val requests = Seq(DeleteRequest(path, ZkVersion.MatchAnyVersion))
       val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
 
       if (responses.head.resultCode.equals(Code.NONODE)) {
-        // Not fatal.
-        error(s"Did not delete $configResource since the node did not exist.")
+        // Not fatal. This is expected in the case this is a topic config and we delete the topic
+        debug(s"Did not delete $configResource since the node did not exist.")
         state
       } else if (responses.head.resultCode.equals(Code.OK)) {
         // Write the notification znode if our update was successful
-        zkClient.createConfigChangeNotification(s"$configType/$configName")
+        zkClient.createConfigChangeNotification(s"${configType.get}/$configName")
         state.withMigrationZkVersion(migrationZkVersion)
       } else {
         throw KeeperException.create(responses.head.resultCode, path)
@@ -247,21 +261,20 @@ class ZkConfigMigrationClient(
     scram: util.Map[String, String],
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
-    val entityMap = entity.asScala
-    val user = entityMap.get(ClientQuotaEntity.USER).map(toZkEntityName)
-    val client = entityMap.get(ClientQuotaEntity.CLIENT_ID).map(toZkEntityName)
-    val ip = entityMap.get(ClientQuotaEntity.IP).map(toZkEntityName)
+    val user: Option[String] = getSanitizedClientQuotaZNodeName(entity, ClientQuotaEntity.USER)
+    val client: Option[String] = getSanitizedClientQuotaZNodeName(entity, ClientQuotaEntity.CLIENT_ID)
+    val ip: Option[String] = getSanitizedClientQuotaZNodeName(entity, ClientQuotaEntity.IP)
     val props = new Properties()
 
     val (configType, path, configKeys) = if (user.isDefined && client.isEmpty) {
-      (Some(ConfigType.User), user, DynamicConfig.User.configKeys)
+      (Some(ConfigType.USER), user, DynamicConfig.User.configKeys)
     } else if (user.isDefined && client.isDefined) {
-      (Some(ConfigType.User), Some(s"${user.get}/clients/${client.get}"),
+      (Some(ConfigType.USER), Some(s"${user.get}/clients/${client.get}"),
         DynamicConfig.User.configKeys)
     } else if (client.isDefined) {
-      (Some(ConfigType.Client), client, DynamicConfig.Client.configKeys)
+      (Some(ConfigType.CLIENT), client, DynamicConfig.Client.configKeys)
     } else if (ip.isDefined) {
-      (Some(ConfigType.Ip), ip, DynamicConfig.Ip.configKeys)
+      (Some(ConfigType.IP), ip, DynamicConfig.Ip.configKeys)
     } else {
       (None, None, Map.empty.asJava)
     }
@@ -275,7 +288,7 @@ class ZkConfigMigrationClient(
     quotas.forEach { case (key, value) =>
       val configKey = configKeys.get(key)
       if (configKey == null) {
-        throw new MigrationClientException(s"Invalid configuration key ${key}")
+        throw new MigrationClientException(s"Invalid configuration key $key")
       } else {
         configKey.`type` match {
           case ConfigDef.Type.DOUBLE =>
@@ -287,7 +300,7 @@ class ZkConfigMigrationClient(
             else
               (value + epsilon).toInt
             if ((intValue.toDouble - value).abs > epsilon)
-              throw new InvalidRequestException(s"Configuration ${key} must be a ${configKey.`type`} value")
+              throw new InvalidRequestException(s"Configuration $key must be a ${configKey.`type`} value")
             props.setProperty(key, intValue.toString)
           case _ =>
             throw new MigrationClientException(s"Unexpected config type ${configKey.`type`}")
@@ -348,3 +361,34 @@ class ZkConfigMigrationClient(
   }
 }
 
+object ZkConfigMigrationClient {
+  /**
+   * Find the znode name to use for a ClientQuotaEntity.
+   *
+   * @param entity      The client quota entity map. See org.apache.kafka.common.ClientQuotaEntity.
+   * @param component   The component that we want a znode name for.
+   * @return            Some(znodeName) if there is a znode path; None otherwise.
+   */
+  def getSanitizedClientQuotaZNodeName(
+    entity: util.Map[String, String],
+    component: String
+  ): Option[String] = {
+    if (!entity.containsKey(component)) {
+      // There is no znode path, because the component wasn't found. For example, if the
+      // entity was (user -> "bob") and our component was "ip", we would return None here.
+      None
+    } else {
+      val rawValue = entity.get(component)
+      if (rawValue == null) {
+        // A raw value of null means this is a default entity. For example, (user -> null) means
+        // the default user. Yes, this means we stored a null value in the map and it did not mean
+        // "not present." This is an unfortunate API that should be revisited at some point.
+        Some(ZooKeeperInternals.DEFAULT_STRING)
+      } else {
+        // We found a non-null value, and now we need to sanitize it. For example, "c@@ldude" will
+        // turn into c%40%40ldude, so that we can use it as a znode name in ZooKeeper.
+        Some(Sanitizer.sanitize(rawValue))
+      }
+    }
+  }
+}

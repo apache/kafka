@@ -40,6 +40,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -70,7 +71,6 @@ import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -88,6 +88,7 @@ import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
 import org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacade;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.TestRecord;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -221,8 +222,8 @@ public class TopologyTestDriver implements Closeable {
     private final Time mockWallClockTime;
     private InternalTopologyBuilder internalTopologyBuilder;
 
-    private final static int PARTITION_ID = 0;
-    private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
+    private static final int PARTITION_ID = 0;
+    private static final TaskId TASK_ID = new TaskId(0, PARTITION_ID);
     StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
     private GlobalStateManager globalStateManager;
@@ -317,7 +318,11 @@ public class TopologyTestDriver implements Closeable {
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
         // provide randomized dummy app-id if it's not specified
-        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG,  "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
+        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
+        // disable stream-stream left/outer join emit result throttling
+        configCopy.putIfAbsent(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 0L);
+        // disable windowed aggregation emit result throttling
+        configCopy.putIfAbsent(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0L);
         final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         logIfTaskIdleEnabled(streamsConfig);
 
@@ -459,7 +464,9 @@ public class TopologyTestDriver implements Closeable {
                 globalTopology,
                 globalProcessorContext,
                 globalStateManager,
-                new LogAndContinueExceptionHandler()
+                new LogAndContinueExceptionHandler(),
+                mockWallClockTime,
+                streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
             );
             globalStateTask.initialize();
             globalProcessorContext.setRecordContext(null);
@@ -522,7 +529,9 @@ public class TopologyTestDriver implements Closeable {
                 stateManager,
                 recordCollector,
                 context,
-                logContext);
+                logContext,
+                false
+                );
             task.initializeIfNeeded();
             task.completeRestoration(noOpResetter -> { });
             task.processorContext().setRecordContext(null);
@@ -596,6 +605,8 @@ public class TopologyTestDriver implements Closeable {
         // If the topology only has global tasks, then `task` would be null.
         // For this method, it just means there's nothing to do.
         if (task != null) {
+            task.resumePollingForPartitionsWithAvailableSpace();
+            task.updateLags();
             while (task.hasRecordsQueued() && task.isProcessable(mockWallClockTime.milliseconds())) {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());

@@ -34,12 +34,14 @@ import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.DuplicateResourceException;
 import org.apache.kafka.common.errors.DuplicateSequenceException;
+import org.apache.kafka.common.errors.DuplicateVoterException;
 import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
+import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionTopicIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -49,10 +51,10 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
 import org.apache.kafka.common.errors.InconsistentVoterSetException;
-import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.IneligibleReplicaException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -63,21 +65,26 @@ import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
+import org.apache.kafka.common.errors.InvalidRegistrationException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidRequiredAcksException;
 import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
+import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
+import org.apache.kafka.common.errors.InvalidVoterKeyException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
+import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NewLeaderElectedException;
 import org.apache.kafka.common.errors.NoReassignmentInProgressException;
@@ -87,9 +94,9 @@ import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
+import org.apache.kafka.common.errors.OffsetMovedToTieredStorageException;
 import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.errors.OffsetMovedToTieredStorageException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
@@ -106,22 +113,27 @@ import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.errors.SnapshotNotFoundException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
+import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
+import org.apache.kafka.common.errors.UnknownControllerIdException;
 import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownSubscriptionIdException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
@@ -129,9 +141,12 @@ import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
+import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.VoterNotFoundException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -357,12 +372,12 @@ public enum Errors {
     DUPLICATE_RESOURCE(92, "A request illegally referred to the same resource twice.", DuplicateResourceException::new),
     UNACCEPTABLE_CREDENTIAL(93, "Requested credential would not meet criteria for acceptability.", UnacceptableCredentialException::new),
     INCONSISTENT_VOTER_SET(94, "Indicates that the either the sender or recipient of a " +
-            "voter-only request is not one of the expected voters", InconsistentVoterSetException::new),
+            "voter-only request is not one of the expected voters.", InconsistentVoterSetException::new),
     INVALID_UPDATE_VERSION(95, "The given update version was invalid.", InvalidUpdateVersionException::new),
     FEATURE_UPDATE_FAILED(96, "Unable to update finalized features due to an unexpected server error.", FeatureUpdateFailedException::new),
     PRINCIPAL_DESERIALIZATION_FAILURE(97, "Request principal deserialization failed during forwarding. " +
          "This indicates an internal error on the broker cluster security setup.", PrincipalDeserializationException::new),
-    SNAPSHOT_NOT_FOUND(98, "Requested snapshot was not found", SnapshotNotFoundException::new),
+    SNAPSHOT_NOT_FOUND(98, "Requested snapshot was not found.", SnapshotNotFoundException::new),
     POSITION_OUT_OF_RANGE(
         99,
         "Requested position is not greater than or equal to zero, and less than the size of the snapshot.",
@@ -370,31 +385,45 @@ public enum Errors {
     UNKNOWN_TOPIC_ID(100, "This server does not host this topic ID.", UnknownTopicIdException::new),
     DUPLICATE_BROKER_REGISTRATION(101, "This broker ID is already in use.", DuplicateBrokerRegistrationException::new),
     BROKER_ID_NOT_REGISTERED(102, "The given broker ID was not registered.", BrokerIdNotRegisteredException::new),
-    INCONSISTENT_TOPIC_ID(103, "The log's topic ID did not match the topic ID in the request", InconsistentTopicIdException::new),
-    INCONSISTENT_CLUSTER_ID(104, "The clusterId in the request does not match that found on the server", InconsistentClusterIdException::new),
-    TRANSACTIONAL_ID_NOT_FOUND(105, "The transactionalId could not be found", TransactionalIdNotFoundException::new),
-    FETCH_SESSION_TOPIC_ID_ERROR(106, "The fetch session encountered inconsistent topic ID usage", FetchSessionTopicIdException::new),
+    INCONSISTENT_TOPIC_ID(103, "The log's topic ID did not match the topic ID in the request.", InconsistentTopicIdException::new),
+    INCONSISTENT_CLUSTER_ID(104, "The clusterId in the request does not match that found on the server.", InconsistentClusterIdException::new),
+    TRANSACTIONAL_ID_NOT_FOUND(105, "The transactionalId could not be found.", TransactionalIdNotFoundException::new),
+    FETCH_SESSION_TOPIC_ID_ERROR(106, "The fetch session encountered inconsistent topic ID usage.", FetchSessionTopicIdException::new),
     INELIGIBLE_REPLICA(107, "The new ISR contains at least one ineligible replica.", IneligibleReplicaException::new),
     NEW_LEADER_ELECTED(108, "The AlterPartition request successfully updated the partition state but the leader has changed.", NewLeaderElectedException::new),
     OFFSET_MOVED_TO_TIERED_STORAGE(109, "The requested offset is moved to tiered storage.", OffsetMovedToTieredStorageException::new),
     FENCED_MEMBER_EPOCH(110, "The member epoch is fenced by the group coordinator. The member must abandon all its partitions and rejoin.", FencedMemberEpochException::new),
     UNRELEASED_INSTANCE_ID(111, "The instance ID is still used by another member in the consumer group. That member must leave first.", UnreleasedInstanceIdException::new),
     UNSUPPORTED_ASSIGNOR(112, "The assignor or its version range is not supported by the consumer group.", UnsupportedAssignorException::new),
-    STALE_MEMBER_EPOCH(113, "The member epoch is stale. The member must retry after receiving its updated member epoch via the ConsumerGroupHeartbeat API.", StaleMemberEpochException::new);
+    STALE_MEMBER_EPOCH(113, "The member epoch is stale. The member must retry after receiving its updated member epoch via the ConsumerGroupHeartbeat API.", StaleMemberEpochException::new),
+    MISMATCHED_ENDPOINT_TYPE(114, "The request was sent to an endpoint of the wrong type.", MismatchedEndpointTypeException::new),
+    UNSUPPORTED_ENDPOINT_TYPE(115, "This endpoint type is not supported yet.", UnsupportedEndpointTypeException::new),
+    UNKNOWN_CONTROLLER_ID(116, "This controller ID is not known.", UnknownControllerIdException::new),
+    UNKNOWN_SUBSCRIPTION_ID(117, "Client sent a push telemetry request with an invalid or outdated subscription ID.", UnknownSubscriptionIdException::new),
+    TELEMETRY_TOO_LARGE(118, "Client sent a push telemetry request larger than the maximum size the broker will accept.", TelemetryTooLargeException::new),
+    INVALID_REGISTRATION(119, "The controller has considered the broker registration to be invalid.", InvalidRegistrationException::new),
+    TRANSACTION_ABORTABLE(120, "The server encountered an error with the transaction. The client can abort the transaction to continue using this transactional ID.", TransactionAbortableException::new),
+    INVALID_RECORD_STATE(121, "The record state is invalid. The acknowledgement of delivery could not be completed.", InvalidRecordStateException::new),
+    SHARE_SESSION_NOT_FOUND(122, "The share session was not found.", ShareSessionNotFoundException::new),
+    INVALID_SHARE_SESSION_EPOCH(123, "The share session epoch is invalid.", InvalidShareSessionEpochException::new),
+    FENCED_STATE_EPOCH(124, "The share coordinator rejected the request because the share-group state epoch did not match.", FencedStateEpochException::new),
+    INVALID_VOTER_KEY(125, "The voter key doesn't match the receiving replica's key.", InvalidVoterKeyException::new),
+    DUPLICATE_VOTER(126, "The voter is already part of the set of voters.", DuplicateVoterException::new),
+    VOTER_NOT_FOUND(127, "The voter is not part of the set of voters.", VoterNotFoundException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
-    private static Map<Class<?>, Errors> classToError = new HashMap<>();
-    private static Map<Short, Errors> codeToError = new HashMap<>();
+    private static final Map<Class<?>, Errors> CLASS_TO_ERROR = new HashMap<>();
+    private static final Map<Short, Errors> CODE_TO_ERROR = new HashMap<>();
 
     static {
         for (Errors error : Errors.values()) {
-            if (codeToError.put(error.code(), error) != null)
+            if (CODE_TO_ERROR.put(error.code(), error) != null)
                 throw new ExceptionInInitializerError("Code " + error.code() + " for error " +
                         error + " has already been used");
 
             if (error.exception != null)
-                classToError.put(error.exception.getClass(), error);
+                CLASS_TO_ERROR.put(error.exception.getClass(), error);
         }
     }
 
@@ -467,7 +496,7 @@ public enum Errors {
      * Throw the exception if there is one
      */
     public static Errors forCode(short code) {
-        Errors error = codeToError.get(code);
+        Errors error = CODE_TO_ERROR.get(code);
         if (error != null) {
             return error;
         } else {
@@ -484,7 +513,7 @@ public enum Errors {
         Throwable cause = maybeUnwrapException(t);
         Class<?> clazz = cause.getClass();
         while (clazz != null) {
-            Errors error = classToError.get(clazz);
+            Errors error = CLASS_TO_ERROR.get(clazz);
             if (error != null)
                 return error;
             clazz = clazz.getSuperclass();

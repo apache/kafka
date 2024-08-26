@@ -19,18 +19,22 @@ package kafka.api
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-import kafka.security.authorizer.AclEntry
-import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -66,9 +70,10 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     super.tearDown()
   }
 
-  @Test
-  def testCreateDeleteTopics(): Unit = {
-    client = Admin.create(createConfig)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateDeleteTopics(quorum: String): Unit = {
+    client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
@@ -99,7 +104,6 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic).get())
       assertEquals(topicIds(topic), createResult.topicId(topic).get())
     }
-    
 
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
@@ -159,9 +163,10 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     waitForTopics(client, List(), topics)
   }
 
-  @Test
-  def testAuthorizedOperations(): Unit = {
-    client = Admin.create(createConfig)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizedOperations(quorum: String): Unit = {
+    client = createAdminClient
 
     // without includeAuthorizedOperations flag
     var result = client.describeCluster
@@ -183,12 +188,12 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
     //with includeAuthorizedOperations flag
     topicResult = getTopicMetadata(client, topic, new DescribeTopicsOptions().includeAuthorizedOperations(true))
-    expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC).asJava
+    expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC)
     assertEquals(expectedOperations, topicResult.authorizedOperations)
   }
 
   def configuredClusterPermissions: Set[AclOperation] =
-    AclEntry.supportedOperations(ResourceType.CLUSTER)
+    AclEntry.supportedOperations(ResourceType.CLUSTER).asScala.toSet
 
   override def modifyConfigs(configs: Seq[Properties]): Unit = {
     super.modifyConfigs(configs)
@@ -196,20 +201,20 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     // verify that they show up in the "configs" output of CreateTopics.
     if (testInfo.getTestMethod.toString.contains("testCreateTopicsReturnsConfigs")) {
       configs.foreach(config => {
-        config.setProperty(KafkaConfig.LogRollTimeHoursProp, "2")
-        config.setProperty(KafkaConfig.LogRetentionTimeMinutesProp, "240")
-        config.setProperty(KafkaConfig.LogRollTimeJitterMillisProp, "123")
+        config.setProperty(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, "2")
+        config.setProperty(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG, "240")
+        config.setProperty(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, "123")
       })
     }
     configs.foreach { config =>
-      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
-      config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-      config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
-      config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+      config.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true")
+      config.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
+      config.setProperty(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false")
+      config.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
-      if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
-        config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
+      if (!config.containsKey(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG))
+        config.setProperty(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "some.invalid.pass")
     }
   }
 
@@ -224,10 +229,15 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
-    val securityProps: util.Map[Object, Object] =
-      adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
+    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     config
+  }
+
+  def createAdminClient: Admin = {
+    val props = new Properties()
+    props.putAll(createConfig)
+    val client = createAdminClient(configOverrides = props)
+    client
   }
 
   def waitForTopics(client: Admin, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {

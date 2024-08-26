@@ -29,22 +29,24 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class HeartbeatTest {
-    private int sessionTimeoutMs = 300;
-    private int heartbeatIntervalMs = 100;
-    private int maxPollIntervalMs = 900;
-    private long retryBackoffMs = 10L;
-    private MockTime time = new MockTime();
+    private final int sessionTimeoutMs = 300;
+    private final int heartbeatIntervalMs = 100;
+    private final int maxPollIntervalMs = 900;
+    private final MockTime time = new MockTime();
 
     private Heartbeat heartbeat;
 
     @BeforeEach
     public void setUp() {
+        long retryBackoffMs = 10L;
+        long retryBackoffMaxMs = 100L;
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
                                                                         maxPollIntervalMs,
                                                                         heartbeatIntervalMs,
                                                                         "group_id",
                                                                         Optional.empty(),
                                                                         retryBackoffMs,
+                                                                        retryBackoffMaxMs,
                                                                         true);
         heartbeat = new Heartbeat(rebalanceConfig, time);
     }

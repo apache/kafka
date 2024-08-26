@@ -17,7 +17,24 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Arrays;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.metadata.BrokerHeartbeatReply;
+import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.server.common.MetadataVersion;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -25,22 +42,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
-import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
-import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.metadata.BrokerHeartbeatReply;
-import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,10 +51,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Utility functions for use in QuorumController integration tests.
  */
 public class QuorumControllerIntegrationTestUtils {
-    private final static Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
 
     BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
-        return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latest());
+        return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latestTesting());
     }
 
     /**
@@ -93,10 +94,13 @@ public class QuorumControllerIntegrationTestUtils {
                     .setBrokerId(brokerId)
                     .setRack(null)
                     .setClusterId(controller.clusterId())
-                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latest()))
+                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latestTesting()))
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
+                    .setLogDirs(Collections.singletonList(
+                        Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
+                    ))
                     .setListeners(new ListenerCollection(
-                        Arrays.asList(
+                        Collections.singletonList(
                             new Listener()
                                 .setName("PLAINTEXT")
                                 .setHost("localhost")
@@ -127,7 +131,7 @@ public class QuorumControllerIntegrationTestUtils {
      * @param brokers       The broker IDs to send heartbeats for.
      * @param brokerEpochs  A map from broker ID to broker epoch.
      */
-    static void sendBrokerHeartbeat(
+    static void sendBrokerHeartbeatToUnfenceBrokers(
         QuorumController controller,
         List<Integer> brokers,
         Map<Integer, Long> brokerEpochs

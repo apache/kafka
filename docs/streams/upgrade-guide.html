@@ -133,11 +133,184 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_400" href="#streams_api_changes_400">Streams API changes in 4.0.0</a></h3>
+
+    <p>
+        In previous release, a new version of the Processor API was introduced and the old Processor API was
+        incrementally replaced and deprecated.
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1070%3A+deprecate+MockProcessorContext">KIP-1070</a>
+        follow this path by deprecating <code>MockProcessorContext</code>, <code>Transformer</code>,
+        <code>TransformerSupplier</code>, <code>ValueTransformer</code>, and <code>ValueTransformerSupplier</code>.
+    </p>
+
+    <h3><a id="streams_api_changes_390" href="#streams_api_changes_390">Streams API changes in 3.9.0</a></h3>
+
+    <p>
+        The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1033%3A+Add+Kafka+Streams+exception+handler+for+exceptions+occurring+during+processing">KIP-1033</a>
+        enables you to provide a processing exception handler to manage exceptions during the processing of a record rather than throwing the exception all the way out of your streams application.
+        You can provide the configs via the <code>StreamsConfig</code> as <code>StreamsConfig#PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG</code>.
+        The specified handler must implement the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface.
+    </p>
+
+    <p>
+        Kafka Streams now allows to customize the logging interval of stream-thread runtime summary, via the newly added config <code>log.summary.interval.ms</code>.
+        By default, the summary is logged every 2 minutes. More details can be found in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1049%3A+Add+config+log.summary.interval.ms+to+Kafka+Streams">KIP-1049</a>.
+    </p>
+
+    <h3><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+
+    <p>
+        Kafka Streams now supports customizable task assignment strategies via the <code>task.assignor.class</code>
+        configuration. The configuration can be set to the fully qualified class name of a custom task assignor
+        implementation that has to extend the new
+        <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface.
+
+        The new configuration also allows users to bring back the behavior of the old task assignor
+        <code>StickyTaskAssignor</code> that was used before the introduction of the
+        <code>HighAvailabilityTaskAssignor</code>. If no custom task assignor is configured, the default task assignor
+        <code>HighAvailabilityTaskAssignor</code> is used.
+
+        If you were using the <code>internal.task.assignor.class</code> config, you should switch to using the new
+        <code>task.assignor.class</code> config instead, as the internal config will be removed in a future release.
+        If you were previously plugging in the <code>StickyTaskAssignor</code> via the legacy
+        <code>internal.task.assignor.class</code> config, you will need to make sure that you are importing
+        the new <code>org.apache.kafka.streams.processor.assignment.StickTaskAssignor</code> when you switch
+        over to the new <code>task.assignor.class</code> config, which is a version of the <code>StickyTaskAssignor</code>
+        that implements the new public <code>TaskAssignor</code> interface.
+
+        For more details, see the public interface section of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-924%3A+customizable+task+assignment+for+Streams">KIP-924</a>.
+    </p>
+
+    <p>
+        The Processor API now support so-called read-only state stores, added via 
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-813%3A+Shareable+State+Stores">KIP-813</a>.
+        These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
+        similar to <code>KTables</code> with source-topic optimization enabled.
+    </p>
+
+    <p>
+        To improve detection of leaked state store iterators, we added new store-level metrics to track the number and
+        age of open iterators. The new metrics are <code>num-open-iterators</code>, <code>iterator-duration-avg</code>,
+        <code>iterator-duration-max</code> and <code>oldest-iterator-open-since-ms</code>. These metrics are available
+        for all state stores, including RocksDB, in-memory, and custom stores. More details can be found in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-989%3A+Improved+StateStore+Iterator+metrics+for+detecting+leaks">KIP-989</a>.
+    </p>
+
+    <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
+    <p>
+        We added a new method to <code>KafkaStreams</code>, namely <code>KafkaStreams#setStandbyUpdateListener()</code> in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-988%3A+Streams+Standby+Update+Listener">KIP-988</a>,
+        in which users can provide their customized implementation of the newly added <code>StandbyUpdateListener</code> interface to continuously monitor changes to standby tasks.
+    </p>
+
+    <p>
+        IQv2 supports <code>RangeQuery</code> that allows to specify unbounded, bounded, or half-open key-ranges, which return data in unordered (byte[]-lexicographical) order (per partition).
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-985%3A+Add+reverseRange+and+reverseAll+query+over+kv-store+in+IQv2">KIP-985</a> extends this functionality by adding <code>.withDescendingKeys()</code> and <code>.withAscendingKeys()</code>to allow user to receive data in descending or ascending order.
+    </p>
+    <p>
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-992%3A+Proposal+to+introduce+IQv2+Query+Types%3A+TimestampedKeyQuery+and+TimestampedRangeQuery">KIP-992</a> adds two new query types,
+        namely <code>TimestampedKeyQuery</code> and <code>TimestampedRangeQuery</code>. Both should be used to query a timestamped key-value store, to retrieve a <code>ValueAndTimestamp</code> result.
+        The existing <code>KeyQuery</code> and <code>RangeQuery</code> are changed to always return the value only for timestamped key-value stores.
+    </p>
+
+    <p>
+        IQv2 adds support for <code>MultiVersionedKeyQuery</code> (introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-968%3A+Support+single-key_multi-timestamp+interactive+queries+%28IQv2%29+for+versioned+state+stores">KIP-968</a>)
+        that allows retrieving a set of records from a versioned state store for a given key and a specified time range.
+        Users have to use <code>fromTime(Instant)</code> and/or <code>toTime(Instant)</code> to specify a half or a complete time range.
+    </p>
+
+    <p>
+        IQv2 adds support for <code>VersionedKeyQuery</code> (introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-960%3A+Support+single-key_single-timestamp+interactive+queries+%28IQv2%29+for+versioned+state+stores">KIP-960</a>)
+        that allows retrieving a single record from a versioned state store based on its key and timestamp.
+        Users have to use the <code>asOf(Instant)</code> method to define a query that returns the record's version for the specified timestamp.
+        To be more precise, the key query returns the record with the greatest timestamp <code>&lt;= Instant</code>.
+    </p>
+
+    <p>
+        The non-null key requirements for Kafka Streams join operators were relaxed as part of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-962%3A+Relax+non-null+key+requirement+in+Kafka+Streams">KIP-962</a>.
+        The behavior of the following operators changed.
+    <ul>
+        <li>left join KStream-KStream: no longer drop left records with null-key and call ValueJoiner with 'null' for right value.</li>
+        <li>outer join KStream-KStream: no longer drop left/right records with null-key and call ValueJoiner with 'null' for right/left value.</li>
+        <li>left-foreign-key join KTable-KTable: no longer drop left records with null-foreign-key returned by the ForeignKeyExtractor and call ValueJoiner with 'null' for right value.</li>
+        <li>left join KStream-KTable: no longer drop left records with null-key and call ValueJoiner with 'null' for right value.</li>
+        <li>left join KStream-GlobalTable: no longer drop records when KeyValueMapper returns 'null' and call ValueJoiner with 'null' for right value.</li>
+    </ul>
+    Stream-DSL users who want to keep the current behavior can prepend a .filter() operator to the aforementioned operators and filter accordingly.
+    The following snippets illustrate how to keep the old behavior.
+    <pre>
+    <code class="java">
+            //left join KStream-KStream
+            leftStream
+            .filter((key, value) -> key != null)
+            .leftJoin(rightStream, (leftValue, rightValue) -> join(leftValue, rightValue), windows);
+
+            //outer join KStream-KStream
+            rightStream
+            .filter((key, value) -> key != null);
+            leftStream
+            .filter((key, value) -> key != null)
+            .outerJoin(rightStream, (leftValue, rightValue) -> join(leftValue, rightValue), windows);
+
+            //left-foreign-key join KTable-KTable
+            Function&ltString, String&gt foreignKeyExtractor = leftValue -> ...
+            leftTable
+            .filter((key, value) -> foreignKeyExtractor.apply(value) != null)
+            .leftJoin(rightTable, foreignKeyExtractor, (leftValue, rightValue) -> join(leftValue, rightValue), Named.as("left-foreign-key-table-join"));
+
+            //left join KStream-KTable
+            leftStream
+            .filter((key, value) -> key != null)
+            .leftJoin(kTable, (k, leftValue, rightValue) -> join(leftValue, rightValue));
+
+            //left join KStream-GlobalTable
+            KeyValueMapper&ltString, String, String&gt keyValueMapper = (key, value) -> ...;
+            leftStream
+            .filter((key, value) -> keyValueMapper.apply(key,value) != null)
+            .leftJoin(globalTable, keyValueMapper, (leftValue, rightValue) -> join(leftValue, rightValue));
+    </code>
+    </pre>
+    </p>
+
+
+    <p>
+        The <code>default.dsl.store</code> config was deprecated in favor of the new
+        <code>dsl.store.suppliers.class</code> config to allow for custom state store
+        implementations to be configured as the default.
+
+        If you currently specify <code>default.dsl.store=ROCKS_DB</code> or <code>default.dsl.store=IN_MEMORY</code> replace those
+        configurations with <code>dsl.store.suppliers.class=BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class</code> and
+        <code>dsl.stores.suppliers.class=BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class</code> respectively
+    </p>
+
+    <p>
+      A new configuration option <code>balance_subtopology</code> for <code>rack.aware.assignment.strategy</code> was introduced in 3.7 release.
+      For more information, including how it can be enabled and further configured, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy"><b>Kafka Streams Developer Guide</b></a>.
+    </p>
+
     <h3><a id="streams_api_changes_360" href="#streams_api_changes_360">Streams API changes in 3.6.0</a></h3>
     <p>
       Rack aware task assignment was introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-925%3A+Rack+aware+task+assignment+in+Kafka+Streams">KIP-925</a>.
       Rack aware task assignment can be enabled for <code>StickyTaskAssignor</code> or <code>HighAvailabilityTaskAssignor</code> to compute task assignments which can minimize cross rack traffic under certain conditions.
       For more information, including how it can be enabled and further configured, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy"><b>Kafka Streams Developer Guide</b></a>.
+    </p>
+
+    <p>
+      IQv2 supports a <code>RangeQuery</code> that allows to specify unbounded, bounded, or half-open key-ranges. Users have to use <code>withUpperBound(K)</code>, <code>withLowerBound(K)</code>,
+      or <code>withNoBounds()</code> to specify half-open or unbounded ranges, but cannot use <code>withRange(K lower, K upper)</code> for the same.
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-941%3A+Range+queries+to+accept+null+lower+and+upper+bounds">KIP-941</a> closes this gap by allowing to pass in <code>null</code>
+      as upper and lower bound (with semantics "no bound") to simplify the usage of the <code>RangeQuery</code> class.
+    </p>
+
+    <p>
+        KStreams-to-KTable joins now have an option for adding a grace period.
+        The grace period is enabled on the <code>Joined</code> object using with <code>withGracePeriod()</code> method.
+        This change was introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-923%3A+Add+A+Grace+Period+to+Stream+Table+Join">KIP-923</a>.
+        To use the grace period option in the Stream-Table join the table must be
+        <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#versioned-state-stores">versioned</a>.
+        For more information, including how it can be enabled and further configured, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy"><b>Kafka Streams Developer Guide</b></a>.
     </p>
 
     <h3><a id="streams_api_changes_350" href="#streams_api_changes_350">Streams API changes in 3.5.0</a></h3>
@@ -185,6 +358,146 @@
     <p>
       <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-884%3A+Add+config+to+configure+KafkaClientSupplier+in+Kafka+Streams">KIP-884</a>
       adds a new config <code>default.client.supplier</code> that allows to use a custom <code>KafkaClientSupplier</code> without any code changes.
+    </p>
+
+    <h3><a id="streams_api_changes_340" href="#streams_api_changes_340">Streams API changes in 3.4.0</a></h3>
+    <p>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=186878390">KIP-770</a> deprecates
+      config <code>cache.max.bytes.buffering</code> in favor of the newly introduced config <code>statestore.cache.max.bytes</code>.
+      To improve monitoring, two new metrics <code>input-buffer-bytes-total</code> and <code>cache-size-bytes-total</code>
+      were added at the DEBUG level. Note, that the KIP is only partially implemented in the 3.4.0 release, and config
+      <code>input.buffer.max.bytes</code> is not available yet.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211883356">KIP-873</a> enables you to multicast
+      result records to multiple partition of downstream sink topics and adds functionality for choosing to drop result records without sending.
+      The <code>Integer StreamPartitioner.partition()</code> method is deprecated and replaced by the newly added
+      <code>Optiona&lg;Set&lt;Integer&gt;&gt;StreamPartitioner.partitions()</code> method, which enables returning a set of partitions to send the record to.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-862%3A+Self-join+optimization+for+stream-stream+joins">KIP-862</a>
+      adds a DSL optimization for stream-stream self-joins. The optimization is enabled via a new option <code>single.store.self.join</code>
+      which can be set via existing config <code>topology.optimization</code>. If enabled, the DSL will use a different
+      join processor implementation that uses a single RocksDB store instead of two, to avoid unnecessary data duplication for the self-join case.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-865%3A+Support+--bootstrap-server+in+kafka-streams-application-reset">KIP-865</a>
+      updates the Kafka Streams application reset tool’s server parameter name to conform to the other Kafka tooling by deprecating
+      the <code>--bootstrap-servers</code> parameter and introducing a new <code>--bootstrap-server</code> parameter in its place.
+    </p>
+
+    <h3><a id="streams_api_changes_330" href="#streams_api_changes_330">Streams API changes in 3.3.0</a></h3>
+    <p>
+      Kafka Streams does not send a "leave group" request when an instance is closed. This behavior implies
+      that a rebalance is delayed until <code>max.poll.interval.ms</code> passed.
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-812%3A+Introduce+another+form+of+the+%60KafkaStreams.close%28%29%60+API+that+forces+the+member+to+leave+the+consumer+group">KIP-812</a>
+      introduces <code>KafkaStreams.close(CloseOptions)</code> overload, which allows forcing an instance to leave the
+      group immediately.
+
+      Note: Due to internal limitations, <code>CloseOptions</code> only works for static consumer groups at this point
+      (cf. <a href="https://issues.apache.org/jira/browse/KAFKA-16514">KAFKA-16514</a> for more details and a fix in
+      some future release).
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-820%3A+Extend+KStream+process+with+new+Processor+API">KIP-820</a>
+      adapts the PAPI type-safety improvement of KIP-478 into the DSL. The existing methods <code>KStream.transform</code>,
+      <code>KStream.flatTransform</code>, <code>KStream.transformValues</code>, and <code>KStream.flatTransformValues</code>
+      as well as all overloads of <code>void KStream.process</code> are deprecated in favor of the newly added methods
+      <ul>
+        <li><code>KStream&lt;KOut,VOut&gt; KStream.process(ProcessorSupplier, ...)</code></li>
+        <li><code>KStream&lt;K,VOut&gt; KStream.processValues(FixedKeyProcessorSupplier, ...)</code></li>
+      </ul>
+      Both new methods have multiple overloads and return a <code>KStream</code> instead of <code>void</code> as the
+      deprecated <code>process()</code> methods did. In addition, <code>FixedKeyProcessor</code>, <code>FixedKeyRecord</code>,
+      <code>FixedKeyProcessorContext</code>, and <code>ContextualFixedKeyProcessor</code> are introduced to guard against
+      disallowed key modification inside <code>processValues()</code>. Furthermore, <code>ProcessingContext</code> is
+      added for a better interface hierarchy.
+    </p>
+
+    <p>
+      Emitting a windowed aggregation result only after a window is closed is currently supported via the
+      <code>suppress()</code> operator. However, <code>suppress()</code> uses an in-memory implementation and does not
+      support RocksDB. To close this gap,
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-825%3A+introduce+a+new+API+to+control+when+aggregated+results+are+produced">KIP-825</a>
+      introduces "emit strategies", which are built into the aggregation operator directly to use the already existing
+      RocksDB store. <code>TimeWindowedKStream.emitStrategy(EmitStrategy)</code> and
+      <code>SessionWindowedKStream.emitStrategy(EmitStrategy)</code> allow picking between "emit on window update" (default)
+      and "emit on window close" strategies. Additionally, a few new emit metrics are added, as well as a necessary
+      new method, <code>SessionStore.findSessions(long, long)</code>.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211882832">KIP-834</a> allows pausing
+      and resuming a Kafka Streams instance. Pausing implies that processing input records and executing punctuations will
+      be skipped; Kafka Streams will continue to poll to maintain its group membership and may commit offsets.
+      In addition to the new methods <code>KafkaStreams.pause()</code> and <code>KafkaStreams.resume()</code>, it is also
+      supported to check if an instance is paused via the <code>KafkaStreams.isPaused()</code> method.
+    </p>
+
+    <p>
+      To improve monitoring of Kafka Streams applications, <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211886093">KIP-846</a>
+      adds four new metrics <code>bytes-consumed-total</code>, <code>records-consumed-total</code>,
+      <code>bytes-produced-total</code>, and <code>records-produced-total</code> within a new <b>topic level</b> scope.
+      The metrics are collected at INFO level for source and sink nodes, respectively.
+    </p>
+
+    <h3><a id="streams_api_changes_320" href="#streams_api_changes_320">Streams API changes in 3.2.0</a></h3>
+    <p>
+        RocksDB offers many metrics which are critical to monitor and tune its performance. Kafka Streams started to make RocksDB metrics accessible
+        like any other Kafka metric via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-471%3A+Expose+RocksDB+Metrics+in+Kafka+Streams">KIP-471</a> in 2.4.0 release.
+        However, the KIP was only partially implemented, and is now completed with the 3.2.0 release.
+        For a full list of available RocksDB metrics, please consult the <a href="/{{version}}/documentation/#kafka_streams_client_monitoring">monitoring documentation</a>.
+    </p>
+
+    <p>
+        Kafka Streams ships with RocksDB and in-memory store implementations and users can pick which one to use.
+        However, for the DSL, the choice is a per-operator one, making it cumbersome to switch from the default RocksDB
+        store to in-memory store for all operators, especially for larger topologies.
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-591%3A+Add+Kafka+Streams+config+to+set+default+state+store">KIP-591</a>
+        adds a new config <code>default.dsl.store</code> that enables setting the default store for all DSL operators globally.
+        Note that it is required to pass <code>TopologyConfig</code> to the <code>StreamsBuilder</code> constructor to make use of this new config.
+    </p>
+
+    <p>
+        For multi-AZ deployments, it is desired to assign StandbyTasks to a KafkaStreams instance running in a different
+        AZ than the corresponding active StreamTask.
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-708%3A+Rack+aware+StandbyTask+assignment+for+Kafka+Streams">KIP-708</a>
+        enables configuring Kafka Streams instances with a rack-aware StandbyTask assignment strategy, by using the new added configs
+        <code>rack.aware.assignment.tags</code> and corresponding <code>client.tag.&lt;myTag&gt;</code>.
+    </p>
+
+    <p>
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-791%3A+Add+Record+Metadata+to+State+Store+Context">KIP-791</a>
+        adds a new method <code>Optional&lt;RecordMetadata&gt; StateStoreContext.recordMetadata()</code> to expose
+        record metadata. This helps for example to provide read-your-writes consistency guarantees in interactive queries.
+    </p>
+
+    <p>
+        <a href="/documentation/streams/developer-guide/interactive-queries.html">Interactive Queries</a> allow users to
+        tap into the operational state of Kafka Streams processor nodes. The existing API is tightly coupled with the
+        actual state store interfaces and thus the internal implementation of state store. To break up this tight coupling
+        and allow for building more advanced IQ features,
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-796%3A+Interactive+Query+v2">KIP-796</a> introduces
+        a completely new IQv2 API, via <code>StateQueryRequest</code> and <code>StateQueryResult</code> classes,
+        as well as <code>Query</code> and <code>QueryResult</code> interfaces (plus additional helper classes).
+
+        In addition, multiple built-in query types were added: <code>KeyQuery</code> for key lookups and
+        <code>RangeQuery</code> (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-805%3A+Add+range+and+scan+query+over+kv-store+in+IQv2">KIP-805</a>)
+        for key-range queries on key-value stores, as well as <code>WindowKeyQuery</code> and <code>WindowRangeQuery</code>
+        (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-806%3A+Add+session+and+window+query+over+kv-store+in+IQv2">KIP-806</a>)
+        for key and range lookup into windowed stores.
+    </p>
+
+    <p>
+        The Kafka Streams DSL may insert so-called repartition topics for certain DSL operators to ensure correct partitioning
+        of data. These topics are configured with infinite retention time, and Kafka Streams purges old data explicitly
+        via "delete record" requests, when commiting input topic offsets.
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-811%3A+Add+config+repartition.purge.interval.ms+to+Kafka+Streams">KIP-811</a>
+        adds a new config <code>repartition.purge.interval.ms</code> allowing you to configure the purge interval independently of the commit interval.
     </p>
 
     <h3><a id="streams_api_changes_310" href="#streams_api_changes_310">Streams API changes in 3.1.0</a></h3>
@@ -1317,7 +1630,7 @@
             <td>Kafka Streams API (rows)</td>
             <td>0.10.0.x</td>
             <td>0.10.1.x and 0.10.2.x</td>
-            <td>0.11.0.x and<br>1.0.x and<br>1.1.x and<br>2.0.x and<br>2.1.x and<br>2.2.x and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x</td>
+            <td>0.11.0.x and<br>1.0.x and<br>1.1.x and<br>2.0.x and<br>2.1.x and<br>2.2.x and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x and<br>3.6.x and<br>3.7.x</td>
           </tr>
           <tr>
             <td>0.10.0.x</td>
@@ -1344,7 +1657,7 @@
             <td>compatible; requires message format 0.10 or higher;<br>if message headers are used, message format 0.11<br>or higher required</td>
           </tr>
           <tr>
-            <td>2.2.1 and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x</td>
+            <td>2.2.1 and<br>2.3.x and<br>2.4.x and<br>2.5.x and<br>2.6.x and<br>2.7.x and<br>2.8.x and<br>3.0.x and<br>3.1.x and<br>3.2.x and<br>3.3.x and<br>3.4.x and<br>3.5.x and<br>3.6.x and<br>3.7.x</td>
             <td></td>
             <td></td>
             <td>compatible; requires message format 0.11 or higher;<br>enabling exactly-once v2 requires 2.4.x or higher</td>

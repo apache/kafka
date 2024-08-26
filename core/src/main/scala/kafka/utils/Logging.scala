@@ -40,7 +40,7 @@ private object Logging {
 
 trait Logging {
 
-  protected lazy val logger = Logger(LoggerFactory.getLogger(loggerName))
+  protected lazy val logger: Logger = Logger(LoggerFactory.getLogger(loggerName))
 
   protected var logIdent: String = _
 

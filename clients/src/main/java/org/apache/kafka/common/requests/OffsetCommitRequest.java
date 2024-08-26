@@ -46,9 +46,13 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         private final OffsetCommitRequestData data;
 
-        public Builder(OffsetCommitRequestData data) {
-            super(ApiKeys.OFFSET_COMMIT);
+        public Builder(OffsetCommitRequestData data, boolean enableUnstableLastVersion) {
+            super(ApiKeys.OFFSET_COMMIT, enableUnstableLastVersion);
             this.data = data;
+        }
+
+        public Builder(OffsetCommitRequestData data) {
+            this(data, false);
         }
 
         @Override
@@ -97,11 +101,11 @@ public class OffsetCommitRequest extends AbstractRequest {
                 .setName(topic.name());
             response.topics().add(responseTopic);
 
-            topic.partitions().forEach(partition -> {
+            topic.partitions().forEach(partition ->
                 responseTopic.partitions().add(new OffsetCommitResponsePartition()
                     .setPartitionIndex(partition.partitionIndex())
-                    .setErrorCode(error.code()));
-            });
+                    .setErrorCode(error.code()))
+            );
         });
         return response;
     }

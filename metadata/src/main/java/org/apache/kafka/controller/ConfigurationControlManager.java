@@ -20,8 +20,8 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -34,16 +34,17 @@ import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -268,9 +269,13 @@ public class ConfigurationControlManager {
                                          List<ApiMessageAndVersion> recordsImplicitlyDeleted,
                                          boolean newlyCreatedResource) {
         Map<String, String> allConfigs = new HashMap<>();
+        Map<String, String> existingConfigsMap = new HashMap<>();
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
-        TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
-        if (existingConfigs != null) allConfigs.putAll(existingConfigs);
+        TimelineHashMap<String, String> existingConfigsSnapshot = configData.get(configResource);
+        if (existingConfigsSnapshot != null) {
+            allConfigs.putAll(existingConfigsSnapshot);
+            existingConfigsMap.putAll(existingConfigsSnapshot);
+        }
         for (ApiMessageAndVersion newRecord : recordsExplicitlyAltered) {
             ConfigRecord configRecord = (ConfigRecord) newRecord.message();
             if (configRecord.value() == null) {
@@ -287,7 +292,7 @@ public class ConfigurationControlManager {
             // in the list passed to the policy in order to maintain backwards compatibility
         }
         try {
-            validator.validate(configResource, allConfigs);
+            validator.validate(configResource, allConfigs, existingConfigsMap);
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }
@@ -434,6 +439,25 @@ public class ConfigurationControlManager {
         }
     }
 
+    /**
+     * Get the config value for the give topic and give config key.
+     * If the config value is not found, return null.
+     *
+     * @param topicName            The topic name for the config.
+     * @param configKey            The key for the config.
+     */
+    String getTopicConfig(String topicName, String configKey) throws NoSuchElementException {
+        Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
+        if (map == null || !map.containsKey(configKey)) {
+            Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigs(Collections.emptyMap());
+            if (!effectiveConfigMap.containsKey(configKey)) {
+                return null;
+            }
+            return effectiveConfigMap.get(configKey).value();
+        }
+        return map.get(configKey);
+    }
+
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(
             long lastCommittedOffset, Map<ConfigResource, Collection<String>> resources) {
         Map<ConfigResource, ResultOrError<Map<String, String>>> results = new HashMap<>();
@@ -451,10 +475,7 @@ public class ConfigurationControlManager {
             if (configs != null) {
                 Collection<String> targetConfigs = resourceEntry.getValue();
                 if (targetConfigs.isEmpty()) {
-                    Iterator<Entry<String, String>> iter =
-                        configs.entrySet(lastCommittedOffset).iterator();
-                    while (iter.hasNext()) {
-                        Entry<String, String> entry = iter.next();
+                    for (Entry<String, String> entry : configs.entrySet(lastCommittedOffset)) {
                         foundConfigs.put(entry.getKey(), entry.getValue());
                     }
                 } else {

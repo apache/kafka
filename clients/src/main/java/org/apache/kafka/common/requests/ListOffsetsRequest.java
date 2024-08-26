@@ -16,15 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
@@ -37,6 +28,15 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 public class ListOffsetsRequest extends AbstractRequest {
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
@@ -47,6 +47,8 @@ public class ListOffsetsRequest extends AbstractRequest {
      */
     public static final long EARLIEST_LOCAL_TIMESTAMP = -4L;
 
+    public static final long LATEST_TIERED_TIMESTAMP = -5L;
+
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
 
@@ -56,19 +58,32 @@ public class ListOffsetsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListOffsetsRequest> {
         private final ListOffsetsRequestData data;
 
-        public static Builder forReplica(short allowedVersion, int replicaId) {
-            return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
+        public static Builder forConsumer(boolean requireTimestamp,
+                                          IsolationLevel isolationLevel) {
+            return forConsumer(requireTimestamp, isolationLevel, false, false, false);
         }
 
-        public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel, boolean requireMaxTimestamp) {
+        public static Builder forConsumer(boolean requireTimestamp,
+                                          IsolationLevel isolationLevel,
+                                          boolean requireMaxTimestamp,
+                                          boolean requireEarliestLocalTimestamp,
+                                          boolean requireTieredStorageTimestamp) {
             short minVersion = 0;
-            if (requireMaxTimestamp)
+            if (requireTieredStorageTimestamp)
+                minVersion = 9;
+            else if (requireEarliestLocalTimestamp)
+                minVersion = 8;
+            else if (requireMaxTimestamp)
                 minVersion = 7;
             else if (isolationLevel == IsolationLevel.READ_COMMITTED)
                 minVersion = 2;
             else if (requireTimestamp)
                 minVersion = 1;
             return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+        }
+
+        public static Builder forReplica(short allowedVersion, int replicaId) {
+            return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
         private Builder(short oldestAllowedVersion,
@@ -178,14 +193,5 @@ public class ListOffsetsRequest extends AbstractRequest {
             topic.partitions().add(entry.getValue());
         }
         return new ArrayList<>(topics.values());
-    }
-
-    public static ListOffsetsTopic singletonRequestData(String topic, int partitionIndex, long timestamp, int maxNumOffsets) {
-        return new ListOffsetsTopic()
-                .setName(topic)
-                .setPartitions(Collections.singletonList(new ListOffsetsPartition()
-                        .setPartitionIndex(partitionIndex)
-                        .setTimestamp(timestamp)
-                        .setMaxNumOffsets(maxNumOffsets)));
     }
 }

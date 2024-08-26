@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -63,11 +64,15 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -77,6 +82,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -128,9 +134,11 @@ public abstract class AbstractCoordinator implements Closeable {
     private final Heartbeat heartbeat;
     private final GroupCoordinatorMetrics sensors;
     private final GroupRebalanceConfig rebalanceConfig;
+    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
     protected final Time time;
     protected final ConsumerNetworkClient client;
+    protected final ExponentialBackoff retryBackoff;
 
     private Node coordinator = null;
     private String rejoinReason = "";
@@ -157,14 +165,30 @@ public abstract class AbstractCoordinator implements Closeable {
                                Metrics metrics,
                                String metricGrpPrefix,
                                Time time) {
+        this(rebalanceConfig, logContext, client, metrics, metricGrpPrefix, time, Optional.empty());
+    }
+
+    public AbstractCoordinator(GroupRebalanceConfig rebalanceConfig,
+                               LogContext logContext,
+                               ConsumerNetworkClient client,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Time time,
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         Objects.requireNonNull(rebalanceConfig.groupId,
                                "Expected a non-null group id for coordinator construction");
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(this.getClass());
         this.client = client;
         this.time = time;
+        this.retryBackoff = new ExponentialBackoff(
+                rebalanceConfig.retryBackoffMs,
+                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+                rebalanceConfig.retryBackoffMaxMs,
+                CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.clientTelemetryReporter = clientTelemetryReporter;
     }
 
     /**
@@ -255,6 +279,7 @@ public abstract class AbstractCoordinator implements Closeable {
         if (!coordinatorUnknown())
             return true;
 
+        long attempts = 0L;
         do {
             if (fatalFindCoordinatorException != null) {
                 final RuntimeException fatalException = fatalFindCoordinatorException;
@@ -274,6 +299,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (future.failed()) {
                 if (future.isRetriable()) {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
+                    timer.sleep(retryBackoff.backoff(attempts++));
                     client.awaitMetadataUpdate(timer);
                 } else {
                     fatalException = future.exception();
@@ -283,7 +309,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
                 markCoordinatorUnknown("coordinator unavailable");
-                timer.sleep(rebalanceConfig.retryBackoffMs);
+                timer.sleep(retryBackoff.backoff(attempts++));
             }
 
             clearFindCoordinatorFuture();
@@ -501,7 +527,10 @@ public abstract class AbstractCoordinator implements Closeable {
                     final String fullReason = String.format("rebalance failed due to '%s' (%s)",
                         exception.getMessage(),
                         simpleName);
-                    requestRejoin(shortReason, fullReason);
+                    // Don't need to request rejoin again for MemberIdRequiredException since we've done that in JoinGroupResponseHandler
+                    if (!(exception instanceof MemberIdRequiredException)) {
+                        requestRejoin(shortReason, fullReason);
+                    }
                 }
 
                 if (exception instanceof UnknownMemberIdException ||
@@ -635,6 +664,8 @@ public abstract class AbstractCoordinator implements Closeable {
                                 joinResponse.data().memberId(), joinResponse.data().protocolName());
 
                             log.info("Successfully joined group with generation {}", AbstractCoordinator.this.generation);
+                            clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
+                                Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, joinResponse.data().memberId())));
 
                             if (joinResponse.isLeader()) {
                                 onLeaderElected(joinResponse).chain(future);
@@ -1113,6 +1144,16 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+    protected void handlePollTimeoutExpiry() {
+        log.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
+            "was longer than the configured max.poll.interval.ms, which typically implies that " +
+            "the poll loop is spending too much time processing messages. You can address this " +
+            "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
+            "returned in poll() with max.poll.records.");
+
+        maybeLeaveGroup("consumer poll timeout has expired.");
+    }
+
     /**
      * Sends LeaveGroupRequest and logs the {@code leaveReason}, unless this member is using static membership or is already
      * not part of the group (ie does not have a valid member id, is in the UNJOINED state, or the coordinator is unknown).
@@ -1281,7 +1322,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    protected Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
+    protected final Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
         return new Meter(new WindowedCount(),
                 metrics.metricName(baseName + "-rate", groupName,
                         String.format("The number of %s per second", descriptiveName)),
@@ -1478,16 +1519,11 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll().
-                            log.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
-                                "was longer than the configured max.poll.interval.ms, which typically implies that " +
-                                "the poll loop is spending too much time processing messages. You can address this " +
-                                "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
-                                "returned in poll() with max.poll.records.");
-
-                            maybeLeaveGroup("consumer poll timeout has expired.");
+                            handlePollTimeoutExpiry();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
-                            // coordinator disconnected
+                            // coordinator disconnected. Note that the heartbeat timing takes account of
+                            // exponential backoff.
                             AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                         } else {
                             heartbeat.sentHeartbeat(now);
@@ -1596,7 +1632,6 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    @SuppressWarnings("serial")
     private static class UnjoinedGroupException extends RetriableException {
 
     }

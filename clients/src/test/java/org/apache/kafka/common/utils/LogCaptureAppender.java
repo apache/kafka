@@ -24,20 +24,37 @@ import org.apache.log4j.spi.LoggingEvent;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseable {
     private final List<LoggingEvent> events = new LinkedList<>();
+    private final List<LogLevelChange> logLevelChanges = new LinkedList<>();
+
+    public static class LogLevelChange {
+
+        public LogLevelChange(final Level originalLevel, final Class<?> clazz) {
+            this.originalLevel = originalLevel;
+            this.clazz = clazz;
+        }
+
+        private final Level originalLevel;
+
+        private final Class<?> clazz;
+
+    }
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public static class Event {
         private final String level;
         private final String message;
         private final Optional<String> throwableInfo;
+        private final Optional<String> throwableClassName;
 
-        Event(final String level, final String message, final Optional<String> throwableInfo) {
+        Event(final String level, final String message, final Optional<String> throwableInfo, final Optional<String> throwableClassName) {
             this.level = level;
             this.message = message;
             this.throwableInfo = throwableInfo;
+            this.throwableClassName = throwableClassName;
         }
 
         public String getLevel() {
@@ -50,6 +67,10 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
 
         public Optional<String> getThrowableInfo() {
             return throwableInfo;
+        }
+
+        public Optional<String> getThrowableClassName() {
+            return throwableClassName;
         }
     }
 
@@ -65,12 +86,9 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
         return logCaptureAppender;
     }
 
-    public static void setClassLoggerToDebug(final Class<?> clazz) {
-        Logger.getLogger(clazz).setLevel(Level.DEBUG);
-    }
-
-    public static void setClassLoggerToTrace(final Class<?> clazz) {
-        Logger.getLogger(clazz).setLevel(Level.TRACE);
+    public void setClassLogger(final Class<?> clazz, Level level) {
+        logLevelChanges.add(new LogLevelChange(Logger.getLogger(clazz).getLevel(), clazz));
+        Logger.getLogger(clazz).setLevel(level);
     }
 
     public static void unregister(final LogCaptureAppender logCaptureAppender) {
@@ -82,6 +100,13 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
         synchronized (events) {
             events.add(event);
         }
+    }
+
+    public List<String> getMessages(String level) {
+        return getEvents().stream()
+                .filter(e -> level.equals(e.getLevel()))
+                .map(Event::getMessage)
+                .collect(Collectors.toList());
     }
 
     public List<String> getMessages() {
@@ -100,8 +125,10 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
             for (final LoggingEvent event : events) {
                 final String[] throwableStrRep = event.getThrowableStrRep();
                 final Optional<String> throwableString;
+                final Optional<String> throwableClassName;
                 if (throwableStrRep == null) {
                     throwableString = Optional.empty();
+                    throwableClassName = Optional.empty();
                 } else {
                     final StringBuilder throwableStringBuilder = new StringBuilder();
 
@@ -110,9 +137,10 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
                     }
 
                     throwableString = Optional.of(throwableStringBuilder.toString());
+                    throwableClassName = Optional.of(event.getThrowableInformation().getThrowable().getClass().getName());
                 }
 
-                result.add(new Event(event.getLevel().toString(), event.getRenderedMessage(), throwableString));
+                result.add(new Event(event.getLevel().toString(), event.getRenderedMessage(), throwableString, throwableClassName));
             }
         }
         return result;
@@ -120,6 +148,10 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
 
     @Override
     public void close() {
+        for (final LogLevelChange logLevelChange : logLevelChanges) {
+            Logger.getLogger(logLevelChange.clazz).setLevel(logLevelChange.originalLevel);
+        }
+        logLevelChanges.clear();
         unregister(this);
     }
 

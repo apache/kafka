@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
@@ -31,21 +32,20 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.DelegationTokenData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.common.utils.Time;
-
-import java.nio.charset.StandardCharsets;
-import javax.crypto.spec.SecretKeySpec;
-import javax.crypto.Mac;
 
 import org.slf4j.Logger;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_AUTH_DISABLED;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_EXPIRED;
@@ -59,7 +59,7 @@ import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
  * Manages DelegationTokens.
  */
 public class DelegationTokenControlManager {
-    private Time time = Time.SYSTEM;
+    private final Time time = Time.SYSTEM;
 
     static class Builder {
         private LogContext logContext = null;
@@ -193,7 +193,7 @@ public class DelegationTokenControlManager {
 
         String tokenId = Uuid.randomUuid().toString();
 
-        List<KafkaPrincipal> renewers = new ArrayList<KafkaPrincipal>();
+        List<KafkaPrincipal> renewers = new ArrayList<>();
         for (CreatableRenewers renewer : requestData.renewers()) {
             if (renewer.principalType().equals(KafkaPrincipal.USER_TYPE)) {
                 renewers.add(new KafkaPrincipal(renewer.principalType(), renewer.principalName()));
@@ -302,10 +302,6 @@ public class DelegationTokenControlManager {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_NOT_FOUND.code()));
         }
 
-        if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
-            return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code()));
-        }
-
         if (!allowedToRenew(myTokenInformation, context.principal())) {
             return ControllerResult.atomicOf(records, responseData.setErrorCode(DELEGATION_TOKEN_OWNER_MISMATCH.code()));
         }
@@ -313,9 +309,11 @@ public class DelegationTokenControlManager {
         if (requestData.expiryTimePeriodMs() < 0) { // expire immediately
             responseData
                 .setErrorCode(NONE.code())
-                .setExpiryTimestampMs(requestData.expiryTimePeriodMs());
+                .setExpiryTimestampMs(now);
             records.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
                 setTokenId(myTokenInformation.tokenId()), (short) 0));
+        } else if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
+            responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code());
         } else {
             long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(),
                 now + requestData.expiryTimePeriodMs());
@@ -335,7 +333,7 @@ public class DelegationTokenControlManager {
     // Periodic call to remove expired DelegationTokens
     public List<ApiMessageAndVersion> sweepExpiredDelegationTokens() {
         long now = time.milliseconds();
-        List<ApiMessageAndVersion> records = new ArrayList<ApiMessageAndVersion>();
+        List<ApiMessageAndVersion> records = new ArrayList<>();
 
         for (TokenInformation oldTokenInformation: tokenCache.tokens()) {
             if ((oldTokenInformation.maxTimestamp() < now) ||

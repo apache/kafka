@@ -17,14 +17,16 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.apache.kafka.common.config.ConfigException;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Collections;
 import java.util.Map;
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.jupiter.api.Test;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
 

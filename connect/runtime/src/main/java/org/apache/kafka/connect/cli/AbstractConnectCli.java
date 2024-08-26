@@ -28,6 +28,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.ConnectRestServer;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,9 +40,10 @@ import java.util.Map;
 /**
  * Common initialization logic for Kafka Connect, intended for use by command line utilities
  *
+ * @param <H> the type of {@link Herder} to be used
  * @param <T> the type of {@link WorkerConfig} to be used
  */
-public abstract class AbstractConnectCli<T extends WorkerConfig> {
+public abstract class AbstractConnectCli<H extends Herder, T extends WorkerConfig> {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractConnectCli.class);
     private final String[] args;
@@ -51,7 +53,7 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
      *
      * @param args the CLI arguments to be processed. Note that if one or more arguments are passed, the first argument is
      *             assumed to be the Connect worker properties file and is processed in {@link #run()}. The remaining arguments
-     *             can be handled in {@link #processExtraArgs(Herder, Connect, String[])}
+     *             can be handled in {@link #processExtraArgs(Connect, String[])}
      */
     protected AbstractConnectCli(String... args) {
         this.args = args;
@@ -63,15 +65,14 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
      * The first CLI argument is assumed to be the Connect worker properties file and is processed by default. This method
      * can be overridden if there are more arguments that need to be processed.
      *
-     * @param herder the {@link Herder} instance that can be used to perform operations on the Connect cluster
      * @param connect the {@link Connect} instance that can be stopped (via {@link Connect#stop()}) if there's an error
      *                encountered while processing the additional CLI arguments.
      * @param extraArgs the extra CLI arguments that need to be processed
      */
-    protected void processExtraArgs(Herder herder, Connect connect, String[] extraArgs) {
+    public void processExtraArgs(Connect<H> connect, String[] extraArgs) {
     }
 
-    protected abstract Herder createHerder(T config, String workerId, Plugins plugins,
+    protected abstract H createHerder(T config, String workerId, Plugins plugins,
                                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                            RestServer restServer, RestClient restClient);
 
@@ -91,7 +92,8 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
             Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
                     Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.emptyMap();
             String[] extraArgs = Arrays.copyOfRange(args, 1, args.length);
-            Connect connect = startConnect(workerProps, extraArgs);
+            Connect<H> connect = startConnect(workerProps);
+            processExtraArgs(connect, extraArgs);
 
             // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
             connect.awaitStop();
@@ -106,11 +108,9 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
      * Initialize and start an instance of {@link Connect}
      *
      * @param workerProps the worker properties map used to initialize the {@link WorkerConfig}
-     * @param extraArgs any additional CLI arguments that may need to be processed via
-     *                  {@link #processExtraArgs(Herder, Connect, String[])}
      * @return a started instance of {@link Connect}
      */
-    public Connect startConnect(Map<String, String> workerProps, String... extraArgs) {
+    public Connect<H> startConnect(Map<String, String> workerProps) {
         log.info("Kafka Connect worker initializing ...");
         long initStart = time.hiResClockMs();
 
@@ -125,7 +125,7 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
 
         RestClient restClient = new RestClient(config);
 
-        ConnectRestServer restServer = new ConnectRestServer(config.rebalanceTimeout(), restClient, workerProps);
+        ConnectRestServer restServer = new ConnectRestServer(config.rebalanceTimeout(), restClient, config.originals());
         restServer.initializeServer();
 
         URI advertisedUrl = restServer.advertisedUrl();
@@ -135,9 +135,9 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
                 config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
                 config, ConnectorClientConfigOverridePolicy.class);
 
-        Herder herder = createHerder(config, workerId, plugins, connectorClientConfigOverridePolicy, restServer, restClient);
+        H herder = createHerder(config, workerId, plugins, connectorClientConfigOverridePolicy, restServer, restClient);
 
-        final Connect connect = new Connect(herder, restServer);
+        final Connect<H> connect = new Connect<>(herder, restServer);
         log.info("Kafka Connect worker initialization took {}ms", time.hiResClockMs() - initStart);
         try {
             connect.start();
@@ -146,8 +146,6 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
             connect.stop();
             Exit.exit(3);
         }
-
-        processExtraArgs(herder, connect, extraArgs);
 
         return connect;
     }

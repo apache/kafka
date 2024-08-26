@@ -17,35 +17,55 @@
 
 package kafka.testkit;
 
-import kafka.server.MetaProperties;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.properties.MetaProperties;
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.NavigableMap;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class TestKitNodes {
-    public static class Builder {
-        private boolean combined = false;
-        private Uuid clusterId = null;
-        private MetadataVersion bootstrapMetadataVersion = null;
-        private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
-        private final NavigableMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
+    public static final int CONTROLLER_ID_OFFSET = 3000;
+    public static final int BROKER_ID_OFFSET = 0;
 
-        public Builder setClusterId(Uuid clusterId) {
+    public static class Builder {
+        private boolean combined;
+        private String clusterId;
+        private int numControllerNodes;
+        private int numBrokerNodes;
+        private int numDisksPerBroker = 1;
+        private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
+        private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
+            fromVersion(MetadataVersion.latestTesting(), "testkit");
+
+        public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;
             return this;
         }
 
         public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
-            this.bootstrapMetadataVersion = metadataVersion;
+            this.bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "testkit");
+            return this;
+        }
+
+        public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
+            this.bootstrapMetadata = bootstrapMetadata;
             return this;
         }
 
@@ -54,127 +74,137 @@ public class TestKitNodes {
             return this;
         }
 
-        public Builder addNodes(TestKitNode[] nodes) {
-            for (TestKitNode node : nodes) {
-                addNode(node);
-            }
-            return this;
-        }
-
-        public Builder addNode(TestKitNode node) {
-            if (node instanceof ControllerNode) {
-                ControllerNode controllerNode = (ControllerNode) node;
-                controllerNodes.put(node.id(), controllerNode);
-            } else if (node instanceof BrokerNode) {
-                BrokerNode brokerNode = (BrokerNode) node;
-                brokerNodes.put(node.id(), brokerNode);
-            } else {
-                throw new RuntimeException("Can't handle TestKitNode subclass " +
-                        node.getClass().getSimpleName());
-            }
-            return this;
-        }
-
         public Builder setNumControllerNodes(int numControllerNodes) {
-            if (numControllerNodes < 0) {
-                throw new RuntimeException("Invalid negative value for numControllerNodes");
-            }
-
-            while (controllerNodes.size() > numControllerNodes) {
-                controllerNodes.pollFirstEntry();
-            }
-            while (controllerNodes.size() < numControllerNodes) {
-                int nextId = startControllerId();
-                if (!controllerNodes.isEmpty()) {
-                    nextId = controllerNodes.lastKey() + 1;
-                }
-                controllerNodes.put(nextId, new ControllerNode.Builder().
-                    setId(nextId).build());
-            }
+            this.numControllerNodes = numControllerNodes;
             return this;
         }
 
         public Builder setNumBrokerNodes(int numBrokerNodes) {
-            if (numBrokerNodes < 0) {
-                throw new RuntimeException("Invalid negative value for numBrokerNodes");
-            }
-            while (brokerNodes.size() > numBrokerNodes) {
-                brokerNodes.pollFirstEntry();
-            }
-            while (brokerNodes.size() < numBrokerNodes) {
-                int nextId = startBrokerId();
-                if (!brokerNodes.isEmpty()) {
-                    nextId = brokerNodes.lastKey() + 1;
-                }
-                brokerNodes.put(nextId, new BrokerNode.Builder().
-                    setId(nextId).build());
-            }
+            this.numBrokerNodes = numBrokerNodes;
+            return this;
+        }
+
+        public Builder setNumDisksPerBroker(int numDisksPerBroker) {
+            this.numDisksPerBroker = numDisksPerBroker;
+            return this;
+        }
+
+        public Builder setPerServerProperties(Map<Integer, Map<String, String>> perServerProperties) {
+            this.perServerProperties = Collections.unmodifiableMap(
+                perServerProperties.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
             return this;
         }
 
         public TestKitNodes build() {
+            if (numControllerNodes < 0) {
+                throw new IllegalArgumentException("Invalid negative value for numControllerNodes");
+            }
+            if (numBrokerNodes < 0) {
+                throw new IllegalArgumentException("Invalid negative value for numBrokerNodes");
+            }
+            if (numDisksPerBroker <= 0) {
+                throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
+            }
+
+            String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
             if (clusterId == null) {
-                clusterId = Uuid.randomUuid();
+                clusterId = Uuid.randomUuid().toString();
             }
-            if (bootstrapMetadataVersion == null) {
-                bootstrapMetadataVersion = MetadataVersion.latest();
-            }
-            return new TestKitNodes(clusterId, bootstrapMetadataVersion, controllerNodes, brokerNodes);
-        }
 
-        private int startBrokerId() {
-            return 0;
-        }
+            int controllerId = combined ? BROKER_ID_OFFSET : BROKER_ID_OFFSET + CONTROLLER_ID_OFFSET;
+            List<Integer> controllerNodeIds = IntStream.range(controllerId, controllerId + numControllerNodes)
+                .boxed()
+                .collect(Collectors.toList());
+            List<Integer> brokerNodeIds = IntStream.range(BROKER_ID_OFFSET, BROKER_ID_OFFSET + numBrokerNodes)
+                .boxed()
+                .collect(Collectors.toList());
 
-        private int startControllerId() {
-            if (combined) {
-                return startBrokerId();
+            String unknownIds = perServerProperties.keySet().stream()
+                    .filter(id -> !controllerNodeIds.contains(id))
+                    .filter(id -> !brokerNodeIds.contains(id))
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
+            if (!unknownIds.isEmpty()) {
+                throw new IllegalArgumentException(
+                        String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
+                                unknownIds,
+                                Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
+                                        .map(Object::toString)
+                                        .collect(Collectors.joining(", "))));
             }
-            return startBrokerId() + 3000;
+
+            TreeMap<Integer, TestKitNode> controllerNodes = new TreeMap<>();
+            for (int id : controllerNodeIds) {
+                TestKitNode controllerNode = TestKitNodes.buildControllerNode(
+                    id,
+                    baseDirectory,
+                    clusterId,
+                    brokerNodeIds.contains(id),
+                    perServerProperties.getOrDefault(id, Collections.emptyMap())
+                );
+                controllerNodes.put(id, controllerNode);
+            }
+
+            TreeMap<Integer, TestKitNode> brokerNodes = new TreeMap<>();
+            for (int id : brokerNodeIds) {
+                TestKitNode brokerNode = TestKitNodes.buildBrokerNode(
+                    id,
+                    baseDirectory,
+                    clusterId,
+                    controllerNodeIds.contains(id),
+                    perServerProperties.getOrDefault(id, Collections.emptyMap()),
+                    numDisksPerBroker
+                );
+                brokerNodes.put(id, brokerNode);
+            }
+
+            return new TestKitNodes(baseDirectory, clusterId, bootstrapMetadata, controllerNodes, brokerNodes);
         }
     }
 
-    private final Uuid clusterId;
-    private final MetadataVersion bootstrapMetadataVersion;
-    private final NavigableMap<Integer, ControllerNode> controllerNodes;
-    private final NavigableMap<Integer, BrokerNode> brokerNodes;
+    private final String baseDirectory;
+    private final String clusterId;
+    private final BootstrapMetadata bootstrapMetadata;
+    private final SortedMap<Integer, TestKitNode> controllerNodes;
+    private final SortedMap<Integer, TestKitNode> brokerNodes;
+
+    private TestKitNodes(
+        String baseDirectory,
+        String clusterId,
+        BootstrapMetadata bootstrapMetadata,
+        SortedMap<Integer, TestKitNode> controllerNodes,
+        SortedMap<Integer, TestKitNode> brokerNodes
+    ) {
+        this.baseDirectory = Objects.requireNonNull(baseDirectory);
+        this.clusterId = Objects.requireNonNull(clusterId);
+        this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
+        this.controllerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(controllerNodes)));
+        this.brokerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(brokerNodes)));
+    }
 
     public boolean isCombined(int node) {
         return controllerNodes.containsKey(node) && brokerNodes.containsKey(node);
     }
 
-    private TestKitNodes(Uuid clusterId,
-                         MetadataVersion bootstrapMetadataVersion,
-                         NavigableMap<Integer, ControllerNode> controllerNodes,
-                         NavigableMap<Integer, BrokerNode> brokerNodes) {
-        this.clusterId = clusterId;
-        this.bootstrapMetadataVersion = bootstrapMetadataVersion;
-        this.controllerNodes = controllerNodes;
-        this.brokerNodes = brokerNodes;
+    public String baseDirectory() {
+        return baseDirectory;
     }
 
-    public Uuid clusterId() {
+    public String clusterId() {
         return clusterId;
     }
 
-    public MetadataVersion bootstrapMetadataVersion() {
-        return bootstrapMetadataVersion;
-    }
-
-    public Map<Integer, ControllerNode> controllerNodes() {
+    public SortedMap<Integer, TestKitNode> controllerNodes() {
         return controllerNodes;
     }
 
-    public NavigableMap<Integer, BrokerNode> brokerNodes() {
+    public BootstrapMetadata bootstrapMetadata() {
+        return bootstrapMetadata;
+    }
+
+    public SortedMap<Integer, TestKitNode> brokerNodes() {
         return brokerNodes;
-    }
-
-    public MetaProperties controllerProperties(int id) {
-        return MetaProperties.apply(clusterId.toString(), id);
-    }
-
-    public MetaProperties brokerProperties(int id) {
-        return MetaProperties.apply(clusterId.toString(), id);
     }
 
     public ListenerName interBrokerListenerName() {
@@ -185,35 +215,93 @@ public class TestKitNodes {
         return new ListenerName("EXTERNAL");
     }
 
-    public TestKitNodes copyWithAbsolutePaths(String baseDirectory) {
-        NavigableMap<Integer, ControllerNode> newControllerNodes = new TreeMap<>();
-        NavigableMap<Integer, BrokerNode> newBrokerNodes = new TreeMap<>();
-        for (Entry<Integer, ControllerNode> entry : controllerNodes.entrySet()) {
-            ControllerNode node = entry.getValue();
-            newControllerNodes.put(entry.getKey(), new ControllerNode(node.id(),
-                absolutize(baseDirectory, node.metadataDirectory())));
-        }
-        for (Entry<Integer, BrokerNode> entry : brokerNodes.entrySet()) {
-            BrokerNode node = entry.getValue();
-            newBrokerNodes.put(entry.getKey(), new BrokerNode(node.id(),
-                node.incarnationId(), absolutize(baseDirectory, node.metadataDirectory()),
-                absolutize(baseDirectory, node.logDataDirectories()), node.propertyOverrides()));
-        }
-        return new TestKitNodes(clusterId, bootstrapMetadataVersion, newControllerNodes, newBrokerNodes);
+    public ListenerName controllerListenerName() {
+        return new ListenerName("CONTROLLER");
     }
 
-    private static List<String> absolutize(String base, Collection<String> directories) {
-        List<String> newDirectories = new ArrayList<>();
-        for (String directory : directories) {
-            newDirectories.add(absolutize(base, directory));
+    private static TestKitNode buildBrokerNode(int id,
+                                              String baseDirectory,
+                                              String clusterId,
+                                              boolean combined,
+                                              Map<String, String> propertyOverrides,
+                                              int numDisksPerBroker) {
+        List<String> logDataDirectories = IntStream
+            .range(0, numDisksPerBroker)
+            .mapToObj(i -> {
+                if (combined) {
+                    return String.format("combined_%d_%d", id, i);
+                }
+                return String.format("broker_%d_data%d", id, i);
+            })
+            .map(logDir -> {
+                if (Paths.get(logDir).isAbsolute()) {
+                    return logDir;
+                }
+                return new File(baseDirectory, logDir).getAbsolutePath();
+            })
+            .collect(Collectors.toList());
+        MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
+
+        copier.setMetaLogDir(Optional.of(logDataDirectories.get(0)));
+        for (String logDir : logDataDirectories) {
+            copier.setLogDirProps(
+                logDir,
+                new MetaProperties.Builder()
+                    .setVersion(MetaPropertiesVersion.V1)
+                    .setClusterId(clusterId)
+                    .setNodeId(id)
+                    .setDirectoryId(copier.generateValidDirectoryId())
+                    .build()
+            );
         }
-        return newDirectories;
+
+        return new TestKitNode() {
+            private final MetaPropertiesEnsemble ensemble = copier.copy();
+
+            @Override
+            public MetaPropertiesEnsemble initialMetaPropertiesEnsemble() {
+                return ensemble;
+            }
+
+            @Override
+            public Map<String, String> propertyOverrides() {
+                return Collections.unmodifiableMap(propertyOverrides);
+            }
+        };
     }
 
-    private static String absolutize(String base, String directory) {
-        if (Paths.get(directory).isAbsolute()) {
-            return directory;
-        }
-        return Paths.get(base, directory).toAbsolutePath().toString();
+    private static TestKitNode buildControllerNode(int id,
+                                                  String baseDirectory,
+                                                  String clusterId,
+                                                  boolean combined,
+                                                  Map<String, String> propertyOverrides) {
+        String metadataDirectory = new File(baseDirectory,
+            combined ? String.format("combined_%d_0", id) : String.format("controller_%d", id)).getAbsolutePath();
+        MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
+
+        copier.setMetaLogDir(Optional.of(metadataDirectory));
+        copier.setLogDirProps(
+            metadataDirectory,
+            new MetaProperties.Builder()
+                .setVersion(MetaPropertiesVersion.V1)
+                .setClusterId(clusterId)
+                .setNodeId(id)
+                .setDirectoryId(copier.generateValidDirectoryId())
+                .build()
+        );
+
+        return new TestKitNode() {
+            private final MetaPropertiesEnsemble ensemble = copier.copy();
+
+            @Override
+            public MetaPropertiesEnsemble initialMetaPropertiesEnsemble() {
+                return ensemble;
+            }
+
+            @Override
+            public Map<String, String> propertyOverrides() {
+                return Collections.unmodifiableMap(propertyOverrides);
+            }
+        };
     }
 }

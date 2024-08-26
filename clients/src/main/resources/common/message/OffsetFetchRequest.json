@@ -32,8 +32,12 @@
   //
   // Version 7 is adding the require stable flag.
   //
-  // Version 8 is adding support for fetching offsets for multiple groups at a time
-  "validVersions": "0-8",
+  // Version 8 is adding support for fetching offsets for multiple groups at a time.
+  //
+  // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). It adds
+  // the MemberId and MemberEpoch fields. Those are filled in and validated when the new consumer protocol is used.
+  "validVersions": "0-9",
+  "deprecatedVersions": "0",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0-7", "entityType": "groupId",
@@ -47,8 +51,12 @@
     ]},
     { "name": "Groups", "type": "[]OffsetFetchRequestGroup", "versions": "8+",
       "about": "Each group we would like to fetch offsets for", "fields": [
-      { "name": "groupId", "type": "string", "versions": "8+", "entityType": "groupId",
+      { "name": "GroupId", "type": "string", "versions": "8+", "entityType": "groupId",
         "about": "The group ID."},
+      { "name": "MemberId", "type": "string", "versions": "9+", "nullableVersions": "9+", "default": "null", "ignorable": true,
+        "about": "The member ID assigned by the group coordinator if using the new consumer protocol (KIP-848)." },
+      { "name": "MemberEpoch", "type": "int32", "versions": "9+", "default": "-1", "ignorable": true,
+        "about": "The member epoch if using the new consumer protocol (KIP-848)." },
       { "name": "Topics", "type": "[]OffsetFetchRequestTopics", "versions": "8+", "nullableVersions": "8+",
         "about": "Each topic we would like to fetch offsets for, or null to fetch offsets for all topics.", "fields": [
         { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName",
@@ -57,7 +65,7 @@
           "about": "The partition indexes we would like to fetch offsets for." }
       ]}
     ]},
-    {"name": "RequireStable", "type": "bool", "versions": "7+", "default": "false",
-      "about": "Whether broker should hold on returning unstable offsets but set a retriable error code for the partitions."}
+    { "name": "RequireStable", "type": "bool", "versions": "7+", "default": "false",
+      "about": "Whether broker should hold on returning unstable offsets but set a retriable error code for the partitions." }
   ]
 }

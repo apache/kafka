@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.tools;
 
-import joptsimple.OptionParser;
-import joptsimple.OptionSpec;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.ManualMetadataUpdater;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -57,12 +56,12 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.ShutdownableThread;
 import org.apache.kafka.server.util.TopicFilter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.SocketTimeoutException;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
@@ -82,6 +81,8 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionSpec;
 
 import static java.lang.String.format;
 
@@ -111,6 +112,8 @@ public class ReplicaVerificationTool {
 
     public static void main(String[] args) {
         try {
+            LOG.warn("This tool is deprecated and may be removed in a future major release.");
+
             ReplicaVerificationToolOptions options = new ReplicaVerificationToolOptions(args);
             // getting topic metadata
             LOG.info("Getting topic metadata...");
@@ -312,33 +315,19 @@ public class ReplicaVerificationTool {
             }
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
             CommandLineUtils.checkInvalidArgs(parser, options, topicsIncludeOpt, topicWhiteListOpt);
+
         }
 
         String brokerHostsAndPorts() {
             String brokerList = options.valueOf(brokerListOpt);
-            validateBrokerList(parser, brokerList);
+
+            try {
+                ToolsUtils.validateBootstrapServer(brokerList);
+            } catch (IllegalArgumentException e) {
+                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+            }
+
             return brokerList;
-        }
-
-        void validateBrokerList(OptionParser parser, String brokerList) {
-            if (parser == null || brokerList == null) {
-                throw new RuntimeException("No option parser or broker list found");
-            }
-            if (brokerList.isEmpty()) {
-                CommandLineUtils.printUsageAndExit(parser, "Empty broker list option");
-            }
-
-            String[] hostPorts;
-            if (brokerList.contains(",")) hostPorts = brokerList.split(",");
-            else hostPorts = new String[]{brokerList};
-
-            String[] validHostPort = Arrays.stream(hostPorts)
-                .filter(hostPortData -> Utils.getPort(hostPortData) != null)
-                .toArray(String[]::new);
-
-            if (validHostPort.length == 0 || validHostPort.length != hostPorts.length) {
-                CommandLineUtils.printUsageAndExit(parser, "Invalid broker list option");
-            }
         }
 
         TopicFilter.IncludeList topicsIncludeFilter() {
@@ -722,7 +711,8 @@ public class ReplicaVerificationTool {
                 time,
                 false,
                 new ApiVersions(),
-                logContext
+                logContext,
+                MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
             );
         }
 

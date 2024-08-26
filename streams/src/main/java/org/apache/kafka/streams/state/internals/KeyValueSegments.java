@@ -42,7 +42,7 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
             return segments.get(segmentId);
         } else {
             final KeyValueSegment newSegment =
-                new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+                new KeyValueSegment(segmentName(segmentId), name, segmentId, position, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");
@@ -64,7 +64,7 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
     @Override
     public void openExisting(final ProcessorContext context, final long streamTime) {
-        metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
+        metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
         super.openExisting(context, streamTime);
     }
 }

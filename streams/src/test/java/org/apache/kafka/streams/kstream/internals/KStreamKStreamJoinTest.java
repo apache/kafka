@@ -19,11 +19,13 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -37,27 +39,29 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
+import org.apache.kafka.streams.state.DslWindowParams;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.LeftOrRightValue;
+import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
+import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
-import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
-import org.apache.kafka.streams.state.internals.LeftOrRightValue;
-import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.GenericInMemoryKeyValueStore;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.time.Duration;
@@ -68,24 +72,26 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
-
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamKStreamJoinTest {
     private final String topic1 = "topic1";
@@ -213,7 +219,7 @@ public class KStreamKStreamJoinTest {
         assertThat(internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.size(), equalTo(2));
         for (final InternalTopicConfig config : internalTopologyBuilder.subtopologyToTopicsInfo().get(SUBTOPOLOGY_0).stateChangelogTopics.values()) {
             assertThat(
-                config.getProperties(Collections.emptyMap(), 0).get("test"),
+                config.properties(Collections.emptyMap(), 0).get("test"),
                 equalTo("property")
             );
         }
@@ -357,14 +363,100 @@ public class KStreamKStreamJoinTest {
         runJoin(streamJoined.withOtherStoreSupplier(otherStoreSupplier), joinWindows);
     }
 
+    public static class TrackingDslStoreSuppliers extends BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers {
+
+        public static final AtomicInteger NUM_CALLS = new AtomicInteger();
+
+        @Override
+        public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
+            NUM_CALLS.incrementAndGet();
+            return super.windowStore(params);
+        }
+    }
+
+    @Test
+    public void shouldJoinWithDslStoreSuppliersIfNoStoreSupplied() {
+        TrackingDslStoreSuppliers.NUM_CALLS.set(0);
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
+
+        final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
+        final TrackingDslStoreSuppliers dslStoreSuppliers = new TrackingDslStoreSuppliers();
+
+        final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore(
+                "in-memory-join-store-other",
+                Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+                Duration.ofMillis(joinWindows.size()),
+                true
+        );
+        final WindowBytesStoreSupplier otherStoreSupplier = Stores.inMemoryWindowStore(
+                "in-memory-join-store",
+                Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+                Duration.ofMillis(joinWindows.size()),
+                true
+        );
+
+        // neither side is supplied explicitly
+        runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers), joinWindows);
+        assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(2));
+
+        // one side is supplied explicitly, so we only increment once
+        runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers).withThisStoreSupplier(thisStoreSupplier), joinWindows);
+        assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(3));
+
+        // both sides are supplied explicitly, so we don't increment further
+        runJoin(streamJoined.withDslStoreSuppliers(dslStoreSuppliers)
+                .withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows);
+        assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(3));
+
+    }
+
+    @Test
+    public void shouldJoinWithDslStoreSuppliersFromStreamsConfig() {
+        TrackingDslStoreSuppliers.NUM_CALLS.set(0);
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
+
+        final StreamJoined<String, Integer, Integer> streamJoined =
+                StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
+        props.setProperty(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, TrackingDslStoreSuppliers.class.getName());
+
+        // neither side is supplied explicitly, so we call the dsl supplier twice
+        runJoin(streamJoined, joinWindows);
+        assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(2));
+    }
+
+    public static class CapturingStoreSuppliers extends BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers {
+
+        final AtomicReference<WindowBytesStoreSupplier> capture = new AtomicReference<>();
+
+        @Override
+        public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
+            final WindowBytesStoreSupplier store = super.windowStore(params);
+            capture.set(store);
+            return store;
+        }
+    }
+
+    @Test
+    public void shouldJoinWithNonTimestampedStore() {
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
+
+        final CapturingStoreSuppliers storeSuppliers = new CapturingStoreSuppliers();
+        final StreamJoined<String, Integer, Integer> streamJoined =
+                StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
+                        .withDslStoreSuppliers(storeSuppliers);
+
+        runJoin(streamJoined, joinWindows);
+        assertThat("Expected stream joined to supply builders that create non-timestamped stores",
+                !WrappedStateStore.isTimestamped(storeSuppliers.capture.get().get()));
+    }
+
     @Test
     public void shouldThrottleEmitNonJoinedOuterRecordsEvenWhenClockDrift() {
         /**
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
-        final KStreamKStreamJoin<String, String, String, String> join = new KStreamKStreamJoin<>(
-                false,
+        final KStreamKStreamJoinRightSide<String, String, String, String> join = new KStreamKStreamJoinRightSide<>(
                 "other",
                 new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
                 (key, v1, v2) -> v1 + v2,

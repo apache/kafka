@@ -25,7 +25,7 @@ import java.util.Objects;
  * The schema for a compound record definition
  */
 public class Schema extends Type {
-    private final static Object[] NO_VALUES = new Object[0];
+    private static final Object[] NO_VALUES = new Object[0];
 
     private final BoundField[] fields;
     private final Map<String, BoundField> fieldsByName;
@@ -53,6 +53,7 @@ public class Schema extends Type {
      *
      * @throws SchemaException If the given list have duplicate fields
      */
+    @SuppressWarnings("this-escape")
     public Schema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         this.fields = new BoundField[fs.length];
         this.fieldsByName = new HashMap<>();
@@ -228,7 +229,7 @@ public class Schema extends Type {
     /**
      * Override one or more of the visit methods with the desired logic.
      */
-    public static abstract class Visitor {
+    public abstract static class Visitor {
         public void visit(Schema schema) {}
         public void visit(Type field) {}
     }

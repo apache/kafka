@@ -16,15 +16,6 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture.SimpleAdminApiFuture;
@@ -44,7 +35,18 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffsetsResultInfo> {
 
@@ -61,7 +63,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         this.offsetTimestampsByPartition = offsetTimestampsByPartition;
         this.options = options;
         this.log = logContext.logger(ListOffsetsHandler.class);
-        this.lookupStrategy = new PartitionLeaderStrategy(logContext);
+        this.lookupStrategy = new PartitionLeaderStrategy(logContext, false);
     }
 
     @Override
@@ -91,9 +93,20 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.MAX_TIMESTAMP);
 
-        return ListOffsetsRequest.Builder
-            .forConsumer(true, options.isolationLevel(), supportsMaxTimestamp)
-            .setTargetTimes(new ArrayList<>(topicsByName.values()));
+        boolean requireEarliestLocalTimestamp = keys
+                .stream()
+                .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+
+        boolean requireTieredStorageTimestamp = keys
+            .stream()
+            .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+
+        return ListOffsetsRequest.Builder.forConsumer(true,
+                        options.isolationLevel(),
+                        supportsMaxTimestamp,
+                        requireEarliestLocalTimestamp,
+                        requireTieredStorageTimestamp)
+                .setTargetTimes(new ArrayList<>(topicsByName.values()));
     }
 
     @Override

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +61,7 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.pars
  * stored. Handles creation/locking/unlocking/cleaning of the Task Directories. This class is not
  * thread-safe.
  */
-public class StateDirectory {
+public class StateDirectory implements AutoCloseable {
 
     private static final Pattern TASK_DIR_PATH_NAME = Pattern.compile("\\d+_\\d+");
     private static final Pattern NAMED_TOPOLOGY_DIR_PATH_NAME = Pattern.compile("__.+__"); // named topology dirs follow '__Topology-Name__'
@@ -183,7 +184,9 @@ public class StateDirectory {
 
     public UUID initializeProcessId() {
         if (!hasPersistentStores) {
-            return UUID.randomUUID();
+            final UUID processId = UUID.randomUUID();
+            log.info("Created new process id: {}", processId);
+            return processId;
         }
 
         if (!lockStateDirectory()) {
@@ -377,6 +380,7 @@ public class StateDirectory {
         }
     }
 
+    @Override
     public void close() {
         if (hasPersistentStores) {
             try {

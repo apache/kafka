@@ -35,20 +35,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -60,15 +57,15 @@ import java.util.List;
 import java.util.Properties;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@RunWith(Parameterized.class)
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class RangeQueryIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
     private static final Properties STREAMS_CONFIG = new Properties();
     private static final String APP_ID = "range-query-integration-test";
@@ -79,10 +76,6 @@ public class RangeQueryIntegrationTest {
 
     private enum StoreType { InMemory, RocksDB, Timed }
 
-    private final StoreType storeType;
-    private final boolean enableLogging;
-    private final boolean enableCaching;
-    private final boolean forward;
     private final LinkedList<KeyValue<String, String>> records;
 
     private String low;
@@ -93,12 +86,7 @@ public class RangeQueryIntegrationTest {
     private String innerLowBetween;
     private String innerHighBetween;
 
-    public RangeQueryIntegrationTest(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) {
-        this.storeType = storeType;
-        this.enableLogging = enableLogging;
-        this.enableCaching = enableCaching;
-        this.forward = forward;
-
+    public RangeQueryIntegrationTest() {
         records = new LinkedList<>();
         final int m = DATA_SIZE / 2;
         for (int i = 0; i < DATA_SIZE; i++) {
@@ -123,28 +111,24 @@ public class RangeQueryIntegrationTest {
                 innerHighBetween = "key-" + index;
             }
         }
-        Assert.assertNotNull(low);
-        Assert.assertNotNull(high);
-        Assert.assertNotNull(middle);
-        Assert.assertNotNull(innerLow);
-        Assert.assertNotNull(innerHigh);
-        Assert.assertNotNull(innerLowBetween);
-        Assert.assertNotNull(innerHighBetween);
+        assertNotNull(low);
+        assertNotNull(high);
+        assertNotNull(middle);
+        assertNotNull(innerLow);
+        assertNotNull(innerHigh);
+        assertNotNull(innerLowBetween);
+        assertNotNull(innerHighBetween);
     }
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Parameterized.Parameters(name = "storeType={0}, enableLogging={1}, enableCaching={2}, forward={3}")
-    public static Collection<Object[]> data() {
+    public static Stream<Arguments> data() {
         final List<StoreType> types = Arrays.asList(StoreType.InMemory, StoreType.RocksDB, StoreType.Timed);
         final List<Boolean> logging = Arrays.asList(true, false);
         final List<Boolean> caching = Arrays.asList(true, false);
         final List<Boolean> forward = Arrays.asList(true, false);
-        return buildParameters(types, logging, caching, forward);
+        return buildParameters(types, logging, caching, forward).stream().map(Arguments::of);
     }
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -156,24 +140,25 @@ public class RangeQueryIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Before
+    @BeforeEach
     public void setupTopics() throws Exception {
         inputStream = "input-topic";
         CLUSTER.createTopic(inputStream);
     }
 
-    @After
+    @AfterEach
     public void cleanup() throws InterruptedException {
         CLUSTER.deleteAllTopicsAndWait(120000);
     }
 
-    @Test
-    public void testStoreConfig() throws Exception {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testStoreConfig(final StoreType storeType, final boolean enableLogging, final boolean enableCaching, final boolean forward) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> stateStoreConfig = getStoreConfig(storeType, enableLogging, enableCaching);
         builder.table(inputStream, stateStoreConfig);

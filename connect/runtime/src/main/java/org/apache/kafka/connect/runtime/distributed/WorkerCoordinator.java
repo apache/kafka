@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;
@@ -42,10 +43,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
+import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
+
 
 /**
  * This class manages the coordination process with the Kafka group coordinator on the broker for managing assignments
@@ -120,7 +124,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         return super.ensureCoordinatorReady(timer);
     }
 
-    public void poll(long timeout) {
+    public void poll(long timeout, Supplier<UncheckedCloseable> onPoll) {
         // poll for io until the timeout expires
         final long start = time.milliseconds();
         long now = start;
@@ -130,7 +134,11 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             if (coordinatorUnknown()) {
                 log.debug("Broker coordinator is marked unknown. Attempting discovery with a timeout of {}ms",
                         coordinatorDiscoveryTimeoutMs);
-                if (ensureCoordinatorReady(time.timer(coordinatorDiscoveryTimeoutMs))) {
+                boolean coordinatorReady;
+                try (UncheckedCloseable polling = onPoll.get()) {
+                    coordinatorReady = ensureCoordinatorReady(time.timer(coordinatorDiscoveryTimeoutMs));
+                }
+                if (coordinatorReady) {
                     log.debug("Broker coordinator is ready");
                 } else {
                     log.debug("Can not connect to broker coordinator");
@@ -146,7 +154,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             }
 
             if (rejoinNeededOrPending()) {
-                ensureActiveGroup();
+                try (UncheckedCloseable polling = onPoll.get()) {
+                    ensureActiveGroup();
+                }
                 now = time.milliseconds();
             }
 
@@ -158,7 +168,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             // Note that because the network client is shared with the background heartbeat thread,
             // we do not want to block in poll longer than the time to the next heartbeat.
             long pollTimeout = Math.min(Math.max(0, remaining), timeToNextHeartbeat(now));
-            client.poll(time.timer(pollTimeout));
+            try (UncheckedCloseable polling = onPoll.get()) {
+                client.poll(time.timer(pollTimeout));
+            }
 
             now = time.milliseconds();
             elapsed = now - start;
@@ -254,6 +266,12 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         if (generation != null)
             return generation.memberId;
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
+    }
+
+    @Override
+    protected void handlePollTimeoutExpiry() {
+        listener.onPollTimeoutExpiry();
+        maybeLeaveGroup("worker poll timeout has expired.");
     }
 
     /**
@@ -478,6 +496,12 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             public ConnectorsAndTasks.Builder addTasks(Collection<ConnectorTaskId> tasks) {
                 this.withTasks.addAll(tasks);
                 return this;
+            }
+
+            public ConnectorsAndTasks.Builder addAll(ConnectorsAndTasks connectorsAndTasks) {
+                return this
+                        .addConnectors(connectorsAndTasks.connectors())
+                        .addTasks(connectorsAndTasks.tasks());
             }
 
             public ConnectorsAndTasks build() {

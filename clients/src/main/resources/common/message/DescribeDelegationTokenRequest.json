@@ -22,6 +22,7 @@
   // Version 2 adds flexible version support
   // Version 3 adds token requester into the response
   "validVersions": "0-3",
+  "deprecatedVersions": "0",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Owners", "type": "[]DescribeDelegationTokenOwner", "versions": "0+", "nullableVersions": "0+",

@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -85,9 +86,9 @@ class AllBrokersStrategyTest {
         );
 
         assertEquals(expectedMappedKeys, lookupResult.mappedKeys.keySet());
-        lookupResult.mappedKeys.forEach((brokerKey, brokerId) -> {
-            assertEquals(OptionalInt.of(brokerId), brokerKey.brokerId);
-        });
+        lookupResult.mappedKeys.forEach((brokerKey, brokerId) ->
+            assertEquals(OptionalInt.of(brokerId), brokerKey.brokerId)
+        );
     }
 
     @Test

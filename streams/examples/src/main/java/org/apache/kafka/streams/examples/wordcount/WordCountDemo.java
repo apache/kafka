@@ -49,7 +49,7 @@ public final class WordCountDemo {
     public static final String INPUT_TOPIC = "streams-plaintext-input";
     public static final String OUTPUT_TOPIC = "streams-wordcount-output";
 
-    static Properties getStreamsConfig(final String[] args) throws IOException {
+    static Properties streamsConfig(final String[] args) throws IOException {
         final Properties props = new Properties();
         if (args != null && args.length > 0) {
             try (final FileInputStream fis = new FileInputStream(args[0])) {
@@ -62,8 +62,8 @@ public final class WordCountDemo {
         props.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
         props.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.putIfAbsent(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-        props.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        props.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         // Note: To re-run the demo, you need to use the offset reset tool:
@@ -85,7 +85,7 @@ public final class WordCountDemo {
     }
 
     public static void main(final String[] args) throws IOException {
-        final Properties props = getStreamsConfig(args);
+        final Properties props = streamsConfig(args);
 
         final StreamsBuilder builder = new StreamsBuilder();
         createWordCountStream(builder);

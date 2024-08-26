@@ -27,7 +27,7 @@ public interface Timer extends AutoCloseable {
     /**
      * Advance the internal clock, executing any tasks whose expiration has been
      * reached within the duration of the passed timeout.
-     * @param timeoutMs
+     * @param timeoutMs the time to advance in milliseconds
      * @return whether or not any tasks were executed
      */
     boolean advanceClock(long timeoutMs) throws InterruptedException;

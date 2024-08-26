@@ -28,12 +28,16 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+import org.apache.kafka.connect.util.ConcreteSubClassValidator;
+import org.apache.kafka.connect.util.InstantiableClassValidator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -42,7 +46,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
@@ -82,10 +85,18 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String KEY_CONVERTER_CLASS_CONFIG = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG;
     public static final String KEY_CONVERTER_CLASS_DOC = WorkerConfig.KEY_CONVERTER_CLASS_DOC;
     public static final String KEY_CONVERTER_CLASS_DISPLAY = "Key converter class";
+    private static final ConfigDef.Validator KEY_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
+            ConcreteSubClassValidator.forSuperClass(Converter.class),
+            new InstantiableClassValidator()
+    );
 
     public static final String VALUE_CONVERTER_CLASS_CONFIG = WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
     public static final String VALUE_CONVERTER_CLASS_DOC = WorkerConfig.VALUE_CONVERTER_CLASS_DOC;
     public static final String VALUE_CONVERTER_CLASS_DISPLAY = "Value converter class";
+    private static final ConfigDef.Validator VALUE_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
+            ConcreteSubClassValidator.forSuperClass(Converter.class),
+            new InstantiableClassValidator()
+    );
 
     public static final String HEADER_CONVERTER_CLASS_CONFIG = WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG;
     public static final String HEADER_CONVERTER_CLASS_DOC = WorkerConfig.HEADER_CONVERTER_CLASS_DOC;
@@ -93,6 +104,10 @@ public class ConnectorConfig extends AbstractConfig {
     // The Connector config should not have a default for the header converter, since the absence of a config property means that
     // the worker config settings should be used. Thus, we set the default to null here.
     public static final String HEADER_CONVERTER_CLASS_DEFAULT = null;
+    private static final ConfigDef.Validator HEADER_CONVERTER_CLASS_VALIDATOR = ConfigDef.CompositeValidator.of(
+            ConcreteSubClassValidator.forSuperClass(HeaderConverter.class),
+            new InstantiableClassValidator()
+    );
 
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";
@@ -100,6 +115,16 @@ public class ConnectorConfig extends AbstractConfig {
     private static final int TASKS_MIN_CONFIG = 1;
 
     private static final String TASK_MAX_DISPLAY = "Tasks max";
+
+    public static final String TASKS_MAX_ENFORCE_CONFIG = "tasks.max.enforce";
+    private static final String TASKS_MAX_ENFORCE_DOC =
+            "(Deprecated) Whether to enforce that the tasks.max property is respected by the connector. "
+                    + "By default, connectors that generate too many tasks will fail, and existing sets of tasks that exceed the tasks.max property will also be failed. "
+                    + "If this property is set to false, then connectors will be allowed to generate more than the maximum number of tasks, and existing sets of "
+                    + "tasks that exceed the tasks.max property will be allowed to run. "
+                    + "This property is deprecated and will be removed in an upcoming major release.";
+    public static final boolean TASKS_MAX_ENFORCE_DEFAULT = true;
+    private static final String TASKS_MAX_ENFORCE_DISPLAY = "Enforce tasks max";
 
     public static final String TRANSFORMS_CONFIG = "transforms";
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
@@ -181,9 +206,10 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(NAME_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, nonEmptyStringWithoutControlChars(), Importance.HIGH, NAME_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, NAME_DISPLAY)
                 .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.LONG, CONNECTOR_CLASS_DISPLAY)
                 .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, TASK_MAX_DISPLAY)
-                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
-                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
-                .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
+                .define(TASKS_MAX_ENFORCE_CONFIG, Type.BOOLEAN, TASKS_MAX_ENFORCE_DEFAULT, Importance.LOW, TASKS_MAX_ENFORCE_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, TASKS_MAX_ENFORCE_DISPLAY)
+                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, KEY_CONVERTER_CLASS_VALIDATOR, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
+                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, VALUE_CONVERTER_CLASS_VALIDATOR, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
+                .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, HEADER_CONVERTER_CLASS_VALIDATOR, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
                 .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("transformation"), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
                 .define(PREDICATES_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("predicate"), Importance.LOW, PREDICATES_DOC, PREDICATES_GROUP, ++orderInGroup, Width.LONG, PREDICATES_DISPLAY)
                 .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
@@ -267,6 +293,14 @@ public class ConnectorConfig extends AbstractConfig {
         return getBoolean(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG);
     }
 
+    public int tasksMax() {
+        return getInt(TASKS_MAX_CONFIG);
+    }
+
+    public boolean enforceTasksMax() {
+        return getBoolean(TASKS_MAX_ENFORCE_CONFIG);
+    }
+
     /**
      * Returns the initialized list of {@link TransformationStage} which apply the
      * {@link Transformation transformations} and {@link Predicate predicates}
@@ -291,7 +325,7 @@ public class ConnectorConfig extends AbstractConfig {
                     @SuppressWarnings("unchecked")
                     Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
-                    transformations.add(new TransformationStage<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
+                    transformations.add(new TransformationStage<>(predicate, negate != null && Boolean.parseBoolean(negate.toString()), transformation));
                 } else {
                     transformations.add(new TransformationStage<>(transformation));
                 }
@@ -313,7 +347,7 @@ public class ConnectorConfig extends AbstractConfig {
         ConfigDef newDef = new ConfigDef(baseConfigDef);
         new EnrichablePlugin<Transformation<?>>("Transformation", TRANSFORMS_CONFIG, TRANSFORMS_GROUP, (Class) Transformation.class,
                 props, requireFullConfig) {
-            @SuppressWarnings("rawtypes")
+
             @Override
             protected Set<PluginDesc<Transformation<?>>> plugins() {
                 return plugins.transformations();
@@ -386,7 +420,7 @@ public class ConnectorConfig extends AbstractConfig {
      * The abstract method pattern is used to cope with this.
      * @param <T> The type of plugin (either {@code Transformation} or {@code Predicate}).
      */
-    static abstract class EnrichablePlugin<T> {
+    abstract static class EnrichablePlugin<T> {
 
         private final String aliasKind;
         private final String aliasConfig;
@@ -429,7 +463,10 @@ public class ConnectorConfig extends AbstractConfig {
                 final ConfigDef.Validator typeValidator = ConfigDef.LambdaValidator.with(
                     (String name, Object value) -> {
                         validateProps(prefix);
-                        getConfigDefFromConfigProvidingClass(typeConfig, (Class<?>) value);
+                        // The value will be null if the class couldn't be found; no point in performing follow-up validation
+                        if (value != null) {
+                            getConfigDefFromConfigProvidingClass(typeConfig, (Class<?>) value);
+                        }
                     },
                     () -> "valid configs for " + alias + " " + aliasKind.toLowerCase(Locale.ENGLISH));
                 newDef.define(typeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
@@ -488,28 +525,18 @@ public class ConnectorConfig extends AbstractConfig {
          * @param cls The subclass of the baseclass.
          */
         ConfigDef getConfigDefFromConfigProvidingClass(String key, Class<?> cls) {
-            if (cls == null || !baseClass.isAssignableFrom(cls)) {
-                throw new ConfigException(key, String.valueOf(cls), "Not a " + baseClass.getSimpleName());
+            if (cls == null) {
+                throw new ConfigException(key, null, "Not a " + baseClass.getSimpleName());
             }
-            if (Modifier.isAbstract(cls.getModifiers())) {
-                String childClassNames = Stream.of(cls.getClasses())
-                        .filter(cls::isAssignableFrom)
-                        .filter(c -> !Modifier.isAbstract(c.getModifiers()))
-                        .filter(c -> Modifier.isPublic(c.getModifiers()))
-                        .map(Class::getName)
-                        .collect(Collectors.joining(", "));
-                String message = Utils.isBlank(childClassNames) ?
-                        aliasKind + " is abstract and cannot be created." :
-                        aliasKind + " is abstract and cannot be created. Did you mean " + childClassNames + "?";
-                throw new ConfigException(key, String.valueOf(cls), message);
-            }
-            T transformation;
+            Utils.ensureConcreteSubclass(baseClass, cls);
+
+            T pluginInstance;
             try {
-                transformation = Utils.newInstance(cls, baseClass);
+                pluginInstance = Utils.newInstance(cls, baseClass);
             } catch (Exception e) {
                 throw new ConfigException(key, String.valueOf(cls), "Error getting config definition from " + baseClass.getSimpleName() + ": " + e.getMessage());
             }
-            ConfigDef configDef = config(transformation);
+            ConfigDef configDef = config(pluginInstance);
             if (null == configDef) {
                 throw new ConnectException(
                     String.format(

@@ -213,6 +213,7 @@ public class InternalMockProcessorContext<KOut, VOut>
         this(stateDir, keySerde, valueSerde, metrics, config, collectorSupplier, cache, time, new TaskId(0, 0));
     }
 
+    @SuppressWarnings("this-escape")
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
                                         final Serde<?> valueSerde,
@@ -238,6 +239,13 @@ public class InternalMockProcessorContext<KOut, VOut>
                 appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
+        this.recordContext = new ProcessorRecordContext(
+                0,
+                0,
+                0,
+                "topic",
+                new RecordHeaders()
+        );
     }
 
     @Override

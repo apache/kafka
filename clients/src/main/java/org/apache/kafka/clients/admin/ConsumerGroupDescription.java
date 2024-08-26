@@ -18,15 +18,16 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A detailed description of a single consumer group in the cluster.
@@ -36,6 +37,7 @@ public class ConsumerGroupDescription {
     private final boolean isSimpleConsumerGroup;
     private final Collection<MemberDescription> members;
     private final String partitionAssignor;
+    private final GroupType type;
     private final ConsumerGroupState state;
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
@@ -56,11 +58,23 @@ public class ConsumerGroupDescription {
                                     ConsumerGroupState state,
                                     Node coordinator,
                                     Set<AclOperation> authorizedOperations) {
+        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, GroupType.CLASSIC, state, coordinator, authorizedOperations);
+    }
+
+    public ConsumerGroupDescription(String groupId,
+                                    boolean isSimpleConsumerGroup,
+                                    Collection<MemberDescription> members,
+                                    String partitionAssignor,
+                                    GroupType type,
+                                    ConsumerGroupState state,
+                                    Node coordinator,
+                                    Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.emptyList() :
             Collections.unmodifiableList(new ArrayList<>(members));
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
+        this.type = type;
         this.state = state;
         this.coordinator = coordinator;
         this.authorizedOperations = authorizedOperations;
@@ -75,6 +89,7 @@ public class ConsumerGroupDescription {
             Objects.equals(groupId, that.groupId) &&
             Objects.equals(members, that.members) &&
             Objects.equals(partitionAssignor, that.partitionAssignor) &&
+            type == that.type &&
             state == that.state &&
             Objects.equals(coordinator, that.coordinator) &&
             Objects.equals(authorizedOperations, that.authorizedOperations);
@@ -82,7 +97,7 @@ public class ConsumerGroupDescription {
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, authorizedOperations);
+        return Objects.hash(groupId, isSimpleConsumerGroup, members, partitionAssignor, type, state, coordinator, authorizedOperations);
     }
 
     /**
@@ -114,6 +129,14 @@ public class ConsumerGroupDescription {
     }
 
     /**
+     * The group type (or the protocol) of this consumer group. It defaults
+     * to Classic if not provided by the server.
+     */
+    public GroupType type() {
+        return type;
+    }
+
+    /**
      * The consumer group state, or UNKNOWN if the state is too new for us to parse.
      */
     public ConsumerGroupState state() {
@@ -138,8 +161,9 @@ public class ConsumerGroupDescription {
     public String toString() {
         return "(groupId=" + groupId +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
-            ", members=" + Utils.join(members, ",") +
+            ", members=" + members.stream().map(MemberDescription::toString).collect(Collectors.joining(",")) +
             ", partitionAssignor=" + partitionAssignor +
+            ", type=" + type +
             ", state=" + state +
             ", coordinator=" + coordinator +
             ", authorizedOperations=" + authorizedOperations +

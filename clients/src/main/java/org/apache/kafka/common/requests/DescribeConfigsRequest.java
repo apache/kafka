@@ -58,12 +58,12 @@ public class DescribeConfigsRequest extends AbstractRequest {
         Errors error = Errors.forException(e);
         return new DescribeConfigsResponse(new DescribeConfigsResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
-                .setResults(data.resources().stream().map(result -> {
-                    return new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code())
+                .setResults(data.resources().stream().map(result ->
+                    new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code())
                             .setErrorMessage(error.message())
                             .setResourceName(result.resourceName())
-                            .setResourceType(result.resourceType());
-                }).collect(Collectors.toList())
+                            .setResourceType(result.resourceType()))
+                .collect(Collectors.toList())
         ));
     }
 

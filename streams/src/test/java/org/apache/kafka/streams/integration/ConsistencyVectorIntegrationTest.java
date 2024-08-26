@@ -38,24 +38,19 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -64,35 +59,32 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class ConsistencyVectorIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
     private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
     private static final String TABLE_NAME = "source-table";
+    private static final int KEY = 1;
+    private static final int NUMBER_OF_MESSAGES = 100;
 
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
-
-    @Rule
-    public TestName testName = new TestName();
 
     private final List<KafkaStreams> streamsToCleanup = new ArrayList<>();
     private final MockTime mockTime = cluster.time;
 
-    @Before
+    @BeforeEach
     public void before() throws InterruptedException, IOException {
         cluster.start();
         cluster.createTopic(INPUT_TOPIC_NAME, 1, 1);
     }
 
-    @After
+    @AfterEach
     public void after() {
         for (final KafkaStreams kafkaStreams : streamsToCleanup) {
             kafkaStreams.close();
@@ -101,13 +93,10 @@ public class ConsistencyVectorIntegrationTest {
     }
 
     @Test
-    public void shouldHaveSamePositionBoundActiveAndStandBy() throws Exception {
-        final int batch1NumMessages = 100;
-        final int key = 1;
+    public void shouldHaveSamePositionBoundActiveAndStandBy(final TestInfo testInfo) throws Exception {
         final Semaphore semaphore = new Semaphore(0);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        Objects.requireNonNull(TABLE_NAME, "name cannot be null");
 
         builder.table(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()),
                       Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as(TABLE_NAME)
@@ -116,48 +105,49 @@ public class ConsistencyVectorIntegrationTest {
                .toStream()
                .peek((k, v) -> semaphore.release());
 
-        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration());
-        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration());
+        final String safeTestName = safeUniqueTestName(testInfo);
+        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
+        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
 
         try {
             startApplicationAndWaitUntilRunning(kafkaStreamsList);
 
-            produceValueRange(key, 0, batch1NumMessages);
+            produceValueRange();
 
             // Assert that all messages in the first batch were processed in a timely manner
-            assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
-
-            final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
+            assertThat(
+                "Did not process all message in time.",
+                semaphore.tryAcquire(NUMBER_OF_MESSAGES, 120, TimeUnit.SECONDS), is(equalTo(true))
+            );
 
             // Assert that both active and standby have the same position bound
-            final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+            final StateQueryRequest<Integer> request =
                 StateQueryRequest
                     .inStore(TABLE_NAME)
-                    .withQuery(KeyQuery.<Integer, ValueAndTimestamp<Integer>>withKey(key))
+                    .withQuery(KeyQuery.<Integer, Integer>withKey(KEY))
                     .withPositionBound(PositionBound.unbounded());
 
-            checkPosition(batch1NumMessages, request, kafkaStreams1);
-            checkPosition(batch1NumMessages, request, kafkaStreams2);
+            checkPosition(request, kafkaStreams1);
+            checkPosition(request, kafkaStreams2);
         } finally {
             kafkaStreams1.close();
             kafkaStreams2.close();
         }
     }
 
-    private void checkPosition(final int batch1NumMessages,
-                               final StateQueryRequest<ValueAndTimestamp<Integer>> request,
+    private void checkPosition(final StateQueryRequest<Integer> request,
                                final KafkaStreams kafkaStreams1) throws InterruptedException {
         final long maxWaitMs = TestUtils.DEFAULT_MAX_WAIT_MS;
         final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
 
         while (true) {
-            final StateQueryResult<ValueAndTimestamp<Integer>> stateQueryResult =
+            final StateQueryResult<Integer> stateQueryResult =
                 IntegrationTestUtils.iqv2WaitForResult(
                     kafkaStreams1,
                     request
                 );
-            final QueryResult<ValueAndTimestamp<Integer>> queryResult =
+            final QueryResult<Integer> queryResult =
                 stateQueryResult.getPartitionResults().get(0);
             if (queryResult.isSuccess() && queryResult.getResult() != null) {
                 // invariant: each value is also at the equivalent offset
@@ -166,11 +156,11 @@ public class ConsistencyVectorIntegrationTest {
                     queryResult.getPosition(),
                     is(
                         Position.emptyPosition()
-                                .withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult().value())
+                                .withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult())
                     )
                 );
 
-                if (queryResult.getResult().value() == batch1NumMessages - 1) {
+                if (queryResult.getResult() == NUMBER_OF_MESSAGES - 1) {
                     // we're at the end of the input.
                     return;
                 }
@@ -187,14 +177,13 @@ public class ConsistencyVectorIntegrationTest {
 
     }
 
-
     private KafkaStreams createKafkaStreams(final StreamsBuilder builder, final Properties config) {
         final KafkaStreams streams = new KafkaStreams(builder.build(config), config);
         streamsToCleanup.add(streams);
         return streams;
     }
 
-    private void produceValueRange(final int key, final int start, final int endExclusive) {
+    private void produceValueRange() {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
@@ -202,23 +191,22 @@ public class ConsistencyVectorIntegrationTest {
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             INPUT_TOPIC_NAME,
-            IntStream.range(start, endExclusive)
-                     .mapToObj(i -> KeyValue.pair(key, i))
+            IntStream.range(0, NUMBER_OF_MESSAGES)
+                     .mapToObj(i -> KeyValue.pair(KEY, i))
                      .collect(Collectors.toList()),
             producerProps,
             mockTime
         );
     }
 
-    private Properties streamsConfiguration() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private Properties streamsConfiguration(final String safeTestName) {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);

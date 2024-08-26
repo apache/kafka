@@ -19,11 +19,11 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.junit.jupiter.params.ParameterizedTest
@@ -36,16 +36,16 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     super.brokerPropertyOverrides(properties)
-    properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
+    properties.put(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[Policy].getName)
   }
 
   override def kraftControllerConfigs(): Seq[Properties] = {
     val properties = new Properties()
-    properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
+    properties.put(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[Policy].getName)
     Seq(properties)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidCreateTopicsRequests(quorum: String): Unit = {
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1",
@@ -64,11 +64,11 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       assignment = Map(0 -> List(1, 0), 1 -> List(0, 1))))))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testErrorCreateTopicsRequests(quorum: String): Unit = {
     val existingTopic = "existing-topic"
-    createTopic(existingTopic, 5, 1)
+    createTopic(existingTopic, 5)
 
     // Policy violations
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("policy-topic1",
@@ -153,7 +153,7 @@ object CreateTopicsRequestWithPolicyTest {
         return
       }
       require(!closed, "Policy should not be closed")
-      require(!configs.isEmpty, "configure should have been called with non empty configs")
+      require(configs.nonEmpty, "configure should have been called with non empty configs")
 
       import requestMetadata._
       if (numPartitions != null || replicationFactor != null) {

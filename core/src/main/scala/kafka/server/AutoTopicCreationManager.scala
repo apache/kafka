@@ -20,7 +20,6 @@ package kafka.server
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
-
 import kafka.controller.KafkaController
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.Logging
@@ -29,13 +28,15 @@ import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.CreateTopicsRequestData
-import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreateableTopicConfig, CreateableTopicConfigCollection}
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait AutoTopicCreationManager {
@@ -50,15 +51,13 @@ trait AutoTopicCreationManager {
 object AutoTopicCreationManager {
 
   def apply(
-    config: KafkaConfig,
-    metadataCache: MetadataCache,
-    threadNamePrefix: Option[String],
-    channelManager: Option[BrokerToControllerChannelManager],
-    adminManager: Option[ZkAdminManager],
-    controller: Option[KafkaController],
-    groupCoordinator: GroupCoordinator,
-    txnCoordinator: TransactionCoordinator,
-  ): AutoTopicCreationManager = {
+   config: KafkaConfig,
+   channelManager: Option[NodeToControllerChannelManager],
+   adminManager: Option[ZkAdminManager],
+   controller: Option[KafkaController],
+   groupCoordinator: GroupCoordinator,
+   txnCoordinator: TransactionCoordinator,
+ ): AutoTopicCreationManager = {
     new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator)
   }
@@ -66,7 +65,7 @@ object AutoTopicCreationManager {
 
 class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
-  channelManager: Option[BrokerToControllerChannelManager],
+  channelManager: Option[NodeToControllerChannelManager],
   adminManager: Option[ZkAdminManager],
   controller: Option[KafkaController],
   groupCoordinator: GroupCoordinator,
@@ -193,7 +192,7 @@ class DefaultAutoTopicCreationManager(
 
     val request = metadataRequestContext.map { context =>
       val requestVersion =
-        channelManager.controllerApiVersions() match {
+        channelManager.controllerApiVersions.asScala match {
           case None =>
             // We will rely on the Metadata request to be retried in the case
             // that the latest version is not usable by the controller.
@@ -235,8 +234,8 @@ class DefaultAutoTopicCreationManager(
       case GROUP_METADATA_TOPIC_NAME =>
         new CreatableTopic()
           .setName(topic)
-          .setNumPartitions(config.offsetsTopicPartitions)
-          .setReplicationFactor(config.offsetsTopicReplicationFactor)
+          .setNumPartitions(config.groupCoordinatorConfig.offsetsTopicPartitions)
+          .setReplicationFactor(config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(groupCoordinator.groupMetadataTopicConfigs))
       case TRANSACTION_STATE_TOPIC_NAME =>
         new CreatableTopic()
@@ -253,11 +252,11 @@ class DefaultAutoTopicCreationManager(
     }
   }
 
-  private def convertToTopicConfigCollections(config: Properties): CreateableTopicConfigCollection = {
-    val topicConfigs = new CreateableTopicConfigCollection()
+  private def convertToTopicConfigCollections(config: Properties): CreatableTopicConfigCollection = {
+    val topicConfigs = new CreatableTopicConfigCollection()
     config.forEach {
       case (name, value) =>
-        topicConfigs.add(new CreateableTopicConfig()
+        topicConfigs.add(new CreatableTopicConfig()
           .setName(name.toString)
           .setValue(value.toString))
     }

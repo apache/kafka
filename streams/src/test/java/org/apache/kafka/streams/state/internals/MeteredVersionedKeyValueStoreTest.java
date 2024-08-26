@@ -16,24 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertThrows;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -53,21 +35,54 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.MultiVersionedKeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedRecord;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class MeteredVersionedKeyValueStoreTest {
 
     private static final String STORE_NAME = "versioned_store";
@@ -95,7 +110,7 @@ public class MeteredVersionedKeyValueStoreTest {
 
     private MeteredVersionedKeyValueStore<String, String> store;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         when(inner.name()).thenReturn(STORE_NAME);
         when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, mockTime));
@@ -296,6 +311,18 @@ public class MeteredVersionedKeyValueStoreTest {
         assertThrows(UnsupportedOperationException.class, () -> store.query(mock(KeyQuery.class), null, null));
     }
 
+    @Test
+    public void shouldThrowOnMultiVersionedKeyQueryInvalidTimeRange() {
+        MultiVersionedKeyQuery<String, Object> query = MultiVersionedKeyQuery.withKey("key");
+        final Instant fromTime = Instant.now();
+        final Instant toTime = Instant.ofEpochMilli(fromTime.toEpochMilli() - 100);
+        query = query.fromTime(fromTime).toTime(toTime);
+        final MultiVersionedKeyQuery<String, Object> finalQuery = query;
+        final Exception exception = assertThrows(IllegalArgumentException.class, () -> store.query(finalQuery, null, null));
+        assertEquals("The `fromTime` timestamp must be smaller than the `toTime` timestamp.", exception.getMessage());
+    }
+
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldDelegateAndAddExecutionInfoOnCustomQuery() {
@@ -345,6 +372,105 @@ public class MeteredVersionedKeyValueStoreTest {
         when(inner.getPosition()).thenReturn(position);
 
         assertThat(store.getPosition(), is(position));
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetric() {
+        final MultiVersionedKeyQuery<String, String> query = MultiVersionedKeyQuery.withKey(KEY);
+        final PositionBound bound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false);
+        when(inner.query(any(), any(), any())).thenReturn(
+            QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
+
+        final KafkaMetric openIteratorsMetric = getMetric("num-open-iterators");
+        assertThat(openIteratorsMetric, not(nullValue()));
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+
+        final QueryResult<VersionedRecordIterator<String>> result = store.query(query, bound, config);
+
+        try (final VersionedRecordIterator<String> iterator = result.getResult()) {
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        }
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+    }
+
+    @Test
+    public void shouldTimeIteratorDuration() {
+        final MultiVersionedKeyQuery<String, String> query = MultiVersionedKeyQuery.withKey(KEY);
+        final PositionBound bound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false);
+        when(inner.query(any(), any(), any())).thenReturn(
+                QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
+
+        final KafkaMetric iteratorDurationAvgMetric = getMetric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = getMetric("iterator-duration-max");
+        assertThat(iteratorDurationAvgMetric, not(nullValue()));
+        assertThat(iteratorDurationMaxMetric, not(nullValue()));
+
+        assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
+        assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
+
+        final QueryResult<VersionedRecordIterator<String>> first = store.query(query, bound, config);
+        try (final VersionedRecordIterator<String> iterator = first.getResult()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(2);
+        }
+
+        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+
+        final QueryResult<VersionedRecordIterator<String>> second = store.query(query, bound, config);
+        try (final VersionedRecordIterator<String> iterator = second.getResult()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(3);
+        }
+
+        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+    }
+
+    @Test
+    public void shouldTrackOldestOpenIteratorTimestamp() {
+        final MultiVersionedKeyQuery<String, String> query = MultiVersionedKeyQuery.withKey(KEY);
+        final PositionBound bound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false);
+        when(inner.query(any(), any(), any())).thenReturn(
+                QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
+
+        final KafkaMetric oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
+
+        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+
+        final QueryResult<VersionedRecordIterator<String>> first = store.query(query, bound, config);
+        VersionedRecordIterator<String> secondIterator = null;
+        final long secondTime;
+        try {
+            try (final VersionedRecordIterator<String> iterator = first.getResult()) {
+                final long oldestTimestamp = mockTime.milliseconds();
+                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                mockTime.sleep(100);
+
+                // open a second iterator before closing the first to test that we still produce the first iterator's timestamp
+                final QueryResult<VersionedRecordIterator<String>> second = store.query(query, bound, config);
+                secondIterator = second.getResult();
+                secondTime = mockTime.milliseconds();
+
+                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                mockTime.sleep(100);
+            }
+
+            // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
+            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTime));
+        } finally {
+            if (secondIterator != null) {
+                secondIterator.close();
+            }
+        }
+
+        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
     }
 
     private KafkaMetric getMetric(final String name) {

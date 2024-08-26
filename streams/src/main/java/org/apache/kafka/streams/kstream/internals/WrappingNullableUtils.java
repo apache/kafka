@@ -33,22 +33,19 @@ public class WrappingNullableUtils {
         final Deserializer<T> deserializerToUse;
 
         if (specificDeserializer == null) {
-            final Deserializer<?> contextKeyDeserializer = context.keySerde().deserializer();
-            final Deserializer<?> contextValueDeserializer = context.valueSerde().deserializer();
-            deserializerToUse = (Deserializer<T>) (isKey ? contextKeyDeserializer : contextValueDeserializer);
+            deserializerToUse = (Deserializer<T>) (isKey ? context.keySerde().deserializer() : context.valueSerde().deserializer());
         } else {
             deserializerToUse = specificDeserializer;
             initNullableDeserializer(deserializerToUse, new SerdeGetter(context));
         }
         return deserializerToUse;
     }
+
     @SuppressWarnings("unchecked")
     private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final ProcessorContext context, final boolean isKey, final String name) {
         final Serializer<T> serializerToUse;
         if (specificSerializer == null) {
-            final Serializer<?> contextKeySerializer = context.keySerde().serializer();
-            final Serializer<?> contextValueSerializer = context.valueSerde().serializer();
-            serializerToUse = (Serializer<T>) (isKey ? contextKeySerializer : contextValueSerializer);
+            serializerToUse = (Serializer<T>) (isKey ? context.keySerde().serializer() : context.valueSerde().serializer());
         } else {
             serializerToUse = specificSerializer;
             initNullableSerializer(serializerToUse, new SerdeGetter(context));
@@ -60,7 +57,7 @@ public class WrappingNullableUtils {
     private static <T> Serde<T> prepareSerde(final Serde<T> specificSerde, final SerdeGetter getter, final boolean isKey) {
         final Serde<T> serdeToUse;
         if (specificSerde == null) {
-            serdeToUse = (Serde<T>) (isKey ?  getter.keySerde() : getter.valueSerde());
+            serdeToUse = (Serde<T>) (isKey ? getter.keySerde() : getter.valueSerde());
         } else {
             serdeToUse = specificSerde;
         }
@@ -93,12 +90,14 @@ public class WrappingNullableUtils {
     public static <V> Serde<V> prepareValueSerde(final Serde<V> specificSerde, final SerdeGetter getter) {
         return prepareSerde(specificSerde, getter, false);
     }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static <T> void initNullableSerializer(final Serializer<T> specificSerializer, final SerdeGetter getter) {
         if (specificSerializer instanceof WrappingNullableSerializer) {
             ((WrappingNullableSerializer) specificSerializer).setIfUnset(getter);
         }
     }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static <T> void initNullableDeserializer(final Deserializer<T> specificDeserializer, final SerdeGetter getter) {
         if (specificDeserializer instanceof WrappingNullableDeserializer) {

@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -43,8 +44,17 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemorySessionStore;
+import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
+import org.apache.kafka.streams.state.internals.RocksDBStore;
+import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
@@ -52,9 +62,10 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -66,21 +77,20 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
-
-import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(600)
 public class StreamsBuilderTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final String STREAM_TOPIC = "stream-topic";
 
@@ -92,7 +102,12 @@ public class StreamsBuilderTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
 
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    @BeforeEach
+    public void before() {
+        props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    }
 
     @Test
     public void shouldAddGlobalStore() {
@@ -391,6 +406,218 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldUseDslStoreSupplierDefinedInMaterialized() {
+        final String topic = "topic";
+        builder.stream(topic)
+                .groupByKey()
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store")
+                        .withStoreType(BuiltInDslStoreSuppliers.IN_MEMORY))
+                .toStream();
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedInMaterializedOverTopologyOverrides() {
+        final String topic = "topic";
+
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store")
+                        .withStoreType(BuiltInDslStoreSuppliers.IN_MEMORY))
+                .toStream();
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldUseDslStoreSupplierOverStoreType() {
+        final String topic = "topic";
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.ROCKS_DB);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store"))
+                .toStream();
+
+        builder.build();
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldUseTopologyOverrideStoreTypeOverConfiguredDslStoreSupplier() {
+        final String topic = "topic";
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store"))
+                .toStream();
+
+        builder.build();
+
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedConfiguredInStreamsConfig() {
+        final String topic = "topic";
+        builder.stream(topic)
+                .groupByKey()
+                .count()
+                .toStream();
+
+        builder.build();
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedConfiguredInTopologyConfigOverStreamsConfig() {
+        final String topic = "topic";
+
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .count()
+                .toStream();
+
+        builder.build();
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedInMaterializedForWindowedOperation() {
+        final String topic = "topic";
+        builder.stream(topic)
+                .groupByKey()
+                .windowedBy(JoinWindows.ofTimeDifferenceAndGrace(Duration.ofHours(1), Duration.ZERO))
+                .count(Materialized.<Object, Long, WindowStore<Bytes, byte[]>>as("store")
+                        .withStoreType(BuiltInDslStoreSuppliers.IN_MEMORY))
+                .toStream();
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryWindowStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedConfiguredInStreamsConfigForWindowedOperation() {
+        final String topic = "topic";
+        builder.stream(topic)
+                .groupByKey()
+                .windowedBy(JoinWindows.ofTimeDifferenceAndGrace(Duration.ofHours(1), Duration.ZERO))
+                .count()
+                .toStream();
+
+        builder.build();
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryWindowStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedConfiguredInTopologyConfigOverStreamsConfigForWindowedOperation() {
+        final String topic = "topic";
+
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .windowedBy(JoinWindows.ofTimeDifferenceAndGrace(Duration.ofHours(1), Duration.ZERO))
+                .count()
+                .toStream();
+
+        builder.build();
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryWindowStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedInMaterializedForSessionWindowedOperation() {
+        final String topic = "topic";
+        builder.stream(topic)
+                .groupByKey()
+                .windowedBy(SessionWindows.ofInactivityGapAndGrace(Duration.ofHours(1), Duration.ZERO))
+                .count(Materialized.<Object, Long, SessionStore<Bytes, byte[]>>as("store")
+                        .withStoreType(BuiltInDslStoreSuppliers.IN_MEMORY))
+                .toStream();
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemorySessionStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedConfiguredInStreamsConfigForSessionWindowedOperation() {
+        final String topic = "topic";
+        builder.stream(topic)
+                .groupByKey()
+                .windowedBy(SessionWindows.ofInactivityGapAndGrace(Duration.ofHours(1), Duration.ZERO))
+                .count()
+                .toStream();
+
+        builder.build();
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemorySessionStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedConfiguredInTopologyConfigOverStreamsConfigForSessionWindowedOperation() {
+        final String topic = "topic";
+
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .windowedBy(SessionWindows.ofInactivityGapAndGrace(Duration.ofHours(1), Duration.ZERO))
+                .count()
+                .toStream();
+
+        builder.build();
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemorySessionStore.class);
+    }
+
+    @Test
     public void shouldUseSerdesDefinedInMaterializedToConsumeTable() {
         final Map<Long, String> results = new HashMap<>();
         final String topic = "topic";
@@ -668,21 +895,6 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "deprecation"})
-    public void shouldUseSpecifiedNameForBranchOperation() {
-        builder.stream(STREAM_TOPIC)
-               .branch(Named.as("branch-processor"), (k, v) -> true, (k, v) -> false);
-
-        builder.build();
-        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
-        assertNamesForOperation(topology,
-                                "KSTREAM-SOURCE-0000000000",
-                                "branch-processor",
-                                "branch-processor-predicate-0",
-                                "branch-processor-predicate-1");
-    }
-
-    @Test
     public void shouldUseSpecifiedNameForSplitOperation() {
         builder.stream(STREAM_TOPIC)
                 .split(Named.as("branch-processor"))
@@ -933,6 +1145,184 @@ public class StreamsBuilderTest {
                                 STREAM_OPERATION_NAME + "-merge");
     }
 
+    @Test
+    public void shouldUseSpecifiedDslStoreSuppliersForAllOuterJoinOperationBetweenKStreamAndKStream() {
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        streamOne.outerJoin(
+                streamTwo,
+                (value1, value2) -> value1,
+                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1)),
+                StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                        .withName(STREAM_OPERATION_NAME)
+                        .withDslStoreSuppliers(BuiltInDslStoreSuppliers.IN_MEMORY)
+        );
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(),
+                InMemoryWindowStore.class,
+                InMemoryWindowStore.class,
+                InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseConfiguredInStreamsConfigIfNoTopologyOverrideDslStoreSuppliersForAllOuterJoinOperationBetweenKStreamAndKStream() {
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        streamOne.outerJoin(
+                streamTwo,
+                (value1, value2) -> value1,
+                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1)),
+                StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                        .withName(STREAM_OPERATION_NAME)
+        );
+
+        builder.build();
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(),
+                InMemoryWindowStore.class,
+                InMemoryWindowStore.class,
+                InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseConfiguredTopologyOverrideDslStoreSuppliersForAllOuterJoinOperationBetweenKStreamAndKStream() {
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        streamOne.outerJoin(
+                streamTwo,
+                (value1, value2) -> value1,
+                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1)),
+                StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                        .withName(STREAM_OPERATION_NAME)
+        );
+
+        builder.build();
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(),
+                InMemoryWindowStore.class,
+                InMemoryWindowStore.class,
+                InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseSpecifiedStoreSupplierForEachOuterJoinOperationBetweenKStreamAndKStreamAndUseSameTypeAsThisSupplierForOuter() {
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        final JoinWindows windows = JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1));
+        streamOne.outerJoin(
+                streamTwo,
+                (value1, value2) -> value1,
+                windows,
+                StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                        .withName(STREAM_OPERATION_NAME)
+                        .withThisStoreSupplier(Stores.inMemoryWindowStore(
+                                "thisSupplier",
+                                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                                Duration.ofMillis(windows.size()),
+                                true
+                        ))
+                        .withOtherStoreSupplier(Stores.persistentWindowStore(
+                                "otherSupplier",
+                                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                                Duration.ofMillis(windows.size()),
+                                true
+                        ))
+        );
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(),
+                InMemoryWindowStore.class,
+                RocksDBWindowStore.class,
+                InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseSpecifiedStoreSuppliersOuterJoinStoreEvenIfThisSupplierIsSupplied() {
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        final JoinWindows windows = JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1));
+        streamOne.outerJoin(
+                streamTwo,
+                (value1, value2) -> value1,
+                windows,
+                StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                        .withName(STREAM_OPERATION_NAME)
+                        .withDslStoreSuppliers(BuiltInDslStoreSuppliers.ROCKS_DB)
+                        .withThisStoreSupplier(Stores.inMemoryWindowStore(
+                                "thisSupplier",
+                                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                                Duration.ofMillis(windows.size()),
+                                true
+                        ))
+                        .withOtherStoreSupplier(Stores.persistentWindowStore(
+                                "otherSupplier",
+                                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                                Duration.ofMillis(windows.size()),
+                                true
+                        ))
+        );
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(),
+                InMemoryWindowStore.class,
+                RocksDBWindowStore.class,
+                RocksDBStore.class);
+    }
+
+    @Test
+    public void shouldUseThisStoreSupplierEvenIfDslStoreSuppliersConfiguredInTopologyConfig() {
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        final JoinWindows windows = JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1));
+        streamOne.outerJoin(
+                streamTwo,
+                (value1, value2) -> value1,
+                windows,
+                StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                        .withName(STREAM_OPERATION_NAME)
+                        .withThisStoreSupplier(Stores.inMemoryWindowStore(
+                                "thisSupplier",
+                                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                                Duration.ofMillis(windows.size()),
+                                true
+                        ))
+                        .withOtherStoreSupplier(Stores.persistentWindowStore(
+                                "otherSupplier",
+                                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                                Duration.ofMillis(windows.size()),
+                                true
+                        ))
+        );
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(),
+                InMemoryWindowStore.class,
+                RocksDBWindowStore.class,
+                InMemoryKeyValueStore.class);
+    }
 
     @Test
     public void shouldUseSpecifiedNameForMergeOperation() {
@@ -1151,16 +1541,27 @@ public class StreamsBuilderTest {
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {
         final List<ProcessorNode<?, ?, ?, ?>> processors = topology.processors();
-        assertEquals("Invalid number of expected processors", expected.length, processors.size());
+        assertEquals(expected.length, processors.size(), "Invalid number of expected processors");
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processors.get(i).name());
         }
     }
 
     private static void assertNamesForStateStore(final List<StateStore> stores, final String... expected) {
-        assertEquals("Invalid number of expected state stores", expected.length, stores.size());
+        assertEquals(expected.length, stores.size(), "Invalid number of expected state stores");
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], stores.get(i).name());
+        }
+    }
+
+    private static void assertTypesForStateStore(final List<StateStore> stores, final Class<?>... expected) {
+        assertEquals(expected.length, stores.size(), "Invalid number of expected state stores");
+        for (int i = 0; i < expected.length; i++) {
+            StateStore store = stores.get(i);
+            while (store instanceof WrappedStateStore && !(expected[i].isInstance(store))) {
+                store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
+            }
+            assertThat(store, instanceOf(expected[i]));
         }
     }
 }

@@ -16,7 +16,7 @@
 
 if [ $# -lt 1 ];
 then
-        echo "USAGE: $0 [-daemon] connect-standalone.properties"
+        echo "USAGE: $0 [-daemon] connect-standalone.properties [connector1.properties connector2.json ...]"
         exit 1
 fi
 

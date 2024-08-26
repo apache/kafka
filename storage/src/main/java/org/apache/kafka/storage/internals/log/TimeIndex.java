@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.errors.InvalidOffsetException;
 import org.apache.kafka.common.record.RecordBatch;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +61,7 @@ public class TimeIndex extends AbstractIndex {
         this(file, baseOffset, maxIndexSize, true);
     }
 
+    @SuppressWarnings("this-escape")
     public TimeIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
         super(file, baseOffset, maxIndexSize, writable);
 

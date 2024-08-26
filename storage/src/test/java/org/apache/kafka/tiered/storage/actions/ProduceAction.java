@@ -39,15 +39,18 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.tieredStorageRecords;
 import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.tieredStorageRecords;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public final class ProduceAction implements TieredStorageTestAction {
 
-    // How much time to wait for all remote log segments of a topic-partition to be offloaded
-    // to the second-tier storage.
-    private static final int OFFLOAD_WAIT_TIMEOUT_SEC = 20;
+    /**
+     * How much time to wait for all remote log segments of a topic-partition to be offloaded to the second-tier storage.
+     * This timeout should exceed the {@link org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils#STORAGE_WAIT_TIMEOUT_SEC}
+     * so that the test can verify that the active segment gets rolled and offloaded to the remote storage.
+     */
+    private static final int OFFLOAD_WAIT_TIMEOUT_SEC = 10;
 
     private final TopicPartition topicPartition;
     private final List<OffloadedSegmentSpec> offloadedSegmentSpecs;
@@ -80,6 +83,7 @@ public final class ProduceAction implements TieredStorageTestAction {
                         COPY_SEGMENT,
                         spec.getSourceBrokerId(),
                         spec.getTopicPartition(),
+                        spec.getBaseOffset(),
                         false))
                 .collect(Collectors.toList());
 

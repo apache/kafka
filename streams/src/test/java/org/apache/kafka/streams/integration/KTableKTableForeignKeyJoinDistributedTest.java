@@ -26,21 +26,22 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.ThreadMetadata;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -126,8 +127,7 @@ public class KTableKTableForeignKeyJoinDistributedTest {
         quietlyCleanStateAfterTest(CLUSTER, client2);
     }
 
-    public Properties getStreamsConfiguration(final TestInfo testInfo) {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+    public Properties getStreamsConfiguration(final String safeTestName) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -158,8 +158,9 @@ public class KTableKTableForeignKeyJoinDistributedTest {
 
     @Test
     public void shouldBeInitializedWithDefaultSerde(final TestInfo testInfo) throws Exception {
-        final Properties streamsConfiguration1 = getStreamsConfiguration(testInfo);
-        final Properties streamsConfiguration2 = getStreamsConfiguration(testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
+        final Properties streamsConfiguration1 = getStreamsConfiguration(safeTestName);
+        final Properties streamsConfiguration2 = getStreamsConfiguration(safeTestName);
 
         //Each streams client needs to have it's own StreamsBuilder in order to simulate
         //a truly distributed run

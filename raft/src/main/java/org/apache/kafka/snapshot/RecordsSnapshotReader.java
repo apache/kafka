@@ -17,9 +17,6 @@
 
 package org.apache.kafka.snapshot;
 
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.OptionalLong;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -27,6 +24,10 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.RecordsIterator;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.OptionalLong;
 
 public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;
@@ -64,8 +65,13 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
             nextBatch.ifPresent(batch -> {
                 throw new IllegalStateException(
                     String.format(
-                        "nextBatch was present when last contained log timestamp was not present",
-                        batch
+                        "nextBatch was present when last contained log timestamp was not present: Batch(baseOffset=%d" +
+                        ", epoch=%d, appendTimestamp=%d, sizeInBytes=%d, lastOffset=%d)",
+                        batch.baseOffset(),
+                        batch.epoch(),
+                        batch.appendTimestamp(),
+                        batch.sizeInBytes(),
+                        batch.lastOffset()
                     )
                 );
             });
@@ -115,18 +121,20 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     }
 
     /**
-     * Returns the next non-control Batch
+     * Returns the next batch
      */
     private Optional<Batch<T>> nextBatch() {
-        while (iterator.hasNext()) {
+        if (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
             if (!lastContainedLogTimestamp.isPresent()) {
-                // This must be the first batch which is expected to be a control batch with one record for
+                // This must be the first batch which is expected to be a control batch with at least one record for
                 // the snapshot header.
                 if (batch.controlRecords().isEmpty()) {
-                    throw new IllegalStateException("First batch is not a control batch with at least one record");
-                } else if (!ControlRecordType.SNAPSHOT_HEADER.equals(batch.controlRecords().get(0).type())) {
+                    throw new IllegalStateException(
+                        "First batch is not a control batch with at least one record"
+                    );
+                } else if (ControlRecordType.SNAPSHOT_HEADER != batch.controlRecords().get(0).type()) {
                     throw new IllegalStateException(
                         String.format(
                             "First control record is not a snapshot header (%s)",
@@ -140,9 +148,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
                 );
             }
 
-            if (!batch.records().isEmpty()) {
-                return Optional.of(batch);
-            }
+            return Optional.of(batch);
         }
 
         return Optional.empty();

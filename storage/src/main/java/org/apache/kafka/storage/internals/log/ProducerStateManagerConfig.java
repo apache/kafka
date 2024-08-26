@@ -16,15 +16,9 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import java.util.Collections;
-import java.util.Set;
-
 public class ProducerStateManagerConfig {
-    public static final String PRODUCER_ID_EXPIRATION_MS = "producer.id.expiration.ms";
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Collections.singleton(PRODUCER_ID_EXPIRATION_MS);
-
     private volatile int producerIdExpirationMs;
-    private boolean transactionVerificationEnabled;
+    private volatile boolean transactionVerificationEnabled;
 
     public ProducerStateManagerConfig(int producerIdExpirationMs, boolean transactionVerificationEnabled) {
         this.producerIdExpirationMs = producerIdExpirationMs;
@@ -33,6 +27,10 @@ public class ProducerStateManagerConfig {
 
     public void setProducerIdExpirationMs(int producerIdExpirationMs) {
         this.producerIdExpirationMs = producerIdExpirationMs;
+    }
+
+    public void setTransactionVerificationEnabled(boolean transactionVerificationEnabled) {
+        this.transactionVerificationEnabled = transactionVerificationEnabled;
     }
 
     public int producerIdExpirationMs() {

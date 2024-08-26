@@ -16,15 +16,15 @@
  */
 package kafka.migration
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelContext, ControllerChannelManager, ReplicaAssignment, StateChangeLogger}
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.requests.AbstractControlRequest
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, TopicsImage}
-import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.{LeaderAndIsr, PartitionRegistration}
 import org.apache.kafka.metadata.migration.LegacyPropagator
 
 import java.util
@@ -65,7 +65,7 @@ class MigrationPropagator(
     stateChangeLogger
   )
 
-  val requestBatch = new MigrationPropagatorBatch(
+  private val requestBatch = new MigrationPropagatorBatch(
     config,
     metadataProvider,
     () => _image.features().metadataVersion(),
@@ -102,11 +102,11 @@ class MigrationPropagator(
    * A very expensive function that creates a map with an entry for every partition that exists, from
    * (topic name, partition index) to partition registration.
    */
-  def materializePartitions(topicsImage: TopicsImage): util.Map[TopicPartition, PartitionRegistration] = {
+  private def materializePartitions(topicsImage: TopicsImage): util.Map[TopicPartition, PartitionRegistration] = {
     val result = new util.HashMap[TopicPartition, PartitionRegistration]()
-    topicsImage.topicsById().values().forEach(topic => {
-      topic.partitions().forEach((key, value) => result.put(new TopicPartition(topic.name(), key), value));
-    })
+    topicsImage.topicsById().values().forEach(topic =>
+      topic.partitions().forEach((key, value) => result.put(new TopicPartition(topic.name(), key), value))
+    )
     result
   }
 
@@ -137,6 +137,7 @@ class MigrationPropagator(
     }
     requestBatch.sendRequestsToBrokers(zkControllerEpoch)
     requestBatch.newBatch()
+    requestBatch.setUpdateType(AbstractControlRequest.Type.INCREMENTAL)
 
     // Now send LISR, UMR and StopReplica requests for both new zk brokers and existing zk
     // brokers based on the topic changes.
@@ -172,11 +173,11 @@ class MigrationPropagator(
         val offlineReplicas = partitionRegistration.replicas.filter {
           MigrationControllerChannelContext.isReplicaOnline(image, _, partitionRegistration.replicas.toSet)
         }
-        val deletedLeaderAndIsr = LeaderAndIsr.duringDelete(partitionRegistration.isr.toList)
+        val deletedLeaderAndIsr = LeaderAndIsr.duringDelete(partitionRegistration.isr.toList.map(Integer.valueOf).asJava)
         requestBatch.addStopReplicaRequestForBrokers(partitionRegistration.replicas, tp, deletePartition = true)
         requestBatch.addUpdateMetadataRequestForBrokers(
           oldZkBrokers.toSeq, zkControllerEpoch, tp, deletedLeaderAndIsr.leader, deletedLeaderAndIsr.leaderEpoch,
-          deletedLeaderAndIsr.partitionEpoch, deletedLeaderAndIsr.isr, partitionRegistration.replicas, offlineReplicas)
+          deletedLeaderAndIsr.partitionEpoch, deletedLeaderAndIsr.isr.asScala.map(_.intValue()).toList, partitionRegistration.replicas, offlineReplicas)
       }
     }
 
@@ -205,7 +206,7 @@ class MigrationPropagator(
         val newReplicas = partitionRegistration.replicas.toSet
         val removedReplicas = oldReplicas -- newReplicas
         if (removedReplicas.nonEmpty) {
-          requestBatch.addStopReplicaRequestForBrokers(removedReplicas.toSeq, tp, deletePartition = false)
+          requestBatch.addStopReplicaRequestForBrokers(removedReplicas.toSeq, tp, deletePartition = true)
         }
       }
     }
@@ -225,6 +226,7 @@ class MigrationPropagator(
     requestBatch.sendRequestsToBrokers(zkControllerEpoch)
 
     requestBatch.newBatch()
+    requestBatch.setUpdateType(AbstractControlRequest.Type.FULL)
     // When we need to send RPCs from the image, we're sending 'full' requests meaning we let
     // every broker know about all the metadata and all the LISR requests it needs to handle.
     // Note that we cannot send StopReplica requests from the image. We don't have any state

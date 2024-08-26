@@ -31,14 +31,17 @@ import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
-import org.apache.kafka.common.message.AlterPartitionRequestData;
-import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.AlterPartitionRequestData;
+import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -71,14 +74,15 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
-import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -91,20 +95,21 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.errors.ControllerExceptions;
 import org.apache.kafka.controller.errors.EventHandlerExceptionInfo;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
+import org.apache.kafka.deferred.DeferredEvent;
+import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.metadata.migration.ZkRecordConsumer;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.util.RecordRedactor;
-import org.apache.kafka.deferred.DeferredEventQueue;
-import org.apache.kafka.deferred.DeferredEvent;
-import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
+import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
@@ -114,6 +119,7 @@ import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -122,17 +128,18 @@ import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -147,7 +154,6 @@ import java.util.function.Supplier;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
-import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.COMPLETES_IN_TRANSACTION;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 
 
@@ -175,19 +181,19 @@ public final class QuorumController implements Controller {
     /**
      * The maximum records that the controller will write in a single batch.
      */
-    private final static int MAX_RECORDS_PER_BATCH = 10000;
+    private static final int MAX_RECORDS_PER_BATCH = 10000;
 
     /**
      * The maximum records any user-initiated operation is allowed to generate.
      *
      * For now, this is set to the maximum records in a single batch.
      */
-    final static int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
+    static final int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
 
     /**
      * A builder class which creates the QuorumController.
      */
-    static public class Builder {
+    public static class Builder {
         private final int nodeId;
         private final String clusterId;
         private FaultHandler nonFatalFaultHandler = null;
@@ -200,6 +206,7 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
+        private int defaultMinIsr = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
@@ -212,6 +219,7 @@ public final class QuorumController implements Controller {
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
         private boolean zkMigrationEnabled = false;
+        private boolean eligibleLeaderReplicasEnabled = false;
         private DelegationTokenCache tokenCache;
         private String tokenSecretKeyString;
         private long delegationTokenMaxLifeMs;
@@ -277,6 +285,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setDefaultMinIsr(int defaultMinIsr) {
+            this.defaultMinIsr = defaultMinIsr;
+            return this;
+        }
+
         public Builder setReplicaPlacer(ReplicaPlacer replicaPlacer) {
             this.replicaPlacer = replicaPlacer;
             return this;
@@ -337,6 +350,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
+            this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+            return this;
+        }
+
         public Builder setDelegationTokenCache(DelegationTokenCache tokenCache) {
             this.tokenCache = tokenCache;
             return this;
@@ -362,7 +380,6 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
@@ -402,6 +419,7 @@ public final class QuorumController implements Controller {
                     quorumFeatures,
                     defaultReplicationFactor,
                     defaultNumPartitions,
+                    defaultMinIsr,
                     replicaPlacer,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
@@ -418,7 +436,8 @@ public final class QuorumController implements Controller {
                     tokenSecretKeyString,
                     delegationTokenMaxLifeMs,
                     delegationTokenExpiryTimeMs,
-                    delegationTokenExpiryCheckIntervalMs
+                    delegationTokenExpiryCheckIntervalMs,
+                    eligibleLeaderReplicasEnabled
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -469,7 +488,17 @@ public final class QuorumController implements Controller {
         }
     }
 
-    public static final String CONTROLLER_THREAD_SUFFIX = "QuorumControllerEventHandler";
+    class QuorumClusterFeatureSupportDescriber implements ClusterFeatureSupportDescriber {
+        @Override
+        public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
+            return clusterControl.brokerSupportedFeatures();
+        }
+
+        @Override
+        public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
+            return clusterControl.controllerSupportedFeatures();
+        }
+    }
 
     private OptionalInt latestController() {
         return raftClient.leaderAndEpoch().leaderId();
@@ -584,7 +613,7 @@ public final class QuorumController implements Controller {
 
         ControllerReadEvent(String name, Supplier<T> handler) {
             this.name = name;
-            this.future = new CompletableFuture<T>();
+            this.future = new CompletableFuture<>();
             this.handler = handler;
         }
 
@@ -647,7 +676,7 @@ public final class QuorumController implements Controller {
         OptionalLong deadlineNs,
         Supplier<T> handler
     ) {
-        ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
+        ControllerReadEvent<T> event = new ControllerReadEvent<>(name, handler);
         if (deadlineNs.isPresent()) {
             queue.appendWithDeadline(deadlineNs.getAsLong(), event);
         } else {
@@ -668,21 +697,16 @@ public final class QuorumController implements Controller {
          * Operations without this flag will always return NOT_CONTROLLER when invoked in premigration
          * mode.
          * <p>
-         * In pre-migration mode, we are still waiting to load the metadata from Apache
-         * ZooKeeper into the metadata log. Therefore, the metadata log is mostly empty,
-         * even though the cluster really does have metadata. Very few operations should
-         * use this flag.
+         * In pre-migration mode, we are still waiting to load the metadata from Apache ZooKeeper into
+         * the metadata log. Therefore, the metadata log is mostly empty, even though the cluster really
+         * does have metadata
+         * <p>
+         * Events using this flag will be completed even if a transaction is ongoing. Pre-migration
+         * events will be completed using the unstable (committed) offset rather than the stable offset.
+         * <p>
+         * In practice, very few operations should use this flag.
          */
-        RUNS_IN_PREMIGRATION,
-
-        /**
-         * This flag signifies that an event will be completed even if it is part of an unfinished transaction.
-         * This is needed for metadata transactions so that external callers can add records to a transaction
-         * and still use the returned future. One example usage of this flag is the batches of migrations records.
-         * The migration driver needs to wait on each submitted batch to avoid overwhelming the controller queue
-         * with events, so it needs events to be completed based on the committed (i.e., not stable) offset.
-         */
-        COMPLETES_IN_TRANSACTION
+        RUNS_IN_PREMIGRATION
     }
 
     interface ControllerWriteOperation<T> {
@@ -732,7 +756,7 @@ public final class QuorumController implements Controller {
             EnumSet<ControllerOperationFlag> flags
         ) {
             this.name = name;
-            this.future = new CompletableFuture<T>();
+            this.future = new CompletableFuture<>();
             this.op = op;
             this.flags = flags;
             this.resultAndOffset = null;
@@ -763,7 +787,14 @@ public final class QuorumController implements Controller {
                 // If the operation did not return any records, then it was actually just
                 // a read after all, and not a read + write.  However, this read was done
                 // from the latest in-memory state, which might contain uncommitted data.
-                OptionalLong maybeOffset = deferredEventQueue.highestPendingOffset();
+                // If the operation can complete within a transaction, let it use the
+                // unstable purgatory so that it can complete sooner.
+                OptionalLong maybeOffset;
+                if (featureControl.inPreMigrationMode() && flags.contains(RUNS_IN_PREMIGRATION)) {
+                    maybeOffset = deferredUnstableEventQueue.highestPendingOffset();
+                } else {
+                    maybeOffset = deferredEventQueue.highestPendingOffset();
+                }
                 if (!maybeOffset.isPresent()) {
                     // If the purgatory is empty, there are no pending operations and no
                     // uncommitted state.  We can complete immediately.
@@ -782,36 +813,32 @@ public final class QuorumController implements Controller {
                 // Pass the records to the Raft layer. This will start the process of committing
                 // them to the log.
                 long offset = appendRecords(log, result, maxRecordsPerBatch,
-                    new Function<List<ApiMessageAndVersion>, Long>() {
-                        @Override
-                        public Long apply(List<ApiMessageAndVersion> records) {
-                            // Start by trying to apply the record to our in-memory state. This should always
-                            // succeed; if it does not, that's a fatal error. It is important to do this before
-                            // scheduling the record for Raft replication.
-                            int recordIndex = 0;
-                            long nextWriteOffset = offsetControl.nextWriteOffset();
-                            for (ApiMessageAndVersion message : records) {
-                                long recordOffset = nextWriteOffset + recordIndex;
-                                try {
-                                    replay(message.message(), Optional.empty(), recordOffset);
-                                } catch (Throwable e) {
-                                    String failureMessage = String.format("Unable to apply %s " +
-                                        "record at offset %d on active controller, from the " +
-                                        "batch with baseOffset %d",
-                                        message.message().getClass().getSimpleName(),
-                                        recordOffset, nextWriteOffset);
-                                    throw fatalFaultHandler.handleFault(failureMessage, e);
-                                }
-                                recordIndex++;
+                    records -> {
+                        // Start by trying to apply the record to our in-memory state. This should always
+                        // succeed; if it does not, that's a fatal error. It is important to do this before
+                        // scheduling the record for Raft replication.
+                        int recordIndex = 0;
+                        long lastOffset = raftClient.prepareAppend(controllerEpoch, records);
+                        long baseOffset = lastOffset - records.size() + 1;
+                        for (ApiMessageAndVersion message : records) {
+                            long recordOffset = baseOffset + recordIndex;
+                            try {
+                                replay(message.message(), Optional.empty(), recordOffset);
+                            } catch (Throwable e) {
+                                String failureMessage = String.format("Unable to apply %s " +
+                                    "record at offset %d on active controller, from the " +
+                                    "batch with baseOffset %d",
+                                    message.message().getClass().getSimpleName(),
+                                    recordOffset, baseOffset);
+                                throw fatalFaultHandler.handleFault(failureMessage, e);
                             }
-                            long nextEndOffset = nextWriteOffset - 1 + recordIndex;
-                            raftClient.scheduleAtomicAppend(controllerEpoch,
-                                OptionalLong.of(nextWriteOffset),
-                                records);
-                            offsetControl.handleScheduleAtomicAppend(nextEndOffset);
-                            return nextEndOffset;
+                            recordIndex++;
                         }
-                    });
+                        raftClient.schedulePreparedAppend();
+                        offsetControl.handleScheduleAppend(lastOffset);
+                        return lastOffset;
+                    }
+                );
                 op.processBatchEndOffset(offset);
                 resultAndOffset = ControllerResultAndOffset.of(offset, result);
 
@@ -825,7 +852,7 @@ public final class QuorumController implements Controller {
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
-                if (flags.contains(COMPLETES_IN_TRANSACTION)) {
+                if (featureControl.inPreMigrationMode() && flags.contains(RUNS_IN_PREMIGRATION)) {
                     deferredUnstableEventQueue.add(resultAndOffset.offset(), this);
                 } else {
                     deferredEventQueue.add(resultAndOffset.offset(), this);
@@ -945,9 +972,7 @@ public final class QuorumController implements Controller {
     }
 
     class MigrationRecordConsumer implements ZkRecordConsumer {
-        private final EnumSet<ControllerOperationFlag> eventFlags = EnumSet.of(
-            RUNS_IN_PREMIGRATION, COMPLETES_IN_TRANSACTION
-        );
+        private final EnumSet<ControllerOperationFlag> eventFlags = EnumSet.of(RUNS_IN_PREMIGRATION);
 
         private volatile OffsetAndEpoch highestMigrationRecordOffset;
 
@@ -1297,7 +1322,7 @@ public final class QuorumController implements Controller {
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
-            EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME, RUNS_IN_PREMIGRATION));
+            EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME));
     }
 
     private void cancelMaybeFenceReplicas() {
@@ -1379,7 +1404,7 @@ public final class QuorumController implements Controller {
                     maybeScheduleNextWriteNoOpRecord();
 
                     return ControllerResult.of(
-                        Arrays.asList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
+                        Collections.singletonList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
                         null
                     );
                 },
@@ -1404,7 +1429,7 @@ public final class QuorumController implements Controller {
             delegationTokenControlManager.isEnabled()) {
 
             log.debug(
-                "Scheduling write event for {} because DelegationTokens are enabled.", 
+                "Scheduling write event for {} because DelegationTokens are enabled.",
                 SWEEP_EXPIRED_DELEGATION_TOKENS
             );
 
@@ -1419,7 +1444,7 @@ public final class QuorumController implements Controller {
                 EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME)
             );
 
-            long delayNs = time.nanoseconds() + 
+            long delayNs = time.nanoseconds() +
                 NANOSECONDS.convert(delegationTokenExpiryCheckIntervalMs, TimeUnit.MILLISECONDS);
             queue.scheduleDeferred(SWEEP_EXPIRED_DELEGATION_TOKENS,
                 new EarliestDeadlineFunction(delayNs), event);
@@ -1532,6 +1557,9 @@ public final class QuorumController implements Controller {
             case ABORT_TRANSACTION_RECORD:
                 offsetControl.replay((AbortTransactionRecord) message, offset);
                 break;
+            case REGISTER_CONTROLLER_RECORD:
+                clusterControl.replay((RegisterControllerRecord) message);
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1619,6 +1647,11 @@ public final class QuorumController implements Controller {
     private final ClientQuotaControlManager clientQuotaControlManager;
 
     /**
+     * Describes the feature versions in the cluster.
+     */
+    private final QuorumClusterFeatureSupportDescriber clusterSupportDescriber;
+
+    /**
      * An object which stores the controller's view of the cluster.
      * This must be accessed only by the event queue thread.
      */
@@ -1676,7 +1709,7 @@ public final class QuorumController implements Controller {
      * from this callbacks need to compare against this value to verify that the event
      * was not from a previous registration.
      */
-    private QuorumMetaLogListener metaLogListener;
+    private final QuorumMetaLogListener metaLogListener;
 
     /**
      * If this controller is active, this is the non-negative controller epoch.
@@ -1723,6 +1756,8 @@ public final class QuorumController implements Controller {
 
     private final boolean zkMigrationEnabled;
 
+    private final boolean eligibleLeaderReplicasEnabled;
+
     /**
      * The maximum number of records per batch to allow.
      */
@@ -1746,6 +1781,7 @@ public final class QuorumController implements Controller {
         QuorumFeatures quorumFeatures,
         short defaultReplicationFactor,
         int defaultNumPartitions,
+        int defaultMinIsr,
         ReplicaPlacer replicaPlacer,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
@@ -1762,7 +1798,8 @@ public final class QuorumController implements Controller {
         String tokenSecretKeyString,
         long delegationTokenMaxLifeMs,
         long delegationTokenExpiryTimeMs,
-        long delegationTokenExpiryCheckIntervalMs
+        long delegationTokenExpiryCheckIntervalMs,
+        boolean eligibleLeaderReplicasEnabled
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1796,6 +1833,7 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
+        this.clusterSupportDescriber = new QuorumClusterFeatureSupportDescriber();
         this.featureControl = new FeatureControlManager.Builder().
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
@@ -1806,6 +1844,7 @@ public final class QuorumController implements Controller {
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
+            setClusterFeatureSupportDescriber(clusterSupportDescriber).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -1816,6 +1855,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
             setZkMigrationEnabled(zkMigrationEnabled).
+            setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
@@ -1829,6 +1869,8 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
+            setDefaultMinIsr(defaultMinIsr).
+            setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
             setClusterControl(clusterControl).
@@ -1862,9 +1904,11 @@ public final class QuorumController implements Controller {
         this.zkRecordConsumer = new MigrationRecordConsumer();
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.recordRedactor = new RecordRedactor(configSchema);
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
 
-        log.info("Creating new QuorumController with clusterId {}.{}",
-                clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "");
+        log.info("Creating new QuorumController with clusterId {}.{}{}",
+            clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "",
+            eligibleLeaderReplicasEnabled ? " Eligible leader replicas enabled." : "");
 
         this.raftClient.register(metaLogListener);
     }
@@ -2128,11 +2172,14 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerRegistrationRequestData request
     ) {
+        // populate finalized features map with latest known kraft version for validation
+        Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+        controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
         return appendWriteEvent("registerBroker", context.deadlineNs(),
             () -> {
                 ControllerResult<BrokerRegistrationReply> result = clusterControl.
-                    registerBroker(request, offsetControl.nextWriteOffset(), featureControl.
-                        finalizedFeatures(Long.MAX_VALUE));
+                    registerBroker(request, offsetControl.nextWriteOffset(),
+                        new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE));
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
@@ -2184,8 +2231,7 @@ public final class QuorumController implements Controller {
                 upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            return featureControl.updateFeatures(updates, upgradeTypes, clusterControl.brokerSupportedVersions(),
-                request.validateOnly());
+            return featureControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
@@ -2222,6 +2268,16 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<Void> registerController(
+        ControllerRequestContext context,
+        ControllerRegistrationRequestData request
+    ) {
+        return appendWriteEvent("registerController", context.deadlineNs(),
+            () -> clusterControl.registerController(request),
+            EnumSet.of(RUNS_IN_PREMIGRATION));
+    }
+
+    @Override
     public CompletableFuture<List<AclCreateResult>> createAcls(
         ControllerRequestContext context,
         List<AclBinding> aclBindings
@@ -2237,6 +2293,15 @@ public final class QuorumController implements Controller {
     ) {
         return appendWriteEvent("deleteAcls", context.deadlineNs(),
             () -> aclControlManager.deleteAcls(filters));
+    }
+
+    @Override
+    public CompletableFuture<AssignReplicasToDirsResponseData> assignReplicasToDirs(
+        ControllerRequestContext context,
+        AssignReplicasToDirsRequestData request
+    ) {
+        return appendWriteEvent("assignReplicasToDirs", context.deadlineNs(),
+                () -> replicationControl.handleAssignReplicasToDirs(request));
     }
 
     @Override
@@ -2282,10 +2347,7 @@ public final class QuorumController implements Controller {
         return controllerMetrics;
     }
 
-    // VisibleForTesting
-    void setNewNextWriteOffset(long newNextWriteOffset) {
-        appendControlEvent("setNewNextWriteOffset", () -> {
-            offsetControl.setNextWriteOffset(newNextWriteOffset);
-        });
+    void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
+        replicationControl.handleBrokerUncleanShutdown(brokerId, records);
     }
 }

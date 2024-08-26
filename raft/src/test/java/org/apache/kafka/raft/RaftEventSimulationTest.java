@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.raft;
 
-import net.jqwik.api.AfterFailureMode;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.Tag;
-import net.jqwik.api.constraints.IntRange;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
@@ -37,14 +35,22 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+
+import net.jqwik.api.AfterFailureMode;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.Tag;
+import net.jqwik.api.constraints.IntRange;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -188,7 +194,7 @@ public class RaftEventSimulationTest {
         // they are able to elect a leader and continue making progress
         cluster.killAll();
 
-        Iterator<Integer> nodeIdsIterator = cluster.nodes().iterator();
+        Iterator<Integer> nodeIdsIterator = cluster.nodeIds().iterator();
         for (int i = 0; i < cluster.majoritySize(); i++) {
             Integer nodeId = nodeIdsIterator.next();
             cluster.start(nodeId);
@@ -223,7 +229,7 @@ public class RaftEventSimulationTest {
         );
         router.filter(leaderId, new DropAllTraffic());
 
-        Set<Integer> nonPartitionedNodes = new HashSet<>(cluster.nodes());
+        Set<Integer> nonPartitionedNodes = new HashSet<>(cluster.nodeIds());
         nonPartitionedNodes.remove(leaderId);
 
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, nonPartitionedNodes));
@@ -251,11 +257,17 @@ public class RaftEventSimulationTest {
         // Partition the nodes into two sets. Nodes are reachable within each set,
         // but the two sets cannot communicate with each other. We should be able
         // to make progress even if an election is needed in the larger set.
-        router.filter(0, new DropOutboundRequestsFrom(Utils.mkSet(2, 3, 4)));
-        router.filter(1, new DropOutboundRequestsFrom(Utils.mkSet(2, 3, 4)));
-        router.filter(2, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
-        router.filter(3, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
-        router.filter(4, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
+        router.filter(
+            0,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(2, 3, 4)))
+        );
+        router.filter(
+            1,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(2, 3, 4)))
+        );
+        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
+        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
+        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
 
         long partitionLogEndOffset = cluster.maxLogEndOffset();
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
@@ -373,13 +385,13 @@ public class RaftEventSimulationTest {
                                  int pollIntervalMs,
                                  int pollJitterMs) {
         int delayMs = 0;
-        for (int nodeId : cluster.nodes()) {
+        for (int nodeId : cluster.nodeIds()) {
             scheduler.schedule(() -> cluster.pollIfRunning(nodeId), delayMs, pollIntervalMs, pollJitterMs);
             delayMs++;
         }
     }
 
-    private static abstract class Event implements Comparable<Event> {
+    private abstract static class Event implements Comparable<Event> {
         final int eventId;
         final long deadlineMs;
         final Runnable action;
@@ -509,6 +521,7 @@ public class RaftEventSimulationTest {
 
     private static class PersistentState {
         final MockQuorumStateStore store = new MockQuorumStateStore();
+        final Uuid nodeDirectoryId = Uuid.randomUuid();
         final MockLog log;
 
         PersistentState(int nodeId) {
@@ -524,26 +537,35 @@ public class RaftEventSimulationTest {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
         final MockTime time = new MockTime();
-        final Uuid clusterId = Uuid.randomUuid();
-        final Set<Integer> voters = new HashSet<>();
+        final String clusterId = Uuid.randomUuid().toString();
+        final Map<Integer, Node> voters = new HashMap<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
 
         private Cluster(int numVoters, int numObservers, Random random) {
             this.random = random;
 
-            int nodeId = 0;
-            for (; nodeId < numVoters; nodeId++) {
-                voters.add(nodeId);
+            for (int nodeId = 0; nodeId < numVoters; nodeId++) {
+                voters.put(nodeId, nodeFromId(nodeId));
                 nodes.put(nodeId, new PersistentState(nodeId));
             }
 
-            for (; nodeId < numVoters + numObservers; nodeId++) {
+            for (int nodeIdDelta = 0; nodeIdDelta < numObservers; nodeIdDelta++) {
+                int nodeId = numVoters + nodeIdDelta;
                 nodes.put(nodeId, new PersistentState(nodeId));
             }
         }
 
-        Set<Integer> nodes() {
+        Set<InetSocketAddress> endpointsFromIds(Set<Integer> nodeIds) {
+            return voters
+                .values()
+                .stream()
+                .filter(node -> nodeIds.contains(node.id()))
+                .map(Cluster::nodeAddress)
+                .collect(Collectors.toSet());
+        }
+
+        Set<Integer> nodeIds() {
             return nodes.keySet();
         }
 
@@ -629,13 +651,13 @@ public class RaftEventSimulationTest {
                 return false;
 
             RaftNode first = iter.next();
-            ElectionState election = first.store.readElectionState();
+            ElectionState election = first.store.readElectionState().get();
             if (!election.hasLeader())
                 return false;
 
             while (iter.hasNext()) {
                 RaftNode next = iter.next();
-                if (!election.equals(next.store.readElectionState()))
+                if (!election.equals(next.store.readElectionState().get()))
                     return false;
             }
 
@@ -708,19 +730,47 @@ public class RaftEventSimulationTest {
             nodes.put(nodeId, new PersistentState(nodeId));
         }
 
-        private static RaftConfig.AddressSpec nodeAddress(int id) {
-            return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
+        private static final int PORT = 1234;
+
+        private static InetSocketAddress nodeAddress(Node node) {
+            return InetSocketAddress.createUnresolved(node.host(), node.port());
+        }
+
+        private static Node nodeFromId(int nodeId) {
+            return new Node(nodeId, hostFromId(nodeId), PORT);
+        }
+
+        private static String hostFromId(int nodeId) {
+            return String.format("host-node-%d", nodeId);
+        }
+
+        private static Endpoints endpointsFromId(int nodeId, ListenerName listenerName) {
+            return Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(
+                    listenerName,
+                    InetSocketAddress.createUnresolved(hostFromId(nodeId), PORT)
+                )
+            );
         }
 
         void start(int nodeId) {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
-            MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter, voters);
+            MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             MockMessageQueue messageQueue = new MockMessageQueue();
-            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
-                .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
-            RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
-                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);
+            Map<Integer, InetSocketAddress> voterAddressMap = voters
+                .values()
+                .stream()
+                .collect(Collectors.toMap(Node::id, Cluster::nodeAddress));
+
+            QuorumConfig quorumConfig = new QuorumConfig(
+                REQUEST_TIMEOUT_MS,
+                RETRY_BACKOFF_MS,
+                ELECTION_TIMEOUT_MS,
+                ELECTION_JITTER_MS,
+                FETCH_TIMEOUT_MS,
+                LINGER_MS
+            );
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();
@@ -729,21 +779,24 @@ public class RaftEventSimulationTest {
             MemoryPool memoryPool = new BatchMemoryPool(2, KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
 
             KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
+                OptionalInt.of(nodeId),
+                persistentState.nodeDirectoryId,
                 serde,
                 channel,
                 messageQueue,
                 persistentState.log,
-                persistentState.store,
                 memoryPool,
                 time,
-                metrics,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                clusterId.toString(),
-                OptionalInt.of(nodeId),
+                true,
+                clusterId,
+                Collections.emptyList(),
+                endpointsFromId(nodeId, channel.listenerName()),
+                Features.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
-                raftConfig
+                quorumConfig
             );
             RaftNode node = new RaftNode(
                 nodeId,
@@ -757,7 +810,8 @@ public class RaftEventSimulationTest {
                 random,
                 serde
             );
-            node.initialize();
+            node.initialize(voterAddressMap, metrics);
+
             running.put(nodeId, node);
         }
     }
@@ -769,10 +823,7 @@ public class RaftEventSimulationTest {
         final MockNetworkChannel channel;
         final MockMessageQueue messageQueue;
         final MockQuorumStateStore store;
-        final LogContext logContext;
         final ReplicatedCounter counter;
-        final Time time;
-        final Random random;
         final RecordSerde<Integer> intSerde;
 
         private RaftNode(
@@ -793,16 +844,17 @@ public class RaftEventSimulationTest {
             this.channel = channel;
             this.messageQueue = messageQueue;
             this.store = store;
-            this.logContext = logContext;
-            this.time = time;
-            this.random = random;
             this.counter = new ReplicatedCounter(nodeId, client, logContext);
             this.intSerde = intSerde;
         }
 
-        void initialize() {
-            client.register(this.counter);
-            client.initialize();
+        void initialize(Map<Integer, InetSocketAddress> voterAddresses, Metrics metrics) {
+            client.register(counter);
+            client.initialize(
+                voterAddresses,
+                store,
+                metrics
+            );
         }
 
         void poll() {
@@ -817,12 +869,12 @@ public class RaftEventSimulationTest {
 
         long highWatermark() {
             return client.quorum().highWatermark()
-                .map(hw -> hw.offset)
+                .map(LogOffsetMetadata::offset)
                 .orElse(0L);
         }
 
         long logEndOffset() {
-            return log.endOffset().offset;
+            return log.endOffset().offset();
         }
 
         @Override
@@ -837,14 +889,12 @@ public class RaftEventSimulationTest {
     }
 
     private static class InflightRequest {
-        final int correlationId;
         final int sourceId;
-        final int destinationId;
+        final Node destination;
 
-        private InflightRequest(int correlationId, int sourceId, int destinationId) {
-            this.correlationId = correlationId;
+        private InflightRequest(int sourceId, Node destination) {
             this.sourceId = sourceId;
-            this.destinationId = destinationId;
+            this.destination = destination;
         }
     }
 
@@ -879,11 +929,15 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class DropOutboundRequestsFrom implements NetworkFilter {
+    private static class DropOutboundRequestsTo implements NetworkFilter {
+        private final Set<InetSocketAddress> unreachable;
 
-        private final Set<Integer> unreachable;
-
-        private DropOutboundRequestsFrom(Set<Integer> unreachable) {
+        /**
+         * This network filter drops any outbound message sent to the {@code unreachable} nodes.
+         *
+         * @param unreachable the set of destination address which are not reachable
+         */
+        private DropOutboundRequestsTo(Set<InetSocketAddress> unreachable) {
             this.unreachable = unreachable;
         }
 
@@ -892,11 +946,25 @@ public class RaftEventSimulationTest {
             return true;
         }
 
+        /**
+         * Returns if the message should be sent to the destination.
+         *
+         * Returns false when outbound request messages contains a destination {@code Node} that
+         * matches the set of unreachable {@code InetSocketAddress}. Note that the {@code Node.id()}
+         * and {@code Node.rack()} are not compared.
+         *
+         * @param message the raft message
+         * @return true if the message should be delivered, otherwise false
+         */
         @Override
         public boolean acceptOutbound(RaftMessage message) {
             if (message instanceof RaftRequest.Outbound) {
                 RaftRequest.Outbound request = (RaftRequest.Outbound) message;
-                return !unreachable.contains(request.destinationId());
+                InetSocketAddress destination = InetSocketAddress.createUnresolved(
+                    request.destination().host(),
+                    request.destination().port()
+                );
+                return !unreachable.contains(destination);
             }
             return true;
         }
@@ -921,19 +989,19 @@ public class RaftEventSimulationTest {
                 PersistentState state = nodeStateEntry.getValue();
                 Integer oldEpoch = nodeEpochs.get(nodeId);
 
-                ElectionState electionState = state.store.readElectionState();
-                if (electionState == null) {
+                Optional<ElectionState> electionState = state.store.readElectionState();
+                if (!electionState.isPresent()) {
                     continue;
                 }
 
-                Integer newEpoch = electionState.epoch;
+                int newEpoch = electionState.get().epoch();
                 if (oldEpoch > newEpoch) {
                     fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
                 }
-                cluster.ifRunning(nodeId, nodeState -> {
-                    assertEquals(newEpoch.intValue(), nodeState.client.quorum().epoch());
-                });
+                cluster.ifRunning(nodeId, nodeState ->
+                    assertEquals(newEpoch, nodeState.client.quorum().epoch())
+                );
                 nodeEpochs.put(nodeId, newEpoch);
             }
         }
@@ -950,8 +1018,8 @@ public class RaftEventSimulationTest {
         public void verify() {
             cluster.leaderHighWatermark().ifPresent(highWatermark -> {
                 long numReachedHighWatermark = cluster.nodes.entrySet().stream()
-                    .filter(entry -> cluster.voters.contains(entry.getKey()))
-                    .filter(entry -> entry.getValue().log.endOffset().offset >= highWatermark)
+                    .filter(entry -> cluster.voters.containsKey(entry.getKey()))
+                    .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
                     .count();
                 assertTrue(
                     numReachedHighWatermark >= cluster.majoritySize(),
@@ -973,16 +1041,18 @@ public class RaftEventSimulationTest {
         public void verify() {
             for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
                 PersistentState state = nodeEntry.getValue();
-                ElectionState electionState = state.store.readElectionState();
+                Optional<ElectionState> electionState = state.store.readElectionState();
 
-                if (electionState != null && electionState.epoch >= epoch && electionState.hasLeader()) {
-                    if (epoch == electionState.epoch && leaderId.isPresent()) {
-                        assertEquals(leaderId.getAsInt(), electionState.leaderId());
-                    } else {
-                        epoch = electionState.epoch;
-                        leaderId = OptionalInt.of(electionState.leaderId());
+                electionState.ifPresent(election -> {
+                    if (election.epoch() >= epoch && election.hasLeader()) {
+                        if (epoch == election.epoch() && leaderId.isPresent()) {
+                            assertEquals(leaderId.getAsInt(), election.leaderId());
+                        } else {
+                            epoch = election.epoch();
+                            leaderId = OptionalInt.of(election.leaderId());
+                        }
                     }
-                }
+                });
             }
         }
     }
@@ -1047,7 +1117,7 @@ public class RaftEventSimulationTest {
                         assertEquals(
                             logStartOffset,
                             earliestSnapshotId.offset(),
-                            () -> String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
+                            () -> String.format("missing snapshot at log start offset: nodeId = %s", nodeId)
                         );
                     }
                 });
@@ -1111,22 +1181,33 @@ public class RaftEventSimulationTest {
                 assertTrue(snapshotId.offset() <= highWatermark.getAsLong());
                 startOffset.set(snapshotId.offset());
 
-                try (SnapshotReader<Integer> snapshot =
-                        RecordsSnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE, true)) {
+                try (SnapshotReader<Integer> snapshot = RecordsSnapshotReader.of(
+                        log.readSnapshot(snapshotId).get(),
+                        node.intSerde,
+                        BufferSupplier.create(),
+                        Integer.MAX_VALUE,
+                        true
+                    )
+                ) {
+                    // Since the state machine is only on e value we only expect one data record in the snapshot
                     // Expect only one batch with only one record
-                    assertTrue(snapshot.hasNext());
-                    Batch<Integer> batch = snapshot.next();
-                    assertFalse(snapshot.hasNext());
-                    assertEquals(1, batch.records().size());
+                    OptionalInt sequence = OptionalInt.empty();
+                    while (snapshot.hasNext()) {
+                        Batch<Integer> batch = snapshot.next();
+                        if (!batch.records().isEmpty()) {
+                            assertEquals(1, batch.records().size());
+                            assertFalse(sequence.isPresent());
+                            sequence = OptionalInt.of(batch.records().get(0));
+                        }
+                    }
 
                     // The snapshotId offset is an "end offset"
                     long offset = snapshotId.offset() - 1;
-                    int sequence = batch.records().get(0);
-                    committedSequenceNumbers.putIfAbsent(offset, sequence);
+                    committedSequenceNumbers.putIfAbsent(offset, sequence.getAsInt());
 
                     assertEquals(
                         committedSequenceNumbers.get(offset),
-                        sequence,
+                        sequence.getAsInt(),
                         String.format("Committed sequence at offset %s changed on node %s", offset, nodeId)
                     );
                 }
@@ -1146,8 +1227,10 @@ public class RaftEventSimulationTest {
 
                     int committedSequence = committedSequenceNumbers.get(offset);
                     assertEquals(
-                        committedSequence, sequence,
-                        "Committed sequence at offset " + offset + " changed on node " + nodeId);
+                        committedSequence,
+                        sequence,
+                        String.format("Committed sequence at offset %d changed on node %d", offset, nodeId)
+                    );
                 }
             }
         }
@@ -1174,19 +1257,31 @@ public class RaftEventSimulationTest {
                 return;
 
             int correlationId = outbound.correlationId();
-            int destinationId = outbound.destinationId();
-            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.data(),
-                cluster.time.milliseconds());
+            Node destination = outbound.destination();
+            RaftRequest.Inbound inbound = cluster
+                .nodeIfRunning(senderId)
+                .map(node ->
+                    new RaftRequest.Inbound(
+                        node.channel.listenerName(),
+                        correlationId,
+                        ApiMessageType
+                            .fromApiKey(outbound.data().apiKey())
+                            .highestSupportedVersion(true),
+                        outbound.data(),
+                        cluster.time.milliseconds()
+                    )
+                )
+                .get();
 
-            if (!filters.get(destinationId).acceptInbound(inbound))
+            if (!filters.get(destination.id()).acceptInbound(inbound))
                 return;
 
-            cluster.nodeIfRunning(destinationId).ifPresent(node -> {
-                inflight.put(correlationId, new InflightRequest(correlationId, senderId, destinationId));
+            cluster.nodeIfRunning(destination.id()).ifPresent(node -> {
+                inflight.put(correlationId, new InflightRequest(senderId, destination));
 
                 inbound.completion.whenComplete((response, exception) -> {
-                    if (response != null && filters.get(destinationId).acceptOutbound(response)) {
-                        deliver(destinationId, response);
+                    if (response != null && filters.get(destination.id()).acceptOutbound(response)) {
+                        deliver(response);
                     }
                 });
 
@@ -1194,17 +1289,23 @@ public class RaftEventSimulationTest {
             });
         }
 
-        void deliver(int senderId, RaftResponse.Outbound outbound) {
+        void deliver(RaftResponse.Outbound outbound) {
             int correlationId = outbound.correlationId();
-            RaftResponse.Inbound inbound = new RaftResponse.Inbound(correlationId, outbound.data(), senderId);
             InflightRequest inflightRequest = inflight.remove(correlationId);
+
+            RaftResponse.Inbound inbound = new RaftResponse.Inbound(
+                correlationId,
+                outbound.data(),
+                // The source of the response is the destination of the request
+                inflightRequest.destination
+            );
 
             if (!filters.get(inflightRequest.sourceId).acceptInbound(inbound))
                 return;
 
-            cluster.nodeIfRunning(inflightRequest.sourceId).ifPresent(node -> {
-                node.channel.mockReceive(inbound);
-            });
+            cluster.nodeIfRunning(inflightRequest.sourceId).ifPresent(node ->
+                node.channel.mockReceive(inbound)
+            );
         }
 
         void filter(int nodeId, NetworkFilter filter) {

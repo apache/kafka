@@ -29,7 +29,8 @@ public class GroupRebalanceConfig {
 
     public enum ProtocolType {
         CONSUMER,
-        CONNECT;
+        CONNECT,
+        SHARE;
 
         @Override
         public String toString() {
@@ -43,13 +44,14 @@ public class GroupRebalanceConfig {
     public final String groupId;
     public final Optional<String> groupInstanceId;
     public final long retryBackoffMs;
+    public final long retryBackoffMaxMs;
     public final boolean leaveGroupOnClose;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
 
         // Consumer and Connect use different config names for defining rebalance timeout
-        if (protocolType == ProtocolType.CONSUMER) {
+        if ((protocolType == ProtocolType.CONSUMER) || (protocolType == ProtocolType.SHARE)) {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         } else {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
@@ -72,6 +74,7 @@ public class GroupRebalanceConfig {
         }
 
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoffMaxMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
 
         // Internal leave group config is only defined in Consumer.
         if (protocolType == ProtocolType.CONSUMER) {
@@ -88,6 +91,7 @@ public class GroupRebalanceConfig {
                                 String groupId,
                                 Optional<String> groupInstanceId,
                                 long retryBackoffMs,
+                                long retryBackoffMaxMs,
                                 boolean leaveGroupOnClose) {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
@@ -95,6 +99,7 @@ public class GroupRebalanceConfig {
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
         this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
     }
 }

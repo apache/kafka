@@ -29,10 +29,10 @@ import java.util.concurrent.CountDownLatch;
  * Demonstrates, using the high-level KStream DSL, how to read data from a source (input) topic and how to
  * write data to a sink (output) topic.
  *
- * In this example, we implement a simple "pipe" program that reads from a source topic "streams-plaintext-input"
+ * <p>In this example, we implement a simple "pipe" program that reads from a source topic "streams-plaintext-input"
  * and writes the data as-is (i.e. unmodified) into a sink topic "streams-pipe-output".
  *
- * Before running this example you must create the input topic and the output topic (e.g. via
+ * <p>Before running this example you must create the input topic and the output topic (e.g. via
  * bin/kafka-topics.sh --create ...), and write some data to the input topic (e.g. via
  * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
@@ -42,8 +42,8 @@ public class PipeDemo {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pipe");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -48,30 +46,33 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings("deprecation")
 public class RepartitionOptimizingTest {
 
-    private final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
+    private static final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
 
     private static final String INPUT_TOPIC = "input";
     private static final String COUNT_TOPIC = "outputTopic_0";
@@ -107,7 +108,7 @@ public class RepartitionOptimizingTest {
     private final List<String> expectedCollectedProcessorValues =
         Arrays.asList("FOO", "BAR", "BAZ");
 
-    @Before
+    @BeforeEach
     public void setUp() {
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
         streamsConfiguration.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, Integer.toString(1024 * 10));
@@ -116,7 +117,7 @@ public class RepartitionOptimizingTest {
         processorValueCollector.clear();
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         topologyTestDriver.close();
     }

@@ -26,17 +26,20 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockClientSupplier;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.util.Collections;
@@ -46,6 +49,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -54,12 +58,12 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.core.IsNot.not;
-import static org.junit.Assert.assertThrows;
-import static java.util.Collections.emptySet;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ActiveTaskCreatorTest {
 
     @Mock
@@ -141,15 +145,13 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldFailOnGetThreadProducerIfEosDisabled() {
+    public void shouldReturnThreadProducerIfAtLeastOnceIsEnabled() {
         createTasks();
 
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class,
-            activeTaskCreator::threadProducer
-        );
+        final StreamsProducer threadProducer = activeTaskCreator.threadProducer();
 
-        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
+        assertThat(mockClientSupplier.producers.size(), is(1));
+        assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
     }
 
     @Test
@@ -291,7 +293,7 @@ public class ActiveTaskCreatorTest {
             activeTaskCreator::threadProducer
         );
 
-        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
+        assertThat(thrown.getMessage(), is("Expected AT_LEAST_ONCE or EXACTLY_ONCE_V2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
     }
 
     @SuppressWarnings("deprecation")
@@ -497,6 +499,7 @@ public class ActiveTaskCreatorTest {
             "clientId-StreamThread-0",
             uuid,
             new LogContext().logger(ActiveTaskCreator.class),
+            false,
             false);
 
         assertThat(

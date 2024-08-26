@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

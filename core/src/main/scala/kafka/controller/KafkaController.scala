@@ -16,10 +16,9 @@
  */
 package kafka.controller
 
-import com.yammer.metrics.core.Timer
+import com.yammer.metrics.core.{Meter, Timer}
 
 import java.util.concurrent.TimeUnit
-import kafka.api._
 import kafka.common._
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{ActiveBrokerCountMetricName, ActiveControllerCountMetricName, AlterReassignmentsCallback, ControllerStateMetricName, ElectLeadersCallback, FencedBrokerCountMetricName, GlobalPartitionCountMetricName, GlobalTopicCountMetricName, ListReassignmentsCallback, OfflinePartitionsCountMetricName, PreferredReplicaImbalanceCountMetricName, ReplicasIneligibleToDeleteCountMetricName, ReplicasToDeleteCountMetricName, TopicsIneligibleToDeleteCountMetricName, TopicsToDeleteCountMetricName, UpdateFeaturesCallback, ZkMigrationStateMetricName}
@@ -43,7 +42,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -57,9 +56,9 @@ import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 sealed trait ElectionTrigger
-final case object AutoTriggered extends ElectionTrigger
-final case object ZkTriggered extends ElectionTrigger
-final case object AdminClientTriggered extends ElectionTrigger
+case object AutoTriggered extends ElectionTrigger
+case object ZkTriggered extends ElectionTrigger
+case object AdminClientTriggered extends ElectionTrigger
 
 object KafkaController extends Logging {
   val InitialControllerEpoch = 0
@@ -161,7 +160,7 @@ class KafkaController(val config: KafkaConfig,
   private val isrChangeNotificationHandler = new IsrChangeNotificationHandler(eventManager)
   private val logDirEventNotificationHandler = new LogDirEventNotificationHandler(eventManager)
 
-  @volatile private var activeControllerId = -1
+  @volatile var activeControllerId = -1
   @volatile private var offlinePartitionCount = 0
   @volatile private var preferredReplicaImbalanceCount = 0
   @volatile private var globalTopicCount = 0
@@ -204,7 +203,7 @@ class KafkaController(val config: KafkaConfig,
    * is the controller. It merely registers the session expiration listener and starts the controller leader
    * elector
    */
-  def startup() = {
+  def startup(): Unit = {
     zkClient.registerStateChangeHandler(new StateChangeHandler {
       override val name: String = StateChangeHandlers.ControllerHandler
       override def afterInitializingSession(): Unit = {
@@ -1041,7 +1040,7 @@ class KafkaController(val config: KafkaConfig,
       true
     } else {
       zkClient.getTopicPartitionStates(Seq(partition)).get(partition).exists { leaderIsrAndControllerEpoch =>
-        val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr.toSet
+        val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr.asScala.toSet.map(Int.unbox)
         val targetReplicas = assignment.targetReplicas.toSet
         targetReplicas.subsetOf(isr)
       }
@@ -1324,7 +1323,7 @@ class KafkaController(val config: KafkaConfig,
   private def canPreferredReplicaBeLeader(tp: TopicPartition): Boolean = {
     val assignment = controllerContext.partitionReplicaAssignment(tp)
     val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, tp))
-    val isr = controllerContext.partitionLeadershipInfo(tp).get.leaderAndIsr.isr
+    val isr = controllerContext.partitionLeadershipInfo(tp).get.leaderAndIsr.isr.asScala.toSeq.map(_.toInt)
     PartitionLeaderElectionAlgorithms
       .preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas.toSet)
       .nonEmpty
@@ -2241,7 +2240,7 @@ class KafkaController(val config: KafkaConfig,
 
             case ElectionType.UNCLEAN =>
               val currentLeader = controllerContext.partitionLeadershipInfo(partition).get.leaderAndIsr.leader
-              currentLeader == LeaderAndIsr.NoLeader || !controllerContext.liveBrokerIds.contains(currentLeader)
+              currentLeader == LeaderAndIsr.NO_LEADER || !controllerContext.isLiveBroker(currentLeader)
           }
         }
 
@@ -2367,13 +2366,13 @@ class KafkaController(val config: KafkaConfig,
         case Some(topicName) =>
           topicReq.partitions.forEach { partitionReq =>
             val isr = if (alterPartitionRequestVersion >= 3) {
-              partitionReq.newIsrWithEpochs.asScala.toList.map(brokerState => brokerState.brokerId())
+              partitionReq.newIsrWithEpochs.asScala.toList.map(brokerState => Integer.valueOf(brokerState.brokerId())).asJava
             } else {
-              partitionReq.newIsr.asScala.toList.map(_.toInt)
+              partitionReq.newIsr
             }
             partitionsToAlter.put(
               new TopicPartition(topicName, partitionReq.partitionIndex),
-              LeaderAndIsr(
+              new LeaderAndIsr(
                 alterPartitionRequest.brokerId,
                 partitionReq.leaderEpoch,
                 isr,
@@ -2409,7 +2408,7 @@ class KafkaController(val config: KafkaConfig,
           } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
             partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
             None
-          }  else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
+          }  else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.size() > 1) {
             partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
             info(
               s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
@@ -2428,7 +2427,7 @@ class KafkaController(val config: KafkaConfig,
           } else {
             // Pull out replicas being added to ISR and verify they are all online.
             // If a replica is not online, reject the update as specified in KIP-841.
-            val ineligibleReplicas = newLeaderAndIsr.isr.toSet -- controllerContext.liveBrokerIds
+            val ineligibleReplicas = newLeaderAndIsr.isr.asScala.toSet.map(Int.unbox) -- controllerContext.liveBrokerIds
             if (ineligibleReplicas.nonEmpty) {
               info(s"Rejecting AlterPartition request from node $brokerId for $tp because " +
                 s"it specified ineligible replicas $ineligibleReplicas in the new ISR ${newLeaderAndIsr.isr}."
@@ -2511,7 +2510,7 @@ class KafkaController(val config: KafkaConfig,
                 .setPartitionIndex(tp.partition)
                 .setLeaderId(leaderAndIsr.leader)
                 .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-                .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                .setIsr(leaderAndIsr.isr)
                 .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
                 .setPartitionEpoch(leaderAndIsr.partitionEpoch)
             )
@@ -2540,7 +2539,7 @@ class KafkaController(val config: KafkaConfig,
       allocateProducerIdsRequest.brokerEpoch, eventManagerCallback))
   }
 
-  def processAllocateProducerIds(brokerId: Int, brokerEpoch: Long, callback: Either[Errors, ProducerIdsBlock] => Unit): Unit = {
+  private def processAllocateProducerIds(brokerId: Int, brokerEpoch: Long, callback: Either[Errors, ProducerIdsBlock] => Unit): Unit = {
     // Handle a few short-circuits
     if (!isActive) {
       callback.apply(Left(Errors.NOT_CONTROLLER))
@@ -2767,7 +2766,7 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
   override def toString: String = {
     val leaderAndIsrInfo = new StringBuilder
     leaderAndIsrInfo.append("(Leader:" + leaderAndIsr.leader)
-    leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.mkString(","))
+    leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.asScala.mkString(","))
     leaderAndIsrInfo.append(",LeaderRecoveryState:" + leaderAndIsr.leaderRecoveryState)
     leaderAndIsrInfo.append(",LeaderEpoch:" + leaderAndIsr.leaderEpoch)
     leaderAndIsrInfo.append(",ZkVersion:" + leaderAndIsr.partitionEpoch)
@@ -2779,7 +2778,7 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 private[controller] class ControllerStats {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  val uncleanLeaderElectionRate = metricsGroup.newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
+  val uncleanLeaderElectionRate: Meter = metricsGroup.newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
 
   val rateAndTimeMetrics: Map[ControllerState, Timer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>

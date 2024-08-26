@@ -19,14 +19,14 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageListener.LocalTieredStorageListeners;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.test.TestUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -47,6 +47,7 @@ import static java.lang.String.format;
 import static java.nio.file.Files.newInputStream;
 import static java.nio.file.StandardOpenOption.READ;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType;
+import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_PARTITION;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_LEADER_EPOCH_CHECKPOINT;
@@ -55,7 +56,6 @@ import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TIME_INDEX;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TRANSACTION_INDEX;
-import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.COPY_SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.LEADER_EPOCH_CHECKPOINT;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.OFFSET_INDEX;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.PRODUCER_SNAPSHOT;
@@ -306,19 +306,13 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     public Optional<CustomMetadata> copyLogSegmentData(final RemoteLogSegmentMetadata metadata, final LogSegmentData data)
             throws RemoteStorageException {
         Callable<Optional<CustomMetadata>> callable = () -> {
-            final RemoteLogSegmentId id = metadata.remoteLogSegmentId();
-            final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(COPY_SEGMENT, id);
+            final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(COPY_SEGMENT, metadata);
             RemoteLogSegmentFileset fileset = null;
-
             try {
                 fileset = openFileset(storageDirectory, metadata);
-
-                logger.info("Offloading log segment for {} from segment={}", id.topicIdPartition(), data.logSegment());
-
+                logger.info("Offloading log segment for {} from segment={}", metadata.topicIdPartition(), data.logSegment());
                 fileset.copy(transferer, data);
-
                 storageListeners.onStorageEvent(eventBuilder.withFileset(fileset).build());
-
             } catch (final Exception e) {
                 // Keep the storage in a consistent state, i.e. a segment stored should always have with its
                 // associated offset and time indexes stored as well. Here, delete any file which was copied
@@ -327,14 +321,11 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 if (fileset != null) {
                     fileset.delete();
                 }
-
                 storageListeners.onStorageEvent(eventBuilder.withException(e).build());
                 throw e;
             }
-
             return Optional.empty();
         };
-
         return wrap(callable);
     }
 
@@ -390,8 +381,14 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata);
 
                 File file = fileset.getFile(fileType);
-                final InputStream inputStream = (fileType.isOptional() && !file.exists()) ?
-                        new ByteArrayInputStream(new byte[0]) : newInputStream(file.toPath(), READ);
+
+                final InputStream inputStream;
+                if (fileType.isOptional() && !file.exists()) {
+                    throw new RemoteResourceNotFoundException("Index file for type: " + indexType +
+                        " not found for segment " + metadata.remoteLogSegmentId());
+                } else {
+                    inputStream = newInputStream(file.toPath(), READ);
+                }
 
                 storageListeners.onStorageEvent(eventBuilder.withFileset(fileset).build());
 
@@ -503,10 +500,6 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         return wrap(() -> storageDirectory.getAbsolutePath());
     }
 
-    private LocalTieredStorageEvent.Builder newEventBuilder(final EventType type, final RemoteLogSegmentId segId) {
-        return LocalTieredStorageEvent.newBuilder(brokerId, type, eventTimestamp.incrementAndGet(), segId);
-    }
-
     private LocalTieredStorageEvent.Builder newEventBuilder(final EventType type, final RemoteLogSegmentMetadata md) {
         return LocalTieredStorageEvent
                 .newBuilder(brokerId, type, eventTimestamp.incrementAndGet(), md.remoteLogSegmentId())
@@ -573,5 +566,9 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 return LEADER_EPOCH_CHECKPOINT;
         }
         return SEGMENT;
+    }
+
+    public int brokerId() {
+        return brokerId;
     }
 }

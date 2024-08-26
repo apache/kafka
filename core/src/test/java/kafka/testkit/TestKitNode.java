@@ -17,7 +17,25 @@
 
 package kafka.testkit;
 
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+
+import java.util.Map;
+import java.util.Set;
+
 public interface TestKitNode {
-    int id();
-    String metadataDirectory();
+    default int id() {
+        return initialMetaPropertiesEnsemble().nodeId().getAsInt();
+    }
+
+    default String metadataDirectory() {
+        return initialMetaPropertiesEnsemble().metadataLogDir().get();
+    }
+
+    default Set<String> logDataDirectories() {
+        return initialMetaPropertiesEnsemble().logDirProps().keySet();
+    }
+
+    MetaPropertiesEnsemble initialMetaPropertiesEnsemble();
+
+    Map<String, String> propertyOverrides();
 }

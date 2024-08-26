@@ -17,20 +17,21 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.common.utils.MockTime;
+
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
-
-import org.apache.kafka.common.utils.MockTime;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -106,6 +107,7 @@ public class QuorumControllerMetricsTest {
             metrics.setLastAppliedRecordTimestamp(500);
             metrics.setLastCommittedRecordOffset(50);
             metrics.updateDualWriteOffset(40L);
+            metrics.setActive(true);
             for (int i = 0; i < 2; i++) {
                 metrics.incrementTimedOutHeartbeats();
             }
@@ -197,11 +199,26 @@ public class QuorumControllerMetricsTest {
         try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
             metrics.updateDualWriteOffset(90);
             metrics.setLastCommittedRecordOffset(100);
+            metrics.setActive(true);
             @SuppressWarnings("unchecked")
             Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
                 .allMetrics()
                 .get(metricName("KafkaController", "ZkWriteBehindLag"));
             assertEquals(10, zkWriteBehindLag.value());
+        } finally {
+            registry.shutdown();
+        }
+
+        // test zkWriteBehindLag metric when in dual-write mode and not active
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, true)) {
+            metrics.updateDualWriteOffset(90);
+            metrics.setLastCommittedRecordOffset(100);
+            metrics.setActive(false);
+            @SuppressWarnings("unchecked")
+            Gauge<Long> zkWriteBehindLag = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "ZkWriteBehindLag"));
+            assertEquals(0, zkWriteBehindLag.value());
         } finally {
             registry.shutdown();
         }

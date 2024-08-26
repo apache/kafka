@@ -17,81 +17,139 @@
 
 package kafka.tools
 
+import kafka.server.KafkaConfig
+
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
-import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, MetaProperties, RawMetaProperties}
-import kafka.utils.{Exit, Logging}
+import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
-import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue, append}
-import net.sourceforge.argparse4j.inf.Namespace
+import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
+import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace}
+import net.sourceforge.argparse4j.internal.HelpScreenException
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.common.metadata.FeatureLevelRecord
-import org.apache.kafka.common.metadata.UserScramCredentialRecord
-import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.security.scram.internals.ScramFormatter
-
+import org.apache.kafka.common.utils.{Exit, Utils}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
+import org.apache.kafka.raft.DynamicVoters
+import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.config.ReplicationConfigs
 
 import java.util
-import java.util.Base64
-import java.util.Optional
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.ArrayBuffer
 
 object StorageTool extends Logging {
+
   def main(args: Array[String]): Unit = {
+    var exitCode: Integer = 0
+    var message: Option[String] = None
     try {
-      val namespace = parseArguments(args)
-      val command = namespace.getString("command")
-      val config = Option(namespace.getString("config")).flatMap(
-        p => Some(new KafkaConfig(Utils.loadProps(p))))
-      command match {
-        case "info" =>
-          val directories = configToLogDirectories(config.get)
-          val selfManagedMode = configToSelfManagedMode(config.get)
-          Exit.exit(infoCommand(System.out, selfManagedMode, directories))
-
-        case "format" =>
-          val directories = configToLogDirectories(config.get)
-          val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = getMetadataVersion(namespace, Option(config.get.interBrokerProtocolVersionString))
-          if (!metadataVersion.isKRaftSupported) {
-            throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
-          }
-          val metaProperties = buildMetadataProperties(clusterId, config.get)
-          val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
-          getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
-            if (!metadataVersion.isScramSupported()) {
-              throw new TerseFailure(s"SCRAM is only supported in metadataVersion IBP_3_5_IV2 or later.");
-            }
-            for (record <- userScramCredentialRecords) {
-              metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
-            }
-          })
-          val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, Some(metadataRecords), "format command")
-          val ignoreFormatted = namespace.getBoolean("ignore_formatted")
-          if (!configToSelfManagedMode(config.get)) {
-            throw new TerseFailure("The kafka configuration file appears to be for " +
-              "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
-          }
-          Exit.exit(formatCommand(System.out, directories, metaProperties, bootstrapMetadata,
-                                  metadataVersion,ignoreFormatted))
-
-        case "random-uuid" =>
-          System.out.println(Uuid.randomUuid)
-          Exit.exit(0)
-
-        case _ =>
-          throw new RuntimeException(s"Unknown command $command")
-      }
+      exitCode = execute(args, System.out)
     } catch {
+      case e: FormatterException =>
+        exitCode = 1
+        message = Some(e.getMessage)
       case e: TerseFailure =>
-        System.err.println(e.getMessage)
-        Exit.exit(1, Some(e.getMessage))
+        exitCode = 1
+        message = Some(e.getMessage)
     }
+    message.foreach(System.err.println)
+    Exit.exit(exitCode, message.orNull)
+  }
+
+  /**
+   * Executes the command according to the given arguments and returns the appropriate exit code.
+   * @param args The command line arguments
+   * @return     The exit code
+   */
+  def execute(
+     args: Array[String],
+     printStream: PrintStream
+  ): Int = {
+    val namespace = try {
+      parseArguments(args)
+    } catch {
+      case _: HelpScreenException =>
+        return 0
+      case e: ArgumentParserException =>
+        e.getParser.handleError(e)
+        return 1
+    }
+    val command = namespace.getString("command")
+    val config = Option(namespace.getString("config")).flatMap(
+      p => Some(new KafkaConfig(Utils.loadProps(p))))
+    command match {
+      case "info" =>
+        val directories = configToLogDirectories(config.get)
+        infoCommand(printStream, config.get.processRoles.nonEmpty, directories)
+
+      case "format" =>
+        runFormatCommand(namespace, config.get, printStream)
+        0
+
+      case "random-uuid" =>
+        printStream.println(Uuid.randomUuid)
+        0
+      case _ =>
+        throw new RuntimeException(s"Unknown command $command")
+    }
+  }
+
+  /**
+   * Validates arguments, configuration, prepares bootstrap metadata and delegates to {{@link formatCommand}}.
+   * Visible for testing.
+   *
+   * @param namespace   Arguments
+   * @param config      The server configuration
+   * @return            The exit code
+   */
+  def runFormatCommand(
+    namespace: Namespace,
+    config: KafkaConfig,
+    printStream: PrintStream
+  ): Unit = {
+    if (config.processRoles.isEmpty) {
+      throw new TerseFailure("The kafka configuration file appears to be for " +
+        "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
+    }
+    val formatter = new Formatter().
+      setPrintStream(printStream).
+      setNodeId(config.nodeId).
+      setClusterId(namespace.getString("cluster_id")).
+      setUnstableFeatureVersionsEnabled(config.unstableFeatureVersionsEnabled).
+      setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
+      setControllerListenerName(config.controllerListenerNames.head).
+      setMetadataLogDirectory(config.metadataLogDir)
+    Option(namespace.getString("release_version")) match {
+      case Some(releaseVersion) => formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
+      case None => Option(config.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).
+        foreach(v => formatter.setReleaseVersion(MetadataVersion.fromVersionString(v.toString)))
+    }
+    Option(namespace.getString("initial_controllers")).
+      foreach(v => formatter.setInitialVoters(DynamicVoters.parse(v)))
+    if (namespace.getBoolean("standalone")) {
+      formatter.setInitialVoters(createStandaloneDynamicVoters(config))
+    }
+    configToLogDirectories(config).foreach(formatter.addDirectory(_))
+    formatter.run()
+  }
+
+  def createStandaloneDynamicVoters(
+    config: KafkaConfig
+  ): DynamicVoters = {
+    if (!config.processRoles.contains(ProcessRole.ControllerRole)) {
+      throw new TerseFailure("You cannot use --standalone on a broker node.")
+    }
+    if (config.effectiveAdvertisedControllerListeners.isEmpty) {
+      throw new RuntimeException("No controller listeners found.")
+    }
+    val listener = config.effectiveAdvertisedControllerListeners.head
+    val host = if (listener.host == null) {
+      "localhost"
+    } else {
+      listener.host
+    }
+    DynamicVoters.parse(s"${config.nodeId}@${host}:${listener.port}:${Uuid.randomUuid()}")
   }
 
   def parseArguments(args: Array[String]): Namespace = {
@@ -125,9 +183,20 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
       action(store()).
-      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.latest().version()}")
-
-    parser.parseArgsOrFail(args)
+      help(s"The release version to use for the initial feature settings. The minimum is " +
+        s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+    formatParser.addArgument("--feature", "-f").
+      help("The setting to use for a specific feature, in feature=level format. For example: `kraft.version=1`.").
+      action(append())
+    val reconfigurableQuorumOptions = formatParser.addMutuallyExclusiveGroup()
+    reconfigurableQuorumOptions.addArgument("--standalone", "-s").
+      help("Used to initialize a single-node quorum controller quorum.").
+      action(storeTrue())
+    reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I").
+      help("The initial controllers, as a comma-separated list of id@hostname:port:directory. The same values must be used to format all nodes. For example:\n" +
+        "0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n").
+      action(store())
+    parser.parseArgs(args)
   }
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
@@ -137,140 +206,10 @@ object StorageTool extends Logging {
     directories.toSeq
   }
 
-  def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
-
-  def getMetadataVersion(
-    namespace: Namespace,
-    defaultVersionString: Option[String]
-  ): MetadataVersion = {
-    val defaultValue = defaultVersionString match {
-      case Some(versionString) => MetadataVersion.fromVersionString(versionString)
-      case None => MetadataVersion.latest()
-    }
-
-    Option(namespace.getString("release_version"))
-      .map(ver => MetadataVersion.fromVersionString(ver))
-      .getOrElse(defaultValue)
-  }
-
-  def getUserScramCredentialRecord(
-    mechanism: String,
-    config: String
-  ) : UserScramCredentialRecord = {
-    /*
-     * Remove  '[' amd ']'
-     * Split K->V pairs on ',' and no K or V should contain ','
-     * Split K and V on '=' but V could contain '=' if inside ""
-     * Create Map of K to V and replace all " in V
-     */
-    val argMap = config.substring(1, config.length - 1)
-                       .split(",")
-                       .map(_.split("=(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"))
-                       .map(args => args(0) -> args(1).replaceAll("\"", "")).toMap
-
-    val scramMechanism = ScramMechanism.forMechanismName(mechanism)
-
-    def getName(argMap: Map[String,String]) : String = {
-      if (!argMap.contains("name")) {
-        throw new TerseFailure(s"You must supply 'name' to add-scram")
-      }
-      argMap("name")
-    }
-
-    def getSalt(argMap: Map[String,String], scramMechanism : ScramMechanism) : Array[Byte] = {
-      if (argMap.contains("salt")) {
-        Base64.getDecoder.decode(argMap("salt"))
-      } else {
-        new ScramFormatter(scramMechanism).secureRandomBytes()
-      }
-    }
-
-    def getIterations(argMap: Map[String,String], scramMechanism : ScramMechanism) : Int = {
-      if (argMap.contains("salt")) {
-        val iterations = argMap("iterations").toInt
-        if (iterations < scramMechanism.minIterations()) {
-            throw new TerseFailure(s"The 'iterations' value must be >= ${scramMechanism.minIterations()} for add-scram")
-        }
-        if (iterations > scramMechanism.maxIterations()) {
-            throw new TerseFailure(s"The 'iterations' value must be <= ${scramMechanism.maxIterations()} for add-scram")
-        }
-        iterations
-      } else {
-        4096
-      }
-    }
-
-    def getSaltedPassword(
-      argMap: Map[String,String],
-      scramMechanism : ScramMechanism,
-      salt : Array[Byte],
-      iterations: Int
-    ) : Array[Byte] = {
-      if (argMap.contains("password")) {
-        if (argMap.contains("saltedpassword")) {
-            throw new TerseFailure(s"You must only supply one of 'password' or 'saltedpassword' to add-scram")
-        }
-        new ScramFormatter(scramMechanism).saltedPassword(argMap("password"), salt, iterations)
-      } else {
-        if (!argMap.contains("saltedpassword")) {
-            throw new TerseFailure(s"You must supply one of 'password' or 'saltedpassword' to add-scram")
-        }
-        if (!argMap.contains("salt")) {
-            throw new TerseFailure(s"You must supply 'salt' with 'saltedpassword' to add-scram")
-        }
-        Base64.getDecoder.decode(argMap("saltedpassword"))
-      }
-    }
-
-    val name = getName(argMap)
-    val salt = getSalt(argMap, scramMechanism)
-    val iterations = getIterations(argMap, scramMechanism)
-    val saltedPassword = getSaltedPassword(argMap, scramMechanism, salt, iterations)
-
-    val myrecord = try {
-      val formatter = new ScramFormatter(scramMechanism);
-
-      new UserScramCredentialRecord()
-           .setName(name)
-           .setMechanism(scramMechanism.`type`)
-           .setSalt(salt)
-           .setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword)))
-           .setServerKey(formatter.serverKey(saltedPassword))
-           .setIterations(iterations)
-    } catch {
-      case e: Throwable => 
-        throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
-    }
-    myrecord
-  }
-
-  def getUserScramCredentialRecords(namespace: Namespace): Option[ArrayBuffer[UserScramCredentialRecord]] = {
-    if (namespace.getList("add_scram") != null) {
-      val listofAddConfig : List[String] = namespace.getList("add_scram").asScala.toList
-      val userScramCredentialRecords : ArrayBuffer[UserScramCredentialRecord] = ArrayBuffer()
-      for (singleAddConfig <- listofAddConfig) {
-        val singleAddConfigList = singleAddConfig.split("\\s+")
-
-        // The first subarg must be of the form key=value
-        val nameValueRecord = singleAddConfigList(0).split("=", 2)
-        nameValueRecord(0) match {
-          case "SCRAM-SHA-256" =>
-            userScramCredentialRecords.append(getUserScramCredentialRecord(nameValueRecord(0), nameValueRecord(1)))
-          case "SCRAM-SHA-512" =>
-            userScramCredentialRecords.append(getUserScramCredentialRecord(nameValueRecord(0), nameValueRecord(1)))
-          case _ => throw new TerseFailure(s"The add-scram mechanism ${nameValueRecord(0)} is not supported.")
-        }
-      }
-      Some(userScramCredentialRecords)
-    } else {
-      None
-    }
-  }
-
-  def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {
+  def infoCommand(stream: PrintStream, kraftMode: Boolean, directories: Seq[String]): Int = {
     val problems = new mutable.ArrayBuffer[String]
     val foundDirectories = new mutable.ArrayBuffer[String]
-    var prevMetadata: Option[RawMetaProperties] = None
+    var prevMetadata: Option[MetaProperties] = None
     directories.sorted.foreach(directory => {
       val directoryPath = Paths.get(directory)
       if (!Files.isDirectory(directoryPath)) {
@@ -281,39 +220,38 @@ object StorageTool extends Logging {
         }
       } else {
         foundDirectories += directoryPath.toString
-        val metaPath = directoryPath.resolve("meta.properties")
+        val metaPath = directoryPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME)
         if (!Files.exists(metaPath)) {
           problems += s"$directoryPath is not formatted."
         } else {
-          val properties = Utils.loadProps(metaPath.toString)
-          val rawMetaProperties = new RawMetaProperties(properties)
-
-          val curMetadata = rawMetaProperties.version match {
-            case 0 | 1 => Some(rawMetaProperties)
-            case v =>
-              problems += s"Unsupported version for $metaPath: $v"
-              None
-          }
-
-          if (prevMetadata.isEmpty) {
-            prevMetadata = curMetadata
-          } else {
-            if (!prevMetadata.get.equals(curMetadata.get)) {
-              problems += s"Metadata for $metaPath was ${curMetadata.get}, " +
-                s"but other directories featured ${prevMetadata.get}"
+          val properties = PropertiesUtils.readPropertiesFile(metaPath.toString)
+          try {
+            val curMetadata = new MetaProperties.Builder(properties).build()
+            if (prevMetadata.isEmpty) {
+              prevMetadata = Some(curMetadata)
+            } else {
+              if (!prevMetadata.get.clusterId().equals(curMetadata.clusterId())) {
+                problems += s"Mismatched cluster IDs between storage directories."
+              } else if (!prevMetadata.get.nodeId().equals(curMetadata.nodeId())) {
+                problems += s"Mismatched node IDs between storage directories."
+              }
             }
+          } catch {
+            case e: Exception =>
+              e.printStackTrace(System.out)
+              problems += s"Error loading $metaPath: ${e.getMessage}"
           }
         }
       }
     })
 
     prevMetadata.foreach { prev =>
-      if (selfManagedMode) {
-        if (prev.version == 0) {
+      if (kraftMode) {
+        if (prev.version.equals(MetaPropertiesVersion.V0)) {
           problems += "The kafka configuration file appears to be for a cluster in KRaft mode, but " +
             "the directories are formatted for legacy mode."
         }
-      } else if (prev.version == 1) {
+      } else if (prev.version.equals(MetaPropertiesVersion.V1)) {
         problems += "The kafka configuration file appears to be for a legacy cluster, but " +
           "the directories are formatted for a cluster in KRaft mode."
       }
@@ -334,7 +272,9 @@ object StorageTool extends Logging {
       }
 
       prevMetadata.foreach { prev =>
-        stream.println(s"Found metadata: ${prev}")
+        val sortedOutput = new util.TreeMap[String, String]()
+        prev.toProperties.entrySet.forEach(e => sortedOutput.put(e.getKey.toString, e.getValue.toString))
+        stream.println(s"Found metadata: $sortedOutput")
         stream.println("")
       }
 
@@ -351,93 +291,5 @@ object StorageTool extends Logging {
         0
       }
     }
-  }
-
-  def buildBootstrapMetadata(metadataVersion: MetadataVersion,
-                             metadataOptionalArguments: Option[ArrayBuffer[ApiMessageAndVersion]],
-                             source: String): BootstrapMetadata = {
-
-    val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
-    metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
-
-    metadataOptionalArguments.foreach { metadataArguments =>
-      for (record <- metadataArguments) metadataRecords.add(record)
-    }
-
-    BootstrapMetadata.fromRecords(metadataRecords, source)
-  }
-
-
-  def buildMetadataProperties(
-    clusterIdStr: String,
-    config: KafkaConfig
-  ): MetaProperties = {
-    val effectiveClusterId = try {
-      Uuid.fromString(clusterIdStr)
-    } catch {
-      case e: Throwable => throw new TerseFailure(s"Cluster ID string $clusterIdStr " +
-        s"does not appear to be a valid UUID: ${e.getMessage}")
-    }
-    if (config.nodeId < 0) {
-      throw new TerseFailure(s"The node.id must be set to a non-negative integer. We saw ${config.nodeId}")
-    }
-    new MetaProperties(effectiveClusterId.toString, config.nodeId)
-  }
-
-  def formatCommand(
-    stream: PrintStream,
-    directories: Seq[String],
-    metaProperties: MetaProperties,
-    metadataVersion: MetadataVersion,
-    ignoreFormatted: Boolean
-  ): Int = {
-    val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
-    formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted)
-  }
-
-  def formatCommand(
-    stream: PrintStream,
-    directories: Seq[String],
-    metaProperties: MetaProperties,
-    bootstrapMetadata: BootstrapMetadata,
-    metadataVersion: MetadataVersion,
-    ignoreFormatted: Boolean
-  ): Int = {
-    if (directories.isEmpty) {
-      throw new TerseFailure("No log directories found in the configuration.")
-    }
-
-    val unformattedDirectories = directories.filter(directory => {
-      if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
-          true
-      } else if (!ignoreFormatted) {
-        throw new TerseFailure(s"Log directory $directory is already formatted. " +
-          "Use --ignore-formatted to ignore this directory and format the others.")
-      } else {
-        false
-      }
-    })
-    if (unformattedDirectories.isEmpty) {
-      stream.println("All of the log directories are already formatted.")
-    }
-    unformattedDirectories.foreach(directory => {
-      try {
-        Files.createDirectories(Paths.get(directory))
-      } catch {
-        case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
-          s"directory $directory: ${e.getMessage}")
-      }
-      val metaPropertiesPath = Paths.get(directory, "meta.properties")
-      val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
-      checkpoint.write(metaProperties.toProperties)
-
-      val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
-      bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
-
-      stream.println(s"Formatting ${directory} with metadata.version ${metadataVersion}.")
-    })
-    0
   }
 }

@@ -18,7 +18,6 @@
 package kafka.security.auth
 
 import java.nio.charset.StandardCharsets
-
 import kafka.admin.ZkSecurityMigrator
 import kafka.server.QuorumTestHarness
 import kafka.utils.{Logging, TestUtils}
@@ -33,6 +32,7 @@ import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.ReplicaAssignment
+import kafka.security.JaasTestUtils
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
@@ -43,7 +43,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 class ZkAuthorizationTest extends QuorumTestHarness with Logging {
-  val jaasFile = kafka.utils.JaasTestUtils.writeJaasContextsToFile(kafka.utils.JaasTestUtils.zkSections)
+  val jaasFile = JaasTestUtils.writeJaasContextsToFile(JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
 
   @BeforeEach
@@ -68,10 +68,10 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
    */
   @Test
   def testIsZkSecurityEnabled(): Unit = {
-    assertTrue(JaasUtils.isZkSaslEnabled())
+    assertTrue(JaasUtils.isZkSaslEnabled)
     Configuration.setConfiguration(null)
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-    assertFalse(JaasUtils.isZkSaslEnabled())
+    assertFalse(JaasUtils.isZkSaslEnabled)
     Configuration.setConfiguration(null)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, "no-such-file-exists.conf")
     assertThrows(classOf[KafkaException], () => JaasUtils.isZkSaslEnabled())
@@ -137,7 +137,7 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
   private def createBrokerInfo(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol,
                                rack: Option[String] = None): BrokerInfo =
     BrokerInfo(Broker(id, Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol
-    (securityProtocol), securityProtocol)), rack = rack), MetadataVersion.latest, jmxPort = port + 10)
+    (securityProtocol), securityProtocol)), rack = rack), MetadataVersion.latestTesting, jmxPort = port + 10)
 
   private def newKafkaZkClient(connectionString: String, isSecure: Boolean) =
     KafkaZkClient(connectionString, isSecure, 6000, 6000, Int.MaxValue, Time.SYSTEM, "ZkAuthorizationTest",
@@ -252,7 +252,7 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
     }
     // Check consumers path.
     val consumersAcl = firstZk.getAcl(ConsumerPathZNode.path)
-    assertTrue(isAclCorrect(consumersAcl, false, false), ConsumerPathZNode.path)
+    assertTrue(isAclCorrect(consumersAcl, secure = false, sensitive = false), ConsumerPathZNode.path)
     assertTrue(isAclCorrect(firstZk.getAcl("/kafka-acl-extended"), secondZk.secure,
       ZkData.sensitivePath(ExtendedAclZNode.path)), "/kafka-acl-extended")
     assertTrue(isAclCorrect(firstZk.getAcl("/feature"), secondZk.secure,

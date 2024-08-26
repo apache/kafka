@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,34 +17,37 @@
 
 package kafka.server
 
-import java.io.{ByteArrayOutputStream, File, PrintStream}
+import java.io.File
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
-import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
+import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
-import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.common.metadata.FeatureLevelRecord
-import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.common.{DirectoryId, Uuid}
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
+import org.apache.kafka.metadata.storage.Formatter
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.ListBuffer
-import scala.collection.{Seq, immutable}
+import java.nio.file.{Files, Paths}
+import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
   def createBroker(
@@ -85,7 +88,7 @@ class KRaftQuorumImplementation(
   val controllerServer: ControllerServer,
   val faultHandlerFactory: FaultHandlerFactory,
   val metadataDir: File,
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, InetSocketAddress]],
   val clusterId: String,
   val log: Logging,
   val faultHandler: FaultHandler
@@ -96,16 +99,41 @@ class KRaftQuorumImplementation(
     startup: Boolean,
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
-    val sharedServer = new SharedServer(config,
-      new MetaProperties(clusterId, config.nodeId),
-      Time.SYSTEM,
+    val metaPropertiesEnsemble = {
+      val loader = new MetaPropertiesEnsemble.Loader()
+      loader.addLogDirs(config.logDirs.asJava)
+      loader.addMetadataLogDir(config.metadataLogDir)
+      val ensemble = loader.load()
+      val copier = new MetaPropertiesEnsemble.Copier(ensemble)
+      ensemble.emptyLogDirs().forEach(logDir => {
+        copier.setLogDirProps(logDir, new MetaProperties.Builder().
+          setVersion(MetaPropertiesVersion.V1).
+          setClusterId(clusterId).
+          setNodeId(config.nodeId).
+          setDirectoryId(DirectoryId.random()).
+          build())
+      })
+      copier.setPreWriteHandler((logDir, _, _) => {
+        Files.createDirectories(Paths.get(logDir))
+      })
+      copier.writeLogDirChanges()
+      copier.copy()
+    }
+    metaPropertiesEnsemble.verify(Optional.of(clusterId),
+      OptionalInt.of(config.nodeId),
+      util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
+    val sharedServer = new SharedServer(
+      config,
+      metaPropertiesEnsemble,
+      time,
       new Metrics(),
       controllerQuorumVotersFuture,
-      faultHandlerFactory)
+      controllerQuorumVotersFuture.get().values(),
+      faultHandlerFactory
+    )
     var broker: BrokerServer = null
     try {
-      broker = new BrokerServer(sharedServer,
-        initialOfflineDirs = Seq())
+      broker = new BrokerServer(sharedServer)
       if (startup) broker.startup()
       broker
     } catch {
@@ -150,12 +178,10 @@ abstract class QuorumTestHarness extends Logging {
     Seq(new Properties())
   }
 
-  protected def metadataVersion: MetadataVersion = MetadataVersion.latest()
+  protected def metadataVersion: MetadataVersion = MetadataVersion.latestTesting()
 
   private var testInfo: TestInfo = _
-  private var implementation: QuorumImplementation = _
-
-  val bootstrapRecords: ListBuffer[ApiMessageAndVersion] = ListBuffer()
+  protected var implementation: QuorumImplementation = _
 
   def isKRaftTest(): Boolean = {
     TestInfoUtils.isKRaft(testInfo)
@@ -163,6 +189,18 @@ abstract class QuorumTestHarness extends Logging {
 
   def isZkMigrationTest(): Boolean = {
     TestInfoUtils.isZkMigrationTest(testInfo)
+  }
+
+  def isNewGroupCoordinatorEnabled(): Boolean = {
+    TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
+  }
+
+  def isShareGroupTest(): Boolean = {
+    TestInfoUtils.isShareGroupTest(testInfo)
+  }
+
+  def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
+    TestInfoUtils.maybeGroupProtocolSpecified(testInfo)
   }
 
   def checkIsZKTest(): Unit = {
@@ -227,7 +265,7 @@ abstract class QuorumTestHarness extends Logging {
     this.testInfo = testInfo
     Exit.setExitProcedure((code, message) => {
       try {
-        throw new RuntimeException(s"exit(${code}, ${message}) called!")
+        throw new RuntimeException(s"exit($code, $message) called!")
       } catch {
         case e: Throwable => error("test error", e)
           throw e
@@ -237,7 +275,7 @@ abstract class QuorumTestHarness extends Logging {
     })
     Exit.setHaltProcedure((code, message) => {
       try {
-        throw new RuntimeException(s"halt(${code}, ${message}) called!")
+        throw new RuntimeException(s"halt($code, $message) called!")
       } catch {
         case e: Throwable => error("test error", e)
           throw e
@@ -274,68 +312,65 @@ abstract class QuorumTestHarness extends Logging {
     CoreUtils.swallow(kRaftQuorumImplementation.controllerServer.shutdown(), kRaftQuorumImplementation.log)
   }
 
-  def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = None
-
-  private def formatDirectories(directories: immutable.Seq[String],
-                                metaProperties: MetaProperties): Unit = {
-    val stream = new ByteArrayOutputStream()
-    var out: PrintStream = null
-    try {
-      out = new PrintStream(stream)
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion,
-                                                                 optionalMetadataRecords, "format command")
-      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion,
-                                    ignoreFormatted = false) != 0) {
-        throw new RuntimeException(stream.toString())
-      }
-      debug(s"Formatted storage directory(ies) ${directories}")
-    } finally {
-      if (out != null) out.close()
-      stream.close()
-    }
-  }
+  def addFormatterSettings(formatter: Formatter): Unit = {}
 
   private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
+    newKRaftQuorum(new Properties())
+  }
+
+  protected def newKRaftQuorum(overridingProps: Properties): KRaftQuorumImplementation = {
     val propsList = kraftControllerConfigs()
     if (propsList.size != 1) {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
-    val props = propsList(0)
-    props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
-    props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
-    if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
-      props.setProperty(KafkaConfig.NodeIdProp, "1000")
+    val props = propsList.head
+    props.putAll(overridingProps)
+    props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
+    if (props.getProperty(KRaftConfigs.NODE_ID_CONFIG) == null) {
+      props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1000")
     }
-    val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
+    val nodeId = Integer.parseInt(props.getProperty(KRaftConfigs.NODE_ID_CONFIG))
     val metadataDir = TestUtils.tempDir()
-    val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
-    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
-
-    val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
-    metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
-
-    optionalMetadataRecords.foreach { metadataArguments =>
-      for (record <- metadataArguments) metadataRecords.add(record)
-    }
-
-    val bootstrapMetadata = BootstrapMetadata.fromRecords(metadataRecords, "test harness")
-
-    props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
+    props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
-    props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
-    props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
-    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"CONTROLLER:$proto")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
+    // Setting the configuration to the same value set on the brokers via TestUtils to keep KRaft based and Zk based controller configs are consistent.
+    props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)
-    val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
-    val sharedServer = new SharedServer(config,
-      metaProperties,
+
+    val formatter = new Formatter().
+      setClusterId(Uuid.randomUuid().toString).
+      setNodeId(nodeId)
+    formatter.addDirectory(metadataDir.getAbsolutePath)
+    formatter.setReleaseVersion(metadataVersion)
+    formatter.setUnstableFeatureVersionsEnabled(true)
+    formatter.setControllerListenerName(config.controllerListenerNames.head)
+    formatter.setMetadataLogDirectory(config.metadataLogDir)
+    addFormatterSettings(formatter)
+    formatter.run()
+    val bootstrapMetadata = formatter.bootstrapMetadata()
+
+    val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, InetSocketAddress]]
+    val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().
+      addMetadataLogDir(metadataDir.getAbsolutePath).
+      load()
+    metaPropertiesEnsemble.verify(Optional.of(formatter.clusterId()),
+      OptionalInt.of(nodeId),
+      util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
+    val sharedServer = new SharedServer(
+      config,
+      metaPropertiesEnsemble,
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      faultHandlerFactory)
+      Collections.emptyList(),
+      faultHandlerFactory
+    )
     var controllerServer: ControllerServer = null
     try {
       controllerServer = new ControllerServer(
@@ -348,8 +383,9 @@ abstract class QuorumTestHarness extends Logging {
           error("Error completing controller socket server future", e)
           controllerQuorumVotersFuture.completeExceptionally(e)
         } else {
-          controllerQuorumVotersFuture.complete(Collections.singletonMap(nodeId,
-            new InetAddressSpec(new InetSocketAddress("localhost", port))))
+          controllerQuorumVotersFuture.complete(
+            Collections.singletonMap(nodeId, new InetSocketAddress("localhost", port))
+          )
         }
       })
       controllerServer.startup()
@@ -359,13 +395,15 @@ abstract class QuorumTestHarness extends Logging {
         CoreUtils.swallow(sharedServer.stopForController(), this)
         throw e
     }
-    new KRaftQuorumImplementation(controllerServer,
+    new KRaftQuorumImplementation(
+      controllerServer,
       faultHandlerFactory,
       metadataDir,
       controllerQuorumVotersFuture,
-      metaProperties.clusterId,
+      formatter.clusterId(),
       this,
-      faultHandler)
+      faultHandler
+    )
   }
 
   private def newZooKeeperQuorum(): ZooKeeperQuorumImplementation = {
@@ -382,7 +420,8 @@ abstract class QuorumTestHarness extends Logging {
         zkMaxInFlightRequests,
         Time.SYSTEM,
         name = "ZooKeeperTestHarness",
-        new ZKClientConfig)
+        new ZKClientConfig,
+        enableEntityConfigControllerCheck = false)
       adminZkClient = new AdminZkClient(zkClient)
     } catch {
       case t: Throwable =>
@@ -401,11 +440,11 @@ abstract class QuorumTestHarness extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    Exit.resetExitProcedure()
-    Exit.resetHaltProcedure()
     if (implementation != null) {
       implementation.shutdown()
     }
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     TestUtils.clearYammerMetrics()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)

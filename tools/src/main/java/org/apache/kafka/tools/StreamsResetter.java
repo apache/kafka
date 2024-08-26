@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
@@ -58,6 +55,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
+
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,
  * you can reprocess its input from scratch.
@@ -89,7 +90,7 @@ public class StreamsResetter {
     private static final int EXIT_CODE_SUCCESS = 0;
     private static final int EXIT_CODE_ERROR = 1;
 
-    private final static String USAGE = "This tool helps to quickly reset an application in order to reprocess "
+    private static final String USAGE = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
             + " and it skips to the end of intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
@@ -135,8 +136,6 @@ public class StreamsResetter {
             String bootstrapServerValue = "localhost:9092";
             if (options.hasBootstrapServer()) {
                 bootstrapServerValue = options.bootstrapServer();
-            } else if (options.hasBootstrapServers()) {
-                bootstrapServerValue = options.bootstrapServers();
             }
 
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
@@ -545,7 +544,6 @@ public class StreamsResetter {
     }
 
     private static class StreamsResetterOptions extends CommandDefaultOptions {
-        private final OptionSpec<String> bootstrapServersOption;
         private final OptionSpec<String> bootstrapServerOption;
         private final OptionSpec<String> applicationIdOption;
         private final OptionSpec<String> inputTopicsOption;
@@ -569,11 +567,7 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .describedAs("id")
                 .required();
-            bootstrapServersOption = parser.accepts("bootstrap-servers", "DEPRECATED: Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
-                .withRequiredArg()
-                .ofType(String.class)
-                .describedAs("urls");
-            bootstrapServerOption = parser.accepts("bootstrap-server", "REQUIRED unless --bootstrap-servers(deprecated) is specified. The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
+            bootstrapServerOption = parser.accepts("bootstrap-server", "The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("server to connect to");
@@ -665,14 +659,6 @@ public class StreamsResetter {
 
         public String bootstrapServer() {
             return options.valueOf(bootstrapServerOption);
-        }
-
-        public boolean hasBootstrapServers() {
-            return options.has(bootstrapServersOption);
-        }
-
-        public String bootstrapServers() {
-            return options.valueOf(bootstrapServersOption);
         }
 
         public boolean hasForce() {

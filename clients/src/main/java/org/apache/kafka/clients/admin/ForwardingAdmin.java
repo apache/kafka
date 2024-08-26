@@ -24,6 +24,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
@@ -275,6 +276,36 @@ public class ForwardingAdmin implements Admin {
     @Override
     public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
         return delegate.fenceProducers(transactionalIds, options);
+    }
+
+    @Override
+    public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
+        return delegate.listClientMetricsResources(options);
+    }
+
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        return delegate.clientInstanceId(timeout);
+    }
+
+    @Override
+    public AddRaftVoterResult addRaftVoter(int voterId, Uuid voterDirectoryId, Set<RaftVoterEndpoint> endpoints, AddRaftVoterOptions options) {
+        return delegate.addRaftVoter(voterId, voterDirectoryId, endpoints, options);
+    }
+
+    @Override
+    public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
+        return delegate.removeRaftVoter(voterId, voterDirectoryId, options);
+    }
+
+    @Override
+    public DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds, DescribeShareGroupsOptions options) {
+        return delegate.describeShareGroups(groupIds, options);
+    }
+
+    @Override
+    public ListShareGroupsResult listShareGroups(ListShareGroupsOptions options) {
+        return delegate.listShareGroups(options);
     }
 
     @Override

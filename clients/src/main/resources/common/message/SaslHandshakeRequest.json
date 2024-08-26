@@ -23,6 +23,7 @@
   // client negotiation for clients <= 2.4.
   // See https://issues.apache.org/jira/browse/KAFKA-9577
   "validVersions": "0-1",
+  "deprecatedVersions": "0",
   "flexibleVersions": "none",
   "fields": [
     { "name": "Mechanism", "type": "string", "versions": "0+",

@@ -42,7 +42,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
             return segments.get(segmentId);
         } else {
             final TimestampedSegment newSegment =
-                new TimestampedSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+                new TimestampedSegment(segmentName(segmentId), name, segmentId, position, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
@@ -64,7 +64,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
 
     @Override
     public void openExisting(final ProcessorContext context, final long streamTime) {
-        metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
+        metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
         super.openExisting(context, streamTime);
     }
 }

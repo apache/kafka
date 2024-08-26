@@ -19,15 +19,16 @@ package org.apache.kafka.connect.mirror.rest.resources;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.resources.InternalClusterResource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+
+import javax.inject.Inject;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.UriInfo;
-import java.util.Map;
 
 @Path("/{source}/{target}/connectors")
 public class InternalMirrorResource extends InternalClusterResource {
@@ -35,12 +36,15 @@ public class InternalMirrorResource extends InternalClusterResource {
     @Context
     private UriInfo uriInfo;
 
-    private static final Logger log = LoggerFactory.getLogger(InternalMirrorResource.class);
-
     private final Map<SourceAndTarget, Herder> herders;
 
-    public InternalMirrorResource(Map<SourceAndTarget, Herder> herders, RestClient restClient) {
-        super(restClient);
+    @Inject
+    public InternalMirrorResource(
+            Map<SourceAndTarget, Herder> herders,
+            RestClient restClient,
+            RestRequestTimeout requestTimeout
+    ) {
+        super(restClient, requestTimeout);
         this.herders = herders;
     }
 

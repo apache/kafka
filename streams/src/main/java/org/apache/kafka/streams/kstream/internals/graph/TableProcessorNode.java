@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -27,22 +27,22 @@ import java.util.Objects;
 public class TableProcessorNode<K, V> extends GraphNode {
 
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
-    private final StoreBuilder<?> storeBuilder;
+    private final StoreFactory storeFactory;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              final StoreBuilder<?> storeBuilder) {
-        this(nodeName, processorParameters, storeBuilder, null);
+                              final StoreFactory storeFactory) {
+        this(nodeName, processorParameters, storeFactory, null);
     }
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              final StoreBuilder<?> storeBuilder,
+                              final StoreFactory storeFactory,
                               final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;
-        this.storeBuilder = storeBuilder;
+        this.storeFactory = storeFactory;
         this.storeNames = storeNames != null ? storeNames : new String[] {};
     }
 
@@ -54,7 +54,7 @@ public class TableProcessorNode<K, V> extends GraphNode {
     public String toString() {
         return "TableProcessorNode{" +
             ", processorParameters=" + processorParameters +
-            ", storeBuilder=" + (storeBuilder == null ? "null" : storeBuilder.name()) +
+            ", storeFactory=" + (storeFactory == null ? "null" : storeFactory.name()) +
             ", storeNames=" + Arrays.toString(storeNames) +
             "} " + super.toString();
     }
@@ -73,11 +73,11 @@ public class TableProcessorNode<K, V> extends GraphNode {
                 (KTableSource<K, V>) processorParameters.processorSupplier() : null;
         if (tableSource != null) {
             if (tableSource.materialized()) {
-                topologyBuilder.addStateStore(Objects.requireNonNull(storeBuilder, "storeBuilder was null"),
+                topologyBuilder.addStateStore(Objects.requireNonNull(storeFactory, "storeFactory was null"),
                                               processorName);
             }
-        } else if (storeBuilder != null) {
-            topologyBuilder.addStateStore(storeBuilder, processorName);
+        } else if (storeFactory != null) {
+            topologyBuilder.addStateStore(storeFactory, processorName);
         }
     }
 }

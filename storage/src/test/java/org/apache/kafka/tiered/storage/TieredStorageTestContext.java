@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.tiered.storage;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
-import org.apache.kafka.tiered.storage.specs.TopicSpec;
-import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 import kafka.log.UnifiedLog;
 import kafka.utils.TestUtils;
+
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
@@ -29,6 +27,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -36,16 +35,20 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
-import scala.Function0;
-import scala.Function1;
+import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
+import org.apache.kafka.tiered.storage.specs.TopicSpec;
+import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -61,6 +64,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import scala.Function0;
+import scala.Function1;
 import scala.Option;
 import scala.collection.JavaConverters;
 
@@ -69,8 +74,8 @@ import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 public final class TieredStorageTestContext implements AutoCloseable {
 
     private final TieredStorageTestHarness harness;
-    private final Serializer<String> ser = Serdes.String().serializer();
-    private final Deserializer<String> de = Serdes.String().deserializer();
+    private final Serializer<String> ser = new StringSerializer();
+    private final Deserializer<String> de = new StringDeserializer();
     private final Map<String, TopicSpec> topicSpecs = new HashMap<>();
     private final TieredStorageTestReport testReport;
 
@@ -89,15 +94,21 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     @SuppressWarnings("deprecation")
     private void initClients() {
+        // rediscover the new bootstrap-server port incase of broker restarts
+        ListenerName listenerName = harness.listenerName();
+        Properties commonOverrideProps = new Properties();
+        commonOverrideProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, harness.bootstrapServers(listenerName));
+
         // Set a producer linger of 60 seconds, in order to optimistically generate batches of
         // records with a pre-determined size.
         Properties producerOverrideProps = new Properties();
         producerOverrideProps.put(LINGER_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(60)));
-        producer = harness.createProducer(ser, ser, producerOverrideProps);
+        producerOverrideProps.putAll(commonOverrideProps);
 
-        consumer = harness.createConsumer(de, de, new Properties(),
+        producer = harness.createProducer(ser, ser, producerOverrideProps);
+        consumer = harness.createConsumer(de, de, commonOverrideProps,
                 JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toList());
-        admin = harness.createAdminClient(harness.listenerName(), new Properties());
+        admin = harness.createAdminClient(listenerName, commonOverrideProps);
     }
 
     private void initContext() {
@@ -170,7 +181,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void deleteTopic(String topic) {
-        TestUtils.deleteTopicWithAdmin(admin, topic, harness.brokers());
+        TestUtils.deleteTopicWithAdmin(admin, topic, harness.brokers(), harness.controllerServers());
     }
 
     /**
@@ -181,13 +192,14 @@ public final class TieredStorageTestContext implements AutoCloseable {
      * @param batchSize the batch size
      */
     public void produce(List<ProducerRecord<String, String>> recordsToProduce, Integer batchSize) {
-        int counter = 0;
+        int counter = 1;
         for (ProducerRecord<String, String> record : recordsToProduce) {
             producer.send(record);
             if (counter++ % batchSize == 0) {
                 producer.flush();
             }
         }
+        producer.flush();
     }
 
     public List<ConsumerRecord<String, String>> consume(TopicPartition topicPartition,
@@ -197,6 +209,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
         consumer.seek(topicPartition, fetchOffset);
 
         long timeoutMs = 60_000L;
+        long pollTimeoutMs = 100L;
         String sep = System.lineSeparator();
         List<ConsumerRecord<String, String>> records = new ArrayList<>();
         Function1<ConsumerRecords<String, String>, Object> pollAction = polledRecords -> {
@@ -206,8 +219,8 @@ public final class TieredStorageTestContext implements AutoCloseable {
         Function0<String> messageSupplier = () ->
                 String.format("Could not consume %d records of %s from offset %d in %d ms. %d message(s) consumed:%s%s",
                         expectedTotalCount, topicPartition, fetchOffset, timeoutMs, records.size(), sep,
-                        Utils.join(records, sep));
-        TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs);
+                        records.stream().map(Object::toString).collect(Collectors.joining(sep)));
+        TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs, pollTimeoutMs);
         return records;
     }
 
@@ -227,7 +240,11 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     public void bounce(int brokerId) {
         harness.killBroker(brokerId);
+        boolean allBrokersDead = harness.aliveBrokers().isEmpty();
         harness.startBroker(brokerId);
+        if (allBrokersDead) {
+            reinitClients();
+        }
         initContext();
     }
 
@@ -237,12 +254,28 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void start(int brokerId) {
+        boolean allBrokersDead = harness.aliveBrokers().isEmpty();
         harness.startBroker(brokerId);
+        if (allBrokersDead) {
+            reinitClients();
+        }
         initContext();
     }
 
-    public void eraseBrokerStorage(int brokerId) throws IOException {
-        localStorages.get(brokerId).eraseStorage();
+    public void eraseBrokerStorage(int brokerId,
+                                   FilenameFilter filter,
+                                   boolean isStopped) throws IOException {
+        BrokerLocalStorage brokerLocalStorage;
+        if (isStopped) {
+            brokerLocalStorage = TieredStorageTestHarness.localStorages(harness.brokers())
+                    .stream()
+                    .filter(bls -> bls.getBrokerId() == brokerId)
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("No local storage found for broker " + brokerId));
+        } else {
+            brokerLocalStorage = localStorages.get(brokerId);
+        }
+        brokerLocalStorage.eraseStorage(filter);
     }
 
     public TopicSpec topicSpec(String topicName) {
@@ -253,11 +286,18 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     public LocalTieredStorageSnapshot takeTieredStorageSnapshot() {
         int aliveBrokerId = harness.aliveBrokers().head().config().brokerId();
-        return LocalTieredStorageSnapshot.takeSnapshot(remoteStorageManagers.get(aliveBrokerId));
+        return LocalTieredStorageSnapshot.takeSnapshot(remoteStorageManager(aliveBrokerId));
     }
 
     public LocalTieredStorageHistory tieredStorageHistory(int brokerId) {
-        return remoteStorageManagers.get(brokerId).getHistory();
+        return remoteStorageManager(brokerId).getHistory();
+    }
+
+    public LocalTieredStorage remoteStorageManager(int brokerId) {
+        return remoteStorageManagers.stream()
+                .filter(rsm -> rsm.brokerId() == brokerId)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No remote storage manager found for broker " + brokerId));
     }
 
     public List<LocalTieredStorage> remoteStorageManagers() {
@@ -309,7 +349,16 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        Utils.closeAll(producer, consumer);
+        // IntegrationTestHarness closes the clients on tearDown, no need to close them explicitly.
+    }
+
+    private void reinitClients() {
+        // Broker uses a random port (TestUtils.RandomPort) for the listener. If the initial bootstrap-server config
+        // becomes invalid, then the clients won't be able to reconnect to the cluster.
+        // To avoid this, we reinitialize the clients after all the brokers are bounced.
+        Utils.closeQuietly(producer, "Producer client");
+        Utils.closeQuietly(consumer, "Consumer client");
         Utils.closeQuietly(admin, "Admin client");
+        initClients();
     }
 }

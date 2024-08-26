@@ -16,16 +16,60 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * This is the abstract definition of the events created by the background thread.
- */
-abstract public class BackgroundEvent {
-    public final EventType type;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.common.Uuid;
 
-    public BackgroundEvent(EventType type) {
-        this.type = type;
+import java.util.Objects;
+
+/**
+ * This is the abstract definition of the events created by the {@link ConsumerNetworkThread network thread}.
+ */
+public abstract class BackgroundEvent {
+
+    public enum Type {
+        ERROR, CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK
     }
-    public enum EventType {
-        NOOP, ERROR,
+
+    private final Type type;
+
+    /**
+     * This identifies a particular event. It is used to disambiguate events via {@link #hashCode()} and
+     * {@link #equals(Object)} and can be used in log messages when debugging.
+     */
+    private final Uuid id;
+
+    protected BackgroundEvent(Type type) {
+        this.type = Objects.requireNonNull(type);
+        this.id = Uuid.randomUuid();
+    }
+
+    public Type type() {
+        return type;
+    }
+
+    public Uuid id() {
+        return id;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BackgroundEvent that = (BackgroundEvent) o;
+        return type == that.type && id.equals(that.id);
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(type, id);
+    }
+
+    protected String toStringBase() {
+        return "type=" + type + ", id=" + id;
+    }
+
+    @Override
+    public final String toString() {
+        return getClass().getSimpleName() + "{" + toStringBase() + "}";
     }
 }
