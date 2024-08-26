@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -1270,7 +1271,7 @@ public class TopologyTest {
     @Test
     public void kGroupedStreamZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
-        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStoreAsInMemory());
         builder.stream("input-topic")
             .groupByKey()
             .count();
@@ -1392,7 +1393,7 @@ public class TopologyTest {
     @Test
     public void timeWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
-        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStoreAsInMemory());
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(1)))
@@ -1465,7 +1466,7 @@ public class TopologyTest {
     @Test
     public void slidingWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
-        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStoreAsInMemory());
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(ofMillis(1)))
@@ -1549,7 +1550,7 @@ public class TopologyTest {
     @Test
     public void timeWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
-        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStoreAsInMemory());
         builder.stream("input-topic")
             .groupByKey()
             .cogroup((key, value, aggregate) -> value)
@@ -1638,7 +1639,7 @@ public class TopologyTest {
     @Test
     public void slidingWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
-        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStoreAsInMemory());
         builder.stream("input-topic")
             .groupByKey()
             .cogroup((key, value, aggregate) -> value)
@@ -1726,7 +1727,7 @@ public class TopologyTest {
     @Test
     public void sessionWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
-        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStoreAsInMemory());
         builder.stream("input-topic")
             .groupByKey()
             .cogroup((key, value, aggregate) -> value)
@@ -1853,7 +1854,7 @@ public class TopologyTest {
     @Test
     public void sessionWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
-        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStoreAsInMemory());
         builder.stream("input-topic")
             .groupByKey()
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
@@ -1963,7 +1964,7 @@ public class TopologyTest {
     @Test
     public void tableNamedMaterializedCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
-        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStore(StreamsConfig.IN_MEMORY));
+        final StreamsBuilder builder = new StreamsBuilder(overrideDefaultStoreAsInMemory());
         builder.table("input-topic")
             .groupBy((key, value) -> null)
             // can still override the default store dynamically
@@ -2405,10 +2406,10 @@ public class TopologyTest {
         assertThat(stateStoreFactory.loggingEnabled(), equalTo(false));
     }
 
-    private TopologyConfig overrideDefaultStore(final String defaultStore) {
+    private TopologyConfig overrideDefaultStoreAsInMemory() {
         final Properties topologyOverrides = new Properties();
         // change default store as in-memory
-        topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, defaultStore);
+        topologyOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
 
         return new TopologyConfig(
