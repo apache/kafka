@@ -63,16 +63,16 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   private def testOffsetCommit(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol && !requestUtilities.isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -82,7 +82,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
 
     // Start from version 1 because version 0 goes to ZK.
-    for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
+    for (version <- 1 to ApiKeys.OFFSET_COMMIT.latestVersion(requestUtilities.isUnstableApiEnabled)) {
       // Commit offset.
       commitOffset(
         groupId = "grp",
@@ -104,7 +104,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         partition = 0,
         offset = 100L,
         expectedError =
-          if (isNewGroupCoordinatorEnabled && version >= 9) Errors.GROUP_ID_NOT_FOUND
+          if (requestUtilities.isNewGroupCoordinatorEnabled && version >= 9) Errors.GROUP_ID_NOT_FOUND
           else Errors.ILLEGAL_GENERATION,
         version = version.toShort
       )
@@ -118,7 +118,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         partition = 0,
         offset = 100L,
         expectedError =
-          if (isNewGroupCoordinatorEnabled && version >= 9) Errors.GROUP_ID_NOT_FOUND
+          if (requestUtilities.isNewGroupCoordinatorEnabled && version >= 9) Errors.GROUP_ID_NOT_FOUND
           else Errors.ILLEGAL_GENERATION,
         version = version.toShort
       )

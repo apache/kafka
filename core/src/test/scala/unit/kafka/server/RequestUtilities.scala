@@ -27,7 +27,6 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
-import org.junit.jupiter.api.AfterEach
 
 import java.util.Properties
 import java.util.stream.Collectors
@@ -35,7 +34,7 @@ import scala.collection.Seq
 import scala.collection.convert.ImplicitConversions.{`collection AsScalaIterable`, `map AsScala`}
 import scala.reflect.ClassTag
 
-class RequestUtilitiesTest(cluster: ClusterInstance) {
+class RequestUtilities(cluster: ClusterInstance) {
 
   protected var producer: KafkaProducer[String, String] = _
 
@@ -46,13 +45,7 @@ class RequestUtilitiesTest(cluster: ClusterInstance) {
 
   private def controllerServers(): Seq[ControllerServer] = cluster.controllers().values().toSeq
 
-  @AfterEach
-  def tearDown(): Unit = {
-    if (producer != null)
-      producer.close()
-  }
-
-  protected def createOffsetsTopic(): Unit = {
+  def createOffsetsTopic(): Unit = {
     TestUtils.createOffsetsTopicWithAdmin(
       admin = cluster.createAdminClient(),
       brokers = brokers(),
@@ -60,7 +53,7 @@ class RequestUtilitiesTest(cluster: ClusterInstance) {
     )
   }
 
-  protected def createTopic(topic: String,
+  def createTopic(topic: String,
                             numPartitions: Int): Unit = {
     TestUtils.createTopicWithAdmin(
       admin = cluster.createAdminClient(),
@@ -71,7 +64,7 @@ class RequestUtilitiesTest(cluster: ClusterInstance) {
     )
   }
 
-  protected def createTopicAndReturnLeaders(topic: String,
+  def createTopicAndReturnLeaders(topic: String,
                                                numPartitions: Int = 1,
                                                replicationFactor: Int = 1,
                                                topicConfig: Properties = new Properties): Map[TopicIdPartition, Int] = {
@@ -87,25 +80,25 @@ class RequestUtilitiesTest(cluster: ClusterInstance) {
     partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds(topic), new TopicPartition(topic, partition)) -> leader }
   }
 
-  protected def getTopicIds: Map[String, Uuid] = {
+  def getTopicIds: Map[String, Uuid] = {
     cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().toMap
   }
 
-  protected def getBrokers: Seq[KafkaBroker] = {
+  def getBrokers: Seq[KafkaBroker] = {
     cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).toSeq
   }
 
-  protected def brokerSocketServer(brokerId: Int): SocketServer = {
+  def brokerSocketServer(brokerId: Int): SocketServer = {
     getBrokers.find { broker =>
       broker.config.brokerId == brokerId
     }.map(_.socketServer).getOrElse(throw new IllegalStateException(s"Could not find broker with id $brokerId"))
   }
 
-  protected def isUnstableApiEnabled: Boolean = {
+  def isUnstableApiEnabled: Boolean = {
     cluster.config.serverProperties.get("unstable.api.versions.enable") == "true"
   }
 
-  protected def isNewGroupCoordinatorEnabled: Boolean = {
+  def isNewGroupCoordinatorEnabled: Boolean = {
     cluster.config.serverProperties.get("group.coordinator.new.enable") == "true" ||
       cluster.config.serverProperties.get("group.coordinator.rebalance.protocols").contains("consumer")
   }
@@ -114,12 +107,17 @@ class RequestUtilitiesTest(cluster: ClusterInstance) {
     TestUtils.bootstrapServers(getBrokers, listenerName)
   }
 
-  protected def initProducer(): Unit = {
+  def initProducer(): Unit = {
     producer = TestUtils.createProducer(cluster.bootstrapServers(),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 
-  protected def produceData(topicIdPartition: TopicIdPartition, numMessages: Int): Seq[RecordMetadata] = {
+  def closeProducer(): Unit = {
+    if( producer != null )
+      producer.close()
+  }
+
+  def produceData(topicIdPartition: TopicIdPartition, numMessages: Int): Seq[RecordMetadata] = {
     val records = for {
       messageIndex <- 0 until numMessages
     } yield {
@@ -129,12 +127,12 @@ class RequestUtilitiesTest(cluster: ClusterInstance) {
     records.map(producer.send(_).get)
   }
 
-  protected def produceData(topicIdPartition: TopicIdPartition, key: String, value: String): RecordMetadata = {
+  def produceData(topicIdPartition: TopicIdPartition, key: String, value: String): RecordMetadata = {
     producer.send(new ProducerRecord(topicIdPartition.topic, topicIdPartition.partition,
       key, value)).get
   }
 
-  protected def connectAndReceive[T <: AbstractResponse](request: AbstractRequest)(implicit classTag: ClassTag[T]): T = {
+  def connectAndReceive[T <: AbstractResponse](request: AbstractRequest)(implicit classTag: ClassTag[T]): T = {
     IntegrationTestUtils.connectAndReceive[T](
       request,
       cluster.anyBrokerSocketServer(),
@@ -142,7 +140,7 @@ class RequestUtilitiesTest(cluster: ClusterInstance) {
     )
   }
 
-  protected def connectAndReceive[T <: AbstractResponse](request: AbstractRequest, destination: Int)(implicit classTag: ClassTag[T]): T = {
+  def connectAndReceive[T <: AbstractResponse](request: AbstractRequest, destination: Int)(implicit classTag: ClassTag[T]): T = {
     IntegrationTestUtils.connectAndReceive[T](
       request,
       brokerSocketServer(destination),

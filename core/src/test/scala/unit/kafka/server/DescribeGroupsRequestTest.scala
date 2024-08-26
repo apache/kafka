@@ -53,10 +53,10 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
   private def testDescribeGroups(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -74,7 +74,7 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
       completeRebalance = false
     )
 
-    for (version <- ApiKeys.DESCRIBE_GROUPS.oldestVersion() to ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.DESCRIBE_GROUPS.oldestVersion() to ApiKeys.DESCRIBE_GROUPS.latestVersion(requestUtilities.isUnstableApiEnabled)) {
       assertEquals(
         List(
           new DescribedGroup()

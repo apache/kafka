@@ -42,10 +42,10 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
   def testUpgradeFromEmptyClassicToConsumerGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -59,7 +59,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       groupId = groupId,
       memberId = memberId,
       useNewProtocol = false,
-      version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+      version = ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
     )
 
     // Verify that the group is empty.
@@ -113,10 +113,10 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
   def testDowngradeFromEmptyConsumerToClassicGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -130,7 +130,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       groupId = groupId,
       memberId = memberId,
       useNewProtocol = true,
-      version = ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(isUnstableApiEnabled)
+      version = ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(requestUtilities.isUnstableApiEnabled)
     )
 
     // Verify that the group is empty.
@@ -177,11 +177,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
   def testUpgradeFromSimpleGroupToConsumerGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     val topicName = "foo"
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = topicName,
       numPartitions = 3
     )
@@ -196,7 +196,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       partition = 0,
       offset = 1000L,
       expectedError = Errors.NONE,
-      version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+      version = ApiKeys.OFFSET_COMMIT.latestVersion(requestUtilities.isUnstableApiEnabled)
     )
 
     // Verify that the simple group is created.

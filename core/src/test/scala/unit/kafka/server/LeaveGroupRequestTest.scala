@@ -51,15 +51,15 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
   private def testLeaveGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = "foo",
       numPartitions = 3
     )
 
-    for (version <- ApiKeys.LEAVE_GROUP.oldestVersion() to ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.LEAVE_GROUP.oldestVersion() to ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)) {
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
       val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol("grp-1")

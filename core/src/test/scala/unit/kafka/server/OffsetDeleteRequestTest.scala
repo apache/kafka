@@ -60,21 +60,21 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   private def testOffsetDelete(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol && !requestUtilities.isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = "foo",
       numPartitions = 3
     )
 
-    for (version <- ApiKeys.OFFSET_DELETE.oldestVersion() to ApiKeys.OFFSET_DELETE.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.OFFSET_DELETE.oldestVersion() to ApiKeys.OFFSET_DELETE.latestVersion(requestUtilities.isUnstableApiEnabled)) {
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
       val (memberId, memberEpoch) = joinConsumerGroup(
@@ -92,7 +92,7 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           partition = partitionId,
           offset = 100L + partitionId,
           expectedError = Errors.NONE,
-          version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+          version = ApiKeys.OFFSET_COMMIT.latestVersion(requestUtilities.isUnstableApiEnabled)
         )
       }
 
@@ -118,7 +118,7 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           groupId = "grp",
           memberId = memberId,
           useNewProtocol = false,
-          version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+          version = ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
         )
       }
 

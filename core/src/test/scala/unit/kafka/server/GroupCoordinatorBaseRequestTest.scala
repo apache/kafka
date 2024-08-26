@@ -27,12 +27,14 @@ import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, Consum
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
-import unit.kafka.server.RequestUtilitiesTest
+import unit.kafka.server.RequestUtilities
 
 import java.util.Comparator
 import scala.jdk.CollectionConverters._
 
-class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestUtilitiesTest(cluster) {
+class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
+
+  val requestUtilities: RequestUtilities = new RequestUtilities(cluster)
 
   protected def commitOffset(
     groupId: String,
@@ -43,7 +45,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
     offset: Long,
     expectedError: Errors,
     version: Short
-  ): Unit = {
+   ): Unit = {
     val request = new OffsetCommitRequest.Builder(
       new OffsetCommitRequestData()
         .setGroupId(groupId)
@@ -58,7 +60,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
                 .setCommittedOffset(offset)
             ).asJava)
         ).asJava),
-      isUnstableApiEnabled
+      requestUtilities.isUnstableApiEnabled
     ).build(version)
 
     val expectedResponse = new OffsetCommitResponseData()
@@ -72,7 +74,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
           ).asJava)
       ).asJava)
 
-    val response = connectAndReceive[OffsetCommitResponse](request)
+    val response = requestUtilities.connectAndReceive[OffsetCommitResponse](request)
     assertEquals(expectedResponse, response.data)
   }
 
@@ -93,7 +95,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
       false
     ).build(version)
 
-    val response = connectAndReceive[OffsetFetchResponse](request)
+    val response = requestUtilities.connectAndReceive[OffsetFetchResponse](request)
 
     // Normalize the response based on the version to present the
     // same format to the caller.
@@ -140,7 +142,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
       false
     ).build(version)
 
-    val response = connectAndReceive[OffsetFetchResponse](request)
+    val response = requestUtilities.connectAndReceive[OffsetFetchResponse](request)
 
     // Sort topics and partitions within the response as their order is not guaranteed.
     response.data.groups.asScala.foreach(sortTopicPartitions)
@@ -189,7 +191,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
       expectedResponse.setErrorCode(expectedResponseError.code)
     }
 
-    val response = connectAndReceive[OffsetDeleteResponse](request)
+    val response = requestUtilities.connectAndReceive[OffsetDeleteResponse](request)
     assertEquals(expectedResponse, response.data)
   }
 
@@ -213,7 +215,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
     expectedProtocolName: String = "consumer-range",
     expectedAssignment: Array[Byte] = Array.empty,
     expectedError: Errors = Errors.NONE,
-    version: Short = ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)
+    version: Short = ApiKeys.SYNC_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
   ): SyncGroupResponseData = {
     val syncGroupRequestData = new SyncGroupRequestData()
       .setGroupId(groupId)
@@ -224,7 +226,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
       .setAssignments(assignments.asJava)
 
     val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build(version)
-    val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
+    val syncGroupResponse = requestUtilities.connectAndReceive[SyncGroupResponse](syncGroupRequest)
     
     assertEquals(
       new SyncGroupResponseData()
@@ -245,7 +247,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
     protocolType: String = "consumer",
     protocolName: String = "consumer-range",
     metadata: Array[Byte] = Array.empty,
-    version: Short = ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled)
+    version: Short = ApiKeys.JOIN_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
   ): JoinGroupResponseData = {
     val joinGroupRequestData = new JoinGroupRequestData()
       .setGroupId(groupId)
@@ -267,7 +269,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
     val joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build(version)
     var joinGroupResponse: JoinGroupResponse = null
     TestUtils.waitUntilTrue(() => {
-      joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
+      joinGroupResponse = requestUtilities.connectAndReceive[JoinGroupResponse](joinGroupRequest)
       joinGroupResponse != null
     }, msg = s"Could not join the group successfully. Last response $joinGroupResponse.")
 
@@ -359,7 +361,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
   protected def listGroups(
     statesFilter: List[String],
     typesFilter: List[String],
-    version: Short = ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)
+    version: Short = ApiKeys.LIST_GROUPS.latestVersion(requestUtilities.isUnstableApiEnabled)
   ): List[ListGroupsResponseData.ListedGroup] = {
     val request = new ListGroupsRequest.Builder(
       new ListGroupsRequestData()
@@ -367,20 +369,20 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
         .setTypesFilter(typesFilter.asJava)
     ).build(version)
 
-    val response = connectAndReceive[ListGroupsResponse](request)
+    val response = requestUtilities.connectAndReceive[ListGroupsResponse](request)
 
     response.data.groups.asScala.toList
   }
 
   protected def describeGroups(
     groupIds: List[String],
-    version: Short = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
+    version: Short = ApiKeys.DESCRIBE_GROUPS.latestVersion(requestUtilities.isUnstableApiEnabled)
   ): List[DescribeGroupsResponseData.DescribedGroup] = {
     val describeGroupsRequest = new DescribeGroupsRequest.Builder(
       new DescribeGroupsRequestData().setGroups(groupIds.asJava)
     ).build(version)
 
-    val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
+    val describeGroupsResponse = requestUtilities.connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
 
     describeGroupsResponse.data.groups.asScala.toList
   }
@@ -388,7 +390,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
   protected def consumerGroupDescribe(
     groupIds: List[String],
     includeAuthorizedOperations: Boolean,
-    version: Short = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)
+    version: Short = ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(requestUtilities.isUnstableApiEnabled)
   ): List[ConsumerGroupDescribeResponseData.DescribedGroup] = {
     val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
       new ConsumerGroupDescribeRequestData()
@@ -396,14 +398,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
         .setIncludeAuthorizedOperations(includeAuthorizedOperations)
     ).build(version)
 
-    val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
+    val consumerGroupDescribeResponse = requestUtilities.connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
     consumerGroupDescribeResponse.data.groups.asScala.toList
   }
 
   protected def shareGroupDescribe(
      groupIds: List[String],
      includeAuthorizedOperations: Boolean,
-     version: Short = ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)
+     version: Short = ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(requestUtilities.isUnstableApiEnabled)
    ): List[ShareGroupDescribeResponseData.DescribedGroup] = {
     val shareGroupDescribeRequest = new ShareGroupDescribeRequest.Builder(
       new ShareGroupDescribeRequestData()
@@ -412,7 +414,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
       true
     ).build(version)
 
-    val shareGroupDescribeResponse = connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
+    val shareGroupDescribeResponse = requestUtilities.connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
     shareGroupDescribeResponse.data.groups.asScala.toList
   }
 
@@ -432,7 +434,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
         .setGroupInstanceId(groupInstanceId)
     ).build(version)
 
-    val heartbeatResponse = connectAndReceive[HeartbeatResponse](heartbeatRequest)
+    val heartbeatResponse = requestUtilities.connectAndReceive[HeartbeatResponse](heartbeatRequest)
     assertEquals(expectedError.code, heartbeatResponse.data.errorCode)
 
     heartbeatResponse.data
@@ -468,7 +470,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
     // here because the group coordinator is loaded in the background.
     var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
-      consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
+      consumerGroupHeartbeatResponse = requestUtilities.connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
       consumerGroupHeartbeatResponse.data.errorCode == expectedError.code
     }, msg = s"Could not heartbeat successfully. Last response $consumerGroupHeartbeatResponse.")
 
@@ -497,7 +499,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
     // here because the group coordinator is loaded in the background.
     var shareGroupHeartbeatResponse: ShareGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
-      shareGroupHeartbeatResponse = connectAndReceive[ShareGroupHeartbeatResponse](shareGroupHeartbeatRequest)
+      shareGroupHeartbeatResponse = requestUtilities.connectAndReceive[ShareGroupHeartbeatResponse](shareGroupHeartbeatRequest)
       shareGroupHeartbeatResponse.data.errorCode == expectedError.code
     }, msg = s"Could not heartbeat successfully. Last response $shareGroupHeartbeatResponse.")
 
@@ -521,7 +523,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
     groupInstanceIds: List[String] = null,
     expectedLeaveGroupError: Errors,
     expectedMemberErrors: List[Errors],
-    version: Short = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+    version: Short = ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
   ): Unit = {
     val leaveGroupRequest = new LeaveGroupRequest.Builder(
       groupId,
@@ -545,7 +547,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
         }.asJava)
     }
 
-    val leaveGroupResponse = connectAndReceive[LeaveGroupResponse](leaveGroupRequest)
+    val leaveGroupResponse = requestUtilities.connectAndReceive[LeaveGroupResponse](leaveGroupRequest)
     assertEquals(expectedResponseData, leaveGroupResponse.data)
   }
 
@@ -583,7 +585,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) extends RequestU
           .setErrorCode(expectedErrors(i).code)
       }.asJava.iterator))
 
-    val deleteGroupsResponse = connectAndReceive[DeleteGroupsResponse](deleteGroupsRequest)
+    val deleteGroupsResponse = requestUtilities.connectAndReceive[DeleteGroupsResponse](deleteGroupsRequest)
     assertEquals(expectedResponseData.results.asScala.toSet, deleteGroupsResponse.data.results.asScala.toSet)
   }
 }

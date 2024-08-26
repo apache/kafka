@@ -64,21 +64,21 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
   }
 
   private def testListGroups(useNewProtocol: Boolean): Unit = {
-    if (!isNewGroupCoordinatorEnabled && useNewProtocol) {
+    if (!requestUtilities.isNewGroupCoordinatorEnabled && useNewProtocol) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = "foo",
       numPartitions = 3
     )
 
-    for (version <- ApiKeys.LIST_GROUPS.oldestVersion() to ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.LIST_GROUPS.oldestVersion() to ApiKeys.LIST_GROUPS.latestVersion(requestUtilities.isUnstableApiEnabled)) {
       // Create grp-1 in old protocol and complete a rebalance. Grp-1 is in STABLE state.
       val (memberId1InGroup1, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-1")
       val response1 = new ListGroupsResponseData.ListedGroup()
@@ -97,7 +97,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
 
       // Create grp-3 in old protocol and complete a rebalance. Then member 1 leaves grp-3. Grp-3 is in EMPTY state.
       val (memberId1InGroup3, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-3")
-      leaveGroup(groupId = "grp-3", memberId = memberId1InGroup3, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+      leaveGroup(groupId = "grp-3", memberId = memberId1InGroup3, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled))
       val response3 = new ListGroupsResponseData.ListedGroup()
         .setGroupId("grp-3")
         .setProtocolType("consumer")
@@ -132,7 +132,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
 
         // Create grp-6 in new protocol. Then member 1 leaves grp-6. Grp-6 is in Empty state.
         memberId1InGroup6 = joinConsumerGroup("grp-6", useNewProtocol = true)._1
-        leaveGroup(groupId = "grp-6", memberId = memberId1InGroup6, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+        leaveGroup(groupId = "grp-6", memberId = memberId1InGroup6, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled))
         response6 = new ListGroupsResponseData.ListedGroup()
           .setGroupId("grp-6")
           .setProtocolType("consumer")
@@ -228,18 +228,18 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         )
       }
 
-      leaveGroup(groupId = "grp-1", memberId = memberId1InGroup1, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
-      leaveGroup(groupId = "grp-2", memberId = memberId1InGroup2, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+      leaveGroup(groupId = "grp-1", memberId = memberId1InGroup1, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled))
+      leaveGroup(groupId = "grp-2", memberId = memberId1InGroup2, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled))
       if (useNewProtocol) {
-        leaveGroup(groupId = "grp-4", memberId = memberId1InGroup4, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
-        leaveGroup(groupId = "grp-5", memberId = memberId1InGroup5, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
-        leaveGroup(groupId = "grp-5", memberId = memberId2InGroup5, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+        leaveGroup(groupId = "grp-4", memberId = memberId1InGroup4, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled))
+        leaveGroup(groupId = "grp-5", memberId = memberId1InGroup5, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled))
+        leaveGroup(groupId = "grp-5", memberId = memberId2InGroup5, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled))
       }
 
       deleteGroups(
         groupIds = if (useNewProtocol) List("grp-1", "grp-2", "grp-3", "grp-4", "grp-5", "grp-6") else List("grp-1", "grp-2", "grp-3"),
         expectedErrors = if (useNewProtocol) List.fill(6)(Errors.NONE) else List.fill(3)(Errors.NONE),
-        version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
+        version = ApiKeys.DELETE_GROUPS.latestVersion(requestUtilities.isUnstableApiEnabled)
       )
 
       assertEquals(

@@ -58,15 +58,15 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
   private def testSyncGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
+    requestUtilities.createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    requestUtilities.createTopic(
       topic = "foo",
       numPartitions = 3
     )
 
-    for (version <- ApiKeys.SYNC_GROUP.oldestVersion() to ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.SYNC_GROUP.oldestVersion() to ApiKeys.SYNC_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)) {
       // Sync with unknown group id.
       syncGroupWithOldProtocol(
         groupId = "grp-unknown",
@@ -252,19 +252,19 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         groupId = "grp",
         memberId = leaderMemberId,
         useNewProtocol = false,
-        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+        version = ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
       )
       leaveGroup(
         groupId = "grp",
         memberId = followerMemberId,
         useNewProtocol = false,
-        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+        version = ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
       )
 
       deleteGroups(
         groupIds = List("grp"),
         expectedErrors = List(Errors.NONE),
-        version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
+        version = ApiKeys.DELETE_GROUPS.latestVersion(requestUtilities.isUnstableApiEnabled)
       )
     }
   }
