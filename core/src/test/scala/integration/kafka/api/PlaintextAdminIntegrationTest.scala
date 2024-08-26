@@ -150,22 +150,20 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     config.put(AdminClientConfig.CLIENT_ID_CONFIG, clientId)
     client = Admin.create(config)
 
-    try {
-      val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> clientId).asJava)
-      val configEntries = Map(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG -> 1.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 3.0)
-      client.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, configEntries.map { case (k, v) =>
-        new ClientQuotaAlteration.Op(k, v)
-      }.asJavaCollection)).asJavaCollection).all.get
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> clientId).asJava)
+    val configEntries = Map(QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG -> 1.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 3.0)
+    client.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, configEntries.map { case (k, v) =>
+      new ClientQuotaAlteration.Op(k, v)
+    }.asJavaCollection)).asJavaCollection).all.get
 
-      TestUtils.waitUntilTrue(() => {
-        // wait for our ClientQuotaEntity to be set
-        client.describeClientQuotas(ClientQuotaFilter.all()).entities().get().size == 1
-      }, "Timed out waiting for quota config to be propagated to all servers")
+    TestUtils.waitUntilTrue(() => {
+      // wait for our ClientQuotaEntity to be set
+      client.describeClientQuotas(ClientQuotaFilter.all()).entities().get().size == 1
+    }, "Timed out waiting for quota config to be propagated to all servers")
 
-      val quotaEntities = client.describeClientQuotas(ClientQuotaFilter.all()).entities().get()
+    val quotaEntities = client.describeClientQuotas(ClientQuotaFilter.all()).entities().get()
 
-      assertEquals(configEntries, quotaEntities.get(entity).asScala)
-    } finally client.close(time.Duration.ZERO)
+    assertEquals(configEntries, quotaEntities.get(entity).asScala)
   }
 
   @ParameterizedTest
@@ -3330,7 +3328,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally client.close(time.Duration.ZERO)
   }
-  
+
   /**
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
