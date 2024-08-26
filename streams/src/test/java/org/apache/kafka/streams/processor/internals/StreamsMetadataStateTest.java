@@ -112,7 +112,7 @@ public class StreamsMetadataStateTest {
         hostToActivePartitions = new HashMap<>();
         hostToActivePartitions.put(hostOne, mkSet(topic1P0, topic2P1, topic4P0));
         hostToActivePartitions.put(hostTwo, mkSet(topic2P0, topic1P1));
-        hostToActivePartitions.put(hostThree, Collections.singleton(topic3P0));™
+        hostToActivePartitions.put(hostThree, Collections.singleton(topic3P0));
         hostToStandbyPartitions = new HashMap<>();
         hostToStandbyPartitions.put(hostThree, mkSet(topic1P0, topic2P1, topic4P0));
         hostToStandbyPartitions.put(hostOne, mkSet(topic2P0, topic1P1));
