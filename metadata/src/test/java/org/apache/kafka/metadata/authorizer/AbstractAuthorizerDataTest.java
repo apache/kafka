@@ -752,6 +752,22 @@ public abstract class AbstractAuthorizerDataTest {
             }
         }
 
+        /* wildcard host */
+        builder.clearAcls();
+        builder.addAcl(new StandardAcl(TOPIC, "topic", LITERAL, "User:alice", "*", READ, ALLOW));
+        principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice");
+        lst.add(getTest(ALLOWED, "Wildcard ACL host", builder, principal, "localhost", READ, TOPIC));
+
+        /* wildcard USER principal */
+        builder.clearAcls();
+        builder.addAcl(new StandardAcl(TOPIC, "topic", LITERAL, WILDCARD_PRINCIPAL, "localhost", READ, ALLOW));
+        principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice");
+        lst.add(getTest(ALLOWED, "Wildcard ACL USER principal", builder, principal, "localhost", READ, TOPIC));
+
+        builder.clearAcls();
+        builder.addAcl(new StandardAcl(TOPIC, "topic", LITERAL, WILDCARD, "localhost", READ, ALLOW));
+        principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice");
+        lst.add(getTest(ALLOWED, "Wildcard ACL principal", builder, principal, "localhost", READ, TOPIC));
         return lst;
     }
 }
