@@ -58,7 +58,7 @@ public class StreamsDelegatingMetricsReporter implements MetricsReporter {
     Optional<KafkaMetric> filteredMetric(final KafkaMetric kafkaMetric) {
         final Map<String, String> tags = kafkaMetric.metricName().tags();
         KafkaMetric maybeKafkaMetric = null;
-        if (!tags.containsKey(THREAD_ID_TAG) || tags.containsKey(THREAD_ID_TAG) && tags.get(THREAD_ID_TAG).equals(threadId)) {
+        if (tags.containsKey(THREAD_ID_TAG) && tags.get(THREAD_ID_TAG).equals(threadId)) {
             maybeKafkaMetric = kafkaMetric;
         }
         return Optional.ofNullable(maybeKafkaMetric);

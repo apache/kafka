@@ -1319,7 +1319,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * An application to be removed from subscription.
+     * An application metric to be removed from subscription.
      * This metric is removed from this client's metrics
      * and will not be available for subscription.
      *
