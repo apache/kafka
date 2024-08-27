@@ -33,6 +33,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -48,6 +50,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
+import org.apache.kafka.streams.internals.metrics.StreamsDelegatingMetricsReporter;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
@@ -63,11 +66,14 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -644,6 +650,24 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
+
+
+        final StreamsDelegatingMetricsReporter reporter = new StreamsDelegatingMetricsReporter(mainConsumer, threadId);
+        final Metrics metricsRegistry = streamsMetrics.metricsRegistry();
+        metricsRegistry.reporters().add(reporter);
+        metricsRegistry.metrics().values().forEach(reporter::metricChange);
+    }
+
+    private Collection<KafkaMetric> filterMetricsForCurrentThread(final String threadId,
+                                                                  final Map<MetricName, KafkaMetric> metrics) {
+        final List<KafkaMetric> filteredMetrics = new ArrayList<>();
+        for (final Map.Entry<MetricName, KafkaMetric> entry : metrics.entrySet()) {
+            final Map<String, String> tags = entry.getKey().tags();
+            if (!tags.containsKey("thread-id") || tags.containsKey("thread-id") && tags.get("thread-id").contains(threadId)) {
+                filteredMetrics.add(entry.getValue());
+            }
+        }
+        return filteredMetrics;
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
