@@ -18,22 +18,20 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
@@ -72,23 +70,21 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
         assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "that doesn't exist");
     }
 
-    @Test
-    public void testDefaultForHeaderUrlEncode() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, "https://www.example.com");
-        configs.put(SASL_LOGIN_RETRY_BACKOFF_MS, 100L);
-        configs.put(SASL_LOGIN_RETRY_BACKOFF_MAX_MS, 1000L);
-
-        Map<String, Object> jaasConfig = new HashMap<>();
-        jaasConfig.put(CLIENT_ID_CONFIG, "test-client-id");
-        jaasConfig.put(CLIENT_SECRET_CONFIG, "test-client-secret");
-
-        AccessTokenRetriever retriever = null;
-
-        try {
-            retriever = assertDoesNotThrow(() -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "A default value for " + SASL_OAUTHBEARER_HEADER_URLENCODE + " should be used if not provided");
-        } finally {
-            Utils.closeQuietly(retriever, AccessTokenRetriever.class.getSimpleName());
-        }
+    @ParameterizedTest
+    @MethodSource("urlEncoderHeaderSupplier")
+    public void testUrlEncodeHeader(Map<String, Object> configs, boolean expectedValue) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs);
+        boolean actualValue = AccessTokenRetrieverFactory.validateUrlencodeHeader(cu);
+        assertEquals(expectedValue, actualValue);
     }
+
+    private static Stream<Arguments> urlEncoderHeaderSupplier() {
+        return Stream.of(
+            Arguments.of(Collections.emptyMap(), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, null), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, true), true),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, false), false)
+        );
+    }
+
 }

@@ -209,17 +209,13 @@ public class ConfigurationUtils {
         return value;
     }
 
-    /**
-     * Validates that a value, if supplied, is a {@link Boolean}. If no value is present in the configuration, a
-     * default value of {@link Boolean#FALSE} is returned.
-     */
-    public Boolean validateBoolean(String name) {
+    public Boolean validateBoolean(String name, boolean isRequired) {
         Boolean value = get(name);
 
-        if (value != null)
-            return value;
+        if (value == null && isRequired)
+            throw new ConfigException(name, null, String.format("The OAuth configuration option %s must be non-null", name));
 
-        return Boolean.FALSE;
+        return value;
     }
 
     @SuppressWarnings("unchecked")
