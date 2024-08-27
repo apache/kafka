@@ -476,7 +476,7 @@ subprojects {
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
 
-    systemProperty("kafka.test.repeated.enable", project.findProperty("kafka.test.repeated.enable"))
+    systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents

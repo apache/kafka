@@ -25,11 +25,16 @@ on:
         description: 'Test class to de-flake. Should be like *SomeTest*'
         required: true
         type: string
+      test-repeat:
+        description: 'Number of times to invoke the test'
+        required: true
+        type: number
+        default: 1
       java-version:
         description: 'Java version to use.'
-        default: '17'
         required: true
         type: string
+        default: '17'
 
 jobs:
   deflake:
@@ -53,7 +58,7 @@ jobs:
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
-          -Pkafka.test.repeated.enabled=true \
+          -Pkafka.cluster.test.repeat=${{ inputs.test-repeat }} \
           ${{ inputs.test-module }}:test --tests ${{ inputs.test-pattern }}
       - name: Archive JUnit reports
         if: always()

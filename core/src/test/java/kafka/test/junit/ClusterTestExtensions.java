@@ -177,11 +177,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
         }
 
-        if (annot.repeated() > 1) {
-            return repeatTestContexts(contexts, annot.repeated());
-        }
-
-        return contexts;
+        return repeatTestContexts(contexts);
     }
 
     @SuppressWarnings("unchecked")
@@ -199,11 +195,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("processClusterTests method should provide at least one config");
         }
 
-        if (annots.repeated() > 1 || defaults.repeated() > 1) {
-            return repeatTestContexts(ret, Math.max(annots.repeated(), defaults.repeated()));
-        }
-
-        return ret;
+        return repeatTestContexts(ret);
     }
 
     private List<TestTemplateInvocationContext> processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults) {
@@ -213,10 +205,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("processClusterTest method should provide at least one config");
         }
 
-        if (annot.repeated() > 1 || defaults.repeated() > 1) {
-            return repeatTestContexts(ret, Math.max(annot.repeated(), defaults.repeated()));
-        }
-        return ret;
+        return repeatTestContexts(ret);
     }
 
     private List<TestTemplateInvocationContext> processClusterTestInternal(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults) {
@@ -255,10 +244,16 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     private List<TestTemplateInvocationContext> repeatTestContexts(
-        List<TestTemplateInvocationContext> contexts,
-        int count
+        List<TestTemplateInvocationContext> contexts
     ) {
-        if (!System.getProperty("kafka.test.repeated.enabled", "false").equals("true")) {
+        int count;
+        try {
+            String repeatCount = System.getProperty("kafka.cluster.test.repeat", "1");
+            count = Integer.parseInt(repeatCount);
+        } catch (NumberFormatException e) {
+            count = 1;
+        }
+        if (count <= 1) {
             return contexts;
         }
         List<TestTemplateInvocationContext> repeatedContexts = new ArrayList<>(contexts.size() * count);
