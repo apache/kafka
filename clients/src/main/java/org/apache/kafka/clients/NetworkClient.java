@@ -990,6 +990,10 @@ public class NetworkClient implements KafkaClient {
                 newNodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
             }
 
+            if (newNodes.size() == 0) {
+                return null;
+            }
+            
             int offset = this.randOffset.nextInt(newNodes.size());
             Node node = newNodes.get(offset);
             log.trace("Resolved bootstrap server again, randomly picked node {} as least loaded node from the resolved node set", node);
