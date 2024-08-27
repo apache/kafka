@@ -429,13 +429,19 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
 
     @Override
-    public void registerMetricForSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
+    public void registerMetric(KafkaMetric metric) {
+        if (clientTelemetryReporter.isPresent()) {
+            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+            reporter.metricChange(metric);
+        }
     }
 
     @Override
-    public void unregisterMetricFromSubscription(KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
+    public void unregisterMetric(KafkaMetric metric) {
+        if (clientTelemetryReporter.isPresent()) {
+            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+            reporter.metricRemoval(metric);
+        }
     }
 
     @Override
