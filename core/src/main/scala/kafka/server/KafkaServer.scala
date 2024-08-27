@@ -364,7 +364,7 @@ class KafkaServer(
         /* start forwarding manager */
         var autoTopicCreationChannel = Option.empty[NodeToControllerChannelManager]
         if (enableForwarding) {
-          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
+          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager, metrics))
           autoTopicCreationChannel = Some(clientToControllerChannelManager)
         }
 
@@ -1031,6 +1031,9 @@ class KafkaServer(
 
         if (alterPartitionManager != null)
           CoreUtils.swallow(alterPartitionManager.shutdown(), this)
+
+        if (forwardingManager.isDefined)
+          CoreUtils.swallow(forwardingManager.get.close(), this)
 
         if (clientToControllerChannelManager != null)
           CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
