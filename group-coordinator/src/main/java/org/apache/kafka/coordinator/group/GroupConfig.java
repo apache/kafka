@@ -66,6 +66,10 @@ public class GroupConfig extends AbstractConfig {
         this.consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
+    public static ConfigDef configDef() {
+        return CONFIG;
+    }
+
     public static Optional<Type> configType(String configName) {
         return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
     }

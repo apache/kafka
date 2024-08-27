@@ -19,6 +19,7 @@ package kafka.admin;
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
@@ -62,6 +63,8 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG;
@@ -78,6 +81,7 @@ public class ConfigCommandIntegrationTest {
 
     private List<String> alterOpts;
     private final String defaultBrokerId = "0";
+    private final String defaultGroupName = "group";
     private final ClusterInstance cluster;
 
     private static Runnable run(Stream<String> command) {
@@ -115,6 +119,21 @@ public class ConfigCommandIntegrationTest {
             errOut -> assertTrue(errOut.contains("User configuration updates using ZooKeeper are only supported for SCRAM credential updates."), errOut));
     }
 
+    @ClusterTest(types = {Type.ZK})
+    public void testExitWithNonZeroStatusOnZkCommandAlterGroup() {
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", "groups",
+                "--entity-name", "group",
+                "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
+            errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
+
+        // Test for the --group alias
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
+                "--group", "group",
+                "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
+            errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
+    }
+
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
     public void testNullStatusOnKraftCommandAlterUserQuota() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
@@ -123,6 +142,23 @@ public class ConfigCommandIntegrationTest {
             "--alter", "--add-config", "consumer_byte_rate=20000"));
         String message = captureStandardMsg(run(command));
 
+        assertTrue(StringUtils.isBlank(message), message);
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testNullStatusOnKraftCommandAlterGroup() {
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
+        String message = captureStandardMsg(run(command));
+        assertTrue(StringUtils.isBlank(message), message);
+
+        // Test for the --group alias
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--group", "group",
+            "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
+        message = captureStandardMsg(run(command));
         assertTrue(StringUtils.isBlank(message), message);
     }
 
@@ -236,7 +272,7 @@ public class ConfigCommandIntegrationTest {
                     singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
             // Per-broker config configured at default cluster-level should fail
             assertThrows(ExecutionException.class,
-                    () -> alterConfigWithKraft(client, Optional.empty(), 
+                    () -> alterConfigWithKraft(client, Optional.empty(),
                             singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
             deleteAndVerifyConfigValue(client, defaultBrokerId,
                     singleton("listener.name.internal.ssl.keystore.location"), false);
@@ -253,6 +289,39 @@ public class ConfigCommandIntegrationTest {
             // Password config update at default cluster-level should fail
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId), configs));
+        }
+    }
+
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+        @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
+        @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
+    })
+    public void testGroupConfigUpdateUsingKraft() throws Exception {
+        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "groups", "--alter");
+        verifyGroupConfigUpdate();
+
+        // Test for the --group alias
+        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--group", "--alter");
+        verifyGroupConfigUpdate();
+    }
+
+    private void verifyGroupConfigUpdate() throws Exception {
+        try (Admin client = cluster.createAdminClient()) {
+            // Add config
+            Map<String, String> configs = new HashMap<>();
+            configs.put("consumer.session.timeout.ms", "50000");
+            configs.put("consumer.heartbeat.interval.ms", "6000");
+            alterAndVerifyGroupConfig(client, defaultGroupName, configs);
+
+            // Delete config
+            configs.put("consumer.session.timeout.ms", "45000");
+            configs.put("consumer.heartbeat.interval.ms", "5000");
+            deleteAndVerifyGroupConfigValue(client, defaultGroupName, configs);
+
+            // Unknown config configured should fail
+            assertThrows(ExecutionException.class,
+                () -> alterConfigWithKraft(client, Optional.of(defaultGroupName),
+                    singletonMap("unknown.config", "20000")));
         }
     }
 
@@ -488,10 +557,15 @@ public class ConfigCommandIntegrationTest {
         verifyConfig(client, brokerId, config);
     }
 
-    private void alterConfigWithKraft(Admin client, Optional<String> brokerId, Map<String, String> config) {
+    private void alterAndVerifyGroupConfig(Admin client, String groupName, Map<String, String> config) throws Exception {
+        alterConfigWithKraft(client, Optional.of(groupName), config);
+        verifyGroupConfig(client, groupName, config);
+    }
+
+    private void alterConfigWithKraft(Admin client, Optional<String> resourceName, Map<String, String> config) {
         String configStr = transferConfigMapToString(config);
         ConfigCommand.ConfigCommandOptions addOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), asList("--add-config", configStr)));
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(resourceName), asList("--add-config", configStr)));
         ConfigCommand.alterConfig(client, addOpts);
     }
 
@@ -501,6 +575,16 @@ public class ConfigCommandIntegrationTest {
             Map<String, String> current = getConfigEntryStream(client, configResource)
                     .filter(configEntry -> Objects.nonNull(configEntry.value()))
                     .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
+            return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
+        }, 10000, config + " are not updated");
+    }
+
+    private void verifyGroupConfig(Admin client, String groupName, Map<String, String> config) throws Exception {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupName);
+        TestUtils.waitForCondition(() -> {
+            Map<String, String> current = getConfigEntryStream(client, configResource)
+                .filter(configEntry -> Objects.nonNull(configEntry.value()))
+                .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
             return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
         }, 10000, config + " are not updated");
     }
@@ -515,15 +599,25 @@ public class ConfigCommandIntegrationTest {
                 .flatMap(e -> e.entries().stream());
     }
 
-    private void deleteAndVerifyConfigValue(Admin client, 
-                                            String brokerId, 
-                                            Set<String> config, 
+    private void deleteAndVerifyConfigValue(Admin client,
+                                            String brokerId,
+                                            Set<String> config,
                                             boolean hasDefaultValue) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", brokerId),
                         asList("--delete-config", String.join(",", config))));
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyPerBrokerConfigValue(client, brokerId, config, hasDefaultValue);
+    }
+
+    private void deleteAndVerifyGroupConfigValue(Admin client,
+                                                 String groupName,
+                                                 Map<String, String> defaultConfigs) throws Exception {
+        ConfigCommand.ConfigCommandOptions deleteOpts =
+            new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", groupName),
+                asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
+        ConfigCommand.alterConfig(client, deleteOpts);
+        verifyGroupConfig(client, groupName, defaultConfigs);
     }
 
     private void verifyPerBrokerConfigValue(Admin client,
