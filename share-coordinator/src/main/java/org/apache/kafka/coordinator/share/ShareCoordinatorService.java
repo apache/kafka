@@ -327,11 +327,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
                                 shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, timeTaken);
                                 partitionResults.addAll(partitionData.results().get(0).partitions());
                             } catch (Exception e) {
-                                log.error("Error while reading share group state", e);
+                                log.error("Error while writing share group state", e);
                                 partitionResults.add(WriteShareGroupStateResponse.toErrorResponsePartitionResult(
                                     partitionId,
                                     Errors.UNKNOWN_SERVER_ERROR,
-                                    "Unable to read share group state: " + e.getMessage()
+                                    "Unable to write share group state: " + e.getMessage()
                                 ));
                             }
                         }
