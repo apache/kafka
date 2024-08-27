@@ -437,8 +437,76 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
 
-        // No changes to th3 leaderMap
+        // No changes to the leaderMap
         assertEquals(5, shard.getLeaderMapValue(shareCoordinatorKey));
+    }
+
+    @Test
+    public void testWriteStateFencedStateEpochError() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+
+        SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
+
+        WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setStateEpoch(1)
+                    .setLeaderEpoch(5)
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
+
+        WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setStateEpoch(0)   // lower state epoch in the second request
+                    .setLeaderEpoch(5)
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(11)
+                        .setLastOffset(20)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
+
+        RequestContext context = getDefaultWriteStateContext();
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(context, request1);
+
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0))
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        assertEquals(groupOffset(expectedRecords.get(0).value().message()),
+            shard.getShareStateMapValue(shareCoordinatorKey));
+        assertEquals(5, shard.getLeaderMapValue(shareCoordinatorKey));
+
+        result = shard.writeState(context, request2);
+
+        // Since the leader epoch in the second request was lower than the one in the first request, FENCED_LEADER_EPOCH error is expected
+        expectedData = WriteShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, PARTITION, Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.message());
+        expectedRecords = Collections.emptyList();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // No changes to the stateEpochMap
+        assertEquals(1, shard.getStateEpochMapValue(shareCoordinatorKey));
     }
 
     @Test

@@ -71,8 +71,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final CoordinatorMetrics coordinatorMetrics;
     private final CoordinatorMetricsShard metricsShard;
     private final TimelineHashMap<SharePartitionKey, ShareGroupOffset> shareStateMap;  // coord key -> ShareGroupOffset
-    private final TimelineHashMap<SharePartitionKey, Integer> leaderMap;
+    private final TimelineHashMap<SharePartitionKey, Integer> leaderEpochMap;
     private final TimelineHashMap<SharePartitionKey, Integer> snapshotUpdateCount;
+    private final TimelineHashMap<SharePartitionKey, Integer> stateEpochMap;
     private MetadataImage metadataImage;
     private final int snapshotUpdateRecordsPerSnapshot;
 
@@ -175,8 +176,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         this.coordinatorMetrics = coordinatorMetrics;
         this.metricsShard = metricsShard;
         this.shareStateMap = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.leaderMap = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.leaderEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
         this.snapshotUpdateCount = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.stateEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
         this.snapshotUpdateRecordsPerSnapshot = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
     }
 
@@ -214,12 +216,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     private void handleShareSnapshot(ShareSnapshotKey key, ShareSnapshotValue value) {
         SharePartitionKey mapKey = SharePartitionKey.getInstance(key.groupId(), key.topicId(), key.partition());
-        Integer oldValue = leaderMap.get(mapKey);
-        if (oldValue == null) {
-            leaderMap.put(mapKey, value.leaderEpoch());
-        } else if (oldValue < value.leaderEpoch()) {
-            leaderMap.put(mapKey, value.leaderEpoch());
-        }
+        maybeUpdateLeaderEpochMap(mapKey, value.leaderEpoch());
+        maybeUpdateStateEpochMap(mapKey, value.stateEpoch());
+
         ShareGroupOffset offsetRecord = ShareGroupOffset.fromRecord(value);
         // this record is the complete snapshot
         shareStateMap.put(mapKey, offsetRecord);
@@ -227,22 +226,29 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     private void handleShareUpdate(ShareUpdateKey key, ShareUpdateValue value) {
         SharePartitionKey mapKey = SharePartitionKey.getInstance(key.groupId(), key.topicId(), key.partition());
-        Integer oldValue = leaderMap.get(mapKey);
-        if (oldValue == null) {
-            leaderMap.put(mapKey, value.leaderEpoch());
-        } else if (oldValue < value.leaderEpoch()) {
-            leaderMap.put(mapKey, value.leaderEpoch());
-        }
+        maybeUpdateLeaderEpochMap(mapKey, value.leaderEpoch());
+
+        // share update does not hold state epoch information.
 
         ShareGroupOffset offsetRecord = ShareGroupOffset.fromRecord(value);
         // this is an incremental snapshot
         // so, we need to apply it to our current soft state
-        if (!shareStateMap.containsKey(mapKey)) {
-            shareStateMap.put(mapKey, offsetRecord);
-        } else {
-            shareStateMap.put(mapKey, merge(shareStateMap.get(mapKey), value));
-        }
+        shareStateMap.compute(mapKey, (k, v) -> v == null ? offsetRecord : merge(v, value));
         snapshotUpdateCount.compute(mapKey, (k, v) -> v == null ? 0 : v + 1);
+    }
+
+    private void maybeUpdateLeaderEpochMap(SharePartitionKey mapKey, int leaderEpoch) {
+        leaderEpochMap.putIfAbsent(mapKey, leaderEpoch);
+        if (leaderEpochMap.get(mapKey) < leaderEpoch) {
+            leaderEpochMap.put(mapKey, leaderEpoch);
+        }
+    }
+
+    private void maybeUpdateStateEpochMap(SharePartitionKey mapKey, int stateEpoch) {
+        stateEpochMap.putIfAbsent(mapKey, stateEpoch);
+        if (stateEpochMap.get(mapKey) < stateEpoch) {
+            stateEpochMap.put(mapKey, stateEpoch);
+        }
     }
 
     @Override
@@ -256,7 +262,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * of the coordinator shard, shareStateMap, by CoordinatorRuntime.
      * <p>
      * This method as called by the ShareCoordinatorService will be provided with
-     * the request data which covers only key i.e. group1:topic1:partition1. The implementation
+     * the request data which covers only a single key i.e. group1:topic1:partition1. The implementation
      * below was done keeping this in mind.
      *
      * @param context - RequestContext
@@ -420,7 +426,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             ).collect(java.util.stream.Collectors.toList()) : Collections.emptyList();
 
         // Updating the leader map with the new leader epoch
-        leaderMap.put(coordinatorKey, leaderEpoch);
+        leaderEpochMap.put(coordinatorKey, leaderEpoch);
 
         // Returning the successfully retrieved snapshot value
         return ReadShareGroupStateResponse.toResponseData(topicId, partition, offsetValue.startOffset(), offsetValue.stateEpoch(), stateBatches);
@@ -441,8 +447,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
-        if (leaderMap.containsKey(mapKey) && leaderMap.get(mapKey) > partitionData.leaderEpoch()) {
+        if (leaderEpochMap.containsKey(mapKey) && leaderEpochMap.get(mapKey) > partitionData.leaderEpoch()) {
             return Optional.of(getWriteErrorResponse(Errors.FENCED_LEADER_EPOCH, topicId, partitionId));
+        }
+        if (stateEpochMap.containsKey(mapKey) && stateEpochMap.get(mapKey) > partitionData.stateEpoch()) {
+            return Optional.of(getWriteErrorResponse(Errors.FENCED_STATE_EPOCH, topicId, partitionId));
         }
         if (metadataImage != null && (metadataImage.topics().getTopic(topicId) == null ||
             metadataImage.topics().getPartition(topicId, partitionId) == null)) {
@@ -465,7 +474,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
-        if (leaderMap.containsKey(mapKey, offset) && leaderMap.get(mapKey, offset) > partitionData.leaderEpoch()) {
+        if (leaderEpochMap.containsKey(mapKey, offset) && leaderEpochMap.get(mapKey, offset) > partitionData.leaderEpoch()) {
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.FENCED_LEADER_EPOCH, Errors.FENCED_LEADER_EPOCH.message()));
         }
 
@@ -487,12 +496,17 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     // Visible for testing
-    public Integer getLeaderMapValue(SharePartitionKey key) {
-        return this.leaderMap.get(key);
+    Integer getLeaderMapValue(SharePartitionKey key) {
+        return this.leaderEpochMap.get(key);
     }
 
     // Visible for testing
-    public ShareGroupOffset getShareStateMapValue(SharePartitionKey key) {
+    Integer getStateEpochMapValue(SharePartitionKey key) {
+        return this.stateEpochMap.get(key);
+    }
+
+    // Visible for testing
+    ShareGroupOffset getShareStateMapValue(SharePartitionKey key) {
         return this.shareStateMap.get(key);
     }
 
