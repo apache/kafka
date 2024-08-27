@@ -116,7 +116,7 @@ class ForwardingManagerImpl(
   metrics: Metrics
 ) extends ForwardingManager with AutoCloseable with Logging {
 
-  val forwardingManagerMetrics: ForwardingManagerMetrics = ForwardingManagerMetrics(metrics)
+  val forwardingManagerMetrics: ForwardingManagerMetrics = ForwardingManagerMetrics(metrics, channelManager.getTimeoutMs)
 
   override def forwardRequest(
     requestContext: RequestContext,
@@ -173,6 +173,8 @@ class ForwardingManagerImpl(
 
       override def onTimeout(): Unit = {
         debug(s"Forwarding of the request ${requestToString()} failed due to timeout exception")
+        forwardingManagerMetrics.queueLength.getAndDecrement()
+        forwardingManagerMetrics.queueTimeMsHist.record(channelManager.getTimeoutMs)
         val response = requestBody.getErrorResponse(new TimeoutException())
         responseCallback(Option(response))
       }

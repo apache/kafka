@@ -25,7 +25,8 @@ import org.apache.kafka.common.metrics.stats.{Percentile, Percentiles}
 import java.util.concurrent.atomic.AtomicInteger
 
 final class ForwardingManagerMetrics private (
-  metrics: Metrics
+  metrics: Metrics,
+  timeoutMs: Long,
 ) extends AutoCloseable {
   import ForwardingManagerMetrics._
 
@@ -33,13 +34,13 @@ final class ForwardingManagerMetrics private (
    * A histogram describing the amount of time in milliseconds each admin request spends in the broker's forwarding manager queue, waiting to be sent to the controller.
    * This does not include the time that the request spends waiting for a response from the controller.
    */
-  val queueTimeMsHist: LatencyHistogram = new LatencyHistogram(metrics, queueTimeMsName, metricGroupName)
+  val queueTimeMsHist: LatencyHistogram = new LatencyHistogram(metrics, queueTimeMsName, metricGroupName, timeoutMs)
 
   /**
    * A histogram describing the amount of time in milliseconds each request sent by the ForwardingManager spends waiting for a response.
    * This does not include the time spent in the queue.
    */
-  val remoteTimeMsHist: LatencyHistogram = new LatencyHistogram(metrics, remoteTimeMsName, metricGroupName)
+  val remoteTimeMsHist: LatencyHistogram = new LatencyHistogram(metrics, remoteTimeMsName, metricGroupName, timeoutMs)
 
   val queueLengthName: MetricName = metrics.metricName(
     "QueueLength",
@@ -65,7 +66,8 @@ object ForwardingManagerMetrics {
   final class LatencyHistogram (
     metrics: Metrics,
     name: String,
-    group: String
+    group: String,
+    maxLatency: Long
   ) extends AutoCloseable {
     private val sensor = metrics.sensor(name)
     val latencyP99Name: MetricName = metrics.metricName(s"$name.p99", group)
@@ -73,7 +75,7 @@ object ForwardingManagerMetrics {
 
     sensor.add(new Percentiles(
       4000,
-      5000,
+      maxLatency,
       BucketSizing.CONSTANT,
       new Percentile(latencyP99Name, 99),
       new Percentile(latencyP999Name, 99.9)
@@ -94,5 +96,5 @@ object ForwardingManagerMetrics {
     }
   }
 
-  def apply(metrics: Metrics): ForwardingManagerMetrics = new ForwardingManagerMetrics(metrics)
+  def apply(metrics: Metrics, timeoutMs: Long): ForwardingManagerMetrics = new ForwardingManagerMetrics(metrics, timeoutMs)
 }
