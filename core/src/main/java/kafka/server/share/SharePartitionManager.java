@@ -32,9 +32,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
@@ -74,7 +72,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import scala.Option;
 import scala.Tuple2;
 import scala.jdk.javaapi.CollectionConverters;
 import scala.runtime.BoxedUnit;
@@ -624,7 +621,7 @@ public class SharePartitionManager implements AutoCloseable {
                     log.trace("Data successfully retrieved by replica manager: {}", responsePartitionData);
                     List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
                         responsePartitionData);
-                    processFetchResponse(shareFetchPartitionData, responseData).whenComplete(
+                    ShareFetchUtils.processFetchResponse(shareFetchPartitionData, responseData, partitionCacheMap, replicaManager).whenComplete(
                         (result, throwable) -> {
                             if (throwable != null) {
                                 log.error("Error processing fetch response for share partitions", throwable);
@@ -651,64 +648,6 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     // Visible for testing.
-    CompletableFuture<Map<TopicIdPartition, PartitionData>> processFetchResponse(
-        ShareFetchPartitionData shareFetchPartitionData,
-        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData
-    ) {
-        Map<TopicIdPartition, CompletableFuture<PartitionData>> futures = new HashMap<>();
-        responseData.forEach(data -> {
-            TopicIdPartition topicIdPartition = data._1;
-            FetchPartitionData fetchPartitionData = data._2;
-
-            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(shareFetchPartitionData.groupId, topicIdPartition));
-            futures.put(topicIdPartition, sharePartition.acquire(shareFetchPartitionData.memberId, fetchPartitionData)
-                .handle((acquiredRecords, throwable) -> {
-                    log.trace("Acquired records for topicIdPartition: {} with share fetch data: {}, records: {}",
-                        topicIdPartition, shareFetchPartitionData, acquiredRecords);
-                    PartitionData partitionData = new PartitionData()
-                        .setPartitionIndex(topicIdPartition.partition());
-
-                    if (throwable != null) {
-                        partitionData.setErrorCode(Errors.forException(throwable).code());
-                        return partitionData;
-                    }
-
-                    if (fetchPartitionData.error.code() == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                        // In case we get OFFSET_OUT_OF_RANGE error, that's because the LSO is later than the fetch offset.
-                        // So, we would update the start and end offset of the share partition and still return an empty
-                        // response and let the client retry the fetch. This way we do not lose out on the data that
-                        // would be returned for other share partitions in the fetch request.
-                        sharePartition.updateCacheAndOffsets(offsetForEarliestTimestamp(topicIdPartition));
-                        partitionData
-                            .setPartitionIndex(topicIdPartition.partition())
-                            .setRecords(null)
-                            .setErrorCode(Errors.NONE.code())
-                            .setAcquiredRecords(Collections.emptyList())
-                            .setAcknowledgeErrorCode(Errors.NONE.code());
-                        return partitionData;
-                    }
-
-                    // Maybe, in the future, check if no records are acquired, and we want to retry
-                    // replica manager fetch. Depends on the share partition manager implementation,
-                    // if we want parallel requests for the same share partition or not.
-                    partitionData
-                        .setPartitionIndex(topicIdPartition.partition())
-                        .setRecords(fetchPartitionData.records)
-                        .setErrorCode(fetchPartitionData.error.code())
-                        .setAcquiredRecords(acquiredRecords)
-                        .setAcknowledgeErrorCode(Errors.NONE.code());
-                    return partitionData;
-                }));
-        });
-
-        return CompletableFuture.allOf(futures.values().toArray(new CompletableFuture[0])).thenApply(v -> {
-            Map<TopicIdPartition, PartitionData> processedResult = new HashMap<>();
-            futures.forEach((topicIdPartition, future) -> processedResult.put(topicIdPartition, future.join()));
-            return processedResult;
-        });
-    }
-
-    // Visible for testing.
     void releaseFetchQueueAndPartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> partitionCacheMap.get(sharePartitionKey(groupId, tp)).releaseFetchLock());
         releaseProcessFetchQueueLock();
@@ -720,20 +659,6 @@ public class SharePartitionManager implements AutoCloseable {
 
     private SharePartitionKey sharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
         return new SharePartitionKey(groupId, topicIdPartition);
-    }
-
-    /**
-     * The method is used to get the offset for the earliest timestamp for the topic-partition.
-     *
-     * @return The offset for the earliest timestamp.
-     */
-    // Visible for testing.
-    long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition) {
-        // Isolation level is only required when reading from the latest offset hence use Option.empty() for now.
-        Option<TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
-            topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
-            Optional.empty(), true);
-        return timestampAndOffset.isEmpty() ? (long) 0 : timestampAndOffset.get().offset;
     }
 
     /**
