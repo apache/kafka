@@ -29,6 +29,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -1620,6 +1622,30 @@ public class StreamsConfigTest {
                 containsString("Invalid value org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler " +
                         "for configuration processing.exception.handler: Class org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler could not be found.")
         );
+    }
+
+    @Test
+    public void testDeserializationExceptionHandlerWhenOnlyNewConfigIsSet() {
+        props.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        streamsConfig = new StreamsConfig(props);
+        assertEquals(LogAndContinueExceptionHandler.class, streamsConfig.deserializationExceptionHandler().getClass());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testDeserializationExceptionHandlerWhenBothConfigsAreSet() {
+        props.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailExceptionHandler.class);
+        streamsConfig = new StreamsConfig(props);
+        assertEquals(LogAndContinueExceptionHandler.class, streamsConfig.deserializationExceptionHandler().getClass());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testDeserializationExceptionHandlerWhenOnlyOldConfigIsSet() {
+        props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        streamsConfig = new StreamsConfig(props);
+        assertEquals(LogAndFailExceptionHandler.class, streamsConfig.deserializationExceptionHandler().getClass());
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

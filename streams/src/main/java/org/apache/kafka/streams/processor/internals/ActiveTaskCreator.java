@@ -211,7 +211,7 @@ class ActiveTaskCreator {
             logContext,
             taskId,
             streamsProducer,
-            applicationConfig.getProductionExceptionHandler(),
+            applicationConfig.productionExceptionHandler(),
             streamsMetrics,
             topology
         );

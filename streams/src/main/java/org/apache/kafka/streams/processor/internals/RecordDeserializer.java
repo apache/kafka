@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
 public class RecordDeserializer {
@@ -78,7 +77,6 @@ public class RecordDeserializer {
         }
     }
 
-    @SuppressWarnings("deprecation")
     public static void handleDeserializationFailure(final DeserializationExceptionHandler deserializationExceptionHandler,
                                                     final ProcessorContext<?, ?> processorContext,
                                                     final RuntimeException deserializationException,
@@ -115,8 +113,7 @@ public class RecordDeserializer {
             throw new StreamsException("Deserialization exception handler is set to fail upon" +
                 " a deserialization error. If you would rather have the streaming pipeline" +
                 " continue after a deserialization error, please set the " +
-                DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " or the deprecated exception handler " +
-                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
+                DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
                 deserializationException);
         } else {
             log.warn(

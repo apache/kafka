@@ -503,7 +503,7 @@ public class TopologyTestDriver implements Closeable {
                 logContext,
                 TASK_ID,
                 testDriverProducer,
-                streamsConfig.getProductionExceptionHandler(),
+                streamsConfig.productionExceptionHandler(),
                 streamsMetrics,
                 processorTopology
             );

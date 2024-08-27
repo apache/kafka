@@ -1047,7 +1047,7 @@ public class InternalTopologyBuilderTest {
         topologyOverrides.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
         topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
         topologyOverrides.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
-        topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
+        topologyOverrides.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
         topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
@@ -1069,25 +1069,9 @@ public class InternalTopologyBuilderTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void exceptionHandlerShouldAcceptNewConfig() {
+    public void newDeserializationExceptionHandlerConfigShouldOverwriteOldOne() {
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailExceptionHandler.class);
-        topologyOverrides.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
-
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
-        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
-            new TopologyConfig(
-                "my-topology",
-                config,
-                topologyOverrides)
-        );
-
-        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().deserializationExceptionHandler.getClass(), equalTo(LogAndContinueExceptionHandler.class));
-    }
-
-    @Test
-    public void exceptionHandlerShouldAcceptNewConfigNoOtherDeprecatedConfigPresent() {
-        final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
 
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
