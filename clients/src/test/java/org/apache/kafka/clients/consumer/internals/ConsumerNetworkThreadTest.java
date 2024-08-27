@@ -56,7 +56,7 @@ public class ConsumerNetworkThreadTest {
     private final BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final OffsetsRequestManager offsetsRequestManager;
-    private final HeartbeatRequestManager heartbeatRequestManager;
+    private final ConsumerHeartbeatRequestManager heartbeatRequestManager;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final ConsumerNetworkThread consumerNetworkThread;
     private final NetworkClientDelegate networkClientDelegate;
@@ -67,7 +67,7 @@ public class ConsumerNetworkThreadTest {
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
         this.requestManagers = mock(RequestManagers.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
-        this.heartbeatRequestManager = mock(HeartbeatRequestManager.class);
+        this.heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);

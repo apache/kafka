@@ -48,7 +48,7 @@ public class RequestManagers implements Closeable {
     private final Logger log;
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
-    public final Optional<HeartbeatRequestManager> heartbeatRequestManager;
+    public final Optional<ConsumerHeartbeatRequestManager> consumerHeartbeatRequestManager;
     public final Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager;
     public final Optional<ConsumerMembershipManager> consumerMembershipManager;
     public final Optional<ShareMembershipManager> shareMembershipManager;
@@ -65,7 +65,7 @@ public class RequestManagers implements Closeable {
                            FetchRequestManager fetchRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager,
-                           Optional<HeartbeatRequestManager> heartbeatRequestManager,
+                           Optional<ConsumerHeartbeatRequestManager> heartbeatRequestManager,
                            Optional<ConsumerMembershipManager> membershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
@@ -74,7 +74,7 @@ public class RequestManagers implements Closeable {
         this.topicMetadataRequestManager = topicMetadataRequestManager;
         this.fetchRequestManager = fetchRequestManager;
         this.shareConsumeRequestManager = Optional.empty();
-        this.heartbeatRequestManager = heartbeatRequestManager;
+        this.consumerHeartbeatRequestManager = heartbeatRequestManager;
         this.shareHeartbeatRequestManager = Optional.empty();
         this.consumerMembershipManager = membershipManager;
         this.shareMembershipManager = Optional.empty();
@@ -99,7 +99,7 @@ public class RequestManagers implements Closeable {
         this.shareConsumeRequestManager = Optional.of(shareConsumeRequestManager);
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = Optional.empty();
-        this.heartbeatRequestManager = Optional.empty();
+        this.consumerHeartbeatRequestManager = Optional.empty();
         this.shareHeartbeatRequestManager = shareHeartbeatRequestManager;
         this.consumerMembershipManager = Optional.empty();
         this.shareMembershipManager = shareMembershipManager;
@@ -189,7 +189,7 @@ public class RequestManagers implements Closeable {
                         logContext,
                         time,
                         config);
-                HeartbeatRequestManager heartbeatRequestManager = null;
+                ConsumerHeartbeatRequestManager heartbeatRequestManager = null;
                 ConsumerMembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commit = null;
@@ -227,7 +227,7 @@ public class RequestManagers implements Closeable {
                             metrics);
                     membershipManager.registerStateListener(commit);
                     membershipManager.registerStateListener(applicationThreadMemberStateListener);
-                    heartbeatRequestManager = new HeartbeatRequestManager(
+                    heartbeatRequestManager = new ConsumerHeartbeatRequestManager(
                             logContext,
                             time,
                             config,

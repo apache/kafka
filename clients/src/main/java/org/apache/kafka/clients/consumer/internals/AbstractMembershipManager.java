@@ -23,6 +23,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.Time;
 
@@ -50,13 +51,14 @@ import static java.util.Collections.unmodifiableList;
  * A stateful object tracking the state of a single member in relationship to a group:
  * <p/>
  * Responsible for:
- * <li>Keeping member state</li>
- * <li>Keeping assignment for the member</li>
- * <li>Computing assignment for the group if the member is required to do so<li/>
- * <p/>
- * The class variable R is the response data for the specific group's heartbeat RPC.
+ * <ul>
+ *   <li>Keeping member state</li>
+ *   <li>Keeping assignment for the member</li>
+ *   <li>Computing assignment for the group if the member is required to do so</li>
+ * </ul>
+ * The class variable R is the response for the specific group's heartbeat RPC.
  */
-public abstract class AbstractMembershipManager<R> implements RequestManager {
+public abstract class AbstractMembershipManager<R extends AbstractResponse> implements RequestManager {
 
     /**
      * TopicPartition comparator based on topic name and partition.
