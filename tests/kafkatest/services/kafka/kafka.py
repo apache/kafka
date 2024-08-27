@@ -430,15 +430,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 config_property.PORT: config_property.FIRST_BROKER_PORT,
                 config_property.NODE_ID: self.idx(node),
                 config_property.NEW_GROUP_COORDINATOR_ENABLE: use_new_coordinator,
-                config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS: rebalance_protocols,
-                config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE: version == DEV_BRANCH
+                config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS: rebalance_protocols
             }
             kraft_broker_plus_zk_configs = kraft_broker_configs.copy()
             kraft_broker_plus_zk_configs.update(zk_broker_configs)
             kraft_broker_plus_zk_configs.pop(config_property.BROKER_ID)
             controller_only_configs = {
                 config_property.NODE_ID: self.idx(node) + config_property.FIRST_CONTROLLER_ID - 1,
-                config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE: version == DEV_BRANCH
             }
             kraft_controller_plus_zk_configs = controller_only_configs.copy()
             kraft_controller_plus_zk_configs.update(zk_broker_configs)
