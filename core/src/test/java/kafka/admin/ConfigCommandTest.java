@@ -1918,6 +1918,42 @@ public class ConfigCommandTest {
         assertEquals("client-metrics is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage());
     }
 
+    @Test
+    public void testDefaultTimeout() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "123",
+            "--entity-type", "brokers",
+            "--alter",
+            "--add-config", "a=b,c=[d,e ,f],g=[h,i]"));
+
+        assertEquals(30000, createOpts.timeoutMs());
+    }
+
+    @Test
+    public void testParseTimeoutOpt() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "123",
+            "--entity-type", "brokers",
+            "--alter",
+            "--add-config", "a=b,c=[d,e ,f],g=[h,i]",
+            "--timeout", "12345"));
+
+        assertEquals(12345, createOpts.timeoutMs());
+    }
+
+    @Test
+    public void testShouldNotAllowNegativeTimeoutOpt() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "123",
+            "--entity-type", "brokers",
+            "--alter",
+            "--add-config", "a=b,c=[d,e ,f],g=[h,i]",
+            "--timeout", "-123456"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+        assertEquals("--timeout should be a positive value", exception.getMessage());
+    }
+
     public static String[] toArray(String... first) {
         return first;
     }

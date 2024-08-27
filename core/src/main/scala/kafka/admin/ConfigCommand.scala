@@ -375,7 +375,7 @@ object ConfigCommand extends Logging {
           throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
         val configResource = new ConfigResource(ConfigResource.Type.TOPIC, entityNameHead)
-        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+        val alterOptions = new AlterConfigsOptions().timeoutMs(opts.timeoutMs.toInt).validateOnly(false)
         val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
           ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
         ).asJavaCollection
@@ -397,7 +397,7 @@ object ConfigCommand extends Logging {
         val newConfig = new JConfig(newEntries.asJava.values)
 
         val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityNameHead)
-        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+        val alterOptions = new AlterConfigsOptions().timeoutMs(opts.timeoutMs.toInt).validateOnly(false)
         adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case BrokerLoggerConfigType =>
@@ -408,7 +408,7 @@ object ConfigCommand extends Logging {
           throw new InvalidConfigurationException(s"Invalid broker logger(s): ${invalidBrokerLoggers.mkString(",")}")
 
         val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityNameHead)
-        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+        val alterOptions = new AlterConfigsOptions().timeoutMs(opts.timeoutMs.toInt).validateOnly(false)
         val alterLogLevelEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
           ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
         ).asJavaCollection
@@ -464,7 +464,7 @@ object ConfigCommand extends Logging {
           throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
         val configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityNameHead)
-        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+        val alterOptions = new AlterConfigsOptions().timeoutMs(opts.timeoutMs.toInt).validateOnly(false)
         val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
           ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
           ).asJavaCollection
@@ -872,6 +872,11 @@ object ConfigCommand extends Logging {
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
         ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.sorted.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
+    private val timeoutMsOpt = parser.accepts("timeout", "The maximum amount of time in milliseconds to wait for the command to finish.")
+      .withRequiredArg()
+      .describedAs("timeout (ms)")
+      .ofType(classOf[Long])
+      .defaultsTo(30000L)
     options = parser.parse(args : _*)
 
     private val entityFlags = List((topic, ConfigType.TOPIC),
@@ -902,6 +907,10 @@ object ConfigCommand extends Logging {
       entityDefaultsFlags
         .filter(entity => options.has(entity._1))
         .map(_ => "")
+    }
+
+    private[admin] def timeoutMs: Long = {
+      options.valueOf(timeoutMsOpt)
     }
 
     def checkArgs(): Unit = {
@@ -990,6 +999,12 @@ object ConfigCommand extends Logging {
 
         if (!isAddConfigPresent && !isAddConfigFilePresent && !isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config, --add-config-file, or --delete-config must be specified with --alter")
+      }
+
+      if (options.has(timeoutMsOpt)) {
+        val timeoutMs = options.valueOf(timeoutMsOpt)
+        if (timeoutMs <= 0)
+          throw new IllegalArgumentException("--timeout should be a positive value")
       }
     }
   }
