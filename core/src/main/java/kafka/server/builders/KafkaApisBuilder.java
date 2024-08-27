@@ -68,7 +68,7 @@ public class KafkaApisBuilder {
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
     private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();
-    private ShareCoordinator shareCoordinator = null;
+    private Optional<ShareCoordinator> shareCoordinator = Optional.empty();
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -95,7 +95,7 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setShareCoordinator(ShareCoordinator shareCoordinator) {
+    public KafkaApisBuilder setShareCoordinator(Optional<ShareCoordinator> shareCoordinator) {
         this.shareCoordinator = shareCoordinator;
         return this;
     }
@@ -202,7 +202,7 @@ public class KafkaApisBuilder {
                              replicaManager,
                              groupCoordinator,
                              txnCoordinator,
-                             shareCoordinator,
+                             OptionConverters.toScala(shareCoordinator),
                              autoTopicCreationManager,
                              brokerId,
                              config,

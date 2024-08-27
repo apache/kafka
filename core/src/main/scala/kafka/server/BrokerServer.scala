@@ -123,7 +123,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var shareCoordinator: ShareCoordinator = _
+  var shareCoordinator: Option[ShareCoordinator] = _
 
   var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
@@ -633,9 +633,9 @@ class BrokerServer(
     }
   }
 
-  private def createShareCoordinator(): ShareCoordinator = {
+  private def createShareCoordinator(): Option[ShareCoordinator] = {
     if (!config.shareGroupConfig.isShareGroupEnabled) {
-      return null
+      return None
     }
     val time = Time.SYSTEM
     val timer = new SystemTimerReaper(
@@ -653,14 +653,14 @@ class BrokerServer(
     val writer = new CoordinatorPartitionWriter(
       replicaManager
     )
-    new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
+    Some(new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
       .withTimer(timer)
       .withTime(time)
       .withLoader(loader)
       .withWriter(writer)
       .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
       .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
-      .build()
+      .build())
   }
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
@@ -730,8 +730,8 @@ class BrokerServer(
         CoreUtils.swallow(transactionCoordinator.shutdown(), this)
       if (groupCoordinator != null)
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
-      if (shareCoordinator != null)
-        CoreUtils.swallow(shareCoordinator.shutdown(), this)
+      if (shareCoordinator.isDefined)
+        CoreUtils.swallow(shareCoordinator.get.shutdown(), this)
 
       if (tokenManager != null)
         CoreUtils.swallow(tokenManager.shutdown(), this)

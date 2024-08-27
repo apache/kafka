@@ -535,7 +535,7 @@ class KafkaServer(
           Some(kafkaController),
           groupCoordinator,
           transactionCoordinator,
-          null
+          None
         )
 
         /* Get the authorizer and initialize it if one is specified.*/
@@ -587,7 +587,7 @@ class KafkaServer(
           replicaManager = replicaManager,
           groupCoordinator = groupCoordinator,
           txnCoordinator = transactionCoordinator,
-          shareCoordinator = null,  //share coord only supported in kraft mode
+          shareCoordinator = None,  //share coord only supported in kraft mode
           autoTopicCreationManager = autoTopicCreationManager,
           brokerId = config.brokerId,
           config = config,

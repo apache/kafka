@@ -224,7 +224,7 @@ class KafkaApisTest extends Logging {
       replicaManager = replicaManager,
       groupCoordinator = groupCoordinator,
       txnCoordinator = txnCoordinator,
-      shareCoordinator = shareCoordinator,
+      shareCoordinator = Some(shareCoordinator),
       autoTopicCreationManager = autoTopicCreationManager,
       brokerId = brokerId,
       config = config,

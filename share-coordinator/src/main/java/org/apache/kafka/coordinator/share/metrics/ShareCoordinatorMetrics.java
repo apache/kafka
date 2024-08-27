@@ -129,4 +129,28 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             shard.commitUpTo(offset);
         }
     }
+
+    /**
+     * This method can be used to record on any sensor
+     * defined as part of global sensors
+     *
+     * @param sensorName - String representing name of sensor
+     */
+    public void record(String sensorName, double value) {
+        if (globalSensors.containsKey(sensorName)) {
+            globalSensors.get(sensorName).record(value);
+        }
+    }
+
+    /**
+     * This method can be used to record on any sensor
+     * defined as part of global sensors
+     *
+     * @param sensorName - String representing name of sensor
+     */
+    public void record(String sensorName) {
+        if (globalSensors.containsKey(sensorName)) {
+            globalSensors.get(sensorName).record();
+        }
+    }
 }

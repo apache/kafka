@@ -234,7 +234,14 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // this is an incremental snapshot
         // so, we need to apply it to our current soft state
         shareStateMap.compute(mapKey, (k, v) -> v == null ? offsetRecord : merge(v, value));
-        snapshotUpdateCount.compute(mapKey, (k, v) -> v == null ? 0 : v + 1);
+        snapshotUpdateCount.compute(mapKey, (k, v) -> {
+            // if number of share updates is exceeded, then reset it
+            if (v == null || v >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
+                return 0;
+            } else {
+                return v + 1;
+            }
+        });
     }
 
     private void maybeUpdateLeaderEpochMap(SharePartitionKey mapKey, int leaderEpoch) {
@@ -325,7 +332,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStateEpoch(newStateEpoch)
                     .setStateBatches(batchesToAdd)
                     .build()));
-            snapshotUpdateCount.put(key, 0);
         } else {
             // share snapshot is present and number of share snapshot update records < snapshotUpdateRecordsPerSnapshot
             recordList = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(

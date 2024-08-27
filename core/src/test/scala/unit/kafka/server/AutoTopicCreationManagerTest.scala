@@ -120,7 +120,7 @@ class AutoTopicCreationManagerTest {
       Some(controller),
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      Some(shareCoordinator))
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor))
@@ -149,7 +149,7 @@ class AutoTopicCreationManagerTest {
       Some(controller),
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      Some(shareCoordinator))
 
     val topicName = "topic"
 
@@ -333,7 +333,7 @@ class AutoTopicCreationManagerTest {
       Some(controller),
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      Some(shareCoordinator))
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName))
@@ -364,7 +364,7 @@ class AutoTopicCreationManagerTest {
       Some(controller),
       groupCoordinator,
       transactionCoordinator,
-      shareCoordinator)
+      Some(shareCoordinator))
 
     Mockito.when(controller.isActive).thenReturn(false)
     val newTopic = if (isInternal) {

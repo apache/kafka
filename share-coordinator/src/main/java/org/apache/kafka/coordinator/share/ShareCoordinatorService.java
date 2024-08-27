@@ -51,11 +51,13 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -238,10 +240,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
     public CompletableFuture<WriteShareGroupStateResponseData> writeState(RequestContext context, WriteShareGroupStateRequestData request) {
         log.debug("ShareCoordinatorService writeState request dump - {}", request);
 
-        String groupId = request.groupId();
-        Map<Uuid, Map<Integer, CompletableFuture<WriteShareGroupStateResponseData>>> futureMap = new HashMap<>();
-        long startTime = time.hiResClockMs();
-
         // Send an empty response if topic data is empty
         if (isEmpty(request.topics())) {
             log.error("Topic Data is empty: {}", request);
@@ -260,6 +258,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
             }
         }
 
+        String groupId = request.groupId();
         // Send an empty response if groupId is invalid
         if (isGroupIdEmpty(groupId)) {
             log.error("Group id must be specified and non-empty: {}", request);
@@ -283,6 +282,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
         // the writeState method in ShareCoordinatorShard expects a single key in the request. Hence, we will
         // be looping over the keys below and constructing new WriteShareGroupStateRequestData objects to pass
         // onto the shard method.
+        Map<Uuid, Map<Integer, CompletableFuture<WriteShareGroupStateResponseData>>> futureMap = new HashMap<>();
+        long startTime = time.hiResClockMs();
 
         request.topics().forEach(topicData -> {
             Map<Integer, CompletableFuture<WriteShareGroupStateResponseData>> partitionFut =
@@ -309,37 +310,35 @@ public class ShareCoordinatorService implements ShareCoordinator {
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(futureMap.values().stream()
             .flatMap(partMap -> partMap.values().stream()).toArray(CompletableFuture[]::new));
 
+        // topicId -> {partitionId -> responseFuture}
         return combinedFuture.thenApply(v -> {
-            List<WriteShareGroupStateResponseData.WriteStateResult> writeStateResults = futureMap.keySet().stream()
-                .map(topicId -> {
-                    List<WriteShareGroupStateResponseData.PartitionResult> partitionResults = futureMap.get(topicId).entrySet().stream()
-                        .map(topicEntry -> {
-                            CompletableFuture<WriteShareGroupStateResponseData> future = topicEntry.getValue();
-                            int partition = topicEntry.getKey();
+            List<WriteShareGroupStateResponseData.WriteStateResult> writeStateResults = new LinkedList<>();
+            futureMap.forEach(
+                (topicId, topicEntry) -> {
+                    List<WriteShareGroupStateResponseData.PartitionResult> partitionResults = new LinkedList<>();
+                    topicEntry.forEach(
+                        // map of partition id -> responses from api
+                        (partitionId, responseFut) -> {
                             try {
                                 long timeTaken = time.hiResClockMs() - startTime;
-                                WriteShareGroupStateResponseData partitionData = future.get();
                                 // This is the future returned by runtime.scheduleWriteOperation which returns when the
                                 // operation has completed including
-                                shareCoordinatorMetrics.globalSensors.get(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME)
-                                    .record(timeTaken);
-                                // error check if the partitionData results contains only 1 row (corresponding to topicId)
-                                return partitionData.results().get(0).partitions();
+                                WriteShareGroupStateResponseData partitionData = responseFut.get(5000L, TimeUnit.MILLISECONDS);
+                                shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, timeTaken);
+                                partitionResults.addAll(partitionData.results().get(0).partitions());
                             } catch (Exception e) {
                                 log.error("Error while reading share group state", e);
-                                return Collections.singletonList(WriteShareGroupStateResponse.toErrorResponsePartitionResult(
-                                    partition,
+                                partitionResults.add(WriteShareGroupStateResponse.toErrorResponsePartitionResult(
+                                    partitionId,
                                     Errors.UNKNOWN_SERVER_ERROR,
                                     "Unable to read share group state: " + e.getMessage()
                                 ));
                             }
-                        })
-                        .flatMap(List::stream)
-                        .collect(Collectors.toList());
-
-                    return WriteShareGroupStateResponse.toResponseWriteStateResult(topicId, partitionResults);
-                })
-                .collect(Collectors.toList());
+                        }
+                    );
+                    writeStateResults.add(WriteShareGroupStateResponse.toResponseWriteStateResult(topicId, partitionResults));
+                }
+            );
             return new WriteShareGroupStateResponseData()
                 .setResults(writeStateResults);
         });
@@ -427,28 +426,29 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         // Transform the combined CompletableFuture<Void> into CompletableFuture<ReadShareGroupStateResponseData>
         return combinedFuture.thenApply(v -> {
-            List<ReadShareGroupStateResponseData.ReadStateResult> readStateResult = futureMap.keySet().stream()
-                .map(topicId -> {
-                    List<ReadShareGroupStateResponseData.PartitionResult> partitionDataList =
-                        futureMap.get(topicId).entrySet().stream()
-                            .map(topicEntry -> {
-                                CompletableFuture<ReadShareGroupStateResponseData> future = topicEntry.getValue();
-                                int partition = topicEntry.getKey();
-                                try {
-                                    return future.get().results().get(0).partitions().get(0);
-                                } catch (Exception e) {
-                                    log.error("Error while reading share group state", e);
-                                    return ReadShareGroupStateResponse.toErrorResponsePartitionResult(
-                                        partition,
-                                        Errors.UNKNOWN_SERVER_ERROR,
-                                        "Unable to read share group state: " + e.getMessage()
-                                    );
-                                }
-                            })
-                            .collect(Collectors.toList());
-                    return ReadShareGroupStateResponse.toResponseReadStateResult(topicId, partitionDataList);
-                })
-                .collect(Collectors.toList());
+            List<ReadShareGroupStateResponseData.ReadStateResult> readStateResult = new LinkedList<>();
+            futureMap.forEach(
+                (topicId, topicEntry) -> {
+                    List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new LinkedList<>();
+                    topicEntry.forEach(
+                        (partitionId, responseFut) -> {
+                            try {
+                                partitionResults.add(
+                                    responseFut.get(5000L, TimeUnit.MILLISECONDS).results().get(0).partitions().get(0)
+                                );
+                            } catch (Exception e) {
+                                log.error("Error while reading share group state", e);
+                                partitionResults.add(ReadShareGroupStateResponse.toErrorResponsePartitionResult(
+                                    partitionId,
+                                    Errors.UNKNOWN_SERVER_ERROR,
+                                    "Unable to read share group state: " + e.getMessage()
+                                ));
+                            }
+                        }
+                    );
+                    readStateResult.add(ReadShareGroupStateResponse.toResponseReadStateResult(topicId, partitionResults));
+                }
+            );
             return new ReadShareGroupStateResponseData()
                 .setResults(readStateResult);
         });
@@ -514,6 +514,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private static <P> boolean isEmpty(List<P> list) {
-        return list == null || list.isEmpty() || list.get(0) == null;
+        return list == null || list.isEmpty();
     }
 }

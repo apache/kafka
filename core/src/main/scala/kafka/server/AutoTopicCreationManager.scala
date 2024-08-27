@@ -58,7 +58,7 @@ object AutoTopicCreationManager {
    controller: Option[KafkaController],
    groupCoordinator: GroupCoordinator,
    txnCoordinator: TransactionCoordinator,
-   shareCoordinator: ShareCoordinator,
+   shareCoordinator: Option[ShareCoordinator],
  ): AutoTopicCreationManager = {
     new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator, shareCoordinator)
@@ -72,7 +72,7 @@ class DefaultAutoTopicCreationManager(
   controller: Option[KafkaController],
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  shareCoordinator: ShareCoordinator
+  shareCoordinator: Option[ShareCoordinator]
 ) extends AutoTopicCreationManager with Logging {
   if (controller.isEmpty && channelManager.isEmpty) {
     throw new IllegalArgumentException("Must supply a channel manager if not supplying a controller")
@@ -248,7 +248,10 @@ class DefaultAutoTopicCreationManager(
           .setConfigs(convertToTopicConfigCollections(
             txnCoordinator.transactionTopicConfigs))
       case SHARE_GROUP_STATE_TOPIC_NAME =>
-        val props = if (shareCoordinator != null) shareCoordinator.shareGroupStateTopicConfigs() else new Properties()
+        val props = shareCoordinator match {
+          case Some(coordinator) => coordinator.shareGroupStateTopicConfigs()
+          case None => new Properties()
+        }
         new CreatableTopic()
           .setName(topic)
           .setNumPartitions(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())

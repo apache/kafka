@@ -67,7 +67,7 @@ class BrokerMetadataPublisher(
   replicaManager: ReplicaManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  shareCoordinator: ShareCoordinator,
+  shareCoordinator: Option[ShareCoordinator],
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
   scramPublisher: ScramPublisher,
@@ -161,16 +161,18 @@ class BrokerMetadataPublisher(
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating txn " +
             s"coordinator with local changes in $deltaName", t)
         }
-        try {
-          updateCoordinator(newImage,
-            delta,
-            Topic.SHARE_GROUP_STATE_TOPIC_NAME,
-            shareCoordinator.onElection,
-            (partitionIndex, leaderEpochOpt) => shareCoordinator.onResignation(partitionIndex, toOptionalInt(leaderEpochOpt))
-          )
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
-            s"coordinator with local changes in $deltaName", t)
+        if (shareCoordinator.isDefined) {
+          try {
+            updateCoordinator(newImage,
+              delta,
+              Topic.SHARE_GROUP_STATE_TOPIC_NAME,
+              shareCoordinator.get.onElection,
+              (partitionIndex, leaderEpochOpt) => shareCoordinator.get.onResignation(partitionIndex, toOptionalInt(leaderEpochOpt))
+            )
+          } catch {
+            case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
+              s"coordinator with local changes in $deltaName", t)
+          }
         }
         try {
           // Notify the group coordinator about deleted topics.
@@ -325,10 +327,10 @@ class BrokerMetadataPublisher(
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
     }
-    if (config.shareGroupConfig.isShareGroupEnabled && shareCoordinator != null) {
+    if (config.shareGroupConfig.isShareGroupEnabled && shareCoordinator.isDefined) {
       try {
         // Start the share coordinator.
-        shareCoordinator.startup(() => metadataCache.numPartitions(
+        shareCoordinator.get.startup(() => metadataCache.numPartitions(
           Topic.SHARE_GROUP_STATE_TOPIC_NAME).getOrElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
       } catch {
         case t: Throwable => fatalFaultHandler.handleFault("Error starting Share coordinator", t)
