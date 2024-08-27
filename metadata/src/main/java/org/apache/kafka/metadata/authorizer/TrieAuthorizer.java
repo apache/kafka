@@ -43,12 +43,6 @@ public class TrieAuthorizer extends StandardAuthorizer {
         super(TrieAuthorizerData.createEmpty());
     }
 
-
-    @Override
-    public BiPredicate<ResourcePattern, String> patternNameMatcher() {
-        return getPatternNameMatcher();
-    }
-
     /**
      * Gets the pattern name matcher for the Trie implementaiton.  This is exposes like this for testing
      * the ResourcePatternFilter.
