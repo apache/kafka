@@ -79,6 +79,9 @@ public class DelayedShareFetch extends DelayedOperation {
                         "topic partitions {}", shareFetchPartitionData.groupId(),
                 shareFetchPartitionData.memberId(), shareFetchPartitionData.partitionMaxBytes().keySet());
 
+        if (shareFetchPartitionData.future().isDone())
+            return;
+
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = topicPartitionDataForAcquirablePartitions();
         try {
             if (topicPartitionData.isEmpty()) {

@@ -17,16 +17,16 @@
 package kafka.server.share;
 
 import kafka.server.ReplicaManager;
+
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Option;
-import scala.Tuple2;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,6 +35,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import scala.Option;
+import scala.Tuple2;
+
+/**
+ * Utility class for post-processing of share fetch operations.
+ */
 public class ShareFetchUtils {
     private static final Logger log = LoggerFactory.getLogger(ShareFetchUtils.class);
 

@@ -288,6 +288,12 @@ public class SharePartitionManager implements AutoCloseable {
                     });
                     return Errors.NONE;
                 });
+
+                // If we have an acknowledgement completed for a topic-partition, then we should check if
+                // there is a pending share fetch request for the topic-partition and complete it.
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(topicIdPartition, groupId);
+                delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
+
                 futures.put(topicIdPartition, future);
             } else {
                 futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));

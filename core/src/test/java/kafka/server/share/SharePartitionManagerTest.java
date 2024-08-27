@@ -85,6 +85,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import scala.jdk.javaapi.CollectionConverters;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1171,7 +1173,7 @@ public class SharePartitionManagerTest {
         Mockito.verify(replicaManager, times(0)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         Mockito.verify(replicaManager, times(0)).fetchMessages(
-                any(), any(), any(ReplicaQuota.class), any());
+            any(), any(), any(ReplicaQuota.class), any());
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = future.join();
         assertEquals(0, result.size());
     }
@@ -1590,6 +1592,176 @@ public class SharePartitionManagerTest {
 
         // Verifying that the second item in the fetchQueue is processed, even though the first item is empty.
         verify(replicaManager, times(1)).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
+    }
+
+    @Test
+    public void testAcknowledgeCompletesDelayedShareFetchRequest() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0));
+
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+
+        // mocked share partitions sp1 and sp2 can be acquired once there is an acknowledgement for it.
+        doAnswer(invocation -> {
+            when(sp1.canAcquireRecords()).thenReturn(true);
+            return CompletableFuture.completedFuture(Optional.empty());
+        }).when(sp1).acknowledge(ArgumentMatchers.eq(memberId), any());
+        doAnswer(invocation -> {
+            when(sp2.canAcquireRecords()).thenReturn(true);
+            return CompletableFuture.completedFuture(Optional.empty());
+        }).when(sp2).acknowledge(ArgumentMatchers.eq(memberId), any());
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData = new SharePartitionManager.ShareFetchPartitionData(
+                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()),
+                groupId,
+                Uuid.randomUuid().toString(),
+                new CompletableFuture<>(),
+                partitionMaxBytes);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
+                "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
+                DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+
+        // Initially you cannot acquire records for both sp1 and sp2.
+        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.canAcquireRecords()).thenReturn(false);
+        when(sp2.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp2.canAcquireRecords()).thenReturn(false);
+
+        Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
+
+        delayedShareFetchPurgatory.tryCompleteElseWatch(
+            new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
+
+        // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
+        assertEquals(2, delayedShareFetchPurgatory.watched());
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap)
+            .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
+            .withReplicaManager(replicaManager)
+            .withTimer(mockTimer)
+            .build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
+        acknowledgeTopics.put(tp1, Arrays.asList(
+                new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
+                new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
+        ));
+
+        assertEquals(2, delayedShareFetchPurgatory.watched());
+        // Acknowledgement request for sp1.
+        sharePartitionManager.acknowledge(memberId, groupId, acknowledgeTopics);
+
+        // Since sp1 is acknowledged, the delayedShareFetchPurgatory should have 1 watched key corresponding to sp2.
+        assertEquals(1, delayedShareFetchPurgatory.watched());
+
+        Mockito.verify(sp1, times(1)).nextFetchOffset();
+        Mockito.verify(sp2, times(0)).nextFetchOffset();
+    }
+
+    @Test
+    public void testAcknowledgeDoesNotCompleteDelayedShareFetchRequest() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0));
+        TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo3", 0));
+
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        SharePartition sp3 = mock(SharePartition.class);
+
+        // mocked share partitions sp1, sp2 and sp3 can be acquired once there is an acknowledgement for it.
+        doAnswer(invocation -> {
+            when(sp1.canAcquireRecords()).thenReturn(true);
+            return CompletableFuture.completedFuture(Optional.empty());
+        }).when(sp1).acknowledge(ArgumentMatchers.eq(memberId), any());
+        doAnswer(invocation -> {
+            when(sp2.canAcquireRecords()).thenReturn(true);
+            return CompletableFuture.completedFuture(Optional.empty());
+        }).when(sp2).acknowledge(ArgumentMatchers.eq(memberId), any());
+        doAnswer(invocation -> {
+            when(sp3.canAcquireRecords()).thenReturn(true);
+            return CompletableFuture.completedFuture(Optional.empty());
+        }).when(sp3).acknowledge(ArgumentMatchers.eq(memberId), any());
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp2), sp2);
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp3), sp3);
+
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData = new SharePartitionManager.ShareFetchPartitionData(
+                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()),
+                groupId,
+                Uuid.randomUuid().toString(),
+                new CompletableFuture<>(),
+                partitionMaxBytes);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
+                "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
+                DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, true, true);
+
+        // Initially you cannot acquire records for both all 3 share partitions.
+        when(sp1.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp1.canAcquireRecords()).thenReturn(false);
+        when(sp2.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp2.canAcquireRecords()).thenReturn(false);
+        when(sp3.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp3.canAcquireRecords()).thenReturn(false);
+
+        Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
+
+        delayedShareFetchPurgatory.tryCompleteElseWatch(
+                new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
+
+        // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
+        assertEquals(2, delayedShareFetchPurgatory.watched());
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withPartitionCacheMap(partitionCacheMap)
+                .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
+                .withReplicaManager(replicaManager)
+                .withTimer(mockTimer)
+                .build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
+        acknowledgeTopics.put(tp3, Arrays.asList(
+                new ShareAcknowledgementBatch(12, 20, Collections.singletonList((byte) 1)),
+                new ShareAcknowledgementBatch(24, 56, Collections.singletonList((byte) 1))
+        ));
+
+        // Acknowledgement request for sp3.
+        sharePartitionManager.acknowledge(memberId, groupId, acknowledgeTopics);
+
+        // Since neither sp1 and sp2 have been acknowledged, the delayedShareFetchPurgatory should have 2 watched keys.
+        assertEquals(2, delayedShareFetchPurgatory.watched());
+
+        Mockito.verify(sp1, times(0)).nextFetchOffset();
+        Mockito.verify(sp2, times(0)).nextFetchOffset();
     }
 
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
