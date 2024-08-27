@@ -36,6 +36,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 
 import java.util
 import scala.collection.mutable
+import scala.jdk.CollectionConverters.MapHasAsScala
 
 object StorageTool extends Logging {
 
@@ -88,6 +89,10 @@ object StorageTool extends Logging {
 
       case "version-mapping" =>
         runVersionMappingCommand(namespace, printStream)
+        0
+
+      case "feature-dependencies" =>
+        runFeatureDependenciesCommand(namespace, printStream)
         0
 
       case "random-uuid" =>
@@ -167,6 +172,54 @@ object StorageTool extends Logging {
     }
   }
 
+  def runFeatureDependenciesCommand(
+    namespace: Namespace,
+    printStream: PrintStream
+  ): Unit = {
+    val featureArg = namespace.getString("feature")
+    val Array(featureName, versionStr) = featureArg.split("=")
+
+    val featureLevel = try {
+      versionStr.toShort
+    } catch {
+      case _: NumberFormatException =>
+        throw new TerseFailure(s"Invalid version format: $versionStr for feature $featureName")
+    }
+
+    if (featureName == MetadataVersion.FEATURE_NAME) {
+      val metadataVersion = try {
+        MetadataVersion.fromFeatureLevel(featureLevel)
+      } catch {
+        case _: IllegalArgumentException =>
+          throw new TerseFailure(s"Unsupported metadata.version $featureLevel")
+      }
+      printStream.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version())
+    } else {
+      Features.values().find(_.featureName == featureName) match {
+        case Some(feature) =>
+          val featureVersion = feature.fromFeatureLevel(featureLevel, true)
+          val dependencies = featureVersion.dependencies().asScala
+
+          if (dependencies.isEmpty) {
+            printStream.printf("%s=%d has no dependencies.%n", featureName, featureLevel)
+          } else {
+            printStream.printf("%s=%d requires:%n", featureName, featureLevel)
+            for ((depFeature, depLevel) <- dependencies) {
+              if (depFeature == MetadataVersion.FEATURE_NAME) {
+                val metadataVersion = MetadataVersion.fromFeatureLevel(depLevel)
+                printStream.println(s"    $depFeature=$depLevel (${metadataVersion.version()})")
+              } else {
+                printStream.println(s"    $depFeature=$depLevel")
+              }
+            }
+          }
+
+        case None =>
+          throw new TerseFailure(s"Unknown feature: $featureName")
+      }
+    }
+  }
+
   def createStandaloneDynamicVoters(
     config: KafkaConfig
   ): DynamicVoters = {
@@ -195,6 +248,7 @@ object StorageTool extends Logging {
     addInfoParser(subparsers)
     addFormatParser(subparsers)
     addVersionMappingParser(subparsers)
+    addFeatureDependenciesParser(subparsers)
     addRandomUuidParser(subparsers)
 
     parser.parseArgs(args)
@@ -258,6 +312,16 @@ object StorageTool extends Logging {
       .action(store())
       .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
         s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+  }
+
+  private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {
+    val featureDependenciesParser = subparsers.addParser("feature-dependencies")
+      .help("Look up dependencies for a given feature version.")
+
+    featureDependenciesParser.addArgument("--feature", "-f")
+      .required(true)
+      .help("The feature and version to look up dependencies for, in feature=level format. For example: `metadata.version=5`.")
+      .action(store())
   }
 
   private def addRandomUuidParser(subparsers: Subparsers): Unit = {

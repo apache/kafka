@@ -66,14 +66,12 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
         assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV2\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(2)));
+                "SupportedMaxVersion: 4.0-IV1\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(1)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -86,14 +84,12 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().collect(Collectors.toList());
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
         assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV2\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(2)));
+                "SupportedMaxVersion: 4.0-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(1)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
     }
 
     @ClusterTest(types = {Type.ZK}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
@@ -152,7 +148,7 @@ public class FeatureCommandTest {
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
         assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
-                "metadata.version. Local controller 3000 only supports versions 1-24", commandOutput);
+                "metadata.version. Local controller 3000 only supports versions 1-23", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
@@ -344,12 +340,12 @@ public class FeatureCommandTest {
 
         // Check that the metadata version is correctly included in the output
         assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
-            "Output did not contain expected Metadata Version: " + versionMappingOutput);
+                "Output did not contain expected Metadata Version: " + versionMappingOutput);
 
         for (Features feature : Features.values()) {
             int featureLevel = feature.defaultValue(metadataVersion);
             assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
-                "Output did not contain expected feature mapping: " + versionMappingOutput);
+                    "Output did not contain expected feature mapping: " + versionMappingOutput);
         }
     }
 
@@ -363,17 +359,17 @@ public class FeatureCommandTest {
                 throw new RuntimeException(e);
             }
         });
-        
+
         MetadataVersion metadataVersion = MetadataVersion.latestProduction();
 
         // Check that the metadata version is correctly included in the output
         assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
-            "Output did not contain expected Metadata Version: " + versionMappingOutput);
+                "Output did not contain expected Metadata Version: " + versionMappingOutput);
 
         for (Features feature : Features.values()) {
             int featureLevel = feature.defaultValue(metadataVersion);
             assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
-                "Output did not contain expected feature mapping: " + versionMappingOutput);
+                    "Output did not contain expected feature mapping: " + versionMappingOutput);
         }
     }
 
@@ -383,21 +379,101 @@ public class FeatureCommandTest {
         namespace.put("release_version", "2.9-IV2");
 
         TerseException exception1 = assertThrows(TerseException.class, () ->
-            FeatureCommand.handleVersionMapping(new Namespace(namespace))
+                FeatureCommand.handleVersionMapping(new Namespace(namespace))
         );
 
         assertEquals("Unsupported release version '2.9-IV2'." +
-            " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
-            " to " + MetadataVersion.LATEST_PRODUCTION, exception1.getMessage());
+                " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+                " to " + MetadataVersion.LATEST_PRODUCTION, exception1.getMessage());
 
         namespace.put("release_version", "invalid");
 
         TerseException exception2 = assertThrows(TerseException.class, () ->
-            FeatureCommand.handleVersionMapping(new Namespace(namespace))
+                FeatureCommand.handleVersionMapping(new Namespace(namespace))
         );
 
         assertEquals("Unsupported release version 'invalid'." +
-            " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
-            " to " + MetadataVersion.LATEST_PRODUCTION, exception2.getMessage());
+                " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+                " to " + MetadataVersion.LATEST_PRODUCTION, exception2.getMessage());
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForFeatureWithDependencies() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", "test.feature.version=2");
+
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+            } catch (TerseException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        String expectedOutput = String.format(
+            "test.feature.version=2 requires:\n    metadata.version=%d (%s)\n",
+            MetadataVersion.latestTesting().featureLevel(),
+            MetadataVersion.latestTesting().version()
+        );
+
+        assertEquals(expectedOutput.trim(), output.trim());
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForFeatureWithNoDependencies() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", "metadata.version=17");
+
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        assertEquals("metadata.version=17 (3.7-IV2) has no dependencies.", output);
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForUnknownFeature() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", "unknown.feature=1");
+
+        Exception exception = assertThrows(
+            TerseException.class,
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace)
+            ));
+
+        assertEquals("Unknown feature: unknown.feature", exception.getMessage());
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForFeatureWithUnknownFeatureVersion() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", "transaction.version=1000");
+
+        Exception exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace)
+            ));
+
+        assertEquals("No feature:transaction.version with feature level 1000", exception.getMessage());
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForInvalidVersionFormat() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", "metadata.version=invalid");
+
+        RuntimeException exception = assertThrows(
+            RuntimeException.class,
+            () -> FeatureCommand.handleFeatureDependencies(new Namespace(namespace))
+        );
+
+        assertEquals(
+            "Can't parse feature=level string metadata.version=invalid: unable to parse invalid as a short.",
+            exception.getMessage()
+        );
     }
 }

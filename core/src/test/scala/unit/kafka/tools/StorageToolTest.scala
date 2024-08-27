@@ -321,7 +321,7 @@ Found problem:
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq("--feature", "metadata.version=20")))
-    assertTrue(stream.toString().contains("4.0-IV0"),
+    assertTrue(stream.toString().contains("3.9-IV0"),
       "Failed to find content in output: " + stream.toString())
   }
 
@@ -525,5 +525,90 @@ Found problem:
       " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
     )
+  }
+
+  private def runFeatureDependenciesCommand(
+    stream: ByteArrayOutputStream,
+    properties: Properties,
+    feature: String
+  ): Int = {
+    val tempDir = TestUtils.tempDir()
+    try {
+      val configPathString = new File(tempDir.getAbsolutePath, "feature-dependencies.props").toString
+      PropertiesUtils.writePropertiesFile(properties, configPathString, true)
+
+      val arguments = ListBuffer[String]("feature-dependencies", "--feature", feature, "--config", configPathString)
+      StorageTool.execute(arguments.toArray, new PrintStream(stream))
+    } finally {
+      Utils.delete(tempDir)
+    }
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForFeatureWithDependencies(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFeatureDependenciesCommand(stream, properties, "test.feature.version=2"))
+
+    val output = stream.toString
+    val metadataVersion = MetadataVersion.latestTesting()
+
+    val expectedOutput = s"test.feature.version=2 requires:\n    metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})\n"
+    assertEquals(expectedOutput.trim, output.trim)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForFeatureWithNoDependencies(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFeatureDependenciesCommand(stream, properties, "metadata.version=17"))
+
+    val output = stream.toString.trim
+
+    assertEquals("metadata.version=17 (3.7-IV2) has no dependencies.", output)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForUnknownFeature(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, properties, "unknown.feature.version=1")
+    })
+
+    assertEquals("Unknown feature: unknown.feature.version", exception.getMessage)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForFeatureWithUnknownFeatureVersion(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    val exception = assertThrows(classOf[IllegalArgumentException], () => {
+      runFeatureDependenciesCommand(stream, properties, "transaction.version=1000")
+    })
+
+    assertEquals("No feature:transaction.version with feature level 1000", exception.getMessage)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForInvalidVersionFormat(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, properties, "metadata.version=invalid")
+    })
+
+    assertEquals("Invalid version format: invalid for feature metadata.version", exception.getMessage)
   }
 }
