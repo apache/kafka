@@ -1265,10 +1265,7 @@ public class RemoteLogManager implements Closeable {
                         canProcess = false;
                         continue;
                     }
-                    // skip the COPY_SEGMENT_STARTED segments since they might be the dangling segments that failed before
-                    // and blocks the normal segment deletion, ex: it failed `isRemoteSegmentWithinLeaderEpochs` check... etc
-                    if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state()) ||
-                            RemoteLogSegmentState.COPY_SEGMENT_STARTED.equals(metadata.state())) {
+                    if (RemoteLogSegmentState.DELETE_SEGMENT_FINISHED.equals(metadata.state())) {
                         continue;
                     }
                     if (segmentsToDelete.contains(metadata)) {
