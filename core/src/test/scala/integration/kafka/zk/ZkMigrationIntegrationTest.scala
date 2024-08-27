@@ -385,6 +385,7 @@ class ZkMigrationIntegrationTest {
         "Timed out waiting for topics to be deleted",
         300000,
         1000)
+      log.info("Topics to be deleted")
 
       val newTopics = new util.ArrayList[NewTopic]()
       newTopics.add(new NewTopic("test-topic-1", 2, 3.toShort))
@@ -407,8 +408,11 @@ class ZkMigrationIntegrationTest {
         "Timed out waiting for topics to be created",
         60000,
         1000)
+      log.info("Topics to be re-created")
 
       TestUtils.retry(300000) {
+        log.info("Waiting for consistent topic state")
+
         // Need a retry here since topic metadata may be inconsistent between brokers
         val topicDescriptions = try {
           admin.describeTopics(util.Arrays.asList(
@@ -420,6 +424,7 @@ class ZkMigrationIntegrationTest {
           case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => Map.empty[String, TopicDescription]
           case t: Throwable => fail("Error describing topics", t.getCause)
         }
+        log.info("Topic describe: {}", topicDescriptions);
 
         assertEquals(2, topicDescriptions("test-topic-1").partitions().size())
         assertEquals(1, topicDescriptions("test-topic-2").partitions().size())
@@ -436,9 +441,8 @@ class ZkMigrationIntegrationTest {
         assertTrue(absentTopics.contains("test-topic-2"))
         assertTrue(absentTopics.contains("test-topic-3"))
       }
-
-      admin.close()
     } finally {
+      admin.close()
       shutdownInSequence(zkCluster, kraftCluster)
     }
   }
