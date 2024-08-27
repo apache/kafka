@@ -264,7 +264,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return CoordinatorResult(records, response)
      */
     @SuppressWarnings("NPathComplexity")
-    public CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> writeState(RequestContext context, WriteShareGroupStateRequestData request) {
+    public CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> writeState(
+        RequestContext context,
+        WriteShareGroupStateRequestData request
+    ) {
         log.debug("Write request dump - {}", request);
         // records to write (with both key and value of snapshot type), response to caller
         // only one key will be there in the request by design
@@ -423,7 +426,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return ReadShareGroupStateResponse.toResponseData(topicId, partition, offsetValue.startOffset(), offsetValue.stateEpoch(), stateBatches);
     }
 
-    private Optional<CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord>> maybeGetWriteStateError(WriteShareGroupStateRequestData request) {
+    private Optional<CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord>> maybeGetWriteStateError(
+        WriteShareGroupStateRequestData request
+    ) {
         String groupId = request.groupId();
         WriteShareGroupStateRequestData.WriteStateData topicData = request.topics().get(0);
         WriteShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
@@ -472,7 +477,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return Optional.empty();
     }
 
-    private CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> getWriteErrorResponse(Errors error, Uuid topicId, int partitionId) {
+    private CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> getWriteErrorResponse(
+        Errors error,
+        Uuid topicId,
+        int partitionId
+    ) {
         WriteShareGroupStateResponseData responseData = WriteShareGroupStateResponse.toErrorResponseData(topicId, partitionId, error, error.message());
         return new CoordinatorResult<>(Collections.emptyList(), responseData);
     }
@@ -509,7 +518,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .build();
     }
 
-    private static List<PersisterOffsetsStateBatch> combineStateBatches(Set<PersisterOffsetsStateBatch> currentBatch, Set<PersisterOffsetsStateBatch> newBatch) {
+    private static List<PersisterOffsetsStateBatch> combineStateBatches(
+        Set<PersisterOffsetsStateBatch> currentBatch,
+        Set<PersisterOffsetsStateBatch> newBatch
+    ) {
         currentBatch.removeAll(newBatch);
         List<PersisterOffsetsStateBatch> batchesToAdd = new LinkedList<>(currentBatch);
         batchesToAdd.addAll(newBatch);

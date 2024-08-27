@@ -454,7 +454,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
         });
     }
 
-    private ReadShareGroupStateResponseData generateErrorReadStateResponse(ReadShareGroupStateRequestData request, Errors error, String errorMessage) {
+    private ReadShareGroupStateResponseData generateErrorReadStateResponse(
+        ReadShareGroupStateRequestData request,
+        Errors error,
+        String errorMessage
+    ) {
         return new ReadShareGroupStateResponseData().setResults(request.topics().stream()
             .map(topicData -> {
                 ReadShareGroupStateResponseData.ReadStateResult resultData = new ReadShareGroupStateResponseData.ReadStateResult();
@@ -467,7 +471,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
             }).collect(Collectors.toList()));
     }
 
-    private WriteShareGroupStateResponseData generateErrorWriteStateResponse(WriteShareGroupStateRequestData request, Errors error, String errorMessage) {
+    private WriteShareGroupStateResponseData generateErrorWriteStateResponse(
+        WriteShareGroupStateRequestData request,
+        Errors error,
+        String errorMessage
+    ) {
         return new WriteShareGroupStateResponseData()
             .setResults(request.topics().stream()
                 .map(topicData -> {
