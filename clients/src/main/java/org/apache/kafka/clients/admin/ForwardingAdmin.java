@@ -315,7 +315,7 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
-    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+    public void unregisterMetricForSubscription(KafkaMetric metric) {
         throw new UnsupportedOperationException();
     }
 
