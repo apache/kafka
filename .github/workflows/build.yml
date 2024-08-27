@@ -13,17 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Pull Requests
+name: Check and Test
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - 'trunk'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      gradle-cache-read-only:
+        description: "Should the Gradle cache be read-only?"
+        default: "true"
+        type: string
+      github-actions-opt-in:
+        description: "Should we run the opt-in steps?"
+        default: "false"
+        type: string
 
 jobs:
   validate:
@@ -34,6 +36,10 @@ jobs:
         java: [ 21, 17, 11, 8 ]
     name: Compile and Check Java ${{ matrix.java }}
     steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -45,7 +51,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          gradle-cache-read-only: true
+          gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
         # Gradle flags
@@ -64,7 +70,7 @@ jobs:
       - name: Annotate checkstyle errors
         # Avoid duplicate annotations, only run on java 21
         # For now, limit to "gh-" PRs
-        if: ${{ contains(github.head_ref, 'gh-') && failure() && matrix.java == '21' }}
+        if: ${{ inputs.github-actions-opt-in && failure() && matrix.java == '21' }}
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
@@ -76,7 +82,7 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 17, 11 ]
-    if: contains(github.head_ref, 'gh-')  # For now, only run tests on "gh-*" PRs
+    if: ${{ inputs.github-actions-opt-in }}
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -87,10 +93,13 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          gradle-cache-read-only: true
+          gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Test
-        # Publish build scans for now. This will only work on PRs from apache/kafka, not public forks.
+        # Gradle flags
+        # --build-cache:  Let Gradle restore the build cache
+        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
+        # --continue:     Keep running even if a test fails
         timeout-minutes: 180  # 3 hours
         run: |
           ./gradlew --build-cache --scan --continue \
@@ -98,3 +107,18 @@ jobs:
           -PignoreFailures=true -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           test
+      - name: Archive JUnit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        id: junit-upload-artifact
+        with:
+          name: junit-reports-${{ matrix.java }}
+          path: |
+            **/build/reports/tests/test/*
+          if-no-files-found: ignore
+      - name: Parse JUnit tests
+        if: always()
+        run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
