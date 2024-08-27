@@ -348,7 +348,7 @@ public class QuorumControllerTest {
             assertEquals(expectedIsr[0], fooLeader);
 
             // Check that there are imbalaned partitions
-            assertTrue(active.replicationControl().shouldScheduleAdjustPartitionLeaders());
+            assertTrue(active.replicationControl().arePartitionLeadersImbalanced());
 
             testToImages(logEnv.allRecords());
         }
@@ -561,7 +561,7 @@ public class QuorumControllerTest {
             );
 
             // Check that there are imbalanced partitions
-            assertTrue(active.replicationControl().shouldScheduleAdjustPartitionLeaders());
+            assertTrue(active.replicationControl().arePartitionLeadersImbalanced());
 
             // Re-register all fenced brokers
             for (Integer brokerId : brokersToFence) {
@@ -612,7 +612,7 @@ public class QuorumControllerTest {
                         lastHeartbeatMs.set(currentMonotonicMs);
                         sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
                     }
-                    return !active.replicationControl().shouldScheduleAdjustPartitionLeaders();
+                    return !active.replicationControl().arePartitionLeadersImbalanced();
                 },
                 TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalNs * 10, TimeUnit.NANOSECONDS),
                 "Leaders were not balanced after unfencing all of the brokers"

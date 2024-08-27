@@ -224,6 +224,7 @@ public final class QuorumController implements Controller {
         private long delegationTokenMaxLifeMs;
         private long delegationTokenExpiryTimeMs;
         private long delegationTokenExpiryCheckIntervalMs;
+        private long uncleanLeaderElectionCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -374,6 +375,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setUncleanLeaderElectionCheckIntervalMs(long uncleanLeaderElectionCheckIntervalMs) {
+            this.uncleanLeaderElectionCheckIntervalMs = uncleanLeaderElectionCheckIntervalMs;
+            return this;
+        }
+
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
@@ -430,7 +436,8 @@ public final class QuorumController implements Controller {
                     delegationTokenMaxLifeMs,
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
-                    eligibleLeaderReplicasEnabled
+                    eligibleLeaderReplicasEnabled,
+                    uncleanLeaderElectionCheckIntervalMs
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -840,8 +847,11 @@ public final class QuorumController implements Controller {
             }
 
             // After every controller write event, schedule a leader rebalance if there are any topic partition
-            // with leader that is not the preferred leader, or leaderless partitions.
-            maybeScheduleNextAdjustPartitionLeaders();
+            // with leader that is not the preferred leader.
+            maybeScheduleNextBalancePartitionLeaders();
+
+            // Schedule a new unclean leader election if there are partitions that do not have a leader.
+            maybeScheduleNextElectUncleanLeaders();
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
@@ -1243,7 +1253,8 @@ public final class QuorumController implements Controller {
             // generateRecordsAndResult have been applied, so we have the correct value for
             // metadata.version and other in-memory state.
             maybeScheduleNextExpiredDelegationTokenSweep();
-            maybeScheduleNextAdjustPartitionLeaders();
+            maybeScheduleNextBalancePartitionLeaders();
+            maybeScheduleNextElectUncleanLeaders();
             maybeScheduleNextWriteNoOpRecord();
         }
     }
@@ -1263,7 +1274,8 @@ public final class QuorumController implements Controller {
             offsetControl.deactivate();
             clusterControl.deactivate();
             cancelMaybeFenceReplicas();
-            cancelMaybeAdjustPartitionLeaders();
+            cancelMaybeBalancePartitionLeaders();
+            cancelMaybeNextElectUncleanLeaders();
             cancelNextWriteNoOpRecord();
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while renouncing leadership", e);
@@ -1322,27 +1334,27 @@ public final class QuorumController implements Controller {
         queue.cancelDeferred(MAYBE_FENCE_REPLICAS);
     }
 
-    private static final String MAYBE_ADJUST_PARTITION_LEADERS = "maybeAdjustPartitionLeaders";
+    private static final String MAYBE_BALANCE_PARTITION_LEADERS = "maybeBalancePartitionLeaders";
 
-    private void maybeScheduleNextAdjustPartitionLeaders() {
+    private void maybeScheduleNextBalancePartitionLeaders() {
         if (imbalancedScheduled != ImbalanceSchedule.SCHEDULED &&
             leaderImbalanceCheckIntervalNs.isPresent() &&
-            replicationControl.shouldScheduleAdjustPartitionLeaders()) {
+            replicationControl.arePartitionLeadersImbalanced()) {
 
             log.debug(
                 "Scheduling write event for {} because scheduled ({}), checkIntervalNs ({}) and isImbalanced ({})",
-                MAYBE_ADJUST_PARTITION_LEADERS,
+                MAYBE_BALANCE_PARTITION_LEADERS,
                 imbalancedScheduled,
                 leaderImbalanceCheckIntervalNs,
-                replicationControl.shouldScheduleAdjustPartitionLeaders()
+                replicationControl.arePartitionLeadersImbalanced()
             );
 
-            ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_ADJUST_PARTITION_LEADERS, () -> {
+            ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_BALANCE_PARTITION_LEADERS, () -> {
                 long startTimeNs = time.nanoseconds();
-                ControllerResult<Boolean> result = replicationControl.maybeAdjustPartitionLeaders();
+                ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
                 long endTimeNs = time.nanoseconds();
                 long durationNs = endTimeNs - startTimeNs;
-                log.info("maybeAdjustPartitionLeaders: generated {} records in {} microseconds.{}",
+                log.info("maybeBalancePartitionLeaders: generated {} records in {} microseconds.{}",
                     result.records().size(), NANOSECONDS.toMicros(durationNs),
                         result.response() ? " Rescheduling immediately." : "");
 
@@ -1354,7 +1366,7 @@ public final class QuorumController implements Controller {
                     imbalancedScheduled = ImbalanceSchedule.DEFERRED;
                 }
 
-                // Note that rescheduling this event here is not required because MAYBE_ADJUST_PARTITION_LEADERS
+                // Note that rescheduling this event here is not required because MAYBE_BALANCE_PARTITION_LEADERS
                 // is a ControllerWriteEvent. ControllerWriteEvent always calls this method after the records
                 // generated by a ControllerWriteEvent have been applied.
 
@@ -1371,15 +1383,63 @@ public final class QuorumController implements Controller {
                 delayNs += NANOSECONDS.convert(10, TimeUnit.MILLISECONDS);
             }
 
-            queue.scheduleDeferred(MAYBE_ADJUST_PARTITION_LEADERS, new EarliestDeadlineFunction(delayNs), event);
+            queue.scheduleDeferred(MAYBE_BALANCE_PARTITION_LEADERS, new EarliestDeadlineFunction(delayNs), event);
 
             imbalancedScheduled = ImbalanceSchedule.SCHEDULED;
         }
     }
 
-    private void cancelMaybeAdjustPartitionLeaders() {
+    private void cancelMaybeBalancePartitionLeaders() {
         imbalancedScheduled = ImbalanceSchedule.DEFERRED;
-        queue.cancelDeferred(MAYBE_ADJUST_PARTITION_LEADERS);
+        queue.cancelDeferred(MAYBE_BALANCE_PARTITION_LEADERS);
+    }
+
+    private static final String MAYBE_ELECT_UNCLEAN_LEADERS = "maybeElectUncleanLeaders";
+
+    private void maybeScheduleNextElectUncleanLeaders() {
+        if (uncleanScheduled != ImbalanceSchedule.SCHEDULED &&
+                replicationControl.areSomePartitionsLeaderless()) {
+            log.debug(
+                "Scheduling write event for {} because scheduled ({}), and areSomePartitionsLeaderless ({})",
+                MAYBE_ELECT_UNCLEAN_LEADERS,
+                uncleanScheduled,
+                replicationControl.areSomePartitionsLeaderless()
+            );
+
+            ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_ELECT_UNCLEAN_LEADERS, () -> {
+                long startTimeNs = time.nanoseconds();
+                ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
+                long endTimeNs = time.nanoseconds();
+                long durationNs = endTimeNs - startTimeNs;
+                log.info("maybeElectUncleanLeaders: generated {} records in {} microseconds.{}",
+                        result.records().size(), NANOSECONDS.toMicros(durationNs),
+                        result.response() ? " Rescheduling immediately." : "");
+                if (result.response()) {
+                    uncleanScheduled = ImbalanceSchedule.IMMEDIATELY;
+                } else {
+                    uncleanScheduled = ImbalanceSchedule.DEFERRED;
+                }
+                return result;
+            }, EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME));
+
+            long delayNs = time.nanoseconds();
+            if (uncleanScheduled == ImbalanceSchedule.DEFERRED) {
+                delayNs += uncleanLeaderElectionCheckIntervalNs;
+            } else {
+                // The current implementation of KafkaEventQueue always picks from the deferred collection of operations
+                // before picking from the non-deferred collection of operations. This can result in some unfairness if
+                // deferred operation are scheduled for immediate execution. This delays them by a small amount of time.
+                delayNs += NANOSECONDS.convert(10, TimeUnit.MILLISECONDS);
+            }
+            queue.scheduleDeferred(MAYBE_ELECT_UNCLEAN_LEADERS, new EarliestDeadlineFunction(delayNs), event);
+            uncleanScheduled = ImbalanceSchedule.SCHEDULED;
+        }
+    }
+
+
+    private void cancelMaybeNextElectUncleanLeaders() {
+        uncleanScheduled = ImbalanceSchedule.DEFERRED;
+        queue.cancelDeferred(MAYBE_ELECT_UNCLEAN_LEADERS);
     }
 
     private static final String WRITE_NO_OP_RECORD = "writeNoOpRecord";
@@ -1742,6 +1802,11 @@ public final class QuorumController implements Controller {
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
     /**
+     * Tracks the scheduling state for unclean leader election operations.
+     */
+    private ImbalanceSchedule uncleanScheduled = ImbalanceSchedule.DEFERRED;
+
+    /**
      * Tracks if the write of the NoOpRecord has been scheduled.
      */
     private boolean noOpRecordScheduled = false;
@@ -1756,6 +1821,11 @@ public final class QuorumController implements Controller {
     private final boolean zkMigrationEnabled;
 
     private final boolean eligibleLeaderReplicasEnabled;
+
+    /**
+     * The number of nanoseconds between unclean leader election checks.
+     */
+    private final long uncleanLeaderElectionCheckIntervalNs;
 
     /**
      * The maximum number of records per batch to allow.
@@ -1797,7 +1867,8 @@ public final class QuorumController implements Controller {
         long delegationTokenMaxLifeMs,
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
-        boolean eligibleLeaderReplicasEnabled
+        boolean eligibleLeaderReplicasEnabled,
+        long uncleanLeaderElectionCheckIntervalMs
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1902,6 +1973,8 @@ public final class QuorumController implements Controller {
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.recordRedactor = new RecordRedactor(configSchema);
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+        this.uncleanLeaderElectionCheckIntervalNs =
+            TimeUnit.MILLISECONDS.toNanos(uncleanLeaderElectionCheckIntervalMs);
 
         log.info("Creating new QuorumController with clusterId {}.{}{}",
             clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "",

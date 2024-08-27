@@ -1613,8 +1613,12 @@ public class ReplicationControlManager {
         return ControllerResult.of(records, null);
     }
 
-    boolean shouldScheduleAdjustPartitionLeaders() {
-        return !imbalancedPartitions.isEmpty() || brokersToIsrs.partitionsWithNoLeader().hasNext();
+    boolean arePartitionLeadersImbalanced() {
+        return !imbalancedPartitions.isEmpty();
+    }
+
+    boolean areSomePartitionsLeaderless() {
+        return brokersToIsrs.partitionsWithNoLeader().hasNext();
     }
 
     /**
@@ -1625,44 +1629,10 @@ public class ReplicationControlManager {
      *
      * @return All of the election records and if there may be more available preferred replicas to elect as leader
      */
-    ControllerResult<Boolean> maybeAdjustPartitionLeaders() {
+    ControllerResult<Boolean> maybeBalancePartitionLeaders() {
         List<ApiMessageAndVersion> records = new ArrayList<>();
-        maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(records, maxElectionsPerImbalance);
         maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(records, maxElectionsPerImbalance);
-        boolean rescheduleImmediately = records.size() >= maxElectionsPerImbalance;
-        return ControllerResult.of(records, rescheduleImmediately);
-    }
-
-    /**
-     * Trigger unclean leader election for partitions without leader (visiable for testing)
-     *
-     * @param records       The record list to append to.
-     * @param maxElections  The maximum number of elections to perform.
-     */
-    void maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(
-        List<ApiMessageAndVersion> records,
-        int maxElections
-    ) {
-        Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
-        while (iterator.hasNext() && records.size() < maxElections) {
-            TopicIdPartition topicIdPartition = iterator.next();
-            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
-            if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
-                ApiError result = electLeader(topic.name, topicIdPartition.partitionId(),
-                        ElectionType.UNCLEAN, records);
-                if (result.error().equals(Errors.NONE)) {
-                    log.error("Triggering unclean leader election for offline partition {}-{}.",
-                            topic.name, topicIdPartition.partitionId());
-                } else {
-                    log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}",
-                            topic.name, topicIdPartition.partitionId(), result.error());
-                }
-            } else if (log.isDebugEnabled()) {
-                log.debug("Cannot trigger unclean leader election for offline partition {}-{} " +
-                        "because unclean leader election is disabled for this topic.",
-                        topic.name, topicIdPartition.partitionId());
-            }
-        }
+        return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
     }
 
     void maybeTriggerLeaderChangeForPartitionsWithoutPreferredLeader(
@@ -1700,6 +1670,44 @@ public class ReplicationControlManager {
                 .setEligibleLeaderReplicasEnabled(isElrEnabled())
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
+        }
+    }
+
+    ControllerResult<Boolean> maybeElectUncleanLeaders() {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(records, maxElectionsPerImbalance);
+        return ControllerResult.of(records, records.size() >= maxElectionsPerImbalance);
+    }
+
+    /**
+     * Trigger unclean leader election for partitions without leader (visiable for testing)
+     *
+     * @param records       The record list to append to.
+     * @param maxElections  The maximum number of elections to perform.
+     */
+    void maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(
+            List<ApiMessageAndVersion> records,
+            int maxElections
+    ) {
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
+        while (iterator.hasNext() && records.size() < maxElections) {
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
+            if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+                ApiError result = electLeader(topic.name, topicIdPartition.partitionId(),
+                        ElectionType.UNCLEAN, records);
+                if (result.error().equals(Errors.NONE)) {
+                    log.error("Triggering unclean leader election for offline partition {}-{}.",
+                            topic.name, topicIdPartition.partitionId());
+                } else {
+                    log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}",
+                            topic.name, topicIdPartition.partitionId(), result.error());
+                }
+            } else if (log.isDebugEnabled()) {
+                log.debug("Cannot trigger unclean leader election for offline partition {}-{} " +
+                                "because unclean leader election is disabled for this topic.",
+                        topic.name, topicIdPartition.partitionId());
+            }
         }
     }
 

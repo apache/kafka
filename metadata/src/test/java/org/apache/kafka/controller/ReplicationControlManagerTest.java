@@ -2562,7 +2562,7 @@ public class ReplicationControlManagerTest {
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{
             new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
 
-        assertTrue(replication.shouldScheduleAdjustPartitionLeaders());
+        assertTrue(replication.arePartitionLeadersImbalanced());
 
         ctx.unfenceBrokers(1);
 
@@ -2585,7 +2585,7 @@ public class ReplicationControlManagerTest {
             alterPartitionResult.response());
         ctx.replay(alterPartitionResult.records());
 
-        ControllerResult<Boolean> balanceResult = replication.maybeAdjustPartitionLeaders();
+        ControllerResult<Boolean> balanceResult = replication.maybeBalancePartitionLeaders();
         ctx.replay(balanceResult.records());
 
         PartitionChangeRecord expectedChangeRecord = new PartitionChangeRecord()
@@ -2593,7 +2593,7 @@ public class ReplicationControlManagerTest {
             .setTopicId(fooId)
             .setLeader(1);
         assertEquals(singletonList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latestTesting().partitionChangeRecordVersion())), balanceResult.records());
-        assertTrue(replication.shouldScheduleAdjustPartitionLeaders());
+        assertTrue(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
 
         ctx.unfenceBrokers(0);
@@ -2617,7 +2617,7 @@ public class ReplicationControlManagerTest {
             alterPartitionResult.response());
         ctx.replay(alterPartitionResult.records());
 
-        balanceResult = replication.maybeAdjustPartitionLeaders();
+        balanceResult = replication.maybeBalancePartitionLeaders();
         ctx.replay(balanceResult.records());
 
         expectedChangeRecord = new PartitionChangeRecord()
@@ -2625,7 +2625,7 @@ public class ReplicationControlManagerTest {
             .setTopicId(fooId)
             .setLeader(0);
         assertEquals(singletonList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latestTesting().partitionChangeRecordVersion())), balanceResult.records());
-        assertFalse(replication.shouldScheduleAdjustPartitionLeaders());
+        assertFalse(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
     }
 
@@ -2642,9 +2642,9 @@ public class ReplicationControlManagerTest {
         ctx.unfenceBrokers(0, 1, 2, 3, 4);
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{
             new int[]{1, 2, 4}, new int[]{1, 3, 4}, new int[]{0, 2, 4}}).topicId();
-        assertFalse(replication.shouldScheduleAdjustPartitionLeaders());
+        assertFalse(replication.areSomePartitionsLeaderless());
         ctx.fenceBrokers(0, 1, 2, 3, 4);
-        assertTrue(replication.shouldScheduleAdjustPartitionLeaders());
+        assertTrue(replication.areSomePartitionsLeaderless());
         for (int partitionId : Arrays.asList(0, 1, 2)) {
             assertArrayEquals(new int[] {4}, ctx.replicationControl.getPartition(fooId, partitionId).isr);
             assertEquals(-1, ctx.replicationControl.getPartition(fooId, partitionId).leader);
@@ -2690,7 +2690,7 @@ public class ReplicationControlManagerTest {
                         new AbstractMap.SimpleImmutableEntry<>(AlterConfigOp.OpType.SET, "true"))),
                 true).records());
         }
-        ControllerResult<Boolean> balanceResult = replication.maybeAdjustPartitionLeaders();
+        ControllerResult<Boolean> balanceResult = replication.maybeElectUncleanLeaders();
         assertFalse(balanceResult.response());
         if (uncleanConfig.equals("none") || uncleanConfig.equals("static")) {
             assertEquals(0, balanceResult.records().size(), "Expected no records, but " +
