@@ -47,6 +47,7 @@ import org.apache.kafka.server.share.ShareSession;
 import org.apache.kafka.server.share.ShareSessionCache;
 import org.apache.kafka.server.share.ShareSessionContext;
 import org.apache.kafka.server.share.ShareSessionKey;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -298,7 +299,8 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     /**
-     * The release acquired records method is used to release the acquired records for the specified topic-partitions.
+     * The release session method is used to release the session for the memberId of respective group.
+     * The method post removing session also releases acquired records for the respective member.
      * The method returns a future that will be completed with the release response.
      *
      * @param groupId The group id, this is used to identify the share group.
@@ -306,13 +308,24 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @return A future that will be completed with the release response.
      */
-    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseAcquiredRecords(
+    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseSession(
         String groupId,
         String memberId
     ) {
-        log.trace("Release acquired records request for groupId: {}, memberId: {}", groupId, memberId);
+        log.trace("Release session request for groupId: {}, memberId: {}", groupId, memberId);
+        Uuid memberIdUuid = Uuid.fromString(memberId);
         List<TopicIdPartition> topicIdPartitions = cachedTopicIdPartitionsInShareSession(
-            groupId, Uuid.fromString(memberId));
+            groupId, memberIdUuid);
+        // Remove the share session from the cache.
+        ShareSessionKey key = shareSessionKey(groupId, memberIdUuid);
+        if (cache.remove(key) == null) {
+            log.error("Share session error for {}: no such share session found", key);
+            return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
+        } else {
+            log.debug("Removed share session with key " + key);
+        }
+
+        // Additionally release the acquired records for the respective member.
         if (topicIdPartitions.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
@@ -335,7 +348,7 @@ public class SharePartitionManager implements AutoCloseable {
         });
 
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-                futuresMap.values().toArray(new CompletableFuture[futuresMap.size()]));
+            futuresMap.values().toArray(new CompletableFuture[0]));
         return allFutures.thenApply(v -> {
             Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
             futuresMap.forEach((topicIdPartition, future) -> result.put(topicIdPartition, new ShareAcknowledgeResponseData.PartitionData()
@@ -371,11 +384,9 @@ public class SharePartitionManager implements AutoCloseable {
                 if (!shareFetchDataWithMaxBytes.isEmpty()) {
                     throw Errors.INVALID_REQUEST.exception();
                 }
-                if (cache.remove(key) == null) {
+                if (cache.get(key) == null) {
                     log.error("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
-                } else {
-                    log.debug("Removed share session with key " + key);
                 }
                 context = new FinalContext();
             } else {
@@ -442,14 +453,6 @@ public class SharePartitionManager implements AutoCloseable {
         if (reqMetadata.epoch() == ShareRequestMetadata.INITIAL_EPOCH) {
             // ShareAcknowledge Request cannot have epoch as INITIAL_EPOCH (0)
             throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
-        } else if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
-            ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
-            if (cache.remove(key) == null) {
-                log.error("Share session error for {}: no such share session found", key);
-                throw Errors.SHARE_SESSION_NOT_FOUND.exception();
-            } else {
-                log.debug("Removed share session with key " + key);
-            }
         } else {
             synchronized (cache) {
                 ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
@@ -457,16 +460,18 @@ public class SharePartitionManager implements AutoCloseable {
                 if (shareSession == null) {
                     log.debug("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
-                } else {
-                    if (shareSession.epoch != reqMetadata.epoch()) {
-                        log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
-                                shareSession.epoch, reqMetadata.epoch());
-                        throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
-                    } else {
-                        cache.touch(shareSession, time.milliseconds());
-                        shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
-                    }
                 }
+
+                if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
+                    // If the epoch is FINAL_EPOCH, then return. Do not update the cache.
+                    return;
+                } else if (shareSession.epoch != reqMetadata.epoch()) {
+                    log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
+                            shareSession.epoch, reqMetadata.epoch());
+                    throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+                }
+                cache.touch(shareSession, time.milliseconds());
+                shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
         }
     }
