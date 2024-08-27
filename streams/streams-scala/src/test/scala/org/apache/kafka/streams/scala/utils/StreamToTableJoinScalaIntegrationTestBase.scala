@@ -97,6 +97,7 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
     p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
     p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[LongDeserializer])
+    p.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "20000")
     p
   }
 
