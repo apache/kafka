@@ -1552,6 +1552,7 @@ project(':coordinator-common') {
     implementation project(':storage')
     implementation libs.slf4jApi
     implementation libs.metrics
+    implementation libs.hdrHistogram
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output

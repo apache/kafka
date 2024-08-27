@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.metrics;
+package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -31,17 +31,24 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics.BATCH_FLUSH_TIME_METRIC_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics.EVENT_PROCESSING_TIME_METRIC_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics.EVENT_PURGATORY_TIME_METRIC_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics.EVENT_QUEUE_TIME_METRIC_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics.METRICS_GROUP;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics.NUM_PARTITIONS_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.BATCH_FLUSH_TIME_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_PROCESSING_TIME_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_PURGATORY_TIME_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_QUEUE_TIME_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.NUM_PARTITIONS_METRIC_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class GroupCoordinatorRuntimeMetricsTest {
+public class CoordinatorRuntimeMetricsImplTest {
+
+    private static final String METRICS_GROUP = "test-runtime-metrics";
+
+    static class TestCoordinatorRuntimeMetricsImpl extends CoordinatorRuntimeMetricsImpl {
+        TestCoordinatorRuntimeMetricsImpl(Metrics metrics) {
+            super(metrics, METRICS_GROUP);
+        }
+    }
     
     @Test
     public void testMetricNames() {
@@ -77,7 +84,7 @@ public class GroupCoordinatorRuntimeMetricsTest {
             kafkaMetricName(metrics, "batch-flush-time-ms-p999")
         ));
 
-        try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
+        try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new TestCoordinatorRuntimeMetricsImpl(metrics)) {
             runtimeMetrics.registerEventQueueSizeGauge(() -> 0);
             expectedMetrics.forEach(metricName -> assertTrue(metrics.metrics().containsKey(metricName)));
         }
@@ -92,7 +99,7 @@ public class GroupCoordinatorRuntimeMetricsTest {
     public void testUpdateNumPartitionsMetrics() {
         Metrics metrics = new Metrics();
 
-        try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
+        try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new TestCoordinatorRuntimeMetricsImpl(metrics)) {
             IntStream.range(0, 10)
                 .forEach(__ -> runtimeMetrics.recordPartitionStateChange(CoordinatorState.INITIAL, CoordinatorState.LOADING));
             IntStream.range(0, 8)
@@ -113,7 +120,7 @@ public class GroupCoordinatorRuntimeMetricsTest {
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
 
-        try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
+        try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new TestCoordinatorRuntimeMetricsImpl(metrics)) {
             long startTimeMs = time.milliseconds();
             runtimeMetrics.recordPartitionLoadSensor(startTimeMs, startTimeMs + 1000);
             runtimeMetrics.recordPartitionLoadSensor(startTimeMs, startTimeMs + 2000);
@@ -134,7 +141,7 @@ public class GroupCoordinatorRuntimeMetricsTest {
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
 
-        GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics);
+        CoordinatorRuntimeMetricsImpl runtimeMetrics = new TestCoordinatorRuntimeMetricsImpl(metrics);
         IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordThreadIdleTime((i + 1) * 1000L));
 
         org.apache.kafka.common.MetricName metricName = kafkaMetricName(metrics, "thread-idle-ratio-avg");
@@ -147,7 +154,7 @@ public class GroupCoordinatorRuntimeMetricsTest {
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
 
-        try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
+        try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new TestCoordinatorRuntimeMetricsImpl(metrics)) {
             runtimeMetrics.registerEventQueueSizeGauge(() -> 5);
             assertMetricGauge(metrics, kafkaMetricName(metrics, "event-queue-size"), 5);
         }
@@ -164,7 +171,7 @@ public class GroupCoordinatorRuntimeMetricsTest {
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
 
-        GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics);
+        CoordinatorRuntimeMetricsImpl runtimeMetrics = new TestCoordinatorRuntimeMetricsImpl(metrics);
 
         IntStream.range(1, 1001).forEach(i -> {
             switch (metricNamePrefix) {

@@ -295,13 +295,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 batchesToAdd = combineStateBatches(
                     shareStateMap.get(key).stateBatchAsSet(),
                     partitionData.stateBatches().stream()
-                        .map(PersisterOffsetsStateBatch::of)
+                        .map(PersisterOffsetsStateBatch::from)
                         .collect(Collectors.toCollection(LinkedHashSet::new)));
             } else {
                 // start offset is being updated - we should only
                 // consider new updates to batches
                 batchesToAdd = partitionData.stateBatches().stream()
-                    .map(PersisterOffsetsStateBatch::of).collect(Collectors.toList());
+                    .map(PersisterOffsetsStateBatch::from).collect(Collectors.toList());
             }
 
             int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? shareStateMap.get(key).leaderEpoch() : partitionData.leaderEpoch();
@@ -504,7 +504,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setStartOffset(newData.startOffset() == -1 ? soFar.startOffset() : newData.startOffset())
             .setLeaderEpoch(newData.leaderEpoch() == -1 ? soFar.leaderEpoch() : newData.leaderEpoch())
             .setStateBatches(combineStateBatches(currentBatches, newData.stateBatches().stream()
-                .map(PersisterOffsetsStateBatch::of)
+                .map(PersisterOffsetsStateBatch::from)
                 .collect(Collectors.toCollection(LinkedHashSet::new))))
             .build();
     }
