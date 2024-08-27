@@ -164,11 +164,12 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
             ), new Avg());
 
         this.threadIdleSensor = metrics.sensor("ThreadIdleRatio");
-        this.threadIdleSensor.add(metrics.metricName(
-            "thread-idle-ratio-avg",
+        this.threadIdleSensor.add(
+            metrics.metricName(
+                "thread-idle-ratio-avg",
                 this.metricsGroup,
-            "The fraction of time the threads spent waiting for an event. This is an average across " +
-                "all coordinator event processor threads."),
+                "The fraction of time the threads spent waiting for an event. This is an average across " +
+                    "all coordinator event processor threads."),
             new Rate(TimeUnit.MILLISECONDS));
 
         KafkaMetricHistogram eventQueueTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
