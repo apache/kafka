@@ -177,7 +177,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
         }
 
-        return repeatTestContexts(contexts);
+        return contexts;
     }
 
     @SuppressWarnings("unchecked")
@@ -188,6 +188,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     private List<TestTemplateInvocationContext> processClusterTests(ExtensionContext context, ClusterTests annots, ClusterTestDefaults defaults) {
+
         List<TestTemplateInvocationContext> ret = Arrays.stream(annots.value())
                 .flatMap(annot -> processClusterTestInternal(context, annot, defaults).stream()).collect(Collectors.toList());
 
@@ -195,7 +196,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("processClusterTests method should provide at least one config");
         }
 
-        return repeatTestContexts(ret);
+        return ret;
     }
 
     private List<TestTemplateInvocationContext> processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults) {
@@ -205,12 +206,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("processClusterTest method should provide at least one config");
         }
 
-        return repeatTestContexts(ret);
+        return ret;
     }
-
     private List<TestTemplateInvocationContext> processClusterTestInternal(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults) {
-        // Does not parse the repeated annotation parameter
-
         Type[] types = annot.types().length == 0 ? defaults.types() : annot.types();
         Map<String, String> serverProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
                 .filter(e -> e.id() == -1)
@@ -241,26 +239,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         return Arrays.stream(types).map(type -> type.invocationContexts(context.getRequiredTestMethod().getName(), config))
                 .collect(Collectors.toList());
-    }
-
-    private List<TestTemplateInvocationContext> repeatTestContexts(
-        List<TestTemplateInvocationContext> contexts
-    ) {
-        int count;
-        try {
-            String repeatCount = System.getProperty("kafka.cluster.test.repeat", "1");
-            count = Integer.parseInt(repeatCount);
-        } catch (NumberFormatException e) {
-            count = 1;
-        }
-        if (count <= 1) {
-            return contexts;
-        }
-        List<TestTemplateInvocationContext> repeatedContexts = new ArrayList<>(contexts.size() * count);
-        for (int i = 0; i < count; i++) {
-            repeatedContexts.addAll(contexts);
-        }
-        return repeatedContexts;
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {
