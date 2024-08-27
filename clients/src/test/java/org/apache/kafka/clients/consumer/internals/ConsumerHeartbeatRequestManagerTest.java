@@ -391,18 +391,20 @@ public class ConsumerHeartbeatRequestManagerTest {
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), DisconnectException.INSTANCE);
         verify(membershipManager).onHeartbeatFailure(true);
         // Ensure that the coordinatorManager rediscovers the coordinator
-        verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
+        verify(coordinatorRequestManager).handleCoordinatorDisconnect(any(), anyLong());
         verify(backgroundEventHandler, never()).add(any());
 
-        // Assure the manager will backoff on disconnect
         time.sleep(DEFAULT_RETRY_BACKOFF_MS - 1);
         result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, result.unsentRequests.size());
+        assertEquals(0,
+                result.unsentRequests.size(),
+                "No request should be generated before the backoff expires");
 
-        // Assure that the backoff time has been exceeded
         time.sleep(1);
         result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
+        assertEquals(1,
+                result.unsentRequests.size(),
+                "A new request should be generated after the backoff expires");
     }
 
     @Test

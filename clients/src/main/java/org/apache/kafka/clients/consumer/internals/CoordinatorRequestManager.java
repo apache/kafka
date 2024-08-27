@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
@@ -120,6 +121,22 @@ public class CoordinatorRequestManager implements RequestManager {
                 onFailedResponse(unsentRequest.handler().completionTimeMs(), throwable);
             }
         });
+    }
+
+    /**
+     * Handles the disconnection of the current coordinator.
+     * This method checks if the given exception is an instance of {@link DisconnectException}.
+     * If so, it marks the coordinator as unknown, indicating that the client should
+     * attempt to discover a new coordinator.
+     *
+     * @param exception     The exception that caused the coordinator to be marked as unknown.
+     *                      This is expected to be an instance of {@link DisconnectException}.
+     * @param currentTimeMs the current time in ms.
+     */
+    public void handleCoordinatorDisconnect(Throwable exception, long currentTimeMs) {
+        if (exception instanceof DisconnectException) {
+            markCoordinatorUnknown(exception.getMessage(), currentTimeMs);
+        }
     }
 
     /**
