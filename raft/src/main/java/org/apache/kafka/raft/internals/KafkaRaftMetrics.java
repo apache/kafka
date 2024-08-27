@@ -205,6 +205,10 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.numOfOfflineVoters = numOfOfflineVoters;
     }
 
+    public int getNumOfOfflineVoters() {
+        return this.numOfOfflineVoters;
+    }
+
     public void updateAppendRecords(long numRecords) {
         appendRecordsSensor.record(numRecords);
     }

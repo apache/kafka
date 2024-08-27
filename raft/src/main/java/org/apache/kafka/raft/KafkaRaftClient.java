@@ -215,6 +215,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile RemoveVoterHandler removeVoterHandler;
     private volatile UpdateVoterHandler updateVoterHandler;
 
+    private volatile int numOfOfflineVoters;
+
     /**
      * Create a new instance.
      *
@@ -533,10 +535,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // so there are no unknown voter connections. Report this metric as 0.
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
-        // increment number of offline voters
-        if (log.lastFetchedEpoch() > quorumConfig.fetchTimeoutMs()) {
-//         kafkaRaftMetrics.updateNumberOfOfflineVoters(1);
-        }
+        // set offline voters to 0
+        kafkaRaftMetrics.updateNumberOfOfflineVoters(0);
 
         quorum.initialize(new OffsetAndEpoch(log.endOffset().offset(), log.lastFetchedEpoch()));
 
@@ -1512,6 +1512,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
                 if (state.updateReplicaState(replicaKey, currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
+                    onUpdateOfflineVoters(1);
+                } else {
+                    onUpdateOfflineVoters(-1);
                 }
 
                 records = info.records;
@@ -1531,6 +1534,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.error("Caught unexpected error in fetch completion of request {}", request, e);
             return buildEmptyFetchResponse(listenerName, apiVersion, Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
         }
+    }
+
+    private void onUpdateOfflineVoters(int numOfOfflineVoters) {
+        kafkaRaftMetrics.updateNumberOfOfflineVoters(kafkaRaftMetrics.getNumOfOfflineVoters() +
+            numOfOfflineVoters);
     }
 
     private static boolean isPartitionDiverged(FetchResponseData.PartitionData partitionResponseData) {
