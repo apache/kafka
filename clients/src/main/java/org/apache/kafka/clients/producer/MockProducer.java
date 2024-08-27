@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
@@ -71,6 +72,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean producerFenced;
     private boolean sentOffsets;
     private long commitCount = 0L;
+    final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     public RuntimeException initTransactionException = null;
     public RuntimeException beginTransactionException = null;
@@ -607,4 +609,13 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+          addedMetrics.add(metric);
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+          addedMetrics.remove(metric);
+    }
 }

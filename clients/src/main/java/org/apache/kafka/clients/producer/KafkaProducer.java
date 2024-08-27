@@ -57,6 +57,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1298,6 +1299,38 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
+    }
+
+
+    /**
+     * An application metric provided for subscription.
+     * This metric will be added to this client's metrics
+     * that are available for subscription and sent as
+     * telemetry data to the broker.
+     *
+     * @param metric, the application metric to register
+     */
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        if (clientTelemetryReporter.isPresent()) {
+            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+            reporter.metricChange(metric);
+        }
+    }
+
+    /**
+     * An application to be removed from subscription.
+     * This metric is removed from this client's metrics
+     * and will not be available for subscription.
+     *
+     * @param metric, the application metric to remove
+     */
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+         if (clientTelemetryReporter.isPresent()) {
+             ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+             reporter.metricRemoval(metric);
+         }
     }
 
     /**
