@@ -658,18 +658,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         metricsRegistry.metrics().values().forEach(reporter::metricChange);
     }
 
-    private Collection<KafkaMetric> filterMetricsForCurrentThread(final String threadId,
-                                                                  final Map<MetricName, KafkaMetric> metrics) {
-        final List<KafkaMetric> filteredMetrics = new ArrayList<>();
-        for (final Map.Entry<MetricName, KafkaMetric> entry : metrics.entrySet()) {
-            final Map<String, String> tags = entry.getKey().tags();
-            if (!tags.containsKey("thread-id") || tags.containsKey("thread-id") && tags.get("thread-id").contains(threadId)) {
-                filteredMetrics.add(entry.getValue());
-            }
-        }
-        return filteredMetrics;
-    }
-
     private static final class InternalConsumerConfig extends ConsumerConfig {
         private InternalConsumerConfig(final Map<String, Object> props) {
             super(ConsumerConfig.appendDeserializerToConfig(props, new ByteArrayDeserializer(),
