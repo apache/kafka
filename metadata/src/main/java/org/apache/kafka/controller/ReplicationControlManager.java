@@ -1636,7 +1636,8 @@ public class ReplicationControlManager {
     /**
      * Trigger unclean leader election for partitions without leader (visiable for testing)
      *
-     * @param records  The record list to append to.
+     * @param records       The record list to append to.
+     * @param maxElections  The maximum number of elections to perform.
      */
     void maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(
         List<ApiMessageAndVersion> records,
@@ -1658,7 +1659,8 @@ public class ReplicationControlManager {
                 }
             } else if (log.isDebugEnabled()) {
                 log.debug("Cannot trigger unclean leader election for offline partition {}-{} " +
-                        "because of configuration.", topic.name, topicIdPartition.partitionId());
+                        "because unclean leader election is disabled for this topic.",
+                        topic.name, topicIdPartition.partitionId());
             }
         }
     }
