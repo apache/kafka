@@ -21,8 +21,6 @@ import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ListTopicsOptions;
-import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -30,7 +28,6 @@ import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -382,7 +379,7 @@ public class ShareConsumerTest {
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), serializer);
         producer.send(record);
 
-        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(deserializer, new ByteArrayDeserializer(), "group1");
         shareConsumer.subscribe(Collections.singleton(tp.topic()));
 
         List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, numRecords);
@@ -559,7 +556,7 @@ public class ShareConsumerTest {
     }
 
     @Test
-    public void testExplicitAcknowledgementCommitAsyncPartialBatch() throws InterruptedException {
+    public void testExplicitAcknowledgementCommitAsyncPartialBatch() {
         ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
         ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
         ProducerRecord<byte[], byte[]> record3 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -1021,7 +1018,7 @@ public class ShareConsumerTest {
         KafkaShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
         shareConsumer2.subscribe(Collections.singleton(tp.topic()));
 
-        int totalMessages = 1000;
+        int totalMessages = 1500;
         for (int i = 0; i < totalMessages; i++) {
             producer.send(record);
         }
@@ -1041,6 +1038,7 @@ public class ShareConsumerTest {
         int consumer1MessageCountB = records1.count();
         records1 = shareConsumer1.poll(Duration.ofMillis(5000));
         int consumer1MessageCountC = records1.count();
+        assertEquals(totalMessages, consumer1MessageCountA + consumer1MessageCountB + consumer1MessageCountC);
         shareConsumer1.close();
 
         int maxRetries = 10;
@@ -1520,7 +1518,7 @@ public class ShareConsumerTest {
                                  boolean commit,
                                  CompletableFuture<Integer> future,
                                  Optional<Integer> maxFetchBytes) {
-        KafkaShareConsumer<byte[], byte[]> shareConsumer = null;
+        KafkaShareConsumer<byte[], byte[]> shareConsumer;
         Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
         Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
         if (maxFetchBytes.isPresent()) {
@@ -1595,18 +1593,6 @@ public class ShareConsumerTest {
         }
     }
 
-    private ListTopicsResult listTopics() {
-        ListTopicsResult topics = null;
-        try (Admin admin = createAdminClient()) {
-            ListTopicsOptions listTopicsOptions = new ListTopicsOptions().listInternal(true);
-            topics = admin.listTopics(listTopicsOptions);
-        } catch (Exception e) {
-            fail("Failed to list topics");
-        }
-        return topics;
-    }
-
-
     private Admin createAdminClient() {
         Properties props = cluster.clientProperties();
         return Admin.create(props);
@@ -1644,22 +1630,10 @@ public class ShareConsumerTest {
         return new KafkaShareConsumer<>(props, keyDeserializer, valueDeserializer);
     }
 
-    private <K, V> KafkaConsumer<K, V> createConsumer(Deserializer<K> keyDeserializer,
-                                                      Deserializer<V> valueDeserializer,
-                                                      String groupId) {
-        Properties props = cluster.clientProperties();
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted");
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.CLIENT_ID_CONFIG, "console-consumer");
-        return new KafkaConsumer<>(props, keyDeserializer, valueDeserializer);
-    }
-
     private void warmup() throws InterruptedException {
         createTopic(warmupTp.topic());
         TestUtils.waitForCondition(() ->
-                        !scala.collection.JavaConverters.asJava(cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL"))).isEmpty(),
+                        !scala.jdk.CollectionConverters.SeqHasAsJava(cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL"))).asJava().isEmpty(),
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
@@ -1669,8 +1643,6 @@ public class ShareConsumerTest {
         shareConsumer.subscribe(subscription);
         TestUtils.waitForCondition(
                 () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, DEFAULT_MAX_WAIT_MS, 200L, () -> "warmup record not received");
-//        TestUtils.waitForCondition(
-//                () -> listTopics().names().get().contains(SHARE_GROUP_STATE_TOPIC_NAME), DEFAULT_MAX_WAIT_MS, 200L, () -> "SGS not up yet");
         producer.close();
         shareConsumer.close();
     }
