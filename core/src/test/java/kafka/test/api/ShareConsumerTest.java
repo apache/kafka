@@ -90,6 +90,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(1200)
 @Tag("integration")
+@SuppressWarnings("deprecation")
 public class ShareConsumerTest {
     private KafkaClusterTestKit cluster;
     private final TopicPartition tp = new TopicPartition("topic", 0);
@@ -1633,7 +1634,7 @@ public class ShareConsumerTest {
     private void warmup() throws InterruptedException {
         createTopic(warmupTp.topic());
         TestUtils.waitForCondition(() ->
-                        !scala.jdk.CollectionConverters.SeqHasAsJava(cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL"))).asJava().isEmpty(),
+                        !scala.collection.JavaConverters.seqAsJavaList(cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL"))).isEmpty(),
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
