@@ -117,7 +117,14 @@ public interface Consumer<K, V> extends Closeable {
      */
     void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback);
 
+    /**
+     * @see KafkaConsumer#registerMetric(KafkaMetric)
+     */
     void registerMetric(KafkaMetric metric);
+
+    /**
+     * @see KafkaConsumer#unregisterMetric(KafkaMetric) 
+     */
     void unregisterMetric(KafkaMetric metric);
     /**
      * @see KafkaConsumer#registerMetricForSubscription(KafkaMetric)

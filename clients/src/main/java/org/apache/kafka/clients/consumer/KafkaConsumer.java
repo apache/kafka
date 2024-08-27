@@ -1428,6 +1428,31 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * An application metric provided for subscription.
+     * This metric will be added to this client's metrics
+     * that are available for subscription and sent as
+     * telemetry data to the broker.
+     *
+     * @param metric, the application metric to register
+     */
+    @Override
+    public void registerMetric(KafkaMetric metric) {
+        delegate.registerMetric(metric);
+    }
+
+    /**
+     * An application to be removed from subscription.
+     * This metric is removed from this client's metrics
+     * and will not be available for subscription.
+     *
+     * @param metric, the application metric to remove
+     */
+    @Override
+    public void unregisterMetric(KafkaMetric metric) {
+         delegate.unregisterMetric(metric);
+    }
+
+    /**
      * Get the set of partitions that were previously paused by a call to {@link #pause(Collection)}.
      *
      * @return The set of paused partitions
