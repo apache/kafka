@@ -223,8 +223,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // this record is the complete snapshot
         shareStateMap.put(mapKey, offsetRecord);
         // if number of share updates is exceeded, then reset it
-        snapshotUpdateCount.computeIfPresent(mapKey,
-            (k, v) -> v >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot() ? 0 : v);
+        if (snapshotUpdateCount.containsKey(mapKey)) {
+            if (snapshotUpdateCount.get(mapKey) >= snapshotUpdateRecordsPerSnapshot) {
+                snapshotUpdateCount.put(mapKey, 0);
+            }
+        }
     }
 
     private void handleShareUpdate(ShareUpdateKey key, ShareUpdateValue value) {
