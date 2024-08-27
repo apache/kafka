@@ -36,6 +36,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.text.ParseException;
 import java.time.Duration;
@@ -58,8 +61,7 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,
