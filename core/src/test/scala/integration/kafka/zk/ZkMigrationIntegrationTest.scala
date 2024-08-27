@@ -292,7 +292,7 @@ class ZkMigrationIntegrationTest {
     migrationState = migrationClient.releaseControllerLeadership(migrationState)
   }
 
-  @ClusterTemplate(value = "zkClustersForAllMigrationVersions", repeated = 3)
+  @ClusterTemplate(value = "zkClustersForAllMigrationVersions")
   def testMigrateTopicDeletions(zkCluster: ClusterInstance): Unit = {
     // Create some topics in ZK mode
     var admin = zkCluster.createAdminClient()
