@@ -33,7 +33,7 @@ import kafka.utils.{Log4jController, TestUtils}
 import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, ShareConsumer}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
@@ -45,9 +45,9 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.common.{ConsumerGroupState, ElectionType, IsolationLevel, ShareGroupState, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
@@ -300,6 +300,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
 
     var transactionId = "foo"
+    val stateAbnormalMsg = "The transaction state is abnormal"
 
     def describeTransactions(): TransactionDescription = {
       client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get()
@@ -331,7 +332,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "k1".getBytes, "v1".getBytes()))
       producer.flush()
-      assertEquals(TransactionState.ONGOING, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.ONGOING, stateAbnormalMsg)
 
       TestUtils.waitUntilTrue(() => describeTransactions().topicPartitions().size() == 1, "Describe transactions timeout")
       val transactionResult = describeTransactions()
@@ -341,13 +342,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(Collections.singleton(topicPartition), transactionResult.topicPartitions())
 
       producer.commitTransaction()
-      val state = transactionState()
-      // Either PREPARE_COMMIT or COMPLETE_COMMIT is expected
-      assertTrue(state == TransactionState.PREPARE_COMMIT || state == TransactionState.COMPLETE_COMMIT)
-      // producer commit transaction, but maybe transaction coordinator has not been submitted mark msg
-      // so we start up a consumer and consume the expected number of msg, to ensure transaction committed
-      consumeToExpectedNumber(1)
-      assertEquals(TransactionState.COMPLETE_COMMIT, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
     } finally producer.close()
 
     // abort case
@@ -376,14 +371,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(Collections.singleton(topicPartition), transactionSendMsgResult.topicPartitions())
       assertEquals(topicPartition, transactionSendMsgResult.topicPartitions().asScala.head)
 
-      assertEquals(TransactionState.ONGOING, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.ONGOING, stateAbnormalMsg)
+
       abortProducer.abortTransaction()
-      val state = transactionState()
-      assertTrue(state == TransactionState.PREPARE_ABORT || state == TransactionState.COMPLETE_ABORT)
-      // producer commit transaction, but maybe transaction coordinator has not been submitted mark msg
-      // so we start up a consumer and consume the expected number of msg, to ensure transaction committed
-      consumeToExpectedNumber(1)
-      assertEquals(TransactionState.COMPLETE_ABORT, transactionState())
+      TestUtils.waitUntilTrue(() => transactionState() == TransactionState.COMPLETE_ABORT, stateAbnormalMsg)
     } finally abortProducer.close()
   }
 
@@ -424,7 +415,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       client = createAdminClient
       client.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
 
-      val producer = TestUtils.createTransactionalProducer("foo", brokers)
+      val stateAbnormalMsg = "The transaction state is abnormal"
+      def transactionState(transactionId: String): TransactionState = {
+        client.describeTransactions(Collections.singleton(transactionId)).description(transactionId).get().state()
+      }
+
+      val transactionId1 = "foo"
+      val producer = TestUtils.createTransactionalProducer(transactionId1, brokers)
       try {
         producer.initTransactions()
         producer.beginTransaction()
@@ -432,8 +429,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer.flush()
         producer.commitTransaction()
       } finally producer.close()
+      TestUtils.waitUntilTrue(() => transactionState(transactionId1) == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
 
-      val producer2 = TestUtils.createTransactionalProducer("foo2", brokers)
+      val transactionId2 = "foo2"
+      val producer2 = TestUtils.createTransactionalProducer(transactionId2, brokers)
       try {
         producer2.initTransactions()
         producer2.beginTransaction()
@@ -441,8 +440,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer2.flush()
         producer2.abortTransaction()
       } finally producer2.close()
+      TestUtils.waitUntilTrue(() => transactionState(transactionId2) == TransactionState.COMPLETE_ABORT, stateAbnormalMsg)
 
-      val producer3 = TestUtils.createTransactionalProducer("foo3", brokers)
+      val transactionId3 = "foo3"
+      val producer3 = TestUtils.createTransactionalProducer(transactionId3, brokers)
       try {
         producer3.initTransactions()
         producer3.beginTransaction()
@@ -450,8 +451,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         producer3.flush()
         producer3.commitTransaction()
       } finally producer3.close()
-
-      consumeToExpectedNumber(2)
+      TestUtils.waitUntilTrue(() => transactionState(transactionId3) == TransactionState.COMPLETE_COMMIT, stateAbnormalMsg)
     }
 
     createTransactionList()
@@ -844,6 +844,41 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
+  def testDescribeConfigsNonexistent(quorum: String): Unit = {
+    client = createAdminClient
+
+    val brokerException = assertThrows(classOf[ExecutionException], () => {
+      client.describeConfigs(Seq(new ConfigResource(ConfigResource.Type.BROKER, "-1")).asJava).all().get()
+    })
+    assertInstanceOf(classOf[TimeoutException], brokerException.getCause)
+
+    val topicException = assertThrows(classOf[ExecutionException], () => {
+      client.describeConfigs(Seq(new ConfigResource(ConfigResource.Type.TOPIC, "none_topic")).asJava).all().get()
+    })
+    assertInstanceOf(classOf[UnknownTopicOrPartitionException], topicException.getCause)
+
+    val brokerLoggerException = assertThrows(classOf[ExecutionException], () => {
+      client.describeConfigs(Seq(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, "-1")).asJava).all().get()
+    })
+    assertInstanceOf(classOf[TimeoutException], brokerLoggerException.getCause)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testDescribeConfigsNonexistentForKraft(quorum: String): Unit = {
+    client = createAdminClient
+
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, "none_group")
+    val groupResult = client.describeConfigs(Seq(groupResource).asJava).all().get().get(groupResource)
+    assertNotEquals(0, groupResult.entries().size())
+
+    val metricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "none_metric")
+    val metricResult = client.describeConfigs(Seq(metricResource).asJava).all().get().get(metricResource)
+    assertEquals(0, metricResult.entries().size())
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeAndAlterConfigs(quorum: String): Unit = {
     client = createAdminClient
 
@@ -923,6 +958,68 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       configs.get(brokerResource2).get(CleanerConfig.LOG_CLEANER_THREADS_PROP).value)
 
     checkValidAlterConfigs(client, this, topicResource1, topicResource2)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testIncrementalAlterAndDescribeGroupConfigs(quorum: String): Unit = {
+    client = createAdminClient
+    val group = "describe-alter-configs-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, group)
+
+    // Alter group configs
+    var groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+
+    var alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava)
+
+    assertEquals(Set(groupResource).asJava, alterResult.values.keySet)
+    alterResult.all.get(15, TimeUnit.SECONDS)
+
+    ensureConsistentKRaftMetadata()
+
+    // Describe group config, verify that group config was updated correctly
+    var describeResult = client.describeConfigs(Seq(groupResource).asJava)
+    var configs = describeResult.all.get(15, TimeUnit.SECONDS)
+
+    assertEquals(1, configs.size)
+
+    assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).value)
+    assertEquals(ConfigSource.DEFAULT_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).source)
+
+    // Alter group with validateOnly=true
+    groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "60000"), AlterConfigOp.OpType.SET)
+    ).asJava
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+    alterResult.all.get(15, TimeUnit.SECONDS)
+
+    // Verify that group config was not updated due to validateOnly = true
+    describeResult = client.describeConfigs(Seq(groupResource).asJava)
+    configs = describeResult.all.get(15, TimeUnit.SECONDS)
+
+    assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+
+    // Alter group with validateOnly=true with invalid configs
+    groupAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "5"), AlterConfigOp.OpType.SET)
+    ).asJava
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      groupResource -> groupAlterConfigs
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+
+    assertFutureExceptionTypeEquals(alterResult.values.get(groupResource), classOf[InvalidConfigurationException],
+      Some("consumer.session.timeout.ms must be greater than or equals to group.consumer.min.session.timeout.ms"))
   }
 
   @ParameterizedTest
@@ -1603,9 +1700,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       // Verify that initially there are no consumer groups to list.
       val list1 = client.listConsumerGroups()
-      assertTrue(0 == list1.all().get().size())
-      assertTrue(0 == list1.errors().get().size())
-      assertTrue(0 == list1.valid().get().size())
+      assertEquals(0, list1.all().get().size())
+      assertEquals(0, list1.errors().get().size())
+      assertEquals(0, list1.valid().get().size())
       val testTopicName = "test_topic"
       val testTopicName1 = testTopicName + "1"
       val testTopicName2 = testTopicName + "2"
@@ -1882,6 +1979,158 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
         classOf[UnknownTopicOrPartitionException])
     } finally {
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip932"))
+  def testShareGroups(quorum: String): Unit = {
+    val testGroupId = "test_group_id"
+    val testClientId = "test_client_id"
+    val fakeGroupId = "fake_group_id"
+    val testTopicName = "test_topic"
+    val testNumPartitions = 2
+
+    def createProperties(): Properties = {
+      val newConsumerConfig = new Properties(consumerConfig)
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      newConsumerConfig
+    }
+
+    val consumerSet = Set(createShareConsumer(configOverrides = createProperties()))
+    val topicSet = Set(testTopicName)
+
+    val latch = new CountDownLatch(consumerSet.size)
+
+    def createShareConsumerThread[K,V](consumer: ShareConsumer[K,V], topic: String): Thread = {
+      new Thread {
+        override def run : Unit = {
+          consumer.subscribe(Collections.singleton(topic))
+          try {
+            while (true) {
+              consumer.poll(JDuration.ofSeconds(5))
+              if (latch.getCount > 0L)
+                latch.countDown()
+              consumer.commitSync()
+            }
+          } catch {
+            case _: InterruptException => // Suppress the output to stderr
+          }
+        }
+      }
+    }
+
+    val config = createConfig
+    client = Admin.create(config)
+    val producer = createProducer()
+    try {
+      // Verify that initially there are no share groups to list.
+      val list1 = client.listShareGroups()
+      assertEquals(0, list1.all().get().size())
+      assertEquals(0, list1.errors().get().size())
+      assertEquals(0, list1.valid().get().size())
+
+      client.createTopics(Collections.singleton(
+        new NewTopic(testTopicName, testNumPartitions, 1.toShort)
+      )).all().get()
+      waitForTopics(client, List(testTopicName), List())
+
+      producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+
+      // Start consumers in a thread that will subscribe to a new group.
+      val consumerThreads = consumerSet.zip(topicSet).map(zipped => createShareConsumerThread(zipped._1, zipped._2))
+
+      try {
+        consumerThreads.foreach(_.start())
+        assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
+
+        // Test that we can list the new group.
+        TestUtils.waitUntilTrue(() => {
+          client.listShareGroups.all.get.stream().filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ShareGroupState.STABLE).count() == 1
+        }, s"Expected to be able to list $testGroupId")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListShareGroupsOptions().inStates(Collections.singleton(ShareGroupState.STABLE))
+          client.listShareGroups(options).all.get.stream().filter(group =>
+            group.groupId == testGroupId &&
+              group.state.get == ShareGroupState.STABLE).count() == 1
+        }, s"Expected to be able to list $testGroupId in state Stable")
+
+        TestUtils.waitUntilTrue(() => {
+          val options = new ListShareGroupsOptions().inStates(Collections.singleton(ShareGroupState.EMPTY))
+          client.listShareGroups(options).all.get.stream().filter(_.groupId == testGroupId).count() == 0
+        }, s"Expected to find zero groups")
+
+        val describeWithFakeGroupResult = client.describeShareGroups(util.Arrays.asList(testGroupId, fakeGroupId),
+          new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
+
+        // Test that we can get information about the test share group.
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
+        assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
+        var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
+
+        assertEquals(testGroupId, testGroupDescription.groupId())
+        assertEquals(consumerSet.size, testGroupDescription.members().size())
+        val members = testGroupDescription.members()
+        members.forEach(member => assertEquals(testClientId, member.clientId()))
+        val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
+        topicSet.foreach { topic =>
+          val topicPartitions = topicPartitionsByTopic.getOrElse(topic, List.empty)
+          assertEquals(testNumPartitions, topicPartitions.size)
+        }
+
+        val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
+        assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
+
+        // Test that the fake group is listed as dead.
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
+        val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
+
+        assertEquals(fakeGroupId, fakeGroupDescription.groupId())
+        assertEquals(0, fakeGroupDescription.members().size())
+        assertEquals(ShareGroupState.DEAD, fakeGroupDescription.state())
+        assertNull(fakeGroupDescription.authorizedOperations())
+
+        // Test that all() returns 2 results
+        assertEquals(2, describeWithFakeGroupResult.all().get().size())
+
+        val describeTestGroupResult = client.describeShareGroups(Collections.singleton(testGroupId),
+          new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(1, describeTestGroupResult.all().get().size())
+        assertEquals(1, describeTestGroupResult.describedGroups().size())
+
+        testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
+
+        assertEquals(testGroupId, testGroupDescription.groupId)
+        assertEquals(consumerSet.size, testGroupDescription.members().size())
+
+        // Describing a share group using describeConsumerGroups reports it as a DEAD consumer group
+        // in the same way as a non-existent group
+        val describeConsumerGroupResult = client.describeConsumerGroups(Collections.singleton(testGroupId),
+          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+        assertEquals(1, describeConsumerGroupResult.all().get().size())
+
+        val deadConsumerGroupDescription = describeConsumerGroupResult.describedGroups().get(testGroupId).get()
+        assertEquals(testGroupId, deadConsumerGroupDescription.groupId())
+        assertEquals(0, deadConsumerGroupDescription.members().size())
+        assertEquals("", deadConsumerGroupDescription.partitionAssignor())
+        assertEquals(ConsumerGroupState.DEAD, deadConsumerGroupDescription.state())
+        assertEquals(expectedOperations, deadConsumerGroupDescription.authorizedOperations())
+      } finally {
+        consumerThreads.foreach {
+          case consumerThread =>
+            consumerThread.interrupt()
+            consumerThread.join()
+        }
+      }
+    } finally {
+      consumerSet.foreach(consumer => Utils.closeQuietly(consumer, "consumer"))
+      Utils.closeQuietly(producer, "producer")
       Utils.closeQuietly(client, "adminClient")
     }
   }
@@ -3005,6 +3254,36 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(expected, config.value())
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testListClientMetricsResources(quorum: String): Unit = {
+    client = createAdminClient
+    client.createTopics(Collections.singleton(new NewTopic(topic, partition, 0.toShort)))
+    assertTrue(client.listClientMetricsResources().all().get().isEmpty)
+    val name = "name"
+    val configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name)
+    val configEntry = new ConfigEntry("interval.ms", "111")
+    val configOp = new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)
+    client.incrementalAlterConfigs(Collections.singletonMap(configResource, Collections.singletonList(configOp))).all().get()
+    TestUtils.waitUntilTrue(() => {
+      val results = client.listClientMetricsResources().all().get()
+      results.size() == 1 && results.iterator().next().equals(new ClientMetricsResourceListing(name))
+    }, "metadata timeout")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("quorum=kraft"))
+  @Timeout(30)
+  def testListClientMetricsResourcesTimeoutMs(ignored: String): Unit = {
+    client = createInvalidAdminClient()
+    try {
+      val timeoutOption = new ListClientMetricsResourcesOptions().timeoutMs(0)
+      val exception = assertThrows(classOf[ExecutionException], () =>
+        client.listClientMetricsResources(timeoutOption).all().get())
+      assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    } finally client.close(time.Duration.ZERO)
+  }
+  
   /**
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *

@@ -26,7 +26,7 @@ import java.util.Properties
 import java.util.stream.IntStream
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
-import kafka.server.{BrokerTopicStats, KafkaRaftServer}
+import kafka.server.KafkaRaftServer
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
 import kafka.utils.{TestUtils, VerifiableProperties}
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
@@ -38,12 +38,12 @@ import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRe
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordBatch, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.{Exit, Utils}
-import org.apache.kafka.coordinator.group.{CoordinatorRecord, CoordinatorRecordSerde}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
-import org.apache.kafka.raft.internals.VoterSetTest
+import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch, VoterSetTest}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
@@ -51,6 +51,7 @@ import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLog
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -641,7 +642,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testOffsetsMessageParser(): Unit = {
-    val serde = new CoordinatorRecordSerde()
+    val serde = new GroupCoordinatorRecordSerde()
     val parser = new OffsetsMessageParser()
 
     def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {

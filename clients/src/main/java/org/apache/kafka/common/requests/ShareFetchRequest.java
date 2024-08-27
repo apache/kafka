@@ -48,7 +48,7 @@ public class ShareFetchRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public static Builder forConsumer(String groupId, ShareFetchMetadata metadata,
+        public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
                                           int maxWait, int minBytes, int maxBytes, int fetchSize,
                                           List<TopicIdPartition> send, List<TopicIdPartition> forget,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
