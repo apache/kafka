@@ -52,6 +52,8 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private final MetricName logEndOffsetMetricName;
     private final MetricName logEndEpochMetricName;
     private final MetricName numUnknownVoterConnectionsMetricName;
+    private final MetricName numberOfOfflineVotersMetricName;
+
     private final Sensor commitTimeSensor;
     private final Sensor electionTimeSensor;
     private final Sensor fetchRecordsSensor;
@@ -137,6 +139,10 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName,
                 "Number of unknown voters whose connection information is not cached; would never be larger than quorum-size.");
         metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
+
+        this.numberOfOfflineVotersMetricName = metrics.metricName("number-of-offline-voters", metricGroupName,
+            "Number of voters with a last Fetch timestamp greater than the Fetch timeout.");
+        metrics.addMetric(this.numberOfOfflineVotersMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
 
         this.commitTimeSensor = metrics.sensor("commit-latency");
         this.commitTimeSensor.add(metrics.metricName("commit-latency-avg", metricGroupName,
@@ -226,7 +232,8 @@ public class KafkaRaftMetrics implements AutoCloseable {
             highWatermarkMetricName,
             logEndOffsetMetricName,
             logEndEpochMetricName,
-            numUnknownVoterConnectionsMetricName
+            numUnknownVoterConnectionsMetricName,
+            numberOfOfflineVotersMetricName
         ).forEach(metrics::removeMetric);
 
         Arrays.asList(
