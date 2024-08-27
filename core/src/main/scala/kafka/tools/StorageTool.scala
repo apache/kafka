@@ -187,7 +187,7 @@ object StorageTool extends Logging {
 
   def parseArguments(args: Array[String]): Namespace = {
     val parser = ArgumentParsers
-      .newArgumentParser("kafka-storage", true, "-", "@")
+      .newArgumentParser("kafka-storage", /* defaultHelp */true, /* prefixChars */"-", /* fromFilePrefix */ "@")
       .description("The Kafka storage tool.")
 
     val subparsers = parser.addSubparsers().dest("command")
@@ -204,7 +204,7 @@ object StorageTool extends Logging {
     val infoParser = subparsers.addParser("info")
       .help("Get information about the Kafka log directories on this node.")
 
-    addCommonArguments(infoParser)
+    addConfigArguments(infoParser)
   }
 
   private def addFormatParser(subparsers: Subparsers): Unit = {
@@ -244,7 +244,7 @@ object StorageTool extends Logging {
         "0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n")
       .action(store())
 
-    addCommonArguments(formatParser)
+    addConfigArguments(formatParser)
   }
 
   private def addVersionMappingParser(subparsers: Subparsers): Unit = {
@@ -259,7 +259,7 @@ object StorageTool extends Logging {
       .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
         s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
 
-    addCommonArguments(versionMappingParser)
+    addConfigArguments(versionMappingParser)
   }
 
   private def addRandomUuidParser(subparsers: Subparsers): Unit = {
@@ -267,7 +267,7 @@ object StorageTool extends Logging {
       .help("Print a random UUID.")
   }
 
-  private def addCommonArguments(parser: Subparser): Unit = {
+  private def addConfigArguments(parser: Subparser): Unit = {
     parser.addArgument("--config", "-c")
       .action(store())
       .required(true)

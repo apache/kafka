@@ -494,14 +494,18 @@ Found problem:
     assertEquals(0, runVersionMappingCommand(stream, properties, null))
 
     val output = stream.toString
-    assertTrue(output.contains("metadata.version=21 (3.9-IV0)"),
-      s"Output did not contain expected feature mapping: $output")
-    assertTrue(output.contains("kraft.version=1"),
-      s"Output did not contain expected feature mapping: $output")
-    assertTrue(output.contains("test.feature.version=1"),
-      s"Output did not contain expected feature mapping: $output")
-    assertTrue(output.contains("transaction.version=0"),
-      s"Output did not contain expected feature mapping: $output")
+    val metadataVersion = MetadataVersion.latestProduction()
+    // Check that the metadata version is correctly included in the output
+    assertTrue(output.contains(s"metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})"),
+      s"Output did not contain expected Metadata Version: $output"
+    )
+
+    for (feature <- Features.values()) {
+      val featureLevel = feature.defaultValue(metadataVersion)
+      assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
+        s"Output did not contain expected feature mapping: $output"
+      )
+    }
   }
 
   @Test
@@ -518,6 +522,15 @@ Found problem:
     assertEquals("Unsupported release version '2.9-IV2'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
+    )
+
+    val exception2 = assertThrows(classOf[TerseFailure], () => {
+      runVersionMappingCommand(stream, properties, "invalid")
+    })
+
+    assertEquals("Unsupported release version 'invalid'." +
+      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
     )
   }
 }
