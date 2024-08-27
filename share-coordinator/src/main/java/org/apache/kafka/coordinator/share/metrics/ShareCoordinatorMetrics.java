@@ -61,36 +61,36 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
         Sensor shareCoordinatorWriteSensor = metrics.sensor(SHARE_COORDINATOR_WRITE_SENSOR_NAME);
         shareCoordinatorWriteSensor.add(new Meter(
-                metrics.metricName("write-rate",
-                        METRICS_GROUP,
-                        "The number of share-group state write calls per second."),
-                metrics.metricName("write-total",
-                        METRICS_GROUP,
-                        "Total number of share-group state write calls.")));
+            metrics.metricName("write-rate",
+                METRICS_GROUP,
+                "The number of share-group state write calls per second."),
+            metrics.metricName("write-total",
+                METRICS_GROUP,
+                "Total number of share-group state write calls.")));
 
         Sensor shareCoordinatorWriteLatencySensor = metrics.sensor(SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME);
         shareCoordinatorWriteLatencySensor.add(
-                metrics.metricName("write-latency-avg",
-                        METRICS_GROUP,
-                        "The average time taken for a share-group state write call, including the time to write to the share-group state topic."),
-                new Avg());
+            metrics.metricName("write-latency-avg",
+                METRICS_GROUP,
+                "The average time taken for a share-group state write call, including the time to write to the share-group state topic."),
+            new Avg());
         shareCoordinatorWriteLatencySensor.add(
-                metrics.metricName("write-latency-max",
-                        METRICS_GROUP,
-                        "The maximum time taken for a share-group state write call, including the time to write to the share-group state topic."),
-                new Max());
+            metrics.metricName("write-latency-max",
+                METRICS_GROUP,
+                "The maximum time taken for a share-group state write call, including the time to write to the share-group state topic."),
+            new Max());
 
         this.globalSensors = Collections.unmodifiableMap(Utils.mkMap(
-                Utils.mkEntry(SHARE_COORDINATOR_WRITE_SENSOR_NAME, shareCoordinatorWriteSensor),
-                Utils.mkEntry(SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, shareCoordinatorWriteLatencySensor)
+            Utils.mkEntry(SHARE_COORDINATOR_WRITE_SENSOR_NAME, shareCoordinatorWriteSensor),
+            Utils.mkEntry(SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, shareCoordinatorWriteLatencySensor)
         ));
     }
 
     @Override
     public void close() throws Exception {
         Arrays.asList(
-                SHARE_COORDINATOR_WRITE_SENSOR_NAME,
-                SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME
+            SHARE_COORDINATOR_WRITE_SENSOR_NAME,
+            SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME
         ).forEach(metrics::removeSensor);
     }
 

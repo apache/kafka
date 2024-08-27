@@ -40,10 +40,10 @@ public class ShareCoordinatorMetricsTest {
         Metrics metrics = new Metrics();
 
         HashSet<MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
-                metrics.metricName("write-rate", ShareCoordinatorMetrics.METRICS_GROUP),
-                metrics.metricName("write-total", ShareCoordinatorMetrics.METRICS_GROUP),
-                metrics.metricName("write-latency-avg", ShareCoordinatorMetrics.METRICS_GROUP),
-                metrics.metricName("write-latency-max", ShareCoordinatorMetrics.METRICS_GROUP)
+            metrics.metricName("write-rate", ShareCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("write-total", ShareCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("write-latency-avg", ShareCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName("write-latency-max", ShareCoordinatorMetrics.METRICS_GROUP)
         ));
 
         ShareCoordinatorMetrics ignored = new ShareCoordinatorMetrics(metrics);
@@ -58,7 +58,7 @@ public class ShareCoordinatorMetricsTest {
         Metrics metrics = new Metrics(time);
         ShareCoordinatorMetrics coordinatorMetrics = new ShareCoordinatorMetrics(metrics);
         ShareCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(
-                new SnapshotRegistry(new LogContext()), new TopicPartition("__share_group_state", 0)
+            new SnapshotRegistry(new LogContext()), new TopicPartition("__share_group_state", 0)
         );
 
         shard.record(SHARE_COORDINATOR_WRITE_SENSOR_NAME);

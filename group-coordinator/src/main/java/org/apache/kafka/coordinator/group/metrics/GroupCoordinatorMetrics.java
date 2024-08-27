@@ -440,23 +440,23 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         );
 
         metrics.addMetric(
-                shareGroupCountMetricName,
-                (Gauge<Long>) (config, now) -> numShareGroups()
+            shareGroupCountMetricName,
+            (Gauge<Long>) (config, now) -> numShareGroups()
         );
 
         metrics.addMetric(
-                shareGroupCountEmptyMetricName,
-                (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.EMPTY)
+            shareGroupCountEmptyMetricName,
+            (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.EMPTY)
         );
 
         metrics.addMetric(
-                shareGroupCountStableMetricName,
-                (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.STABLE)
+            shareGroupCountStableMetricName,
+            (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.STABLE)
         );
 
         metrics.addMetric(
-                shareGroupCountDeadMetricName,
-                (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.DEAD)
+            shareGroupCountDeadMetricName,
+            (Gauge<Long>) (config, now) -> numShareGroups(ShareGroup.ShareGroupState.DEAD)
         );
     }
 }

@@ -86,32 +86,32 @@ class ShareCoordinatorShardTest {
             }
 
             return new ShareCoordinatorShard(
-                    logContext,
-                    time,
-                    timer,
-                    config,
-                    coordinatorMetrics,
-                    metricsShard,
-                    snapshotRegistry
+                logContext,
+                time,
+                timer,
+                config,
+                coordinatorMetrics,
+                metricsShard,
+                snapshotRegistry
             );
         }
     }
 
     private RequestContext getDefaultWriteStateContext() {
         return new RequestContext(
-                new RequestHeader(
-                        ApiKeys.WRITE_SHARE_GROUP_STATE,
-                        ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion(),
-                        "client",
-                        0
-                ),
-                "1",
-                InetAddress.getLoopbackAddress(),
-                KafkaPrincipal.ANONYMOUS,
-                ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-                SecurityProtocol.PLAINTEXT,
-                ClientInformation.EMPTY,
-                false
+            new RequestHeader(
+                ApiKeys.WRITE_SHARE_GROUP_STATE,
+                ApiKeys.WRITE_SHARE_GROUP_STATE.latestVersion(),
+                "client",
+                0
+            ),
+            "1",
+            InetAddress.getLoopbackAddress(),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
         );
     }
 
@@ -122,19 +122,19 @@ class ShareCoordinatorShardTest {
     private void writeAndReplayRecord(ShareCoordinatorShard shard, int leaderEpoch) {
 
         WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(PARTITION)
-                                .setStartOffset(0)
-                                .setStateEpoch(0)
-                                .setLeaderEpoch(leaderEpoch)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                                        .setFirstOffset(0)
-                                        .setLastOffset(10)
-                                        .setDeliveryCount((short) 1)
-                                        .setDeliveryState((byte) 0)))))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
 
         RequestContext context = getDefaultWriteStateContext();
 
@@ -156,56 +156,56 @@ class ShareCoordinatorShardTest {
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
         CoordinatorRecord record1 = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new ShareSnapshotKey()
-                                .setGroupId(GROUP_ID)
-                                .setTopicId(TOPIC_ID)
-                                .setPartition(PARTITION),
-                        (short) 0
-                ),
-                new ApiMessageAndVersion(
-                        new ShareSnapshotValue()
-                                .setSnapshotEpoch(0)
-                                .setStateEpoch(0)
-                                .setLeaderEpoch(leaderEpoch)
-                                .setStateBatches(Collections.singletonList(
-                                        new ShareSnapshotValue.StateBatch()
-                                                .setFirstOffset(0)
-                                                .setLastOffset(10)
-                                                .setDeliveryCount((short) 1)
-                                                .setDeliveryState((byte) 0))),
-                        (short) 0
-                )
+            new ApiMessageAndVersion(
+                new ShareSnapshotKey()
+                    .setGroupId(GROUP_ID)
+                    .setTopicId(TOPIC_ID)
+                    .setPartition(PARTITION),
+                (short) 0
+            ),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(leaderEpoch)
+                    .setStateBatches(Collections.singletonList(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(0)
+                            .setLastOffset(10)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
         );
 
         CoordinatorRecord record2 = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new ShareSnapshotKey()
-                                .setGroupId(GROUP_ID)
-                                .setTopicId(TOPIC_ID)
-                                .setPartition(PARTITION),
-                        (short) 0
-                ),
-                new ApiMessageAndVersion(
-                        new ShareSnapshotValue()
-                                .setSnapshotEpoch(1)
-                                .setStateEpoch(1)
-                                .setLeaderEpoch(leaderEpoch + 1)
-                                .setStateBatches(Collections.singletonList(
-                                        new ShareSnapshotValue.StateBatch()
-                                                .setFirstOffset(11)
-                                                .setLastOffset(12)
-                                                .setDeliveryCount((short) 1)
-                                                .setDeliveryState((byte) 0))),
-                        (short) 0
-                )
+            new ApiMessageAndVersion(
+                new ShareSnapshotKey()
+                    .setGroupId(GROUP_ID)
+                    .setTopicId(TOPIC_ID)
+                    .setPartition(PARTITION),
+                (short) 0
+            ),
+            new ApiMessageAndVersion(
+                new ShareSnapshotValue()
+                    .setSnapshotEpoch(1)
+                    .setStateEpoch(1)
+                    .setLeaderEpoch(leaderEpoch + 1)
+                    .setStateBatches(Collections.singletonList(
+                        new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(11)
+                            .setLastOffset(12)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 0))),
+                (short) 0
+            )
         );
 
         // First replay should populate values in otherwise empty shareStateMap and leaderMap
         shard.replay(offset, producerId, producerEpoch, record1);
 
         assertEquals(groupOffset(record1.value().message()),
-                shard.getShareStateMapValue(shareCoordinatorKey));
+            shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(leaderEpoch, shard.getLeaderMapValue(shareCoordinatorKey));
 
 
@@ -223,19 +223,19 @@ class ShareCoordinatorShardTest {
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
         WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(PARTITION)
-                                .setStartOffset(0)
-                                .setStateEpoch(0)
-                                .setLeaderEpoch(0)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                                        .setFirstOffset(0)
-                                        .setLastOffset(10)
-                                        .setDeliveryCount((short) 1)
-                                        .setDeliveryState((byte) 0)))))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
 
         RequestContext context = getDefaultWriteStateContext();
 
@@ -245,14 +245,14 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
         ));
 
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
 
         assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
         ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
         verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
@@ -265,34 +265,34 @@ class ShareCoordinatorShardTest {
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
         WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(PARTITION)
-                                .setStartOffset(0)
-                                .setStateEpoch(0)
-                                .setLeaderEpoch(0)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                                        .setFirstOffset(0)
-                                        .setLastOffset(10)
-                                        .setDeliveryCount((short) 1)
-                                        .setDeliveryState((byte) 0)))))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
 
         WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(PARTITION)
-                                .setStartOffset(0)
-                                .setStateEpoch(0)
-                                .setLeaderEpoch(0)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                                        .setFirstOffset(11)
-                                        .setLastOffset(20)
-                                        .setDeliveryCount((short) 1)
-                                        .setDeliveryState((byte) 0)))))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(11)
+                        .setLastOffset(20)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
 
         RequestContext context = getDefaultWriteStateContext();
 
@@ -302,14 +302,14 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0))
         ));
 
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
 
         assertEquals(groupOffset(expectedRecords.get(0).value().message()),
-                shard.getShareStateMapValue(shareCoordinatorKey));
+            shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
 
         result = shard.writeState(context, request2);
@@ -320,7 +320,7 @@ class ShareCoordinatorShardTest {
         // the snapshot epoch here will be 1 since this is a snapshot update record,
         // and it refers to parent share snapshot
         expectedRecords = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
-                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), 0)
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request2.topics().get(0).partitions().get(0), 0)
         ));
 
         assertEquals(expectedData, result.response());
@@ -344,26 +344,26 @@ class ShareCoordinatorShardTest {
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
         WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(partition)
-                                .setStartOffset(0)
-                                .setStateEpoch(0)
-                                .setLeaderEpoch(0)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                                        .setFirstOffset(0)
-                                        .setLastOffset(10)
-                                        .setDeliveryCount((short) 1)
-                                        .setDeliveryState((byte) 0)))))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(partition)
+                    .setStartOffset(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
 
         RequestContext context = getDefaultWriteStateContext();
 
         CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(context, request);
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toErrorResponseData(
-                TOPIC_ID, partition, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
+            TOPIC_ID, partition, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
         List<CoordinatorRecord> expectedRecords = Collections.emptyList();
 
         assertEquals(expectedData, result.response());
@@ -380,34 +380,34 @@ class ShareCoordinatorShardTest {
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
         WriteShareGroupStateRequestData request1 = new WriteShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(PARTITION)
-                                .setStartOffset(0)
-                                .setStateEpoch(0)
-                                .setLeaderEpoch(5)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                                        .setFirstOffset(0)
-                                        .setLastOffset(10)
-                                        .setDeliveryCount((short) 1)
-                                        .setDeliveryState((byte) 0)))))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(5)
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
 
         WriteShareGroupStateRequestData request2 = new WriteShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(PARTITION)
-                                .setStartOffset(0)
-                                .setStateEpoch(0)
-                                .setLeaderEpoch(3) // lower leader epoch in the second request
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                                        .setFirstOffset(11)
-                                        .setLastOffset(20)
-                                        .setDeliveryCount((short) 1)
-                                        .setDeliveryState((byte) 0)))))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(3) // lower leader epoch in the second request
+                    .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(11)
+                        .setLastOffset(20)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 0)))))));
 
         RequestContext context = getDefaultWriteStateContext();
 
@@ -417,21 +417,21 @@ class ShareCoordinatorShardTest {
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         List<CoordinatorRecord> expectedRecords = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0))
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request1.topics().get(0).partitions().get(0))
         ));
 
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
 
         assertEquals(groupOffset(expectedRecords.get(0).value().message()),
-                shard.getShareStateMapValue(shareCoordinatorKey));
+            shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(5, shard.getLeaderMapValue(shareCoordinatorKey));
 
         result = shard.writeState(context, request2);
 
         // Since the leader epoch in the second request was lower than the one in the first request, FENCED_LEADER_EPOCH error is expected
         expectedData = WriteShareGroupStateResponse.toErrorResponseData(
-                TOPIC_ID, PARTITION, Errors.FENCED_LEADER_EPOCH, Errors.FENCED_LEADER_EPOCH.message());
+            TOPIC_ID, PARTITION, Errors.FENCED_LEADER_EPOCH, Errors.FENCED_LEADER_EPOCH.message());
         expectedRecords = Collections.emptyList();
 
         assertEquals(expectedData, result.response());
@@ -450,26 +450,26 @@ class ShareCoordinatorShardTest {
         writeAndReplayDefaultRecord(shard);
 
         ReadShareGroupStateRequestData request = new ReadShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
-                                .setPartition(PARTITION)
-                                .setLeaderEpoch(1)))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setLeaderEpoch(1)))));
 
         ReadShareGroupStateResponseData result = shard.readState(request, 0L);
 
         assertEquals(ReadShareGroupStateResponse.toResponseData(
-                TOPIC_ID,
-                PARTITION,
-                0,
-                0,
-                Collections.singletonList(new ReadShareGroupStateResponseData.StateBatch()
-                        .setFirstOffset(0)
-                        .setLastOffset(10)
-                        .setDeliveryCount((short) 1)
-                        .setDeliveryState((byte) 0)
-                )
+            TOPIC_ID,
+            PARTITION,
+            0,
+            0,
+            Collections.singletonList(new ReadShareGroupStateResponseData.StateBatch()
+                .setFirstOffset(0)
+                .setLastOffset(10)
+                .setDeliveryCount((short) 1)
+                .setDeliveryState((byte) 0)
+            )
         ), result);
 
         assertEquals(1, shard.getLeaderMapValue(coordinatorKey));
@@ -486,17 +486,17 @@ class ShareCoordinatorShardTest {
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
         ReadShareGroupStateRequestData request = new ReadShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
-                                .setPartition(partition)
-                                .setLeaderEpoch(5)))));
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(partition)
+                    .setLeaderEpoch(5)))));
 
         ReadShareGroupStateResponseData result = shard.readState(request, 0L);
 
         ReadShareGroupStateResponseData expectedData = ReadShareGroupStateResponse.toErrorResponseData(
-                TOPIC_ID, partition, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
+            TOPIC_ID, partition, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
 
         assertEquals(expectedData, result);
 
@@ -515,20 +515,20 @@ class ShareCoordinatorShardTest {
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
         ReadShareGroupStateRequestData request = new ReadShareGroupStateRequestData()
-                .setGroupId(GROUP_ID)
-                .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
-                                .setPartition(PARTITION)
-                                .setLeaderEpoch(3))))); // lower leaderEpoch than the one stored in leaderMap
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setLeaderEpoch(3))))); // lower leaderEpoch than the one stored in leaderMap
 
         ReadShareGroupStateResponseData result = shard.readState(request, 0L);
 
         ReadShareGroupStateResponseData expectedData = ReadShareGroupStateResponse.toErrorResponseData(
-                TOPIC_ID,
-                PARTITION,
-                Errors.FENCED_LEADER_EPOCH,
-                Errors.FENCED_LEADER_EPOCH.message());
+            TOPIC_ID,
+            PARTITION,
+            Errors.FENCED_LEADER_EPOCH,
+            Errors.FENCED_LEADER_EPOCH.message());
 
         assertEquals(expectedData, result);
 
@@ -537,7 +537,7 @@ class ShareCoordinatorShardTest {
 
     private static List<ShareGroupOffset> groupOffset(List<ApiMessage> records) {
         return records.stream().map(ShareCoordinatorShardTest::groupOffset)
-                .collect(Collectors.toList());
+            .collect(Collectors.toList());
     }
 
     private static ShareGroupOffset groupOffset(ApiMessage record) {
