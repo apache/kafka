@@ -214,7 +214,6 @@ public class StateDirectory implements AutoCloseable {
                 final ProcessorTopology topology = topologyMetadata.buildSubtopology(id);
                 final Set<TopicPartition> inputPartitions = topology.sourceTopics().stream().map(topic -> new TopicPartition(topic, id.partition())).collect(Collectors.toSet());
 
-                // create a StandbyTask for each one
                 if (topology.hasStateWithChangelogs()) {
                     final ProcessorStateManager stateManager = new ProcessorStateManager(
                         id,
@@ -253,7 +252,6 @@ public class StateDirectory implements AutoCloseable {
                         task.initializeIfNeeded();
                         task.suspend();
 
-                        // add new Tasks to tasksForLocalState
                         tasksForLocalState.put(id, task);
                     } catch (final TaskCorruptedException e) {
                         // Task is corrupt - wipe it out (under EOS) and don't initialize a Standby for it
