@@ -71,14 +71,14 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("urlEncoderHeaderSupplier")
-    public void testUrlEncodeHeader(Map<String, Object> configs, boolean expectedValue) {
+    @MethodSource("urlencodeHeaderSupplier")
+    public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
         ConfigurationUtils cu = new ConfigurationUtils(configs);
         boolean actualValue = AccessTokenRetrieverFactory.validateUrlencodeHeader(cu);
         assertEquals(expectedValue, actualValue);
     }
 
-    private static Stream<Arguments> urlEncoderHeaderSupplier() {
+    private static Stream<Arguments> urlencodeHeaderSupplier() {
         return Stream.of(
             Arguments.of(Collections.emptyMap(), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
             Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, null), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
