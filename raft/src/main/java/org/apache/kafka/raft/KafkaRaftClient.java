@@ -533,6 +533,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // so there are no unknown voter connections. Report this metric as 0.
         kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
+        // increment number of offline voters
+        if (log.lastFetchedEpoch() > quorumConfig.fetchTimeoutMs()) {
+//         kafkaRaftMetrics.updateNumberOfOfflineVoters(1);
+        }
+
         quorum.initialize(new OffsetAndEpoch(log.endOffset().offset(), log.lastFetchedEpoch()));
 
         long currentTimeMs = time.milliseconds();

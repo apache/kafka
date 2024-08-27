@@ -40,6 +40,8 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     private volatile OffsetAndEpoch logEndOffset;
     private volatile int numUnknownVoterConnections;
+
+    private volatile int numOfOfflineVoters;
     private volatile OptionalLong electionStartMs;
     private volatile OptionalLong pollStartMs;
 
@@ -67,6 +69,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.pollStartMs = OptionalLong.empty();
         this.electionStartMs = OptionalLong.empty();
         this.numUnknownVoterConnections = 0;
+        this.numOfOfflineVoters = 0;
         this.logEndOffset = new OffsetAndEpoch(0L, 0);
 
         this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, voted, follower, unattached, observer");
@@ -142,7 +145,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
         this.numberOfOfflineVotersMetricName = metrics.metricName("number-of-offline-voters", metricGroupName,
             "Number of voters with a last Fetch timestamp greater than the Fetch timeout.");
-        metrics.addMetric(this.numberOfOfflineVotersMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
+        metrics.addMetric(this.numberOfOfflineVotersMetricName, (mConfig, currentTimeMs) -> numOfOfflineVoters);
 
         this.commitTimeSensor = metrics.sensor("commit-latency");
         this.commitTimeSensor.add(metrics.metricName("commit-latency-avg", metricGroupName,
@@ -196,6 +199,10 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     public void updateNumUnknownVoterConnections(int numUnknownVoterConnections) {
         this.numUnknownVoterConnections = numUnknownVoterConnections;
+    }
+
+    public void updateNumberOfOfflineVoters(int numOfOfflineVoters) {
+        this.numOfOfflineVoters = numOfOfflineVoters;
     }
 
     public void updateAppendRecords(long numRecords) {
