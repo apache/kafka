@@ -62,6 +62,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -115,6 +116,7 @@ public class StateDirectory implements AutoCloseable {
     private final StreamsConfig config;
     private final ConcurrentMap<TaskId, Task> tasksForLocalState = new ConcurrentHashMap<>();
     private final AtomicInteger threadsWithAssignment = new AtomicInteger(0);
+    private final Supplier<Integer> numStreamThreads;
 
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
@@ -129,10 +131,15 @@ public class StateDirectory implements AutoCloseable {
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
      *                                 and could not be created when hasPersistentStores is enabled.
      */
-    public StateDirectory(final StreamsConfig config, final Time time, final boolean hasPersistentStores, final boolean hasNamedTopologies) {
+    public StateDirectory(final StreamsConfig config,
+                          final Time time,
+                          final boolean hasPersistentStores,
+                          final boolean hasNamedTopologies,
+                          final Supplier<Integer> numStreamThreads) {
         this.time = time;
         this.hasPersistentStores = hasPersistentStores;
         this.hasNamedTopologies = hasNamedTopologies;
+        this.numStreamThreads = numStreamThreads;
         this.appId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         final String stateDirName = config.getString(StreamsConfig.STATE_DIR_CONFIG);
@@ -276,7 +283,7 @@ public class StateDirectory implements AutoCloseable {
     }
 
     public void closeInitialTasksIfLastAssginedThread() {
-        if (hasInitialTasks() && threadsWithAssignment.incrementAndGet() >= config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)) {
+        if (hasInitialTasks() && threadsWithAssignment.incrementAndGet() >= numStreamThreads.get()) {
             // we need to be careful here, because other StreamThreads may still be assigning tasks (via assignInitialTask)
             // so we first "drain" our Map of all remaining Tasks, and then close all the Tasks we successfully claimed from the Map
             final Set<Task> tasksToClose = drainInitialTasks();

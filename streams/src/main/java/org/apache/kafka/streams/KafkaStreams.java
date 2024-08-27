@@ -977,6 +977,7 @@ public class KafkaStreams implements AutoCloseable {
                          final Time time) throws StreamsException {
         this.applicationConfigs = applicationConfigs;
         this.time = time;
+        threads = Collections.synchronizedList(new LinkedList<>());
 
         this.topologyMetadata = topologyMetadata;
         this.topologyMetadata.buildAndRewriteTopology();
@@ -984,7 +985,13 @@ public class KafkaStreams implements AutoCloseable {
         final boolean hasGlobalTopology = topologyMetadata.hasGlobalTopology();
 
         try {
-            stateDirectory = new StateDirectory(applicationConfigs, time, topologyMetadata.hasPersistentStores(), topologyMetadata.hasNamedTopologies());
+            stateDirectory = new StateDirectory(
+                applicationConfigs,
+                time,
+                topologyMetadata.hasPersistentStores(),
+                topologyMetadata.hasNamedTopologies(),
+                threads::size
+            );
             processId = stateDirectory.initializeProcessId();
         } catch (final ProcessorStateException fatal) {
             Utils.closeQuietly(stateDirectory, "streams state directory");
@@ -1022,7 +1029,6 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
-        threads = Collections.synchronizedList(new LinkedList<>());
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) -> numLiveStreamThreads());
 
         streamsMetadataState = new StreamsMetadataState(

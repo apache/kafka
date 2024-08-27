@@ -114,7 +114,7 @@ public class StateDirectoryTest {
                 put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
             }
         });
-        directory = new StateDirectory(config, time, createStateDirectory, hasNamedTopology);
+        directory = new StateDirectory(config, time, createStateDirectory, hasNamedTopology, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
         appDir = new File(stateDir, applicationId);
     }
 
@@ -386,17 +386,20 @@ public class StateDirectoryTest {
     @Test
     public void shouldReturnEmptyArrayIfListFilesReturnsNull() throws IOException {
         stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
+        final StreamsConfig config = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+            }
+        });
         directory = new StateDirectory(
-            new StreamsConfig(new Properties() {
-                {
-                    put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-                    put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-                    put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
-                }
-            }),
+            config,
             time,
             true,
-            false);
+            false,
+            () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)
+        );
         appDir = new File(stateDir, applicationId);
 
         // make sure the File#listFiles returns null and StateDirectory#listAllTaskDirectories is able to handle null
@@ -429,17 +432,20 @@ public class StateDirectoryTest {
     public void shouldCreateDirectoriesIfParentDoesntExist() {
         final File tempDir = TestUtils.tempDirectory();
         final File stateDir = new File(new File(tempDir, "foo"), "state-dir");
+        final StreamsConfig config = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+            }
+        });
         final StateDirectory stateDirectory = new StateDirectory(
-            new StreamsConfig(new Properties() {
-                {
-                    put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-                    put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-                    put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
-                }
-            }),
+            config,
             time,
             true,
-            false);
+            false,
+            () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)
+        );
         final File taskDir = stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
         assertTrue(stateDir.exists());
         assertTrue(taskDir.exists());
@@ -629,16 +635,18 @@ public class StateDirectoryTest {
     @Test
     public void shouldLogTempDirMessage() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            final StreamsConfig config = new StreamsConfig(
+                mkMap(
+                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ""),
+                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "")
+                )
+            );
             new StateDirectory(
-                new StreamsConfig(
-                    mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ""),
-                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "")
-                    )
-                ),
+                config,
                 new MockTime(),
                 true,
-                false
+                false,
+                () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)
             );
             assertThat(
                 appender.getMessages(),

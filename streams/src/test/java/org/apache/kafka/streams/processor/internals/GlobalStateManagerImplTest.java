@@ -160,7 +160,7 @@ public class GlobalStateManagerImplTest {
                 put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
             }
         });
-        stateDirectory = new StateDirectory(streamsConfig, time, true, false);
+        stateDirectory = new StateDirectory(streamsConfig, time, true, false, () -> streamsConfig.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
         consumer = new MockConsumer<>(OffsetResetStrategy.NONE);
         stateManager = new GlobalStateManagerImpl(
             new LogContext("test"),
