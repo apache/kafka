@@ -34,6 +34,7 @@ import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.time.Duration
 import scala.collection.Seq

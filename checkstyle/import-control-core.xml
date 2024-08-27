@@ -82,6 +82,7 @@
     <allow pkg="org.apache.kafka.server.log.remote" />
     <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.storage.internals" />
+    <allow pkg="org.apache.kafka.storage.log.metrics" />
     <allow pkg="kafka.log" />
     <allow pkg="kafka.cluster" />
     <allow pkg="kafka.server" />

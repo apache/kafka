@@ -17,7 +17,6 @@
 package kafka.log.remote;
 
 import kafka.log.remote.quota.RLMQuotaManager;
-import kafka.server.BrokerTopicStats;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
@@ -27,6 +26,7 @@ import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import com.yammer.metrics.core.Timer;
 
