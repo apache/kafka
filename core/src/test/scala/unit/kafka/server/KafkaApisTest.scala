@@ -90,6 +90,7 @@ import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPar
 import org.apache.kafka.server.quota.ThrottleCallback
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -212,6 +213,8 @@ class KafkaApisTest extends Logging {
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
 
     val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
+
+    when(groupCoordinator.isNewGroupCoordinator).thenReturn(config.isNewGroupCoordinatorEnabled)
 
     new KafkaApis(
       requestChannel = requestChannel,
@@ -4101,7 +4104,7 @@ class KafkaApisTest extends Logging {
         .setPartitionIndex(tp.partition)
         .setTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP)
         .setCurrentLeaderEpoch(currentLeaderEpoch.get)).asJava)).asJava
-    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel, false, false)
+    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
@@ -4722,7 +4725,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     ).thenThrow(Errors.INVALID_REQUEST.exception)
 
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareAcknowledgeResponseData.PartitionData()
@@ -5604,7 +5607,7 @@ class KafkaApisTest extends Logging {
       new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 0L, 0L, 3))
     ).thenReturn(new FinalContext())
 
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)) ->
           new ShareAcknowledgeResponseData.PartitionData()
@@ -6903,7 +6906,7 @@ class KafkaApisTest extends Logging {
       new FinalContext()
     )
 
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
@@ -7473,7 +7476,7 @@ class KafkaApisTest extends Logging {
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
 
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)) ->
           new ShareAcknowledgeResponseData.PartitionData()
@@ -7547,7 +7550,7 @@ class KafkaApisTest extends Logging {
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
 
-    when(sharePartitionManager.releaseAcquiredRecords(any(), any())).thenReturn(
+    when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
@@ -10112,7 +10115,7 @@ class KafkaApisTest extends Logging {
       .setPartitions(List(new ListOffsetsPartition()
         .setPartitionIndex(tp.partition)
         .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP)).asJava)).asJava
-    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel, false, false)
+    val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
     kafkaApis = createKafkaApis()

@@ -67,6 +67,8 @@ private[group] class GroupCoordinatorAdapter(
   private val time: Time
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
 
+  override def isNewGroupCoordinator: Boolean = false
+
   override def consumerGroupHeartbeat(
     context: RequestContext,
     request: ConsumerGroupHeartbeatRequestData

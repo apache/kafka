@@ -77,6 +77,7 @@ import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_I
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch, ShareFetchContext}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
@@ -2401,7 +2402,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"End transaction marker append for producer id $producerId completed with status: $currentErrors")
       updateErrors(producerId, currentErrors)
 
-      if (!config.isNewGroupCoordinatorEnabled) {
+      if (!groupCoordinator.isNewGroupCoordinator) {
         val successfulOffsetsPartitions = currentErrors.asScala.filter { case (topicPartition, error) =>
           topicPartition.topic == GROUP_METADATA_TOPIC_NAME && error == Errors.NONE
         }.keys
@@ -2468,7 +2469,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         val controlRecords = mutable.Map.empty[TopicPartition, MemoryRecords]
         partitionsWithCompatibleMessageFormat.foreach { partition =>
-          if (config.isNewGroupCoordinatorEnabled && partition.topic == GROUP_METADATA_TOPIC_NAME) {
+          if (groupCoordinator.isNewGroupCoordinator && partition.topic == GROUP_METADATA_TOPIC_NAME) {
             // When the new group coordinator is used, writing the end marker is fully delegated
             // to the group coordinator.
             groupCoordinator.completeTransaction(
@@ -3809,7 +3810,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isConsumerGroupProtocolEnabled(): Boolean = {
-    config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
+    groupCoordinator.isNewGroupCoordinator && config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
   }
 
   def handleConsumerGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -4193,13 +4194,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManagerInstance.releaseAcquiredRecords(groupId, memberId).
+            sharePartitionManagerInstance.releaseSession(groupId, memberId).
               whenComplete((releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
-                  error(s"Release acquired records on share session close with correlation from client ${request.header.clientId}  " +
+                  error(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Release acquired records on share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
                 }
               )
           }
@@ -4415,13 +4416,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
         } else {
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManagerInstance.releaseAcquiredRecords(groupId, memberId).
+            sharePartitionManagerInstance.releaseSession(groupId, memberId).
               whenComplete{ (releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
-                  debug(s"Release acquired records on share session close with correlation from client ${request.header.clientId}  " +
+                  debug(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Release acquired records on share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
                 }
               }
           }
@@ -4727,7 +4728,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isShareGroupProtocolEnabled: Boolean = {
-    config.isNewGroupCoordinatorEnabled && config.shareGroupConfig.isShareGroupEnabled
+    groupCoordinator.isNewGroupCoordinator && config.shareGroupConfig.isShareGroupEnabled
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
