@@ -228,9 +228,16 @@ public class StreamThreadTest {
     @AfterEach
     public void tearDown() {
         if (thread != null) {
+            // KAFKA-17122 manually stop taskManager if `thread` is not in CREATED state.
+            if (thread.state() != State.CREATED) {
+                thread.taskManager().shutdown(false);
+            }
             thread.shutdown();
             thread = null;
         }
+        final Set<Thread> t = Collections.unmodifiableSet(Thread.getAllStackTraces().keySet());
+        assertTrue(t.stream().noneMatch(thread -> thread.getName().contains("TaskExecutor")));
+        assertTrue(t.stream().noneMatch(thread -> thread.getName().contains("StateUpdater")));
         stateDirectory = null;
     }
 
@@ -2058,8 +2065,8 @@ public class StreamThreadTest {
         assertEquals(task1, standbyTask1.id());
         assertEquals(task3, standbyTask2.id());
 
-        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
-        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.store(storeName1);
+        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.store(storeName2);
 
         assertEquals(0L, store1.approximateNumEntries());
         assertEquals(0L, store2.approximateNumEntries());
@@ -2182,10 +2189,10 @@ public class StreamThreadTest {
         assertEquals(task1, standbyTask1.id());
         assertEquals(task3, standbyTask2.id());
 
-        final KeyValueStore<Object, Long> activeStore = (KeyValueStore<Object, Long>) activeTask1.getStore(storeName1);
+        final KeyValueStore<Object, Long> activeStore = (KeyValueStore<Object, Long>) activeTask1.store(storeName1);
 
-        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
-        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.store(storeName1);
+        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.store(storeName2);
 
         assertEquals(0L, activeStore.approximateNumEntries());
         assertEquals(0L, store1.approximateNumEntries());
