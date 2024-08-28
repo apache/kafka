@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.metadata.FakeKafkaConfigSchema;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -115,6 +116,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 MockFaultHandler nonFatalFaultHandler = new MockFaultHandler("nonFatalFaultHandler");
                 builder.setNonFatalFaultHandler(nonFatalFaultHandler);
                 builder.setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled);
+                builder.setConfigSchema(FakeKafkaConfigSchema.INSTANCE);
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 this.controllers.add(builder.build());
