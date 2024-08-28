@@ -52,7 +52,6 @@ import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
-import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
@@ -103,13 +102,18 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         // The provided context is not required to implement InternalProcessorContext,
         // If it doesn't, we can't record this metric.
-        this.context = asInternalProcessorContext(stateStoreContext);
-        final StreamsMetricsImpl metrics = this.context.metrics();
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-            threadId,
-            taskName,
-            metrics
-        );
+        if (stateStoreContext instanceof InternalProcessorContext) {
+            this.context = (InternalProcessorContext) stateStoreContext;
+            final StreamsMetricsImpl metrics = this.context.metrics();
+            expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
+                threadId,
+                taskName,
+                metrics
+            );
+        } else {
+            this.context = null;
+            expiredRecordSensor = null;
+        }
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
