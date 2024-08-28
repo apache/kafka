@@ -137,6 +137,8 @@ public final class RaftClientTestContext {
     final Set<Integer> bootstrapIds;
     // Used to determine which RPC request and response to construct
     final boolean kip853Rpc;
+    // Used to determine if the local kraft client was configured to always flush
+    final boolean alwaysFlush;
 
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
 
@@ -170,6 +172,7 @@ public final class RaftClientTestContext {
         private MemoryPool memoryPool = MemoryPool.NONE;
         private Optional<List<InetSocketAddress>> bootstrapServers = Optional.empty();
         private boolean kip853Rpc = false;
+        private boolean alwaysFlush = false;
         private VoterSet startingVoters = VoterSet.empty();
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
@@ -293,6 +296,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withAlwaysFlush(boolean alwaysFlush) {
+            this.alwaysFlush = alwaysFlush;
+            return this;
+        }
+
         Builder withStaticVoters(Set<Integer> staticVoters) {
             Map<Integer, InetSocketAddress> staticVoterAddressMap = staticVoters
                 .stream()
@@ -407,6 +415,7 @@ public final class RaftClientTestContext {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
+                alwaysFlush,
                 clusterId,
                 computedBootstrapServers,
                 localListeners,
@@ -441,6 +450,7 @@ public final class RaftClientTestContext {
                     .boxed()
                     .collect(Collectors.toSet()),
                 kip853Rpc,
+                alwaysFlush,
                 metrics,
                 listener
             );
@@ -468,6 +478,7 @@ public final class RaftClientTestContext {
         VoterSet startingVoters,
         Set<Integer> bootstrapIds,
         boolean kip853Rpc,
+        boolean alwaysFlush,
         Metrics metrics,
         MockListener listener
     ) {
@@ -484,6 +495,7 @@ public final class RaftClientTestContext {
         this.startingVoters = startingVoters;
         this.bootstrapIds = bootstrapIds;
         this.kip853Rpc = kip853Rpc;
+        this.alwaysFlush = alwaysFlush;
         this.metrics = metrics;
         this.listener = listener;
     }
@@ -1531,7 +1543,9 @@ public final class RaftClientTestContext {
         assertEquals(localId.orElse(-1), request.replicaState().replicaId());
 
         // Assert that voters have flushed up to the fetch offset
-        if (localId.isPresent() && startingVoters.voterIds().contains(localId.getAsInt())) {
+        if ((localId.isPresent() && startingVoters.voterIds().contains(localId.getAsInt())) ||
+            alwaysFlush
+        ) {
             assertEquals(
                 log.firstUnflushedOffset(),
                 fetchOffset,
@@ -1912,7 +1926,7 @@ public final class RaftClientTestContext {
         private final List<Batch<String>> commits = new ArrayList<>();
         private final List<BatchReader<String>> savedBatches = new ArrayList<>();
         private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
-        private LeaderAndEpoch currentLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
+        private LeaderAndEpoch currentLeaderAndEpoch = LeaderAndEpoch.UNKNOWN;
         private final OptionalInt localId;
         private Optional<SnapshotReader<String>> snapshot = Optional.empty();
         private boolean readCommit = true;

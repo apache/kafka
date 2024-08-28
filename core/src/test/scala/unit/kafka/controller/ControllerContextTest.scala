@@ -17,14 +17,15 @@
 
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 
+import scala.jdk.CollectionConverters._
 
 class ControllerContextTest {
 
@@ -179,13 +180,13 @@ class ControllerContextTest {
     context.updatePartitionFullReplicaAssignment(tp3, ReplicaAssignment(Seq(1, 2, 3)))
     assertEquals(0, context.preferredReplicaImbalanceCount)
 
-    context.putPartitionLeadershipInfo(tp1, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(1, 2, 3)), 0))
+    context.putPartitionLeadershipInfo(tp1, LeaderIsrAndControllerEpoch(new LeaderAndIsr(1, List(1, 2, 3).map(Int.box).asJava), 0))
     assertEquals(0, context.preferredReplicaImbalanceCount)
 
-    context.putPartitionLeadershipInfo(tp2, LeaderIsrAndControllerEpoch(LeaderAndIsr(2, List(2, 3, 1)), 0))
+    context.putPartitionLeadershipInfo(tp2, LeaderIsrAndControllerEpoch(new LeaderAndIsr(2, List(2, 3, 1).map(Int.box).asJava), 0))
     assertEquals(1, context.preferredReplicaImbalanceCount)
 
-    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(3, List(3, 1, 2)), 0))
+    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(new LeaderAndIsr(3, List(3, 1, 2).map(Int.box).asJava), 0))
     assertEquals(2, context.preferredReplicaImbalanceCount)
 
     context.updatePartitionFullReplicaAssignment(tp1, ReplicaAssignment(Seq(2, 3, 1)))
@@ -195,7 +196,7 @@ class ControllerContextTest {
     context.queueTopicDeletion(Set(tp3.topic))
     assertEquals(1, context.preferredReplicaImbalanceCount)
 
-    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(3, 1, 2)), 0))
+    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(new LeaderAndIsr(1, List(3, 1, 2).map(Int.box).asJava), 0))
     assertEquals(1, context.preferredReplicaImbalanceCount)
 
     context.removeTopic(tp1.topic)
@@ -216,7 +217,7 @@ class ControllerContextTest {
 
     context.queueTopicDeletion(Set(topicA))
     // All partitions in topic will be marked as Offline during deletion procedure
-    context.putPartitionLeadershipInfo(tpA, LeaderIsrAndControllerEpoch(LeaderAndIsr(LeaderAndIsr.NoLeader, List(1, 2, 3)), 0))
+    context.putPartitionLeadershipInfo(tpA, LeaderIsrAndControllerEpoch(new LeaderAndIsr(LeaderAndIsr.NO_LEADER, List(1, 2, 3).map(Int.box).asJava), 0))
     assertEquals(0, context.preferredReplicaImbalanceCount)
 
     // Initiate topicB's topic deletion before topicA's deletion completes.

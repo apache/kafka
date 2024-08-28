@@ -20,6 +20,10 @@ import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
+import java.util.Collections;
+import java.util.Optional;
+import java.util.Set;
+
 public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
 
     private final Serializer<K> keySerializer;
@@ -29,17 +33,16 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
     }
 
     @Override
-    @Deprecated
-    public Integer partition(final String topic, final K key, final V value, final int numPartitions) {
+    public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
         final byte[] keyBytes = keySerializer.serialize(topic, key);
 
-        // if the key bytes are not available, we just return null to let the producer to decide
+        // if the key bytes are not available, we just return empty optional to let the producer decide
         // which partition to send internally; otherwise stick with the same built-in partitioner
         // util functions that producer used to make sure its behavior is consistent with the producer
         if (keyBytes == null) {
-            return null;
+            return Optional.empty();
         } else {
-            return BuiltInPartitioner.partitionForKey(keyBytes, numPartitions);
+            return Optional.of(Collections.singleton(BuiltInPartitioner.partitionForKey(keyBytes, numPartitions)));
         }
     }
 }

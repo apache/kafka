@@ -72,17 +72,17 @@ public class ConfigurationUtils {
         try {
             file = new File(url.toURI().getRawPath()).getAbsoluteFile();
         } catch (URISyntaxException e) {
-            throw new ConfigException(name, url.toString(), String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, url, e.getMessage()));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, url, e.getMessage()));
         }
 
         if (!file.exists())
-            throw new ConfigException(name, file, String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", name, file));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", name, file));
 
         if (!file.canRead())
-            throw new ConfigException(name, file, String.format("The OAuth configuration option %s contains a file (%s) that doesn't have read permission", name, file));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't have read permission", name, file));
 
         if (file.isDirectory())
-            throw new ConfigException(name, file, String.format("The OAuth configuration option %s references a directory (%s), not a file", name, file));
+            throw new ConfigException(String.format("The OAuth configuration option %s references a directory (%s), not a file", name, file));
 
         return file.toPath();
     }
@@ -104,7 +104,7 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(name, null, String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
             else
                 return null;
         }
@@ -137,13 +137,13 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(name, null, String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
             else
                 return null;
         }
 
         if (min != null && value < min)
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s value must be at least %s", name, min));
+            throw new ConfigException(String.format("The OAuth configuration option %s value must be at least %s", name, min));
 
         return value;
     }
@@ -167,18 +167,18 @@ public class ConfigurationUtils {
         try {
             url = new URL(value);
         } catch (MalformedURLException e) {
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, value, e.getMessage()));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, value, e.getMessage()));
         }
 
         String protocol = url.getProtocol();
 
         if (protocol == null || protocol.trim().isEmpty())
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that is missing the protocol", name, value));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is missing the protocol", name, value));
 
         protocol = protocol.toLowerCase(Locale.ROOT);
 
         if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
 
         return url;
     }
@@ -205,6 +205,15 @@ public class ConfigurationUtils {
             else
                 return null;
         }
+
+        return value;
+    }
+
+    public Boolean validateBoolean(String name, boolean isRequired) {
+        Boolean value = get(name);
+
+        if (value == null && isRequired)
+            throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
 
         return value;
     }

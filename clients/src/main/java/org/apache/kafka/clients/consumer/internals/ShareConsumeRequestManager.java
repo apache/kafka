@@ -51,6 +51,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -258,36 +259,41 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                       long currentTimeMs,
                                                       boolean onCommitAsync,
                                                       AtomicBoolean isAsyncDone) {
-        if (acknowledgeRequestState == null || (!acknowledgeRequestState.onClose && acknowledgeRequestState.isEmpty())) {
-            if (onCommitAsync) {
-                isAsyncDone.set(true);
+        boolean asyncDone = true;
+        try {
+            if (acknowledgeRequestState == null || (!acknowledgeRequestState.onClose() && acknowledgeRequestState.isEmpty())) {
+                return Optional.empty();
             }
-            return Optional.empty();
-        } else if (!acknowledgeRequestState.maybeExpire()) {
-            if (acknowledgeRequestState.canSendRequest(currentTimeMs)) {
-                acknowledgeRequestState.onSendAttempt(currentTimeMs);
-                if (onCommitAsync) {
-                    isAsyncDone.set(true);
+
+            if (acknowledgeRequestState.maybeExpire()) {
+                // Fill in TimeoutException
+                for (TopicIdPartition tip : acknowledgeRequestState.incompleteAcknowledgements.keySet()) {
+                    metricsManager.recordFailedAcknowledgements(acknowledgeRequestState.getIncompleteAcknowledgementsCount(tip));
+                    acknowledgeRequestState.handleAcknowledgeTimedOut(tip);
                 }
-                return Optional.of(acknowledgeRequestState.buildRequest(currentTimeMs));
-            } else {
+                acknowledgeRequestState.incompleteAcknowledgements.clear();
+                return Optional.empty();
+            }
+
+            if (!acknowledgeRequestState.canSendRequest(currentTimeMs)) {
                 // We wait for the backoff before we can send this request.
-                if (onCommitAsync) {
-                    isAsyncDone.set(false);
-                }
+                asyncDone = false;
+                return Optional.empty();
             }
-        } else {
-            // Fill in TimeoutException
-            for (TopicIdPartition tip : acknowledgeRequestState.incompleteAcknowledgements.keySet()) {
-                metricsManager.recordFailedAcknowledgements(acknowledgeRequestState.getIncompleteAcknowledgementsCount(tip));
-                acknowledgeRequestState.handleAcknowledgeTimedOut(tip);
+
+            UnsentRequest request = acknowledgeRequestState.buildRequest(currentTimeMs);
+            if (request == null) {
+                asyncDone = false;
+                return Optional.empty();
             }
-            acknowledgeRequestState.incompleteAcknowledgements.clear();
+
+            acknowledgeRequestState.onSendAttempt(currentTimeMs);
+            return Optional.of(request);
+        } finally {
             if (onCommitAsync) {
-                isAsyncDone.set(true);
+                isAsyncDone.set(asyncDone);
             }
         }
-        return Optional.empty();
     }
 
     /**
@@ -367,7 +373,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             acknowledgementsMapForNode,
                             this::handleShareAcknowledgeSuccess,
                             this::handleShareAcknowledgeFailure,
-                            resultHandler
+                            resultHandler,
+                            AcknowledgeRequestType.COMMIT_SYNC
                     ));
                 }
             }
@@ -384,8 +391,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      */
     public void commitAsync(final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
         final Cluster cluster = metadata.fetch();
-        final AtomicInteger resultCount = new AtomicInteger();
-        final ResultHandler resultHandler = new ResultHandler(resultCount, Optional.empty());
+        final ResultHandler resultHandler = new ResultHandler(Optional.empty());
 
         sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Node node = cluster.nodeById(nodeId);
@@ -401,7 +407,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
                         metricsManager.recordAcknowledgementSent(acknowledgements.size());
                         log.debug("Added async acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
-                        resultCount.incrementAndGet();
                         AcknowledgeRequestState asyncRequestState = acknowledgeRequestStates.get(nodeId).getAsyncRequest();
                         if (asyncRequestState == null) {
                             acknowledgeRequestStates.get(nodeId).setAsyncRequest(new AcknowledgeRequestState(logContext,
@@ -414,7 +419,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                     acknowledgementsMapForNode,
                                     this::handleShareAcknowledgeSuccess,
                                     this::handleShareAcknowledgeFailure,
-                                    resultHandler
+                                    resultHandler,
+                                    AcknowledgeRequestType.COMMIT_ASYNC
                             ));
                         } else {
                             Acknowledgements prevAcks = asyncRequestState.acknowledgementsToSend.putIfAbsent(tip, acknowledgements);
@@ -453,8 +459,13 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             if (node != null) {
                 Map<TopicIdPartition, Acknowledgements> acknowledgementsMapForNode = new HashMap<>();
                 for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
-                    Acknowledgements acknowledgements = acknowledgementsMap.get(tip);
-                    if (acknowledgements != null) {
+                    Acknowledgements acknowledgements = acknowledgementsMap.getOrDefault(tip, Acknowledgements.empty());
+
+                    if (fetchAcknowledgementsMap.get(tip) != null) {
+                        acknowledgements.merge(fetchAcknowledgementsMap.remove(tip));
+                    }
+
+                    if (acknowledgements != null && !acknowledgements.isEmpty()) {
                         acknowledgementsMapForNode.put(tip, acknowledgements);
 
                         metricsManager.recordAcknowledgementSent(acknowledgements.size());
@@ -484,7 +495,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             this::handleShareAcknowledgeCloseSuccess,
                             this::handleShareAcknowledgeCloseFailure,
                             resultHandler,
-                            true
+                            AcknowledgeRequestType.CLOSE
                     ));
 
                 }
@@ -612,7 +623,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             if (!handler.handleResponse(response, requestVersion)) {
                 acknowledgeRequestState.onFailedAttempt(currentTimeMs);
-                if (response.error().exception() instanceof RetriableException && !acknowledgeRequestState.onClose) {
+                if (response.error().exception() instanceof RetriableException && !acknowledgeRequestState.onClose()) {
                     // We retry the request until the timer expires, unless we are closing.
                     acknowledgeRequestState.retryRequest();
                 } else {
@@ -634,7 +645,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             partitionData.partitionIndex(),
                             metadata.topicNames().get(shareAcknowledgeTopicResponse.topicId()));
                     if (partitionError.exception() != null) {
-                        if (partitionError.exception() instanceof RetriableException && !acknowledgeRequestState.onClose) {
+                        if (partitionError.exception() instanceof RetriableException && !acknowledgeRequestState.onClose()) {
                             // Move to incomplete acknowledgements to retry
                             acknowledgeRequestState.moveToIncompleteAcks(tip);
                             shouldRetry.set(true);
@@ -808,24 +819,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         private final ResultHandler resultHandler;
 
         /**
-         * Whether this is the final acknowledge request state before the consumer closes.
+         * Indicates whether this was part of commitAsync, commitSync or close operation.
          */
-        private final boolean onClose;
-
-        AcknowledgeRequestState(LogContext logContext,
-                                String owner,
-                                long deadlineMs,
-                                long retryBackoffMs,
-                                long retryBackoffMaxMs,
-                                ShareSessionHandler sessionHandler,
-                                int nodeId,
-                                Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
-                                ResponseHandler<ClientResponse> successHandler,
-                                ResponseHandler<Throwable> errorHandler,
-                                ResultHandler resultHandler) {
-            this(logContext, owner, deadlineMs, retryBackoffMs, retryBackoffMaxMs, sessionHandler, nodeId,
-                    acknowledgementsMap, successHandler, errorHandler, resultHandler, false);
-        }
+        private final AcknowledgeRequestType requestType;
 
         AcknowledgeRequestState(LogContext logContext,
                                 String owner,
@@ -838,7 +834,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                 ResponseHandler<ClientResponse> successHandler,
                                 ResponseHandler<Throwable> errorHandler,
                                 ResultHandler resultHandler,
-                                boolean onClose) {
+                                AcknowledgeRequestType acknowledgeRequestType) {
             super(logContext, owner, retryBackoffMs, retryBackoffMaxMs, deadlineTimer(time, deadlineMs));
             this.sessionHandler = sessionHandler;
             this.nodeId = nodeId;
@@ -846,14 +842,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.errorHandler = errorHandler;
             this.acknowledgementsToSend = acknowledgementsMap;
             this.resultHandler = resultHandler;
-            this.onClose = onClose;
             this.inFlightAcknowledgements = new HashMap<>();
             this.incompleteAcknowledgements = new HashMap<>();
+            this.requestType = acknowledgeRequestType;
         }
 
         UnsentRequest buildRequest(long currentTimeMs) {
             // If this is the closing request, close the share session by setting the final epoch
-            if (onClose) {
+            if (onClose()) {
                 sessionHandler.notifyClose();
             }
 
@@ -867,6 +863,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             ShareAcknowledgeRequest.Builder requestBuilder = sessionHandler.newShareAcknowledgeBuilder(groupId, fetchConfig);
             Node nodeToSend = metadata.fetch().nodeById(nodeId);
 
+            log.trace("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
             nodesWithPendingRequests.add(nodeId);
 
             BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, error) -> {
@@ -875,7 +872,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     processingComplete();
                 } else {
                     successHandler.handle(nodeToSend, requestBuilder.data(), this, clientResponse, currentTimeMs);
-                    if (onClose && !closeFuture.isDone()) {
+                    if (onClose() && !closeFuture.isDone()) {
                         closeFuture.complete(null);
                     }
                 }
@@ -937,7 +934,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             if (acks != null) {
                 acks.setAcknowledgeErrorCode(acknowledgeErrorCode);
             }
-            resultHandler.complete(tip, acks);
+            resultHandler.complete(tip, acks, onCommitAsync());
         }
 
         /**
@@ -949,7 +946,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             if (acks != null) {
                 acks.setAcknowledgeErrorCode(Errors.REQUEST_TIMED_OUT);
             }
-            resultHandler.complete(tip, acks);
+            resultHandler.complete(tip, acks, onCommitAsync());
         }
 
         /**
@@ -962,7 +959,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (acks != null) {
                     acks.setAcknowledgeErrorCode(errorCode);
                 }
-                resultHandler.complete(tip, acks);
+                resultHandler.complete(tip, acks, onCommitAsync());
             });
             processingComplete();
         }
@@ -994,6 +991,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
             }
         }
+
+        public boolean onClose() {
+            return requestType == AcknowledgeRequestType.CLOSE;
+        }
+
+        public boolean onCommitAsync() {
+            return requestType == AcknowledgeRequestType.COMMIT_ASYNC;
+        }
     }
 
     /**
@@ -1019,6 +1024,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         private final AtomicInteger remainingResults;
         private final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future;
 
+        ResultHandler(final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
+            this(null, future);
+        }
+
         ResultHandler(final AtomicInteger remainingResults,
                       final Optional<CompletableFuture<Map<TopicIdPartition, Acknowledgements>>> future) {
             result = new HashMap<>();
@@ -1030,11 +1039,13 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * Handle the result of a ShareAcknowledge request sent to one or more nodes and
          * signal the completion when all results are known.
          */
-        public void complete(TopicIdPartition partition, Acknowledgements acknowledgements) {
+        public void complete(TopicIdPartition partition, Acknowledgements acknowledgements, boolean isCommitAsync) {
             if (acknowledgements != null) {
                 result.put(partition, acknowledgements);
             }
-            if (remainingResults.decrementAndGet() == 0) {
+            // For commitAsync, we do not wait for other results to complete, we prepare a background event
+            // for every ShareAcknowledgeResponse.
+            if (isCommitAsync || (remainingResults  != null && remainingResults.decrementAndGet() == 0)) {
                 ShareAcknowledgementCommitCallbackEvent event = new ShareAcknowledgementCommitCallbackEvent(result);
                 backgroundEventHandler.add(event);
                 future.ifPresent(future -> future.complete(result));
@@ -1045,7 +1056,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * Handles the case where there are no results pending after initialization.
          */
         public void completeIfEmpty() {
-            if (remainingResults.get() == 0) {
+            if (remainingResults != null && remainingResults.get() == 0) {
                 future.ifPresent(future -> future.complete(result));
             }
         }
@@ -1079,5 +1090,23 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
     Pair<AcknowledgeRequestState> requestStates(int nodeId) {
         return acknowledgeRequestStates.get(nodeId);
+    }
+
+    public enum AcknowledgeRequestType {
+        COMMIT_ASYNC((byte) 0),
+        COMMIT_SYNC((byte) 1),
+        CLOSE((byte) 2);
+
+        public final byte id;
+
+        AcknowledgeRequestType(byte id) {
+            this.id = id;
+        }
+
+        @Override
+        public String toString() {
+            return super.toString().toLowerCase(Locale.ROOT);
+        }
+
     }
 }
