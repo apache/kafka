@@ -344,6 +344,11 @@ public class SharePartitionManager implements AutoCloseable {
                     }
                     return Errors.NONE;
                 });
+                // If we have a release acquired request completed for a topic-partition, then we should check if
+                // there is a pending share fetch request for the topic-partition and complete it.
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(topicIdPartition, groupId);
+                delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
+
                 futuresMap.put(topicIdPartition, future);
             }
         });
