@@ -1806,7 +1806,7 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testReleaseAcquiredRecordsCompletesDelayedShareFetchRequest() {
+    public void testReleaseSessionCompletesDelayedShareFetchRequest() {
         String groupId = "grp";
         String memberId = Uuid.randomUuid().toString();
 
@@ -1821,7 +1821,11 @@ public class SharePartitionManagerTest {
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
 
-        // mocked share partitions sp1 and sp2 can be acquired once there is a release acquired records request for it.
+        ShareSessionCache cache = mock(ShareSessionCache.class);
+        ShareSession shareSession = mock(ShareSession.class);
+        when(cache.remove(new ShareSessionKey(groupId, Uuid.fromString(memberId)))).thenReturn(shareSession);
+
+        // mocked share partitions sp1 and sp2 can be acquired once there is a release acquired records on session close request for it.
         doAnswer(invocation -> {
             when(sp1.canAcquireRecords()).thenReturn(true);
             return CompletableFuture.completedFuture(Optional.empty());
@@ -1865,6 +1869,7 @@ public class SharePartitionManagerTest {
 
         SharePartitionManager sharePartitionManager = spy(SharePartitionManagerBuilder.builder()
                 .withPartitionCacheMap(partitionCacheMap)
+                .withCache(cache)
                 .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
                 .withReplicaManager(replicaManager)
                 .withTimer(mockTimer)
@@ -1875,10 +1880,11 @@ public class SharePartitionManagerTest {
         // The share session for this share group member returns tp1 and tp3, tp1 is common in both the delayed fetch request and the share session.
         when(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, Uuid.fromString(memberId))).thenReturn(Arrays.asList(tp1, tp3));
 
-        // Release acquired records request for tp1 and tp3.
-        sharePartitionManager.releaseAcquiredRecords(groupId, memberId);
+        // Release acquired records on session close request for tp1 and tp3.
+        sharePartitionManager.releaseSession(groupId, memberId);
 
-        // Since sp1's request to release acquired records is completed, the delayedShareFetchPurgatory should have 1 watched key corresponding to sp2.
+        // Since sp1's request to release acquired records on session close is completed, the delayedShareFetchPurgatory
+        // should have 1 watched key corresponding to sp2.
         assertEquals(1, delayedShareFetchPurgatory.watched());
 
         Mockito.verify(sp1, times(1)).nextFetchOffset();
@@ -1886,7 +1892,7 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testReleaseAcquiredRecordsDoesNotCompleteDelayedShareFetchRequest() {
+    public void testReleaseSessionDoesNotCompleteDelayedShareFetchRequest() {
         String groupId = "grp";
         String memberId = Uuid.randomUuid().toString();
 
@@ -1902,7 +1908,11 @@ public class SharePartitionManagerTest {
         SharePartition sp2 = mock(SharePartition.class);
         SharePartition sp3 = mock(SharePartition.class);
 
-        // mocked share partitions sp1, sp2 and sp3 can be acquired once there is a release acquired records for it.
+        ShareSessionCache cache = mock(ShareSessionCache.class);
+        ShareSession shareSession = mock(ShareSession.class);
+        when(cache.remove(new ShareSessionKey(groupId, Uuid.fromString(memberId)))).thenReturn(shareSession);
+
+        // mocked share partitions sp1, sp2 and sp3 can be acquired once there is a release acquired records on session close for it.
         doAnswer(invocation -> {
             when(sp1.canAcquireRecords()).thenReturn(true);
             return CompletableFuture.completedFuture(Optional.empty());
@@ -1953,6 +1963,7 @@ public class SharePartitionManagerTest {
 
         SharePartitionManager sharePartitionManager = spy(SharePartitionManagerBuilder.builder()
                 .withPartitionCacheMap(partitionCacheMap)
+                .withCache(cache)
                 .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
                 .withReplicaManager(replicaManager)
                 .withTimer(mockTimer)
@@ -1962,10 +1973,11 @@ public class SharePartitionManagerTest {
         // both the delayed fetch request and the share session.
         when(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, Uuid.fromString(memberId))).thenReturn(Collections.singletonList(tp3));
 
-        // Release acquired records request for sp3.
-        sharePartitionManager.releaseAcquiredRecords(groupId, memberId);
+        // Release acquired records on session close for sp3.
+        sharePartitionManager.releaseSession(groupId, memberId);
 
-        // Since neither sp1 and sp2 have their release acquired records request, the delayedShareFetchPurgatory should have 2 watched keys.
+        // Since neither sp1 and sp2 are a part of the release acquired records request on session close, the
+        // delayedShareFetchPurgatory should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
 
         Mockito.verify(sp1, times(0)).nextFetchOffset();
