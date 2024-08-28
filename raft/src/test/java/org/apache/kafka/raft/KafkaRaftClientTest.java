@@ -81,6 +81,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaRaftClientTest {
+    @Test
+    public void testNodeDirectoryId() {
+        int localId = randomReplicaId();
+        assertThrows(
+            IllegalArgumentException.class,
+            new RaftClientTestContext.Builder(localId, Uuid.ZERO_UUID)::build
+        );
+    }
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
