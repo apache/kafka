@@ -106,7 +106,6 @@ public class MirrorSourceConnector extends SourceConnector {
     private int replicationFactor;
     private Admin sourceAdminClient;
     private Admin targetAdminClient;
-    private volatile boolean useIncrementalAlterConfigs;
 
     public MirrorSourceConnector() {
         // nop
@@ -135,7 +134,6 @@ public class MirrorSourceConnector extends SourceConnector {
         this.replicationPolicy = replicationPolicy;
         this.configPropertyFilter = configPropertyFilter;
         this.config = config;
-        this.useIncrementalAlterConfigs = !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
         this.targetAdminClient = targetAdmin;                      
     }
         
@@ -161,7 +159,6 @@ public class MirrorSourceConnector extends SourceConnector {
         replicationFactor = config.replicationFactor();
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("replication-target-admin"));
-        useIncrementalAlterConfigs =  !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
 
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
@@ -441,15 +438,10 @@ public class MirrorSourceConnector extends SourceConnector {
     // visible for testing
     void syncTopicConfigs()
             throws InterruptedException, ExecutionException {
-        boolean incremental = useIncrementalAlterConfigs;
         Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue(), incremental)));
-        if (incremental) {
-            incrementalAlterConfigs(targetConfigs);
-        } else {
-            deprecatedAlterConfigs(targetConfigs);
-        }
+            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue(), true)));
+        incrementalAlterConfigs(targetConfigs);
     }
 
     private void createOffsetSyncsTopic() {
@@ -607,26 +599,6 @@ public class MirrorSourceConnector extends SourceConnector {
                 .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
     }
 
-    // visible for testing
-    // use deprecated alterConfigs API for broker compatibility back to 0.11.0
-    @SuppressWarnings("deprecation")
-    void deprecatedAlterConfigs(Map<String, Config> topicConfigs) throws ExecutionException, InterruptedException {
-        Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
-            .collect(Collectors.toMap(x ->
-                new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
-        log.trace("Syncing configs for {} topics.", configs.size());
-        adminCall(
-                () -> {
-                    targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
-                        if (e != null) {
-                            log.warn("Could not alter configuration of topic {}.", k.name(), e);
-                        }
-                    }));
-                    return null;
-                },
-                () -> String.format("alter topic configs %s on %s cluster", topicConfigs, config.targetClusterAlias())
-        );
-    }
 
     // visible for testing
     void incrementalAlterConfigs(Map<String, Config> topicConfigs) throws ExecutionException, InterruptedException {
@@ -645,33 +617,23 @@ public class MirrorSourceConnector extends SourceConnector {
         }
         log.trace("Syncing configs for {} topics.", configOps.size());
         AtomicReference<Boolean> encounteredError = new AtomicReference<>(false);
-        adminCall(
-                () -> {
-                    targetAdminClient.incrementalAlterConfigs(configOps).values().forEach((k, v) -> v.whenComplete((x, e) -> {
-                        if (e != null) {
-                            if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUEST_INCREMENTAL_ALTER_CONFIGS)
-                                    && e instanceof UnsupportedVersionException && !encounteredError.get()) {
-                                //Fallback logic
-                                log.warn("The target cluster {} is not compatible with IncrementalAlterConfigs API. "
-                                                + "Therefore using deprecated AlterConfigs API for syncing configs for topic {}",
-                                        sourceAndTarget.target(), k.name(), e);
-                                encounteredError.set(true);
-                                useIncrementalAlterConfigs = false;
-                            } else if (config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.REQUIRE_INCREMENTAL_ALTER_CONFIGS)
-                                    && e instanceof UnsupportedVersionException && !encounteredError.get()) {
-                                log.error("Failed to sync configs for topic {} on cluster {} with IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
-                                encounteredError.set(true);
-                                context.raiseError(new ConnectException("use.incremental.alter.configs was set to \"required\", but the target cluster '"
-                                        + sourceAndTarget.target() + "' is not compatible with IncrementalAlterConfigs API", e));
-                            } else {
-                                log.warn("Could not alter configuration of topic {}.", k.name(), e);
-                            }
-                        }
-                    }));
-                    return null;
-                },
-                () -> String.format("incremental alter topic configs %s on %s cluster", topicConfigs, config.targetClusterAlias())
-        );
+        adminCall(() -> {
+            targetAdminClient.incrementalAlterConfigs(configOps).values()
+                .forEach((k, v) -> v.whenComplete((x, e) -> {
+                    if (e instanceof UnsupportedVersionException && !encounteredError.get()) {
+                        log.error("Failed to sync configs for topic {} on cluster {} with " +
+                                "IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
+                        encounteredError.set(true);
+                        context.raiseError(new ConnectException("the target cluster '"
+                                + sourceAndTarget.target() + "' is not compatible with " +
+                                "IncrementalAlterConfigs " +
+                                "API", e));
+                    }
+                }));
+            return null;
+        },
+            () -> String.format("incremental alter topic configs %s on %s cluster", topicConfigs,
+                    config.targetClusterAlias()));
     }
 
     private void updateTopicAcls(List<AclBinding> bindings) throws ExecutionException, InterruptedException {
