@@ -93,7 +93,7 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val properties = new Properties()
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
     Seq(properties)

@@ -71,7 +71,7 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
     props.foreach(p => p.putAll(overridingProps()))
   }
 
-  override protected def kraftControllerConfigs(): Seq[Properties] = {
+  override protected def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     Seq(overridingProps())
   }
 

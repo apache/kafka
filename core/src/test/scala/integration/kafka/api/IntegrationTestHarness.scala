@@ -82,7 +82,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     cfgs.map(KafkaConfig.fromProps)
   }
 
-  override protected def kraftControllerConfigs(): Seq[Properties] = {
+  override protected def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     Seq(controllerConfig)
   }
 
