@@ -70,7 +70,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     configs.map(KafkaConfig.fromProps)
   }
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val props = new Properties()
     overrideNodeConfigs(props)
     Seq(props)

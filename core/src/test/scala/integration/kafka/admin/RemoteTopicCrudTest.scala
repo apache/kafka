@@ -56,7 +56,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     props.foreach(p => p.putAll(overrideProps()))
   }
 
-  override protected def kraftControllerConfigs(): Seq[Properties] = {
+  override protected def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     Seq(overrideProps())
   }
 

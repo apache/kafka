@@ -110,8 +110,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     properties.put(QuotaConfigs.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, ControllerQuotaWindowSizeSeconds.toString)
   }
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
-    val props = super.kraftControllerConfigs()
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
+    val props = super.kraftControllerConfigs(testInfo)
     props.head.setProperty(QuotaConfigs.NUM_CONTROLLER_QUOTA_SAMPLES_CONFIG, ControllerQuotaSamples.toString)
     props
   }
