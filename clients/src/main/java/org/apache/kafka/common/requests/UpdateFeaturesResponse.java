@@ -104,7 +104,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
         // Here we check the version and if it is high enough override the topLevelError.
         // If the request is a newer version, indicate the update failed with a top level error if any update failed.
         if (version > 1 && featuresWithErrors.size() > 0) {
-            topLevelError = new ApiError(Errors.FEATURE_UPDATE_FAILED,
+            topLevelError = new ApiError(Errors.INVALID_UPDATE_VERSION,
                 "The update failed for all features since the following features had errors: " +
                 String.join(", ", featuresWithErrors));
         }

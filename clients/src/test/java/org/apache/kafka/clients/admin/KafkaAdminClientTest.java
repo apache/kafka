@@ -6346,15 +6346,13 @@ public class KafkaAdminClientTest {
                 final ApiError error = featureUpdateErrors.get(entry.getKey());
                 if (topLevelError.error() == Errors.NONE) {
                     assertNotNull(error);
-                    if (error.error() == Errors.NONE) {
-                        future.get();
-                    } else {
-                        final ExecutionException e = assertThrows(ExecutionException.class, future::get);
-                        assertEquals(e.getCause().getClass(), error.exception().getClass());
-                    }
+                    // Now if any update fails, we should have a top level error. Error should be None.
+                    assertEquals(Errors.NONE, error.error());
+                    future.get();
                 } else {
                     final ExecutionException e = assertThrows(ExecutionException.class, future::get);
                     assertEquals(e.getCause().getClass(), topLevelError.exception().getClass());
+                    assertEquals(e.getCause().getMessage(), topLevelError.exception().getMessage());
                 }
             }
         }
@@ -6375,20 +6373,39 @@ public class KafkaAdminClientTest {
     @Test
     public void testUpdateFeaturesInvalidRequestError() throws Exception {
         final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
-        testUpdateFeatures(updates, ApiError.NONE, makeTestFeatureUpdateErrors(updates, Errors.INVALID_REQUEST));
+        Map<String, ApiError> errors = makeTestFeatureUpdateErrors(updates, Errors.INVALID_REQUEST);
+        testUpdateFeatures(updates, topLevelError(errors), errors);
     }
 
     @Test
     public void testUpdateFeaturesUpdateFailedError() throws Exception {
         final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
-        testUpdateFeatures(updates, ApiError.NONE, makeTestFeatureUpdateErrors(updates, Errors.FEATURE_UPDATE_FAILED));
+        Map<String, ApiError> errors = makeTestFeatureUpdateErrors(updates, Errors.FEATURE_UPDATE_FAILED);
+        testUpdateFeatures(updates, topLevelError(errors), errors);
     }
 
     @Test
     public void testUpdateFeaturesPartialSuccess() throws Exception {
         final Map<String, ApiError> errors = makeTestFeatureUpdateErrors(makeTestFeatureUpdates(), Errors.NONE);
-        errors.put("test_feature_2", new ApiError(Errors.INVALID_REQUEST));
-        testUpdateFeatures(makeTestFeatureUpdates(), ApiError.NONE, errors);
+        ApiError error = new ApiError(Errors.INVALID_REQUEST);
+        errors.put("test_feature_2", error);
+        testUpdateFeatures(makeTestFeatureUpdates(), topLevelError(errors), errors);
+    }
+
+    private ApiError topLevelError(Map<String, ApiError> errors) {
+        List<String> featuresWithErrors = new ArrayList<>();
+        for (final Map.Entry<String, ApiError> updateError : errors.entrySet()) {
+            final String feature = updateError.getKey();
+            final ApiError error = updateError.getValue();
+
+            if (!error.error().equals(Errors.NONE)) {
+                featuresWithErrors.add(feature + ":" + error.error().exceptionName() + " (" + error.message() + ")");
+            }
+        }
+
+        return new ApiError(Errors.INVALID_UPDATE_VERSION,
+            "The update failed for all features since the following features had errors: " +
+                    String.join(", ", featuresWithErrors));
     }
 
     @Test

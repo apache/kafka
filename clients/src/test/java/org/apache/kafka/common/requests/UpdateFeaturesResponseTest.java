@@ -70,10 +70,9 @@ public class UpdateFeaturesResponseTest {
         updateErrors.put("metadata.version", ApiError.NONE);
         updateErrors.put("group.version", new ApiError(Errors.FEATURE_UPDATE_FAILED, "update failed"));
 
-
         UpdateFeaturesResponse response = UpdateFeaturesResponse.createWithErrors(version, ApiError.NONE, updateErrors, 0);
 
-        Errors expectedError = version > 1 ? Errors.FEATURE_UPDATE_FAILED : Errors.NONE;
+        Errors expectedError = version > 1 ? Errors.INVALID_UPDATE_VERSION : Errors.NONE;
         assertEquals(expectedError, response.topLevelError().error());
     }
 

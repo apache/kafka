@@ -2245,7 +2245,7 @@ public final class QuorumController implements Controller {
             });
             // If the request is a newer version, indicate the update failed with a top level error if any update failed.
             if (context.requestHeader().requestApiVersion() > 1 && featuresWithErrors.size() > 0) {
-                responseData.setErrorCode(Errors.FEATURE_UPDATE_FAILED.code());
+                responseData.setErrorCode(Errors.INVALID_UPDATE_VERSION.code());
                 responseData.setErrorMessage("The update failed for all features since the following features had errors: " +
                     String.join(", ", featuresWithErrors));
             }
