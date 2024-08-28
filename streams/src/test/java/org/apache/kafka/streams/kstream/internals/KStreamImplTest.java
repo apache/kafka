@@ -1340,11 +1340,11 @@ public class KStreamImplTest {
         stream2.through("topic-6");
 
         final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
-        assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
-        assertNull(processorTopology.source("topic-4").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-3").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-2").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-1").getTimestampExtractor());
+        assertThat(processorTopology.source("topic-6").timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+        assertNull(processorTopology.source("topic-4").timestampExtractor());
+        assertNull(processorTopology.source("topic-3").timestampExtractor());
+        assertNull(processorTopology.source("topic-2").timestampExtractor());
+        assertNull(processorTopology.source("topic-1").timestampExtractor());
     }
 
     @Test
@@ -1357,11 +1357,11 @@ public class KStreamImplTest {
         stream2.repartition(Repartitioned.as("topic-6"));
 
         final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
-        assertThat(processorTopology.source("X-topic-6-repartition").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
-        assertNull(processorTopology.source("topic-4").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-3").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-2").getTimestampExtractor());
-        assertNull(processorTopology.source("topic-1").getTimestampExtractor());
+        assertThat(processorTopology.source("X-topic-6-repartition").timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+        assertNull(processorTopology.source("topic-4").timestampExtractor());
+        assertNull(processorTopology.source("topic-3").timestampExtractor());
+        assertNull(processorTopology.source("topic-2").timestampExtractor());
+        assertNull(processorTopology.source("topic-1").timestampExtractor());
     }
 
     @Deprecated
@@ -1455,9 +1455,9 @@ public class KStreamImplTest {
 
         for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
-                assertNull(sourceNode.getTimestampExtractor());
+                assertNull(sourceNode.timestampExtractor());
             } else {
-                assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+                assertThat(sourceNode.timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
             }
         }
     }
@@ -1485,9 +1485,9 @@ public class KStreamImplTest {
 
         for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
-                assertNull(sourceNode.getTimestampExtractor());
+                assertNull(sourceNode.timestampExtractor());
             } else {
-                assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+                assertThat(sourceNode.timestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
             }
         }
     }

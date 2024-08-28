@@ -177,7 +177,7 @@ abstract class QuorumTestHarness extends Logging {
    */
   protected val controllerListenerSecurityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
 
-  protected def kraftControllerConfigs(): Seq[Properties] = {
+  protected def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     Seq(new Properties())
   }
 
@@ -322,7 +322,7 @@ abstract class QuorumTestHarness extends Logging {
   }
 
   protected def newKRaftQuorum(overridingProps: Properties): KRaftQuorumImplementation = {
-    val propsList = kraftControllerConfigs()
+    val propsList = kraftControllerConfigs(testInfo)
     if (propsList.size != 1) {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
