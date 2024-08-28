@@ -59,7 +59,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
     @SuppressWarnings("unchecked")
     @Override
     public <S extends StateStore> S getStateStore(final String name) {
-        final StateStore store = stateManager.getGlobalStore(name);
+        final StateStore store = stateManager.globalStore(name);
         return (S) getReadWriteStore(store);
     }
 

@@ -338,7 +338,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.recycle();
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-        assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
 
         stateMgr.registerStateStores(singletonList(store), context);
 
@@ -361,7 +361,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.recycle();
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-        assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
 
         verify(store).clearCache();
     }
@@ -500,9 +500,9 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback, null);
 
-            assertNull(stateMgr.getStore("noSuchStore"));
-            assertEquals(persistentStore, stateMgr.getStore(persistentStoreName));
-            assertEquals(nonPersistentStore, stateMgr.getStore(nonPersistentStoreName));
+            assertNull(stateMgr.store("noSuchStore"));
+            assertEquals(persistentStore, stateMgr.store(persistentStoreName));
+            assertEquals(nonPersistentStore, stateMgr.store(nonPersistentStoreName));
         } finally {
             stateMgr.close();
         }

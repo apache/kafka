@@ -231,7 +231,7 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     }
 
     @Override
-    public ProcessorMetadata getProcessorMetadata() {
+    public ProcessorMetadata processorMetadata() {
         return processorMetadata;
     }
 

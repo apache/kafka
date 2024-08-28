@@ -165,7 +165,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
             throw new StreamsException("Accessing from an unknown node");
         }
 
-        final StateStore globalStore = stateManager.getGlobalStore(name);
+        final StateStore globalStore = stateManager.globalStore(name);
         if (globalStore != null) {
             return (S) getReadOnlyStore(globalStore);
         }
@@ -181,7 +181,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                 "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
         }
 
-        final StateStore store = stateManager.getStore(name);
+        final StateStore store = stateManager.store(name);
         return (S) getReadWriteStore(store);
     }
 
@@ -270,7 +270,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                     forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
                 }
             } else {
-                final ProcessorNode<?, ?, ?, ?> child = currentNode().getChild(childName);
+                final ProcessorNode<?, ?, ?, ?> child = currentNode().child(childName);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + childName
                                                    + " either does not exist or is not connected to this processor.");
