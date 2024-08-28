@@ -178,6 +178,12 @@ class DelegationTokenManagerZk(config: KafkaConfig,
 
         val issueTimeStamp = time.milliseconds
         val maxLifeTime = if (maxLifeTimeMs <= 0) tokenMaxLifetime else Math.min(maxLifeTimeMs, tokenMaxLifetime)
+
+        if (checkTimestampOverflow(issueTimeStamp, maxLifeTime)) {
+          responseCallback(CreateTokenResult(owner, tokenRequester, -1, -1, -1, "", Array[Byte](), Errors.INVALID_TIMESTAMP))
+          return
+        }
+
         val maxLifeTimeStamp = issueTimeStamp + maxLifeTime
         val expiryTimeStamp = Math.min(maxLifeTimeStamp, issueTimeStamp + defaultTokenRenewTime)
 
@@ -190,6 +196,10 @@ class DelegationTokenManagerZk(config: KafkaConfig,
         responseCallback(CreateTokenResult(owner, tokenRequester, issueTimeStamp, expiryTimeStamp, maxLifeTimeStamp, tokenId, hmac, Errors.NONE))
       }
     }
+  }
+
+  private def checkTimestampOverflow(issueTimeStamp: Long, maxLifeTime: Long) = {
+    issueTimeStamp > Long.MaxValue - maxLifeTime || issueTimeStamp > Long.MaxValue - defaultTokenRenewTime
   }
 
   /**
@@ -292,6 +302,8 @@ class DelegationTokenManagerZk(config: KafkaConfig,
               expireResponseCallback(Errors.NONE, now)
             } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
               expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
+            } else if (now > Long.MaxValue - expireLifeTimeMs) {
+              expireResponseCallback(Errors.INVALID_TIMESTAMP, tokenInfo.expiryTimestamp())
             } else {
               //set expiry time stamp
               val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, now + expireLifeTimeMs)
