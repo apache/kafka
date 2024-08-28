@@ -190,24 +190,28 @@ if __name__ == "__main__":
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped.append((simple_class_name, skipped_test.test_name))
     duration = pretty_time_duration(total_time)
+    logger.info(f"Finished processing {len(reports)} reports")
 
     # Print summary
     report_url = get_env("REPORT_URL")
     report_md = f"Download [HTML report]({report_url})."
     summary = f"{total_tests} tests run in {duration}, {total_failures} {FAILED}, {total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, and {total_errors} errors."
-    logger.debug(summary)
+    print("## Test Summary")
     print(f"{summary} {report_md}")
     if len(failed) > 0:
-        print("## Test Failures")
+        logger.info(f"Found {len(failed)} test failures:")
+        print("## Failed Tests")
         print(f"| Module | Test | Result | Message | Time |")
         print(f"| ------ | ---- | ------ | ------- | ---- |")
         for row in failed:
+            logger.info(f"{row[2]} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
-
+    print("\n")
     if len(skipped) > 0:
         print("<details>")
         print("<summary>Skipped Tests</summary>")
+        print("\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
         for row in skipped:
@@ -215,6 +219,7 @@ if __name__ == "__main__":
             print(f"| {row_joined} |")
         print("</details>")
 
+    logger.debug(summary)
     if total_failures > 0:
         logger.debug(f"Failing this step due to {total_failures} test failures")
         exit(1)
