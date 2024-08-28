@@ -19,8 +19,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import config_property
 from kafkatest.tests.end_to_end import EndToEndTest
-from kafkatest.version import LATEST_3_5, \
-    LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
 
 class TestDowngrade(EndToEndTest):
     PARTITIONS = 3
