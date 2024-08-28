@@ -533,8 +533,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * {@code default.deserialization.exception.handler}
-     * @deprecated since 4.0.
-     * Use deserialization.exception.handler instead
+     * @deprecated since 4.0; use {@link #DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG} instead
      */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
@@ -545,12 +544,11 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code deserialization.exception.handler} */
     @SuppressWarnings("WeakerAccess")
     public static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "deserialization.exception.handler";
-    protected static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
+    static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
     /**
      * {@code default.production.exception.handler}
-     * @deprecated since 4.0.
-     * Use production.exception.handler instead
+     * @deprecated since 4.0. Use {@link #PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG} instead
      */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
@@ -1941,11 +1939,12 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public DeserializationExceptionHandler deserializationExceptionHandler() {
-        if (getClass(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) != null &&
-            getClass(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) != null) {
-            log.warn("Both the deprecated and new config for deserialization exception handler are configured !!");
+        if (originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) &&
+            originals().containsKey(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)) {
+            log.warn("Both the deprecated and new config for deserialization exception handler are configured. " +
+                "The deprecated one will be ignored.");
         }
-        if (getClass(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) != null) {
+        if (originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)) {
             return getConfiguredInstance(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
         } else {
             return defaultDeserializationExceptionHandler();
@@ -1953,8 +1952,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * @deprecated as of kafka 4.0. Use deserializationExceptionHandler() instead
-     * @return DeserializationExceptionHandler
+     * @deprecated as of kafka 4.0; use {@link #deserializationExceptionHandler()} instead
      */
     @Deprecated
     @SuppressWarnings("WeakerAccess")
@@ -1963,15 +1961,24 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public ProductionExceptionHandler productionExceptionHandler() {
-        if (getClass(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG) != null) {
+        if (originals().containsKey(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG) &&
+            originals().containsKey(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG)) {
+            log.warn("Both the deprecated and new config for production exception handler are configured. " +
+                "The deprecated one will be ignored.");
+        }
+        if (originals().containsKey(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG)) {
             return getConfiguredInstance(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
         } else {
             return defaultProductionExceptionHandler();
         }
     }
 
+    /**
+     * @deprecated as of kafka 4.0; use {@link #processingExceptionHandler()} instead
+     */
+    @Deprecated
     @SuppressWarnings("WeakerAccess")
-    private ProductionExceptionHandler defaultProductionExceptionHandler() {
+    public ProductionExceptionHandler defaultProductionExceptionHandler() {
         return getConfiguredInstance(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
     }
 

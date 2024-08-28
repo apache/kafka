@@ -29,8 +29,10 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
+import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -1625,7 +1627,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void testDeserializationExceptionHandlerWhenOnlyNewConfigIsSet() {
+    public void shouldSetAndGetDeserializationExceptionHandlerWhenOnlyNewConfigIsSet() {
         props.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
         streamsConfig = new StreamsConfig(props);
         assertEquals(LogAndContinueExceptionHandler.class, streamsConfig.deserializationExceptionHandler().getClass());
@@ -1633,19 +1635,61 @@ public class StreamsConfigTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void testDeserializationExceptionHandlerWhenBothConfigsAreSet() {
+    public void shouldUseNewDeserializationExceptionHandlerWhenBothConfigsAreSet() {
         props.put(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
         props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailExceptionHandler.class);
-        streamsConfig = new StreamsConfig(props);
-        assertEquals(LogAndContinueExceptionHandler.class, streamsConfig.deserializationExceptionHandler().getClass());
+
+        try (LogCaptureAppender streamsConfigLogs = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            streamsConfigLogs.setClassLogger(StreamsConfig.class, Level.WARN);
+            streamsConfig = new StreamsConfig(props);
+            assertEquals(LogAndContinueExceptionHandler.class, streamsConfig.deserializationExceptionHandler().getClass());
+
+            final long warningMessageWhenBothConfigsAreSet = streamsConfigLogs.getMessages().stream()
+                .filter(m -> m.contains("Both the deprecated and new config for deserialization exception handler are configured."))
+                .count();
+            assertEquals(1, warningMessageWhenBothConfigsAreSet);
+        }
     }
 
     @SuppressWarnings("deprecation")
     @Test
-    public void testDeserializationExceptionHandlerWhenOnlyOldConfigIsSet() {
+    public void shouldUseOldDeserializationExceptionHandlerWhenOnlyOldConfigIsSet() {
         props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueExceptionHandler.class);
         streamsConfig = new StreamsConfig(props);
-        assertEquals(LogAndFailExceptionHandler.class, streamsConfig.deserializationExceptionHandler().getClass());
+        assertEquals(LogAndContinueExceptionHandler.class, streamsConfig.deserializationExceptionHandler().getClass());
+    }
+
+    @Test
+    public void shouldSetAndGetProductionExceptionHandlerWhenOnlyNewConfigIsSet() {
+        props.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, DefaultProductionExceptionHandler.class);
+        streamsConfig = new StreamsConfig(props);
+        assertEquals(DefaultProductionExceptionHandler.class, streamsConfig.productionExceptionHandler().getClass());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldUseNewProductionExceptionHandlerWhenBothConfigsAreSet() {
+        props.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, DefaultProductionExceptionHandler.class);
+        props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
+
+        try (LogCaptureAppender streamsConfigLogs = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            streamsConfigLogs.setClassLogger(StreamsConfig.class, Level.WARN);
+            streamsConfig = new StreamsConfig(props);
+            assertEquals(DefaultProductionExceptionHandler.class, streamsConfig.productionExceptionHandler().getClass());
+
+            final long warningMessageWhenBothConfigsAreSet = streamsConfigLogs.getMessages().stream()
+                .filter(m -> m.contains("Both the deprecated and new config for production exception handler are configured."))
+                .count();
+            assertEquals(1, warningMessageWhenBothConfigsAreSet);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldUseOldProductionExceptionHandlerWhenOnlyOldConfigIsSet() {
+        props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, DefaultProductionExceptionHandler.class);
+        streamsConfig = new StreamsConfig(props);
+        assertEquals(DefaultProductionExceptionHandler.class, streamsConfig.productionExceptionHandler().getClass());
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

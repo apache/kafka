@@ -95,16 +95,16 @@ public class TopologyConfig extends AbstractConfig {
                 null,
                 Importance.MEDIUM,
                 DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
-            .define(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
-                Type.CLASS,
-                null,
-                Importance.MEDIUM,
-                DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                 Type.CLASS,
                 null,
                 Importance.MEDIUM,
                 DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
+            .define(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                Type.CLASS,
+                null,
+                Importance.MEDIUM,
+                DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                 Type.LONG,
                 null,
@@ -230,7 +230,7 @@ public class TopologyConfig extends AbstractConfig {
             timestampExtractorSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         }
 
-        final String deserializationExceptionHandlerKey = getClass(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) != null ?
+        final String deserializationExceptionHandlerKey = originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) ?
             DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG :
             DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
