@@ -97,11 +97,11 @@ public class DefaultStateUpdater implements StateUpdater {
             this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
         }
 
-        public Collection<Task> getUpdatingTasks() {
+        public Collection<Task> updatingTasks() {
             return updatingTasks.values();
         }
 
-        public Collection<StandbyTask> getUpdatingStandbyTasks() {
+        public Collection<StandbyTask> updatingStandbyTasks() {
             return updatingTasks.values().stream()
                 .filter(t -> !t.isActive())
                 .map(t -> (StandbyTask) t)
@@ -112,29 +112,29 @@ public class DefaultStateUpdater implements StateUpdater {
             return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
         }
 
-        public Collection<Task> getPausedTasks() {
+        public Collection<Task> pausedTasks() {
             return pausedTasks.values();
         }
 
-        public long getNumUpdatingStandbyTasks() {
+        public long numUpdatingStandbyTasks() {
             return updatingTasks.values().stream()
                 .filter(t -> !t.isActive())
                 .count();
         }
 
-        public long getNumRestoringActiveTasks() {
+        public long numRestoringActiveTasks() {
             return updatingTasks.values().stream()
                 .filter(Task::isActive)
                 .count();
         }
 
-        public long getNumPausedStandbyTasks() {
+        public long numPausedStandbyTasks() {
             return pausedTasks.values().stream()
                 .filter(t -> !t.isActive())
                 .count();
         }
 
-        public long getNumPausedActiveTasks() {
+        public long numPausedActiveTasks() {
             return pausedTasks.values().stream()
                 .filter(Task::isActive)
                 .count();
@@ -927,20 +927,20 @@ public class DefaultStateUpdater implements StateUpdater {
         }
     }
 
-    public Set<StandbyTask> getUpdatingStandbyTasks() {
+    public Set<StandbyTask> updatingStandbyTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getUpdatingStandbyTasks()))
+            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.updatingStandbyTasks()))
             : Collections.emptySet();
     }
 
     @Override
-    public Set<Task> getUpdatingTasks() {
+    public Set<Task> updatingTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getUpdatingTasks()))
+            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.updatingTasks()))
             : Collections.emptySet();
     }
 
-    public Set<StreamTask> getRestoredActiveTasks() {
+    public Set<StreamTask> restoredActiveTasks() {
         restoredActiveTasksLock.lock();
         try {
             return Collections.unmodifiableSet(new HashSet<>(restoredActiveTasks));
@@ -949,7 +949,7 @@ public class DefaultStateUpdater implements StateUpdater {
         }
     }
 
-    public List<ExceptionAndTask> getExceptionsAndFailedTasks() {
+    public List<ExceptionAndTask> exceptionsAndFailedTasks() {
         exceptionsAndFailedTasksLock.lock();
         try {
             return Collections.unmodifiableList(new ArrayList<>(exceptionsAndFailedTasks));
@@ -958,38 +958,38 @@ public class DefaultStateUpdater implements StateUpdater {
         }
     }
 
-    public Set<Task> getRemovedTasks() {
+    public Set<Task> removedTasks() {
         return Collections.unmodifiableSet(new HashSet<>(removedTasks));
     }
 
-    public Set<Task> getPausedTasks() {
+    public Set<Task> pausedTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getPausedTasks()))
+            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.pausedTasks()))
             : Collections.emptySet();
     }
 
     @Override
-    public Set<Task> getTasks() {
-        return executeWithQueuesLocked(() -> getStreamOfTasks().map(ReadOnlyTask::new).collect(Collectors.toSet()));
+    public Set<Task> tasks() {
+        return executeWithQueuesLocked(() -> streamOfTasks().map(ReadOnlyTask::new).collect(Collectors.toSet()));
     }
 
     @Override
     public boolean restoresActiveTasks() {
         return !executeWithQueuesLocked(
-            () -> getStreamOfTasks().filter(Task::isActive).collect(Collectors.toSet())
+            () -> streamOfTasks().filter(Task::isActive).collect(Collectors.toSet())
         ).isEmpty();
     }
 
-    public Set<StreamTask> getActiveTasks() {
+    public Set<StreamTask> activeTasks() {
         return executeWithQueuesLocked(
-            () -> getStreamOfTasks().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toSet())
+            () -> streamOfTasks().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toSet())
         );
     }
 
     @Override
-    public Set<StandbyTask> getStandbyTasks() {
+    public Set<StandbyTask> standbyTasks() {
         return executeWithQueuesLocked(
-            () -> getStreamOfTasks().filter(t -> !t.isActive()).map(t -> (StandbyTask) t).collect(Collectors.toSet())
+            () -> streamOfTasks().filter(t -> !t.isActive()).map(t -> (StandbyTask) t).collect(Collectors.toSet())
         );
     }
 
@@ -1023,22 +1023,22 @@ public class DefaultStateUpdater implements StateUpdater {
         }
     }
 
-    private Stream<Task> getStreamOfTasks() {
+    private Stream<Task> streamOfTasks() {
         return
             Stream.concat(
-                getStreamOfNonPausedTasks(),
-                getPausedTasks().stream()
+                streamOfNonPausedTasks(),
+                pausedTasks().stream()
             );
     }
 
-    private Stream<Task> getStreamOfNonPausedTasks() {
+    private Stream<Task> streamOfNonPausedTasks() {
         return
             Stream.concat(
                 tasksAndActions.stream()
                     .filter(taskAndAction -> taskAndAction.action() == Action.ADD)
                     .map(TaskAndAction::task),
                 Stream.concat(
-                    getUpdatingTasks().stream(),
+                    updatingTasks().stream(),
                     Stream.concat(
                         restoredActiveTasks.stream(),
                         Stream.concat(
@@ -1074,7 +1074,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 "The number of active tasks currently undergoing restoration",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
-                stateUpdaterThread.getNumRestoringActiveTasks() : 0);
+                stateUpdaterThread.numRestoringActiveTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("standby-updating-tasks",
@@ -1082,7 +1082,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 "The number of standby tasks currently undergoing state update",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
-                stateUpdaterThread.getNumUpdatingStandbyTasks() : 0);
+                stateUpdaterThread.numUpdatingStandbyTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("active-paused-tasks",
@@ -1090,7 +1090,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 "The number of active tasks paused restoring",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
-                stateUpdaterThread.getNumPausedActiveTasks() : 0);
+                stateUpdaterThread.numPausedActiveTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("standby-paused-tasks",
@@ -1098,7 +1098,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 "The number of standby tasks paused state update",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
-                stateUpdaterThread.getNumPausedStandbyTasks() : 0);
+                stateUpdaterThread.numPausedStandbyTasks() : 0);
             allMetricNames.push(metricName);
 
             this.idleRatioSensor = metrics.sensor("idle-ratio", RecordingLevel.INFO);
