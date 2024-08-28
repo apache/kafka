@@ -165,7 +165,8 @@ public class DelayedShareFetch extends DelayedOperation {
     /**
      * Prepare fetch request structure for partitions in the share fetch request for which we can acquire records.
      */
-    private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataForAcquirablePartitions() {
+    // Visible for testing
+    Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataForAcquirablePartitions() {
         // Initialize the topic partitions for which the fetch should be attempted.
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
 

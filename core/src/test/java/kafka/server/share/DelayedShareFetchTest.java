@@ -22,6 +22,7 @@ import kafka.server.ReplicaQuota;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
@@ -30,6 +31,7 @@ import org.apache.kafka.storage.internals.log.FetchParams;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
@@ -194,5 +197,37 @@ public class DelayedShareFetchTest {
         Mockito.verify(sp0, times(1)).nextFetchOffset();
         Mockito.verify(sp1, times(0)).nextFetchOffset();
         assertTrue(delayedShareFetch.isCompleted());
+    }
+
+    @Test
+    public void testToCompleteAnAlreadyCompletedFuture() {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+
+        SharePartition sp0 = mock(SharePartition.class);
+
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData = new SharePartitionManager.ShareFetchPartitionData(
+                new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
+                        1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
+                future, partitionMaxBytes);
+
+        DelayedShareFetch delayedShareFetch = spy(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap));
+        assertFalse(delayedShareFetch.isCompleted());
+
+        // Completing the future before calling forceComplete which can happen in a real world scenario where the future
+        // might be completed by another thread which has the same share fetch request entry.
+        future.complete(Collections.emptyMap());
+        delayedShareFetch.forceComplete();
+        assertTrue(delayedShareFetch.isCompleted());
+        // Verifying that forceComplete does not call topicPartitionDataForAcquirablePartitions method in DelayedShareFetch.
+        Mockito.verify(delayedShareFetch, times(0)).topicPartitionDataForAcquirablePartitions();
     }
 }
