@@ -55,7 +55,6 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -153,7 +152,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 clearInputQueue();
                 clearUpdatingAndPausedTasks();
                 updaterMetrics.clear();
-                shutdownGate.countDown();
                 log.info("State updater thread stopped");
             }
         }
@@ -766,7 +764,6 @@ public class DefaultStateUpdater implements StateUpdater {
     private long lastCommitMs;
 
     private StateUpdaterThread stateUpdaterThread = null;
-    private CountDownLatch shutdownGate;
 
     public DefaultStateUpdater(final String name,
                                final Metrics metrics,
@@ -796,7 +793,6 @@ public class DefaultStateUpdater implements StateUpdater {
             }
             stateUpdaterThread = new StateUpdaterThread(name, metrics, changelogReader);
             stateUpdaterThread.start();
-            shutdownGate = new CountDownLatch(1);
 
             // initialize the last commit as of now to prevent first commit happens immediately
             this.lastCommitMs = time.milliseconds();
@@ -821,7 +817,8 @@ public class DefaultStateUpdater implements StateUpdater {
             }
 
             try {
-                if (!shutdownGate.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                stateUpdaterThread.join(timeout.toMillis());
+                if (stateUpdaterThread.isAlive()) {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");
                 }
                 stateUpdaterThread = null;
