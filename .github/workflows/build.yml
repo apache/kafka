@@ -74,11 +74,15 @@ jobs:
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-      - name: Leave a comment
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Generate a comment
         run: |
-          gh pr comment ${{ github.event.number }} --body 'Hello from Actions!'
+          echo 'Hello, world!' >> comment.txt
+      - name: Archive comment
+        uses: actions/upload-artifact@v4
+        with:
+          name: comment-${{ matrix.java }}
+          path: |
+            comment.txt
 
   test:
     needs: validate
