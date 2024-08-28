@@ -187,9 +187,7 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }
-
-    void waitForMeatdataSync(String topic, int partition, int isrSize) throws InterruptedException;
-
+    
     default void createTopic(String topicName, int partitions, short replicas) {
         try (Admin admin = createAdminClient()) {
             admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));

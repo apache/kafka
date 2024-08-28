@@ -241,19 +241,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        @SuppressWarnings("unused")
-        public void waitForMeatdataSync(String topic, int partition, int isrSize) throws InterruptedException {
-
-            long controllerOffset = controllers().values().stream().mapToLong(s ->
-                            s.raftManager().replicatedLog().endOffset().offset()).max().getAsLong();
-
-            TestUtils.waitForCondition(() ->
-                    aliveBrokers().values().stream().allMatch(broker ->
-                            ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset
-                    ), "Timeout waiting for controller metadata propagating to brokers");
-        }
-
-        @Override
         public Map<Integer, ControllerServer> controllers() {
             return Collections.unmodifiableMap(clusterTestKit.controllers());
         }

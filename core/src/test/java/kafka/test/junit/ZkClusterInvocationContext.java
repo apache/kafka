@@ -243,16 +243,6 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
-        public void waitForMeatdataSync(String topic, int partition, int isrSize) {
-            kafka.utils.TestUtils.waitUntilTrue(
-                    () -> aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache()
-                            .getPartitionInfo(topic, partition).get().isr().size() == isrSize),
-                    () -> String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", topic),
-                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
-            );
-        }
-
-        @Override
         public void waitForReadyBrokers() throws InterruptedException {
             org.apache.kafka.test.TestUtils.waitForCondition(() -> {
                 int numRegisteredBrokers = clusterReference.get().zkClient().getAllBrokersInCluster().size();
