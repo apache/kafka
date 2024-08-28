@@ -28,6 +28,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.BrokerNotAvailableException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -3611,47 +3613,46 @@ public class TransactionManagerTest {
         assertAbortableError(TransactionAbortableException.class);
     }
 
-    private TimeoutException timeoutException(TopicPartition tp, ProducerBatch batch) {
-        return new TimeoutException(
-            String.format(
-                "Expiring %s record(s) for %s:%s ms has passed since batch creation",
-                batch.recordCount,
-                tp,
-                time.milliseconds() - batch.createdMs
-            )
-        );
+    @Test
+    public void testBatchesReceivedAfterAbortableError() {
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        ProducerBatch batch = writeIdempotentBatchWithValue(transactionManager, tp1, "first");
+
+        // The producer's connection to the broker is tenuous, so this mimics the catch block for ApiException in
+        // KafkaProducer.doSend().
+        transactionManager.maybeTransitionToErrorState(new DisconnectException("test"));
+        assertEquals(TransactionManager.State.ABORTABLE_ERROR, transactionManager.currentState());
+
+        // The above error is bubbled up to the user who then aborts the transaction...
+        TransactionalRequestResult result = transactionManager.beginAbort();
+        assertEquals(TransactionManager.State.ABORTING_TRANSACTION, transactionManager.currentState());
+
+        // The transaction manager handles the abort internally and re-initializes the epoch
+        short bumpedEpoch = epoch + 1;
+        prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
+        runUntil(result::isCompleted);
+        assertEquals(TransactionManager.State.READY, transactionManager.currentState());
+
+        // This mimics a slower produce response that receives the timeout on the client after the above rollback
+        // has completed. The failed batch should not attempt to change the state since it's stale.
+        transactionManager.handleFailedBatch(batch, new TimeoutException(), false);
     }
 
     @Test
-    public void testFailedBatchesAfterAbort() {
-        final TopicPartition tp1 = new TopicPartition("topic", 0);
-        final TopicPartition tp2 = new TopicPartition("topic", 1);
-
-        long producerId = 191799;
-        short epoch = 0;
-        doInitTransactions(producerId, epoch);
+    public void testBatchesReceivedAfterFatalError() {
+        doInitTransactions();
         transactionManager.beginTransaction();
 
-        ProducerBatch batch1 = writeIdempotentBatchWithValue(transactionManager, tp1, "first");
-        ProducerBatch batch2 = writeIdempotentBatchWithValue(transactionManager, tp2, "second");
+        ProducerBatch batch = writeIdempotentBatchWithValue(transactionManager, tp1, "first");
 
-        transactionManager.maybeTransitionToErrorState(timeoutException(tp1, batch1));
-        transactionManager.maybeTransitionToErrorState(timeoutException(tp2, batch2));
+        // This mimics something that causes the transaction manager to enter its FATAL_ERROR state.
+        transactionManager.transitionToFatalError(Errors.PRODUCER_FENCED.exception());
+        assertEquals(TransactionManager.State.FATAL_ERROR, transactionManager.currentState());
 
-        assertEquals(TransactionManager.State.ABORTABLE_ERROR, transactionManager.currentState());
-        TransactionalRequestResult result = transactionManager.beginAbort();
-        assertEquals(TransactionManager.State.ABORTING_TRANSACTION, transactionManager.currentState());
-        assertTrue(transactionManager.hasOngoingTransaction());
-        epoch++;
-
-        // Don't we need to receive the response for the end transaction?
-        // prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
-        assertEquals(TransactionManager.State.ABORTING_TRANSACTION, transactionManager.currentState());
-        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
-        runUntil(result::isCompleted);
-
-        transactionManager.handleFailedBatch(batch1, new NetworkException("Disconnected from node 4"), false);
-        transactionManager.handleFailedBatch(batch2, new TimeoutException("The request timed out."), false);
+        // However, even with this failure, the failed batch should not attempt to update to ABORTABLE_ERROR.
+        transactionManager.handleFailedBatch(batch, new TimeoutException(), false);
     }
 
     @Test

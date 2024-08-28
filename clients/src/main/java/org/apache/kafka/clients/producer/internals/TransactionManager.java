@@ -667,13 +667,22 @@ public class TransactionManager {
     }
 
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
-        maybeTransitionToErrorState(exception);
+        boolean isStaleBatch = batch.producerId() == producerIdAndEpoch.producerId && batch.producerEpoch() < producerIdAndEpoch.epoch;
+
+        if (!isStaleBatch && !hasFatalError())
+            maybeTransitionToErrorState(exception);
+
         removeInFlightBatch(batch);
 
         if (hasFatalError()) {
             log.debug("Ignoring batch {} with producer id {}, epoch {}, and sequence number {} " +
                             "since the producer is already in fatal error state", batch, batch.producerId(),
                     batch.producerEpoch(), batch.baseSequence(), exception);
+            return;
+        } else if (isStaleBatch) {
+            log.debug("Ignoring stale batch {} with producer id {}, epoch {}, and sequence number {} " +
+                    "since the producer has been re-initialized with producer id {} and epoch {}", batch, batch.producerId(),
+                batch.producerEpoch(), batch.baseSequence(), producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, exception);
             return;
         }
 
