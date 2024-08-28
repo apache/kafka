@@ -44,7 +44,7 @@ plugins {
   // be dropped from gradle/resources/dependencycheck-suppressions.xml
   id "com.github.spotbugs" version '5.1.3' apply false
   id 'org.scoverage' version '8.0.3' apply false
-  id 'com.gradleup.shadow' version '8.3.0' apply false
+  id 'io.github.goooler.shadow' version '8.1.7' apply false
   //  Spotless 6.13.0 has issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), and Spotless 6.14.0+ requires JRE 11
   //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
   //  spotless 6.15.0+ has issue in runtime with JDK8 even through we define it with `apply:false`. see https://github.com/diffplug/spotless/issues/2156 for more details
@@ -320,6 +320,62 @@ subprojects {
 
   if (shouldPublish) {
 
+    if (shouldPublishWithShadow) {
+      apply plugin: 'io.github.goooler.shadow'
+
+      configurations {
+        shadowed
+      }
+
+      task createVersionFile() {
+        def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+        inputs.property "commitId", commitId
+        inputs.property "version", version
+        outputs.file receiptFile
+
+        doLast {
+          def data = [
+                  commitId: commitId,
+                  version: version,
+          ]
+
+          receiptFile.parentFile.mkdirs()
+          def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+          receiptFile.setText(content, "ISO-8859-1")
+        }
+      }
+
+      shadowJar {
+        dependsOn createVersionFile
+        // archiveClassifier defines the classifier for the shadow jar, the default is 'all'.
+        // We don't want to use the default classifier because it will cause the shadow jar to
+        // overwrite the original jar. We also don't want to use the 'shadow' classifier because
+        // it will cause the shadow jar to be named kafka-clients-shadow.jar. We want to use the
+        // same name as the original jar, kafka-clients.jar.
+        archiveClassifier = null
+        // KIP-714: move shaded dependencies to a shaded location
+        relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
+        relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
+
+        // dependencies excluded from the final jar, since they are declared as runtime dependencies
+        dependencies {
+          project.configurations.shadowed.allDependencies.each {
+            exclude(dependency(it.group + ':' + it.name))
+          }
+          // exclude proto files from the jar
+          exclude "**/opentelemetry/proto/**/*.proto"
+          exclude "**/google/protobuf/*.proto"
+        }
+
+        from("$buildDir") {
+          include "kafka/$buildVersionFileName"
+        }
+
+        from "$rootDir/LICENSE"
+        from "$rootDir/NOTICE"
+      }
+    }
+
     publishing {
       repositories {
         // To test locally, invoke gradlew with `-PmavenUrl=file:///some/local/path`
@@ -336,7 +392,7 @@ subprojects {
           if (!shouldPublishWithShadow) {
             from components.java
           } else {
-            apply plugin: 'com.gradleup.shadow'
+
             project.shadow.component(mavenJava)
 
             // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
@@ -1674,7 +1730,6 @@ project(':clients') {
 
   configurations {
     generator
-    shadowed
   }
 
   dependencies {
@@ -1708,54 +1763,6 @@ project(':clients') {
     testRuntimeOnly libs.junitPlatformLanucher
 
     generator project(':generator')
-  }
-
-  task createVersionFile() {
-    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
-    inputs.property "commitId", commitId
-    inputs.property "version", version
-    outputs.file receiptFile
-
-    doLast {
-      def data = [
-        commitId: commitId,
-        version: version,
-      ]
-
-      receiptFile.parentFile.mkdirs()
-      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
-      receiptFile.setText(content, "ISO-8859-1")
-    }
-  }
-
-  shadowJar {
-    dependsOn createVersionFile
-    // archiveClassifier defines the classifier for the shadow jar, the default is 'all'.
-    // We don't want to use the default classifier because it will cause the shadow jar to
-    // overwrite the original jar. We also don't want to use the 'shadow' classifier because
-    // it will cause the shadow jar to be named kafka-clients-shadow.jar. We want to use the
-    // same name as the original jar, kafka-clients.jar.
-    archiveClassifier = null
-    // KIP-714: move shaded dependencies to a shaded location
-    relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
-    relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
-
-    // dependencies excluded from the final jar, since they are declared as runtime dependencies
-    dependencies {
-      project.configurations.shadowed.allDependencies.each {
-        exclude(dependency(it.group + ':' + it.name))
-      }
-      // exclude proto files from the jar
-      exclude "**/opentelemetry/proto/**/*.proto"
-      exclude "**/google/protobuf/*.proto"
-    }
-
-    from("$buildDir") {
-      include "kafka/$buildVersionFileName"
-    }
-
-    from "$rootDir/LICENSE"
-    from "$rootDir/NOTICE"
   }
 
   jar {
@@ -3109,7 +3116,7 @@ project(':streams:upgrade-system-tests-38') {
 
 project(':jmh-benchmarks') {
 
-  apply plugin: 'com.gradleup.shadow'
+  apply plugin: 'io.github.goooler.shadow'
 
   shadowJar {
     archiveBaseName = 'kafka-jmh-benchmarks'
