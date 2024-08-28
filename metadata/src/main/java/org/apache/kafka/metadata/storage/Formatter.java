@@ -125,7 +125,7 @@ public class Formatter {
     /**
      * The metadata log directory.
      */
-    private Optional<String> metadataLogDirectory = null;
+    private Optional<String> metadataLogDirectory = Optional.empty();
 
     /**
      * The initial KIP-853 voters.
@@ -239,9 +239,6 @@ public class Formatter {
         }
         if (controllerListenerName == null) {
             throw new FormatterException("You must specify the name of the initial controller listener.");
-        }
-        if (metadataLogDirectory == null) {
-            throw new FormatterException("You must specify the metadata log directory.");
         }
         metadataLogDirectory.ifPresent(d -> {
             if (!directories.contains(d)) {

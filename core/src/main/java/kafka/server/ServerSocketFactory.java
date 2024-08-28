@@ -44,9 +44,8 @@ public interface ServerSocketFactory {
                 int listenBacklogSize,
                 int recvBufferSize
         ) throws IOException {
-            ServerSocketChannel socketChannel = null;
+            ServerSocketChannel socketChannel = ServerSocketChannel.open();
             try {
-                socketChannel = ServerSocketChannel.open();
                 socketChannel.configureBlocking(false);
                 if (recvBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE) {
                     socketChannel.socket().setReceiveBufferSize(recvBufferSize);

@@ -123,7 +123,7 @@ public class ReconfigurableQuorumIntegrationTest {
                     }
                 });
                 admin.removeRaftVoter(3000, cluster.nodes().
-                    controllerNodes().get(3000).metadataUuid()).all().get();
+                    controllerNodes().get(3000).metadataDirectoryId()).all().get();
             }
         }
     }

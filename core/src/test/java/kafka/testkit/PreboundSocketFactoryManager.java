@@ -117,7 +117,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
      *
      * @return              The socket factory.
      */
-    public synchronized PreboundSocketFactory getOrCreateSocketFactory(int nodeId) {
+    public synchronized ServerSocketFactory getOrCreateSocketFactory(int nodeId) {
         return factories.computeIfAbsent(nodeId, __ -> new PreboundSocketFactory(nodeId));
     }
 
