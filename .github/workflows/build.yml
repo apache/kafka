@@ -78,7 +78,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment ${{ github.number }} 'Hello from Actions!'
+          gh pr comment ${{ github.number }} --body 'Hello from Actions!'
 
   test:
     needs: validate
