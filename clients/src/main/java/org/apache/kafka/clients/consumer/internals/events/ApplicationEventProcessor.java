@@ -123,6 +123,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((CommitOnCloseEvent) event);
                 return;
 
+            case FETCH:
+                process((FetchEvent) event);
+                return;
+
             case SHARE_FETCH:
                 process((ShareFetchEvent) event);
                 return;
@@ -159,6 +163,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         } else {
             requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
         }
+    }
+
+    private void process(final FetchEvent event) {
+        CompletableFuture<Void> future = requestManagers.fetchRequestManager.requestFetch();
+        future.whenComplete(complete(event.future()));
     }
 
     private void process(final AsyncCommitEvent event) {

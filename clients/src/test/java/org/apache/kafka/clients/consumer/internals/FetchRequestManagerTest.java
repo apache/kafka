@@ -3660,6 +3660,7 @@ public class FetchRequestManagerTest {
         }
 
         private int sendFetches() {
+            requestFetch();
             NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);
             return pollResult.unsentRequests.size();
