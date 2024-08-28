@@ -1327,10 +1327,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void unregisterMetricFromSubscription(KafkaMetric metric) {
-         if (clientTelemetryReporter.isPresent()) {
-             ClientTelemetryReporter reporter = clientTelemetryReporter.get();
-             reporter.metricRemoval(metric);
-         }
+        if (clientTelemetryReporter.isPresent()) {
+            ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+            reporter.metricRemoval(metric);
+        }
     }
 
     /**

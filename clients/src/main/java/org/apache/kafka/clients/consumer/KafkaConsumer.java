@@ -1449,7 +1449,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void unregisterMetric(KafkaMetric metric) {
-         delegate.unregisterMetric(metric);
+        delegate.unregisterMetric(metric);
     }
 
     /**
