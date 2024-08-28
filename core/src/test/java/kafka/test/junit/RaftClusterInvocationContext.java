@@ -258,8 +258,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
                         if (!nameToSupportedFeature.containsKey(featureName)) {
                             throw new FormatterException("Unsupported feature: " + featureName +
-                                ". Supported features are: " + nameToSupportedFeature.keySet().stream().
-                                    collect(Collectors.joining(", ")));
+                                ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
                         }
                     }
                     newFeatureLevels.put(featureName, level);
