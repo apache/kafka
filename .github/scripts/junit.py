@@ -21,7 +21,7 @@ import logging
 import os
 import os.path
 import sys
-from typing import Tuple, Optional, List, Iterable
+from typing import Dict, Tuple, Optional, List, Iterable
 import xml.etree.ElementTree
 
 
@@ -31,6 +31,9 @@ handler = logging.StreamHandler(sys.stderr)
 handler.setLevel(logging.DEBUG)
 logger.addHandler(handler)
 
+FAILED = "FAILED ❌"
+FLAKY = "FLAKY ⚠️ "
+SKIPPED = "SKIPPED ⚠️ "
 
 def get_env(key: str) -> str:
     value = os.getenv(key)
@@ -47,6 +50,9 @@ class TestCase:
     failure_class: Optional[str]
     failure_stack_trace: Optional[str]
 
+    def key(self) -> Tuple[str, str]:
+        return (self.class_name, self.test_name)
+
 
 @dataclasses.dataclass
 class TestSuite:
@@ -57,20 +63,21 @@ class TestSuite:
     failures: int
     errors: int
     time: float
-    test_failures: List[TestCase]
+    failed_tests: List[TestCase]
     skipped_tests: List[TestCase]
+    passed_tests: List[TestCase]
 
-    def errors_and_failures() -> int:
+    def errors_and_failures(self) -> int:
         return self.errors + self.failures
 
 
 def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
-    stack = []
-    cur_suite = None
+    cur_suite: Optional[TestSuite] = None
+    cur_test: Optional[Tuple[str, str]] = None  # (test class, test name)
     partial_test_failure = None
+    test_case_failed = False
     for (event, elem) in xml.etree.ElementTree.iterparse(fp, events=["start", "end"]):
         if event == "start":
-            stack.append(elem)
             if elem.tag == "testsuite":
                 name = elem.get("name")
                 tests = int(elem.get("tests", 0))
@@ -78,30 +85,36 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
                 failures = int(elem.get("failures", 0))
                 errors = int(elem.get("errors", 0))
                 suite_time = float(elem.get("time", 0.0))
-                cur_suite = TestSuite(name, report_path, tests, skipped, failures, errors, suite_time, [], [])
+                cur_suite = TestSuite(name, report_path, tests, skipped, failures, errors, suite_time, [], [], [])
             elif elem.tag == "testcase":
                 test_name = elem.get("name")
                 class_name = elem.get("classname")
                 test_time = float(elem.get("time", 0.0))
                 partial_test_case = partial(TestCase, test_name, class_name, test_time)
+                cur_test = (class_name, test_name)
+                test_case_failed = False
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
                 failure_class = elem.get("type")
                 failure_stack_trace = elem.text
                 failure = partial_test_case(failure_message, failure_class, failure_stack_trace)
-                cur_suite.test_failures.append(failure)
-                #print(f"{cur_suite}#{cur_test} {elem.attrib}: {elem.text}")
+                cur_suite.failed_tests.append(failure)
+                test_case_failed = True
             elif elem.tag == "skipped":
                 skipped = partial_test_case(None, None, None)
                 cur_suite.skipped_tests.append(skipped)
             else:
                 pass
         elif event == "end":
-            stack.pop()
-            if elem.tag == "testsuite":
+            if elem.tag == "testcase":
+                if not test_case_failed:
+                    passed = partial_test_case(None, None, None)
+                    cur_suite.passed_tests.append(passed)
+                cur_test = None
+                partial_test_failure = None
+            elif elem.tag == "testsuite":
                 yield cur_suite
                 cur_suite = None
-                partial_test_failure = None
         else:
             logger.error(f"Unhandled xml event {event}: {elem}")
 
@@ -136,9 +149,11 @@ if __name__ == "__main__":
     total_tests = 0
     total_skipped = 0
     total_failures = 0
+    total_flaky = 0
     total_errors = 0
     total_time = 0
-    table = []
+    failed = []
+    skipped = []
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing {report}")
@@ -148,28 +163,57 @@ if __name__ == "__main__":
                 total_failures += suite.failures
                 total_errors += suite.errors
                 total_time += suite.time
-                for test_failure in suite.test_failures:
+
+                # Due to how the Develocity Test Retry plugin interacts with our geneated ClusterTests, we can see
+                # tests pass and then fail in the same run. Because of this, we need to capture all passed and all
+                # failed for each suite. Then we can find flakes by taking the intersection of those two.
+                all_suite_passed = {test.key() for test in suite.passed_tests}
+                all_suite_failed = {test.key() for test in suite.failed_tests}
+                flaky = all_suite_passed & all_suite_failed
+                total_flaky += len(flaky)
+
+                # Display failures first
+                for test_failure in suite.failed_tests:
+                    if test_failure.key() in flaky:
+                        continue
                     logger.debug(f"Found test failure: {test_failure}")
                     simple_class_name = test_failure.class_name.split(".")[-1]
-                    table.append(("❌", simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
+                    failed.append((simple_class_name, test_failure.test_name, FAILED, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
+                for test_failure in suite.failed_tests:
+                    if test_failure.key() not in flaky:
+                        continue
+                    logger.debug(f"Found flaky test: {test_failure}")
+                    simple_class_name = test_failure.class_name.split(".")[-1]
+                    failed.append((simple_class_name, test_failure.test_name, FLAKY, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
                 for skipped_test in suite.skipped_tests:
                     simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
-                    table.append(("⚠️", simple_class_name, skipped_test.test_name, "Skipped", ""))
+                    skipped.append((simple_class_name, skipped_test.test_name))
     duration = pretty_time_duration(total_time)
 
     # Print summary
     report_url = get_env("REPORT_URL")
     report_md = f"Download [HTML report]({report_url})."
-    summary = f"{total_tests} tests run in {duration}, {total_failures} failed ❌, {total_skipped} skipped ⚠️, {total_errors} errors."
+    summary = f"{total_tests} tests run in {duration}, {total_failures} {FAILED}, {total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, and {total_errors} errors."
     logger.debug(summary)
     print(f"{summary} {report_md}")
-    if len(table) > 0:
-        print(f"|   | Module | Test | Message | Time |")
-        print(f"| - | ------ | ---- | ------- | ---- |")
-        for row in table:
+    if len(failed) > 0:
+        print("## Test Failures")
+        print(f"| Module | Test | Result | Message | Time |")
+        print(f"| ------ | ---- | ------ | ------- | ---- |")
+        for row in failed:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+
+    if len(skipped) > 0:
+        print("<details>")
+        print("<summary>Skipped Tests</summary>")
+        print(f"| Module | Test |")
+        print(f"| ------ | ---- |")
+        for row in skipped:
+            row_joined = " | ".join(row)
+            print(f"| {row_joined} |")
+        print("</details>")
 
     if total_failures > 0:
         logger.debug(f"Failing this step due to {total_failures} test failures")
