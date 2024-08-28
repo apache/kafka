@@ -74,6 +74,9 @@ jobs:
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Leave a comment
+        run: |
+          gh pr comment ${{ github.number }} 'Hello from Actions!'
 
   test:
     needs: validate
