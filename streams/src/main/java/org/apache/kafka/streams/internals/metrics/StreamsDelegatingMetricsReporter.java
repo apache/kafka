@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public class StreamsDelegatingMetricsReporter implements MetricsReporter {
 
@@ -49,24 +48,20 @@ public class StreamsDelegatingMetricsReporter implements MetricsReporter {
 
     @Override
     public void metricChange(final KafkaMetric metric) {
-        if (filteredMetric(metric).isPresent()) {
+        if (tagMatchesCurrentThread(metric)) {
             LOG.info("Registering metric {} for thread={}", metric.metricName().name(), threadId);
             consumer.registerMetric(metric);
         }
     }
 
-    Optional<KafkaMetric> filteredMetric(final KafkaMetric kafkaMetric) {
+    boolean tagMatchesCurrentThread(final KafkaMetric kafkaMetric) {
         final Map<String, String> tags = kafkaMetric.metricName().tags();
-        KafkaMetric maybeKafkaMetric = null;
-        if (tags.containsKey(THREAD_ID_TAG) && tags.get(THREAD_ID_TAG).equals(threadId)) {
-            maybeKafkaMetric = kafkaMetric;
-        }
-        return Optional.ofNullable(maybeKafkaMetric);
+        return tags.containsKey(THREAD_ID_TAG) && tags.get(THREAD_ID_TAG).equals(threadId);
     }
 
     @Override
     public void metricRemoval(final KafkaMetric metric) {
-        if (filteredMetric(metric).isPresent()) {
+        if (tagMatchesCurrentThread(metric)) {
             LOG.info("Unregistering metric {} for thread={}", metric.metricName().name(), threadId);
             consumer.unregisterMetric(metric);
         }
