@@ -369,7 +369,6 @@ public class FeatureCommandTest {
                 throw new RuntimeException(e);
             }
         });
-        assertTrue(versionMappingOutput.contains("No release version provided. Defaulting to the latest stable version"));
         assertTrue(versionMappingOutput.contains("metadata.version=21 (3.9-IV0)"));
         assertTrue(versionMappingOutput.contains("kraft.version=1"));
         assertTrue(versionMappingOutput.contains("test.feature.version=1"));

@@ -301,7 +301,7 @@ public class FeatureCommand {
     static void handleVersionMapping(Namespace namespace) throws TerseException {
         // Get the release version from the command-line arguments or default to the latest stable version
         String releaseVersion = Optional.ofNullable(namespace.getString("release_version"))
-           .orElseGet(() -> MetadataVersion.latestProduction().version());
+            .orElseGet(() -> MetadataVersion.latestProduction().version());
 
         try {
             MetadataVersion version = MetadataVersion.fromVersionString(releaseVersion);

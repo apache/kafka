@@ -154,11 +154,11 @@ object StorageTool extends Logging {
       val metadataVersion = MetadataVersion.fromVersionString(releaseVersion)
 
       val metadataVersionLevel = metadataVersion.featureLevel()
-      printStream.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion)
+      printStream.print(f"metadata.version=$metadataVersionLevel%d ($releaseVersion%s)%n")
 
       for (feature <- Features.values()) {
         val featureLevel = feature.defaultValue(metadataVersion)
-        printStream.printf("%s=%d%n", feature.featureName, featureLevel)
+        printStream.print(f"${feature.featureName}%s=$featureLevel%d%n")
       }
     } catch {
       case e: IllegalArgumentException =>
