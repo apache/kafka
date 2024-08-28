@@ -197,8 +197,12 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         assert self.kafka.all_nodes_support_topic_ids()
         new_id = self.kafka.topic_id(self.topic)
-        assert old_id is not None
-        assert new_id is not None
-        assert old_id == new_id
+        if from_kafka_version >= V_2_8_0:
+            assert old_id is not None
+            assert new_id is not None
+            assert old_id == new_id
+        else:
+            assert old_id is None
+            assert new_id is not None
 
         assert self.kafka.check_protocol_errors(self)
