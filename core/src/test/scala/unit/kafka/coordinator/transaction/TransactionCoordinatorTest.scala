@@ -588,18 +588,18 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 2)))))
 
-    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest.
+    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest. Return PRODUCER_FENCED.
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, 2, endTxnCallback)
-    assertEquals(Errors.INVALID_TXN_STATE, error)
+    assertEquals(Errors.PRODUCER_FENCED, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), 2)))))
 
-    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest.
+    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest. Return PRODUCER_FENCED.
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, 2, endTxnCallback)
-    assertEquals(Errors.INVALID_TXN_STATE, error)
+    assertEquals(Errors.PRODUCER_FENCED, error)
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
