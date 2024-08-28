@@ -307,11 +307,11 @@ public class FeatureCommand {
             MetadataVersion version = MetadataVersion.fromVersionString(releaseVersion);
 
             short metadataVersionLevel = version.featureLevel();
-            System.out.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion); // New line after this output
+            System.out.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion);
 
             for (Features feature : Features.values()) {
                 short featureLevel = feature.defaultValue(version);
-                System.out.printf("%s=%d%n", feature.featureName(), featureLevel); // New line for each feature
+                System.out.printf("%s=%d%n", feature.featureName(), featureLevel);
             }
         } catch (IllegalArgumentException e) {
             throw new TerseException("Unsupported release.version " + releaseVersion +
