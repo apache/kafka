@@ -155,7 +155,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result;
 
         private PendingFetchCommittedRequest(final Set<TopicPartition> requestedPartitions,
-                                              final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result) {
+                                             final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result) {
             this.requestedPartitions = Objects.requireNonNull(requestedPartitions);
             this.result = Objects.requireNonNull(result);
         }
@@ -246,15 +246,13 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         });
 
         try {
-
             // Validate positions using the partition leader end offsets, to detect if any partition
             // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
             // request, retrieve the partition end offsets, and validate the current position
             // against it. It will throw an exception if log truncation is detected.
             validatePositionsIfNeeded();
 
-            boolean hasAllFetchPositions = subscriptionState.hasAllFetchPositions();
-            if (hasAllFetchPositions) {
+            if (subscriptionState.hasAllFetchPositions()) {
                 result.complete(true);
                 return result;
             }
@@ -308,11 +306,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         });
     }
 
-    // Visible for testing
-    boolean hasPendingOffsetFetchEvent() {
-        return pendingOffsetFetchEvent != null;
-    }
-
     /**
      * Fetch the committed offsets for partitions that require initialization. Use them to set
      * the fetch positions in the subscription state.
@@ -344,8 +337,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             // Need to generate a new request to fetch committed offsets
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
             fetchCommittedFuture = commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
-            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions,
-                fetchCommittedFuture);
+            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions, fetchCommittedFuture);
         } else {
             fetchCommittedFuture = pendingOffsetFetchEvent.result;
         }
@@ -402,7 +394,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * an error is received in the response, it will be saved to be thrown on the next call to
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
      */
-    protected CompletableFuture<Void> resetPositionsIfNeeded() {
+    CompletableFuture<Void> resetPositionsIfNeeded() {
         Map<TopicPartition, Long> offsetResetTimestamps;
 
         try {
@@ -431,14 +423,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * detected, a {@link LogTruncationException} will be saved in memory, to be thrown on the
      * next call to this function.
      */
-    protected CompletableFuture<Void> validatePositionsIfNeeded() {
+    void validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
                 offsetFetcherUtils.getPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
+            return;
         }
 
-        return sendOffsetsForLeaderEpochRequestsAndValidatePositions(partitionsToValidate);
+        sendOffsetsForLeaderEpochRequestsAndValidatePositions(partitionsToValidate);
     }
 
     /**

@@ -1588,6 +1588,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                                       defined
      */
     private boolean updateFetchPositions(final Timer timer) {
+        cachedSubscriptionHasAllFetchPositions = false;
         try {
             UpdateFetchPositionsEvent updateFetchPositionsEvent = new UpdateFetchPositionsEvent(calculateDeadlineMs(timer));
             wakeupTrigger.setActiveTask(updateFetchPositionsEvent.future());
