@@ -81,7 +81,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      * {@inheritDoc}
      */
     @Override
-    public PollResult pollOnClose() {
+    public PollResult pollOnClose(long currentTimeMs) {
         // TODO: move the logic to poll to handle signal close
         return pollInternal(
                 prepareCloseFetchSessionRequests(),

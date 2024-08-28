@@ -49,6 +49,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -84,7 +85,7 @@ public class ApplicationEventProcessorTest {
     public void testPrepClosingCommitEvents() {
         setupProcessor(true);
         List<NetworkClientDelegate.UnsentRequest> results = mockCommitResults();
-        doReturn(new NetworkClientDelegate.PollResult(100, results)).when(commitRequestManager).pollOnClose();
+        doReturn(new NetworkClientDelegate.PollResult(100, results)).when(commitRequestManager).pollOnClose(anyLong());
         processor.process(new CommitOnCloseEvent());
         verify(commitRequestManager).signalClose();
     }
