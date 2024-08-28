@@ -75,7 +75,7 @@ jobs:
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
       - name: Leave a comment
-        with:
+        env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr comment ${{ github.number }} 'Hello from Actions!'
