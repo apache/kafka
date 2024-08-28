@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
@@ -168,6 +169,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     .withDefaultWriteTimeOut(Duration.ofMillis(config.shareCoordinatorOffsetsCommitTimeoutMs()))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(coordinatorMetrics)
+                    .withSerializer(new ShareCoordinatorRecordSerde())
+                    .withCompression(Compression.of(config.shareCoordinatorStateTopicCompressionType()).build())
+                    .withAppendLingerMs(config.shareCoordinatorAppendLingerMs())
                     .build();
 
             return new ShareCoordinatorService(

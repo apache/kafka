@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
 
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
+import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 
@@ -38,7 +40,9 @@ public class ShareCoordinatorConfigTest {
     // dependency on group coord module.
     private static final ConfigDef ADDITIONAL_CONFIG = new ConfigDef()
         .define("offsets.commit.timeout.ms", INT, 5000, atLeast(1), HIGH, "commit timeout")
-        .define("offsets.load.buffer.size", INT, 5 * 1024 * 1024, atLeast(1), HIGH, "load buffer");
+        .define("offsets.load.buffer.size", INT, 5 * 1024 * 1024, atLeast(1), HIGH, "load buffer")
+        .define("group.coordinator.append.linger.ms", INT, 10, atLeast(0), MEDIUM, "linger ms")
+        .define("offsets.topic.compression.codec", INT, (int) CompressionType.NONE.id, HIGH, "state topic compression type");
 
     private static final List<ConfigDef> CONFIG_DEF_LIST = Arrays.asList(
         ShareCoordinatorConfig.CONFIG_DEF,
@@ -59,6 +63,8 @@ public class ShareCoordinatorConfigTest {
         configs.put(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "50");
         configs.put("offsets.commit.timeout.ms", "5000");
         configs.put("offsets.load.buffer.size", "555");
+        configs.put("group.coordinator.append.linger.ms", "10");
+        configs.put("offsets.topic.compression.codec", String.valueOf(CompressionType.NONE.id));
         return Collections.unmodifiableMap(configs);
     }
 

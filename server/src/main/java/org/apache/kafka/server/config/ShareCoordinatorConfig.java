@@ -18,7 +18,10 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+
+import java.util.Optional;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -68,6 +71,9 @@ public class ShareCoordinatorConfig {
     private final int snapshotUpdateRecordsPerSnapshot;
     private final int offsetsCommitTimeoutMs;
     private final int offsetsLoadBufferSize;
+    private final CompressionType compressionType;
+    private final int appendLingerMs;
+
 
     public ShareCoordinatorConfig(AbstractConfig config) {
         stateTopicNumPartitions = config.getInt(STATE_TOPIC_NUM_PARTITIONS_CONFIG);
@@ -78,6 +84,10 @@ public class ShareCoordinatorConfig {
         snapshotUpdateRecordsPerSnapshot = config.getInt(SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG);
         offsetsCommitTimeoutMs = config.getInt(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
         offsetsLoadBufferSize = config.getInt(GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_CONFIG);
+        compressionType = Optional.ofNullable(config.getInt(GroupCoordinatorConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG))
+            .map(CompressionType::forId)
+            .orElse(null);
+        appendLingerMs = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG);
     }
 
     public int shareCoordinatorStateTopicNumPartitions() {
@@ -110,5 +120,13 @@ public class ShareCoordinatorConfig {
 
     public int shareCoordinatorOffsetsLoadBufferSize() {
         return offsetsLoadBufferSize;
+    }
+
+    public int shareCoordinatorAppendLingerMs() {
+        return appendLingerMs;
+    }
+
+    public CompressionType shareCoordinatorStateTopicCompressionType() {
+        return compressionType;
     }
 }
