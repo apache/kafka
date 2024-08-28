@@ -1082,7 +1082,7 @@ public class GroupMetadataManager {
                 return convertToClassicGroup(consumerGroup);
             }
         } catch (GroupIdNotFoundException e) {
-            log.info("Cannot downgrade group {} because the group doesn't exist or it's not a consumer group.");
+            log.debug("Cannot downgrade group {} because the group doesn't exist or it's not a consumer group.");
         }
         return new CoordinatorResult<>(Collections.emptyList());
     }
@@ -1125,14 +1125,18 @@ public class GroupMetadataManager {
         metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
 
         classicGroup.allMembers().forEach(member -> rescheduleClassicGroupMemberHeartbeat(classicGroup, member));
-        prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
+
+        // Trigger a rebalance if group is not stable.
+        if (!STABLE.toString().equals(consumerGroup.stateAsString())) {
+            prepareRebalance(classicGroup, String.format("Downgrade group %s from consumer to classic.", classicGroup.groupId()));
+        }
 
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.exceptionally(__ -> {
             metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
             return null;
         });
-        return new CoordinatorResult<>(records, null, appendFuture, false);
+        return new CoordinatorResult<>(records, appendFuture, false);
     }
 
     /**
@@ -3150,20 +3154,27 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Schedules the downgrade timeout for the consumer group.
+     * Maybe schedules the downgrade timeout for the consumer group.
      *
      * @param groupId The group id to downgrade.
      */
     private void scheduleConsumerGroupDowngradeTimeout(
         String groupId
     ) {
-        timer.schedule(
-            consumerGroupDowngradeKey(groupId),
-            0,
-            TimeUnit.MILLISECONDS,
-            true,
-            () -> consumerGroupDowngradeOperation(groupId)
-        );
+        try {
+            ConsumerGroup consumerGroup = consumerGroup(groupId);
+            if (validateOnlineDowngrade(consumerGroup)) {
+                timer.scheduleIfAbsent(
+                    consumerGroupDowngradeKey(groupId),
+                    0,
+                    TimeUnit.MILLISECONDS,
+                    true,
+                    () -> consumerGroupDowngradeOperation(groupId)
+                );
+            }
+        } catch (GroupIdNotFoundException e) {
+            log.debug("Cannot schedule the downgrade timeout {} because the group doesn't exist or it's not a consumer group.");
+        }
     }
 
     /**

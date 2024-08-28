@@ -3142,20 +3142,11 @@ public class GroupMetadataManagerTest {
             timeout.result.records()
         );
 
-        // Verify that there is a downgrade timer scheduled if the append future is completed without exception.
+        // Verify that there are no timers.
         timeout.result.appendFuture().complete(null);
         context.assertNoSessionTimeout(groupId, memberId);
         context.assertNoRebalanceTimeout(groupId, memberId);
-        context.assertDowngradeTimeout(groupId);
-
-        // The downgrade is not triggered.
-        assertEquals(
-            new ExpiredTimeout<Void, CoordinatorRecord>(
-                consumerGroupDowngradeKey(groupId),
-                new CoordinatorResult<>(Collections.emptyList())
-            ),
-            context.sleep(0).get(0)
-        );
+        context.assertNoDowngradeTimeout(groupId);
     }
 
     @Test
@@ -3232,20 +3223,11 @@ public class GroupMetadataManagerTest {
             timeout.result.records()
         );
 
-        // Verify that there is a downgrade timer scheduled if the append future is completed without exception.
+        // Verify that there are no timers.
         timeout.result.appendFuture().complete(null);
         context.assertNoSessionTimeout(groupId, memberId);
         context.assertNoRebalanceTimeout(groupId, memberId);
-        context.assertDowngradeTimeout(groupId);
-
-        // The downgrade is not triggered.
-        assertEquals(
-            new ExpiredTimeout<Void, CoordinatorRecord>(
-                consumerGroupDowngradeKey(groupId),
-                new CoordinatorResult<>(Collections.emptyList())
-            ),
-            context.sleep(0).get(0)
-        );
+        context.assertNoDowngradeTimeout(groupId);
     }
 
     @Test
@@ -3537,20 +3519,11 @@ public class GroupMetadataManagerTest {
             timeout.result.records()
         );
 
-        // Verify that there is a downgrade timer scheduled if the append future is completed without exception.
+        // Verify that there are no timers.
         timeout.result.appendFuture().complete(null);
         context.assertNoSessionTimeout(groupId, memberId1);
         context.assertNoRebalanceTimeout(groupId, memberId1);
-        context.assertDowngradeTimeout(groupId);
-
-        // The downgrade is not triggered.
-        assertEquals(
-            new ExpiredTimeout<Void, CoordinatorRecord>(
-                consumerGroupDowngradeKey(groupId),
-                new CoordinatorResult<>(Collections.emptyList())
-            ),
-            context.sleep(0).get(0)
-        );
+        context.assertNoDowngradeTimeout(groupId);
     }
 
     @Test
@@ -3605,8 +3578,8 @@ public class GroupMetadataManagerTest {
         // foo-1 should also have a revocation timeout in place.
         assertNotNull(context.timer.timeout(consumerGroupRebalanceTimeoutKey("foo", "foo-1")));
 
-        // The group has a downgrade timeout scheduled.
-        assertNotNull(context.timer.timeout(consumerGroupDowngradeKey("foo")));
+        // No downgrade timeout is scheduled.
+        assertNull(context.timer.timeout(consumerGroupDowngradeKey("foo")));
     }
 
     @Test
@@ -11192,11 +11165,10 @@ public class GroupMetadataManagerTest {
         ScheduledTimeout<Void, CoordinatorRecord> groupJoinTimeout = context.timer.timeout(
             classicGroupJoinKey(groupId)
         );
-        assertNotNull(groupJoinTimeout);
 
-        // A new rebalance is triggered.
+        // No rebalance is triggered. The group is stable.
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, false);
-        assertTrue(classicGroup.isInState(PREPARING_REBALANCE));
+        assertTrue(classicGroup.isInState(STABLE));
     }
 
     @Test

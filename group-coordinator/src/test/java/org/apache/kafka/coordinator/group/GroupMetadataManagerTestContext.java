@@ -762,6 +762,15 @@ public class GroupMetadataManagerTestContext {
         return timeout;
     }
 
+    public MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> assertNoDowngradeTimeout(
+        String groupId
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+            timer.timeout(consumerGroupDowngradeKey(groupId));
+        assertNull(timeout);
+        return timeout;
+    }
+
     ClassicGroup createClassicGroup(String groupId) {
         return groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, true);
     }
