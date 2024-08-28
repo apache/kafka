@@ -99,7 +99,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
         storeName = "store-" + safeTestName;
         counterName = "counter-" + safeTestName;
 
-        CLUSTER.deleteTopicsAndWait(inputTopic, outputTopic);
+        CLUSTER.deleteTopics(inputTopic, outputTopic);
         CLUSTER.createTopic(inputTopic, partitionCount, 3);
         CLUSTER.createTopic(outputTopic, partitionCount, 3);
     }

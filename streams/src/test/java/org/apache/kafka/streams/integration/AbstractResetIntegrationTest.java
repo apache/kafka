@@ -159,7 +159,7 @@ public abstract class AbstractResetIntegrationTest {
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
 
-        cluster.deleteAllTopicsAndWait(120000);
+        cluster.deleteAllTopics();
         cluster.createTopics(INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN);
 
         add10InputElements();
@@ -323,7 +323,7 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(!useRepartitioned, null, null, appID);
 
         if (!useRepartitioned) {
-            cluster.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
+            cluster.deleteTopic(INTERMEDIATE_USER_TOPIC);
         }
     }
 
@@ -420,7 +420,6 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     protected void assertInternalTopicsGotDeleted(final String additionalExistingTopic) throws Exception {
-        // do not use list topics request, but read from the embedded cluster's zookeeper path directly to confirm
         if (additionalExistingTopic != null) {
             cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN,
                     Topic.GROUP_METADATA_TOPIC_NAME, additionalExistingTopic);

@@ -81,7 +81,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Timeout(600)
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyList(), 0L, 0L);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyMap(), 0L, 0L);
 
     @BeforeAll
     public static void startCluster() throws IOException {
