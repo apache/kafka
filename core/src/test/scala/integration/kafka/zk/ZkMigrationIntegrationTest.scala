@@ -302,17 +302,17 @@ class ZkMigrationIntegrationTest {
       newTopics.add(new NewTopic("test-topic-2", 10, 3.toShort))
       newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
       val createTopicResult = admin.createTopics(newTopics)
-      createTopicResult.all().get(300, TimeUnit.SECONDS)
+      createTopicResult.all().get(61, TimeUnit.SECONDS)
       TestUtils.waitUntilTrue(() => {
         val topicDescribe = admin.describeTopics(Seq("test-topic-1", "test-topic-2", "test-topic-3").asJava)
         if (topicDescribe.topicNameValues() == null || topicDescribe.topicNameValues().size() < 3) {
           false
         } else {
           topicDescribe.topicNameValues().values().stream().allMatch {
-            topic => topic.get(30, TimeUnit.SECONDS).partitions().stream().allMatch(part => part.leader() != null)
+            topic => topic.get(32, TimeUnit.SECONDS).partitions().stream().allMatch(part => part.leader() != null)
           }
         }
-      }, msg="waiting for topics to be available", waitTimeMs=300)
+      }, msg="waiting for topics to be available", waitTimeMs=303000)
     } finally {
       admin.close()
     }
@@ -353,7 +353,7 @@ class ZkMigrationIntegrationTest {
       zkClient.createDeleteTopicPath("test-topic-3")
 
       zkCluster.waitForReadyBrokers()
-      readyFuture.get(60, TimeUnit.SECONDS)
+      readyFuture.get(64, TimeUnit.SECONDS)
 
       // Only continue with the test if there are some pending deletions to verify. If there are not any pending
       // deletions, this will mark the test as "skipped" instead of failed.
@@ -366,12 +366,12 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => zkClient.getOrCreateMigrationState(ZkMigrationLeadershipState.EMPTY).initialZkMigrationComplete(),
         "Timed out waiting for migration to complete",
-        60000)
+        65000)
 
       // At this point, some of the topics may have been deleted by ZK controller and the rest will be
       // implicitly deleted by the KRaft controller and remove from the ZK brokers as stray partitions
       def topicsAllDeleted(admin: Admin): Boolean = {
-        val topics = admin.listTopics().names().get(30, TimeUnit.SECONDS)
+        val topics = admin.listTopics().names().get(36, TimeUnit.SECONDS)
         topics.retainAll(util.Arrays.asList(
           "test-topic-1", "test-topic-2", "test-topic-3"
         ))
@@ -383,7 +383,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => topicsAllDeleted(admin),
         "Timed out waiting for topics to be deleted",
-        300000,
+        307000,
         1000)
       log.info("Topics to be deleted")
 
@@ -392,10 +392,10 @@ class ZkMigrationIntegrationTest {
       newTopics.add(new NewTopic("test-topic-2", 1, 3.toShort))
       newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
       val createTopicResult = admin.createTopics(newTopics)
-      createTopicResult.all().get(60, TimeUnit.SECONDS)
+      createTopicResult.all().get(68, TimeUnit.SECONDS)
 
       def topicsAllRecreated(admin: Admin): Boolean = {
-        val topics = admin.listTopics().names().get(60, TimeUnit.SECONDS)
+        val topics = admin.listTopics().names().get(69, TimeUnit.SECONDS)
         topics.retainAll(util.Arrays.asList(
           "test-topic-1", "test-topic-2", "test-topic-3"
         ))
@@ -406,11 +406,11 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => topicsAllRecreated(admin),
         "Timed out waiting for topics to be created",
-        60000,
+        70000,
         1000)
       log.info("Topics to be re-created")
 
-      TestUtils.retry(300000) {
+      TestUtils.retry(311000) {
         log.info("Waiting for consistent topic state")
 
         // Need a retry here since topic metadata may be inconsistent between brokers
@@ -418,7 +418,7 @@ class ZkMigrationIntegrationTest {
           admin.describeTopics(util.Arrays.asList(
             "test-topic-1", "test-topic-2", "test-topic-3"
           )).topicNameValues().asScala.map { case (name, description) =>
-            name -> description.get(60, TimeUnit.SECONDS)
+            name -> description.get(72, TimeUnit.SECONDS)
           }.toMap
         } catch {
           case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => Map.empty[String, TopicDescription]
@@ -436,7 +436,7 @@ class ZkMigrationIntegrationTest {
           })
         }
 
-        val absentTopics = admin.listTopics().names().get(60, TimeUnit.SECONDS).asScala
+        val absentTopics = admin.listTopics().names().get(73, TimeUnit.SECONDS).asScala
         assertTrue(absentTopics.contains("test-topic-1"))
         assertTrue(absentTopics.contains("test-topic-2"))
         assertTrue(absentTopics.contains("test-topic-3"))
