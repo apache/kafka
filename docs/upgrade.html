@@ -19,6 +19,18 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
+    <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
+    <ul>
+        <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
+        <ul>
+            <li> The original MirrorMaker (MM1) and related classes have been removed. Please use the Connect-based
+                MirrorMaker (MM2), as described in the
+                <a href="/{{version}}/documentation/#georeplication">Geo-Replication section</a>.
+            </li>
+        </ul>
+    </ul>
+
 <h4><a id="upgrade_3_9_0" href="#upgrade_3_9_0">Upgrading to 3.9.0 from any version 0.8.x through 3.8.x</a></h4>
     <h5><a id="upgrade_390_notable" href="#upgrade_390_notable">Notable changes in 3.9.0</a></h5>
     <ul>
