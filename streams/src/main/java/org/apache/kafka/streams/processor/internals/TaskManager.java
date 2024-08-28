@@ -479,7 +479,7 @@ public class TaskManager {
                                                 final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                                 final Set<Task> tasksToCloseClean) {
         final Map<Task, Set<TopicPartition>> initialStandbyTasksToRecycle = assignInitialTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-        final Map<Task, Set<TopicPartition>> initialStandbyTasksToUse = assignInitialTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> initialStandbyTasksToUse = assignInitialTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
         final Set<TaskId> recycledInitialTasks = new HashSet<>(initialStandbyTasksToRecycle.size() + initialStandbyTasksToUse.size());
 
         // if this was the last local thread to receive its assignment, close all the remaining Tasks, as they are not needed
