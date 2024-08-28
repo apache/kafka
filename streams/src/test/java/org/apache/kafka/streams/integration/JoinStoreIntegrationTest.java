@@ -97,7 +97,7 @@ public class JoinStoreIntegrationTest {
 
     @AfterEach
     public void cleanup() throws InterruptedException, IOException {
-        CLUSTER.deleteAllTopicsAndWait(120000);
+        CLUSTER.deleteAllTopics();
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
     }
 

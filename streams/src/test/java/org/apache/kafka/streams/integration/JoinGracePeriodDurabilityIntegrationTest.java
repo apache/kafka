@@ -72,7 +72,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         3,
-        mkProperties(mkMap()),
+        new Properties(),
         0L
     );
 

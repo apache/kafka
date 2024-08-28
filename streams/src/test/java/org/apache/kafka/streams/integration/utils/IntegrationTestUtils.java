@@ -294,7 +294,7 @@ public class IntegrationTestUtils {
                                             final int replicationCount,
                                             final String... topics) {
         try {
-            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
+            cluster.deleteAllTopics();
             for (final String topic : topics) {
                 cluster.createTopic(topic, partitionCount, replicationCount);
             }
@@ -306,9 +306,9 @@ public class IntegrationTestUtils {
     public static void quietlyCleanStateAfterTest(final EmbeddedKafkaCluster cluster, final KafkaStreams driver) {
         try {
             driver.cleanUp();
-            cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
-        } catch (final RuntimeException | InterruptedException e) {
-            LOG.warn("Ignoring failure to clean test state", e);
+            cluster.deleteAllTopics();
+        } catch (final RuntimeException e) {
+            LOG.warn("Ignoring failure to clean test state");
         }
     }
 

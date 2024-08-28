@@ -155,7 +155,7 @@ public class EosV2UpgradeIntegrationTest {
     @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + ++testNumber;
-        CLUSTER.deleteTopicsAndWait(
+        CLUSTER.deleteTopics(
             MULTI_PARTITION_INPUT_TOPIC,
             MULTI_PARTITION_OUTPUT_TOPIC,
             applicationId + "-" + storeName + "-changelog"

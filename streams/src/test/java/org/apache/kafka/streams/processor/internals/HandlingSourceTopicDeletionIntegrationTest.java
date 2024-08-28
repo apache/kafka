@@ -114,7 +114,7 @@ public class HandlingSourceTopicDeletionIntegrationTest {
             () -> "Kafka Streams clients did not reach state RUNNING"
         );
 
-        CLUSTER.deleteTopicAndWait(INPUT_TOPIC);
+        CLUSTER.deleteTopic(INPUT_TOPIC);
 
         TestUtils.waitForCondition(
             () -> kafkaStreams1.state() == State.ERROR && kafkaStreams2.state() == State.ERROR,
