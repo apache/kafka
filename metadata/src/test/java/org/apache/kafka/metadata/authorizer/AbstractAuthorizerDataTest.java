@@ -162,7 +162,7 @@ public abstract class AbstractAuthorizerDataTest {
         data = getAuthorizerData().copyWithNewAcls(acls);
         assertSettings(data, INITIAL_SUPERUSERS, DENIED, acls.values(), INITIAL_MUTATOR);
 
-        // adding a new acl yeidls two results.
+        // adding a new acl yields two results.
         entry = iter.next();
         acls.put(entry.getKey(), entry.getValue());
         data = getAuthorizerData().copyWithNewAcls(acls);
@@ -170,9 +170,9 @@ public abstract class AbstractAuthorizerDataTest {
 
         // test that updating a populated AuthorizerData does not change things unexpectedly
         acls.clear();
-        StandardAclWithId aclWithId = AuthorizerTestUtils.withId(new StandardAcl(ResourceType.USER, "foo_", PREFIXED, "User:bob", WILDCARD, AclOperation.CREATE, ALLOW));
+        StandardAclWithId aclWithId = AuthorizerTestUtils.withId(new StandardAcl(ResourceType.USER, "foo_", PREFIXED, "User:alice", WILDCARD, AclOperation.CREATE, ALLOW));
         acls.put(aclWithId.id(), aclWithId.acl());
-        aclWithId = AuthorizerTestUtils.withId(new StandardAcl(ResourceType.TRANSACTIONAL_ID, "foo_", PREFIXED, "User:bob", WILDCARD, AclOperation.CREATE, ALLOW));
+        aclWithId = AuthorizerTestUtils.withId(new StandardAcl(ResourceType.TRANSACTIONAL_ID, "foo_", PREFIXED, "User:alice", WILDCARD, AclOperation.CREATE, ALLOW));
         acls.put(aclWithId.id(), aclWithId.acl());
         data = dataWithAllValuesSet().copyWithNewAcls(acls);
 
