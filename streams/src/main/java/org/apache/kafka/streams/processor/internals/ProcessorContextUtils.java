@@ -49,7 +49,7 @@ public final class ProcessorContextUtils {
     }
 
     public static String changelogFor(final ProcessorContext context, final String storeName, final Boolean newChangelogTopic) {
-        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
+        final String prefix = topicNamePrefix(context.appConfigs(), context.applicationId());
         if (context instanceof InternalProcessorContext && !newChangelogTopic) {
             final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
             if (changelogTopic != null)
@@ -60,7 +60,7 @@ public final class ProcessorContextUtils {
     }
 
     public static String changelogFor(final StateStoreContext context, final String storeName, final Boolean newChangelogTopic) {
-        final String prefix = getPrefix(context.appConfigs(), context.applicationId());
+        final String prefix = topicNamePrefix(context.appConfigs(), context.applicationId());
         if (context instanceof InternalProcessorContext && !newChangelogTopic) {
             final String changelogTopic = ((InternalProcessorContext) context).changelogFor(storeName);
             if (changelogTopic != null)
@@ -70,7 +70,7 @@ public final class ProcessorContextUtils {
         return ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
     }
 
-    public static String getPrefix(final Map<String, Object> configs, final String applicationId) {
+    public static String topicNamePrefix(final Map<String, Object> configs, final String applicationId) {
         if (configs == null) {
             return applicationId;
         } else {

@@ -596,7 +596,7 @@ public class TaskManager {
         final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futuresForActiveTasksToRecycle = new LinkedHashMap<>();
         final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futuresForStandbyTasksToRecycle = new LinkedHashMap<>();
         final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futuresForTasksToClose = new LinkedHashMap<>();
-        for (final Task task : stateUpdater.getTasks()) {
+        for (final Task task : stateUpdater.tasks()) {
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
                 if (task.isActive()) {
@@ -720,7 +720,7 @@ public class TaskManager {
             final Map.Entry<TaskId, Set<TopicPartition>> entry = iter.next();
             final TaskId taskId = entry.getKey();
             final boolean taskIsOwned = tasks.allTaskIds().contains(taskId)
-                || (stateUpdater != null && stateUpdater.getTasks().stream().anyMatch(task -> task.id() == taskId));
+                || (stateUpdater != null && stateUpdater.tasks().stream().anyMatch(task -> task.id() == taskId));
             if (taskId.topologyName() != null && !taskIsOwned && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 log.info("Cannot create the assigned task {} since it's topology name cannot be recognized, will put it " +
                         "aside as pending for now and create later when topology metadata gets refreshed", taskId);
@@ -1169,7 +1169,7 @@ public class TaskManager {
         if (stateUpdater != null) {
             final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
             final Map<TaskId, RuntimeException> failedTasksFromStateUpdater = new HashMap<>();
-            for (final Task restoringTask : stateUpdater.getTasks()) {
+            for (final Task restoringTask : stateUpdater.tasks()) {
                 if (restoringTask.isActive()) {
                     if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
                         futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
@@ -1241,7 +1241,7 @@ public class TaskManager {
             final Map<TaskId, RuntimeException> failedTasksDuringCleanClose = new HashMap<>();
             final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
             final Set<Task> tasksToCloseDirty = new HashSet<>();
-            for (final Task restoringTask : stateUpdater.getTasks()) {
+            for (final Task restoringTask : stateUpdater.tasks()) {
                 if (restoringTask.isActive()) {
                     futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
                 }
@@ -1271,7 +1271,7 @@ public class TaskManager {
      * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}.
      * Does not include stateless or non-logged tasks.
      */
-    public Map<TaskId, Long> getTaskOffsetSums() {
+    public Map<TaskId, Long> taskOffsetSums() {
         final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
 
         // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
@@ -1485,7 +1485,7 @@ public class TaskManager {
     private void shutdownStateUpdater() {
         if (stateUpdater != null) {
             final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
-            for (final Task task : stateUpdater.getTasks()) {
+            for (final Task task : stateUpdater.tasks()) {
                 final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
                 futures.put(task.id(), future);
             }
@@ -1683,7 +1683,7 @@ public class TaskManager {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
         if (stateUpdater != null) {
-            final Map<TaskId, Task> ret = stateUpdater.getTasks().stream().collect(Collectors.toMap(Task::id, x -> x));
+            final Map<TaskId, Task> ret = stateUpdater.tasks().stream().collect(Collectors.toMap(Task::id, x -> x));
             ret.putAll(tasks.allTasksPerId());
             ret.putAll(tasks.pendingTasksToInit().stream().collect(Collectors.toMap(Task::id, x -> x)));
             return ret;
@@ -1709,7 +1709,7 @@ public class TaskManager {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
         if (stateUpdater != null) {
-            final HashSet<Task> ret = new HashSet<>(stateUpdater.getTasks());
+            final HashSet<Task> ret = new HashSet<>(stateUpdater.tasks());
             ret.addAll(tasks.allTasks());
             return Collections.unmodifiableSet(ret);
         } else {
@@ -1740,7 +1740,7 @@ public class TaskManager {
         if (stateUpdater != null) {
             return Stream.concat(
                 activeRunningTaskStream(),
-                stateUpdater.getTasks().stream().filter(Task::isActive)
+                stateUpdater.tasks().stream().filter(Task::isActive)
             );
         }
         return activeRunningTaskStream();
@@ -1762,7 +1762,7 @@ public class TaskManager {
         final Stream<Task> standbyTasksInTaskRegistry = tasks.allTasks().stream().filter(t -> !t.isActive());
         if (stateUpdater != null) {
             return Stream.concat(
-                stateUpdater.getStandbyTasks().stream(),
+                stateUpdater.standbyTasks().stream(),
                 standbyTasksInTaskRegistry
             );
         } else {

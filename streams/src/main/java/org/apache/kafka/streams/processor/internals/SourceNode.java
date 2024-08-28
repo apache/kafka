@@ -104,7 +104,7 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
         return toString("");
     }
 
-    public TimestampExtractor getTimestampExtractor() {
+    public TimestampExtractor timestampExtractor() {
         return timestampExtractor;
     }
 }

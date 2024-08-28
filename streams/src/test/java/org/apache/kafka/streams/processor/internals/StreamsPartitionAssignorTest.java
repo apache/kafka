@@ -295,7 +295,7 @@ public class StreamsPartitionAssignorTest {
                                        final Set<TaskId> standbyTasks) {
         taskManager = mock(TaskManager.class);
         lenient().when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
-        lenient().when(taskManager.getTaskOffsetSums()).thenReturn(getTaskOffsetSums(activeTasks, standbyTasks));
+        lenient().when(taskManager.taskOffsetSums()).thenReturn(getTaskOffsetSums(activeTasks, standbyTasks));
         lenient().when(taskManager.processId()).thenReturn(PID_1);
         builder.setApplicationId(APPLICATION_ID);
         topologyMetadata.buildAndRewriteTopology();
