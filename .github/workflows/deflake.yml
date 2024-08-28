@@ -22,7 +22,7 @@ on:
         required: true
         type: string
       test-pattern:
-        description: 'Test class to de-flake. Should be like *SomeTest*'
+        description: 'Test class to de-flake (must be a ClusterTest). Should be like *SomeTest*'
         required: true
         type: string
       test-repeat:
@@ -57,7 +57,6 @@ jobs:
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
-          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -Pkafka.cluster.test.repeat=${{ inputs.test-repeat }} \
           ${{ inputs.test-module }}:test --tests ${{ inputs.test-pattern }}
       - name: Archive JUnit reports
