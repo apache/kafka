@@ -24,7 +24,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 from kafkatest.utils.remote_account import java_version
-from kafkatest.version import LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, V_0_11_0_0, V_2_8_0, V_3_0_0, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
 from kafkatest.services.kafka.util import new_jdk_not_supported
 
 class TestUpgrade(ProduceConsumeValidateTest):
@@ -83,9 +83,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
             if to_message_format_version is None:
                 del node.config[config_property.MESSAGE_FORMAT_VERSION]
             else:
-                # older message formats are not supported with IBP 3.0 or higher
-                if to_message_format_version < V_0_11_0_0:
-                    node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(V_2_8_0)
                 node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
             self.kafka.start_node(node)
             self.wait_until_rejoin()
@@ -150,12 +147,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
                                            compression_types=compression_types,
                                            version=KafkaVersion(from_kafka_version))
 
-        if from_kafka_version <= LATEST_0_10_0:
-            assert self.kafka.cluster_id() is None
-
-        # With older message formats before KIP-101, message loss may occur due to truncation
-        # after leader change. Tolerate limited data loss for this case to avoid transient test failures.
-        self.may_truncate_acked_records = False if from_kafka_version >= V_0_11_0_0 else True
+        self.may_truncate_acked_records = False
 
         new_consumer = fromKafkaVersion.consumer_supports_bootstrap_server()
         # TODO - reduce the timeout
@@ -172,12 +164,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         assert self.kafka.all_nodes_support_topic_ids()
         new_id = self.kafka.topic_id(self.topic)
-        if from_kafka_version >= V_2_8_0:
-            assert old_id is not None
-            assert new_id is not None
-            assert old_id == new_id
-        else:
-            assert old_id is None
-            assert new_id is not None
+        assert old_id is not None
+        assert new_id is not None
+        assert old_id == new_id
 
         assert self.kafka.check_protocol_errors(self)
