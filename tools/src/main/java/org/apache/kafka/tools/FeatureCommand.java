@@ -178,7 +178,7 @@ public class FeatureCommand {
     private static void addVersionMappingParser(Subparsers subparsers) {
         Subparser versionMappingParser = subparsers.addParser("version-mapping")
                 .help("Look up the corresponding features for a given metadata version. " +
-                        "Using the command with no  --release-version  argument will return the mapping for " +
+                        "Using the command with no --release-version  argument will return the mapping for " +
                         "the latest stable metadata version"
                 );
         versionMappingParser.addArgument("--release-version")
@@ -301,26 +301,22 @@ public class FeatureCommand {
     static void handleVersionMapping(Namespace namespace) throws TerseException {
         // Get the release version from the command-line arguments or default to the latest stable version
         String releaseVersion = Optional.ofNullable(namespace.getString("release_version"))
-            .orElseGet(() -> {
-                String latestVersion = MetadataVersion.latestProduction().version();
-                System.out.println("No release version provided. Defaulting to the latest stable version: " + latestVersion);
-                return latestVersion;
-            });
+           .orElseGet(() -> MetadataVersion.latestProduction().version());
 
         try {
             MetadataVersion version = MetadataVersion.fromVersionString(releaseVersion);
 
             short metadataVersionLevel = version.featureLevel();
-            System.out.printf("metadata.version=%d (%s)  ", metadataVersionLevel, releaseVersion);
+            System.out.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion); // New line after this output
 
             for (Features feature : Features.values()) {
                 short featureLevel = feature.defaultValue(version);
-                System.out.printf("%s=%d  ", feature.featureName(), featureLevel);
+                System.out.printf("%s=%d%n", feature.featureName(), featureLevel); // New line for each feature
             }
         } catch (IllegalArgumentException e) {
             throw new TerseException("Unsupported release.version " + releaseVersion +
-                    ". Supported release.version are " + metadataVersionsToString(
-                    MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
+                ". Supported release.version are " + metadataVersionsToString(
+                MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
         }
     }
 

@@ -436,15 +436,10 @@ Found problem:
 
   private def runVersionMappingCommand(
     stream: ByteArrayOutputStream,
-    properties: Properties,
     releaseVersion: String
   ): Int = {
     val tempDir = TestUtils.tempDir()
     try {
-      // Write the properties to a temporary file
-      val configPathString = new File(tempDir.getAbsolutePath, "version-mapping.props").toString
-      PropertiesUtils.writePropertiesFile(properties, configPathString, true)
-
       // Prepare the arguments list
       val arguments = ListBuffer[String]("version-mapping")
 
@@ -453,9 +448,6 @@ Found problem:
         arguments += "--release-version"
         arguments += releaseVersion
       }
-
-      arguments += "--config"
-      arguments += configPathString
 
       // Execute the StorageTool with the arguments
       StorageTool.execute(arguments.toArray, new PrintStream(stream))
@@ -467,12 +459,9 @@ Found problem:
 
   @Test
   def testVersionMappingWithValidReleaseVersion(): Unit = {
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-
     val stream = new ByteArrayOutputStream()
     // Test with a valid release version
-    assertEquals(0, runVersionMappingCommand(stream, properties, "3.3-IV3"))
+    assertEquals(0, runVersionMappingCommand(stream, "3.3-IV3"))
 
     val output = stream.toString()
     assertTrue(output.contains("metadata.version=7 (3.3-IV3)"),
@@ -491,7 +480,7 @@ Found problem:
     properties.putAll(defaultStaticQuorumProperties)
 
     val stream = new ByteArrayOutputStream()
-    assertEquals(0, runVersionMappingCommand(stream, properties, null))
+    assertEquals(0, runVersionMappingCommand(stream, null))
 
     val output = stream.toString
     val metadataVersion = MetadataVersion.latestProduction()
@@ -516,7 +505,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     // Test with an invalid release version
     val exception = assertThrows(classOf[TerseFailure], () => {
-      runVersionMappingCommand(stream, properties, "2.9-IV2")
+      runVersionMappingCommand(stream, "2.9-IV2")
     })
 
     assertEquals("Unsupported release version '2.9-IV2'." +
@@ -525,7 +514,7 @@ Found problem:
     )
 
     val exception2 = assertThrows(classOf[TerseFailure], () => {
-      runVersionMappingCommand(stream, properties, "invalid")
+      runVersionMappingCommand(stream, "invalid")
     })
 
     assertEquals("Unsupported release version 'invalid'." +

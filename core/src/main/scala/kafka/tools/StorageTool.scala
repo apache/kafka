@@ -154,11 +154,11 @@ object StorageTool extends Logging {
       val metadataVersion = MetadataVersion.fromVersionString(releaseVersion)
 
       val metadataVersionLevel = metadataVersion.featureLevel()
-      printStream.printf("metadata.version=%d (%s)  ", metadataVersionLevel, releaseVersion)
+      printStream.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion) // New line after this output
 
       for (feature <- Features.values()) {
         val featureLevel = feature.defaultValue(metadataVersion)
-        printStream.printf("%s=%d  ", feature.featureName, featureLevel)
+        printStream.printf("%s=%d%n", feature.featureName, featureLevel) // New line for each feature
       }
     } catch {
       case e: IllegalArgumentException =>
@@ -211,6 +211,8 @@ object StorageTool extends Logging {
     val formatParser = subparsers.addParser("format")
       .help("Format the Kafka log directories on this node.")
 
+    addConfigArguments(formatParser)
+
     formatParser.addArgument("--cluster-id", "-t")
       .action(store())
       .required(true)
@@ -243,14 +245,12 @@ object StorageTool extends Logging {
       .help("The initial controllers, as a comma-separated list of id@hostname:port:directory. The same values must be used to format all nodes. For example:\n" +
         "0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n")
       .action(store())
-
-    addConfigArguments(formatParser)
   }
 
   private def addVersionMappingParser(subparsers: Subparsers): Unit = {
     val versionMappingParser = subparsers.addParser("version-mapping")
       .help("Look up the corresponding features for a given metadata version. " +
-        "Using the command with no  --release-version  argument will return the mapping for " +
+        "Using the command with no --release-version  argument will return the mapping for " +
         "the latest stable metadata version"
       )
 
@@ -258,8 +258,6 @@ object StorageTool extends Logging {
       .action(store())
       .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
         s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
-
-    addConfigArguments(versionMappingParser)
   }
 
   private def addRandomUuidParser(subparsers: Subparsers): Unit = {
