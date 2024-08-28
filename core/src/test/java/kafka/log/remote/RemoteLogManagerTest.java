@@ -2133,6 +2133,7 @@ public class RemoteLogManagerTest {
                 // wait until copy thread has started copying segment data
                 copySegmentDataLatch.await();
                 expirationTask.cleanupExpiredRemoteLogSegments();
+                copyLogSegmentLatch.countDown();
             } catch (RemoteStorageException | ExecutionException | InterruptedException e) {
                 throw new RuntimeException(e);
             }
