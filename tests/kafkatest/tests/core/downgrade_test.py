@@ -21,7 +21,7 @@ from kafkatest.services.kafka import config_property
 from kafkatest.tests.end_to_end import EndToEndTest
 from kafkatest.version import LATEST_2_4, LATEST_2_5, \
     LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, \
-    LATEST_3_6, LATEST_3_7, LATEST_3_8, V_0_11_0_0, V_2_8_0, V_3_0_0, DEV_BRANCH, KafkaVersion
+    LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
 
 class TestDowngrade(EndToEndTest):
     PARTITIONS = 3
