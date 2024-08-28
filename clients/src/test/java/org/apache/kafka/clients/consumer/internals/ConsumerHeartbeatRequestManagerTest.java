@@ -156,7 +156,7 @@ public class ConsumerHeartbeatRequestManagerTest {
                 backgroundEventHandler);
     }
 
-    private void createHeartbeatStatAndRequestManager() {
+    private void createHeartbeatStateAndRequestManager() {
         this.heartbeatState = new HeartbeatState(
                 subscriptions,
                 membershipManager,
@@ -248,7 +248,7 @@ public class ConsumerHeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments(short version) {
-        createHeartbeatStatAndRequestManager();
+        createHeartbeatStateAndRequestManager();
         createHeartbeatRequestStateWithZeroHeartbeatInterval();
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         String topic = "topic1";
@@ -406,7 +406,7 @@ public class ConsumerHeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequest(final short version) {
-        createHeartbeatStatAndRequestManager();
+        createHeartbeatStateAndRequestManager();
 
         // The initial heartbeatInterval is set to 0, but we're testing
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
@@ -443,7 +443,7 @@ public class ConsumerHeartbeatRequestManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
     public void testValidateConsumerGroupHeartbeatRequestAssignmentSentWhenLocalEpochChanges(final short version) {
-        createHeartbeatStatAndRequestManager();
+        createHeartbeatStateAndRequestManager();
 
         when(membershipManager.shouldHeartbeatNow()).thenReturn(true);
 
@@ -745,6 +745,19 @@ public class ConsumerHeartbeatRequestManagerTest {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         NetworkClientDelegate.PollResult pollAgain = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, pollAgain.unsentRequests.size());
+    }
+
+    @Test
+    public void testPollOnCloseGeneratesRequestIfNeeded() {
+        when(membershipManager.isLeavingGroup()).thenReturn(true);
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size(),
+            "A request to leave the group should be generated if the member is still leaving when closing the manager");
+
+        when(membershipManager.isLeavingGroup()).thenReturn(false);
+        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
+        assertTrue(pollResult.unsentRequests.isEmpty(),
+            "No requests should be generated on close if the member is not leaving when closing the manager");
     }
 
     private void assertHeartbeat(ConsumerHeartbeatRequestManager hrm, int nextPollMs) {
