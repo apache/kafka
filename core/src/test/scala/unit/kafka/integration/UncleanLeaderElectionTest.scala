@@ -103,7 +103,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     if (testInfo.getTestMethod.get().getName.contains("testUncleanLeaderElectionEnabled")) {
       properties.setProperty("unclean.leader.election.enable", "true")
     }
-    properties.setProperty("leader.imbalance.check.interval.seconds", "1")
+    properties.setProperty("unclean.leader.election.interval.ms", "10")
     Seq(properties)
   }
 

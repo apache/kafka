@@ -1622,7 +1622,7 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Check if we can do an election for partitions with no leader or a leader other than the preferred one.
+     * Attempt to elect a preferred leader for all topic partitions which have a leader that is not the preferred replica.
      *
      * The response() method in the return object is true if this method returned without electing all possible preferred replicas.
      * The quorum controller should reschedule this operation immediately if it is true.
@@ -1673,6 +1673,14 @@ public class ReplicationControlManager {
         }
     }
 
+    /**
+     * Check if we can do an unclean election for partitions with no leader.
+     *
+     * The response() method in the return object is true if this method returned without electing all possible preferred replicas.
+     * The quorum controller should reschedule this operation immediately if it is true.
+     *
+     * @return All of the election records and true if there may be more elections to be done.
+     */
     ControllerResult<Boolean> maybeElectUncleanLeaders() {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         maybeTriggerUncleanLeaderElectionForLeaderlessPartitions(records, maxElectionsPerImbalance);

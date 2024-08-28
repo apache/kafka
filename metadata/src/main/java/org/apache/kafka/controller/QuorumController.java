@@ -1408,7 +1408,7 @@ public final class QuorumController implements Controller {
 
             ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_ELECT_UNCLEAN_LEADERS, () -> {
                 long startTimeNs = time.nanoseconds();
-                ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
+                ControllerResult<Boolean> result = replicationControl.maybeElectUncleanLeaders();
                 long endTimeNs = time.nanoseconds();
                 long durationNs = endTimeNs - startTimeNs;
                 log.info("maybeElectUncleanLeaders: generated {} records in {} microseconds.{}",
