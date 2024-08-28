@@ -154,7 +154,8 @@ public class SharePartitionManager implements AutoCloseable {
         int maxDeliveryCount,
         int maxInFlightMessages,
         Persister persister,
-        Metrics metrics
+        Metrics metrics,
+        int shareFetchPurgatoryPurgeIntervalRequests
     ) {
         this(replicaManager,
             time,
@@ -164,7 +165,8 @@ public class SharePartitionManager implements AutoCloseable {
             maxDeliveryCount,
             maxInFlightMessages,
             persister,
-            metrics
+            metrics,
+            shareFetchPurgatoryPurgeIntervalRequests
         );
     }
 
@@ -177,7 +179,8 @@ public class SharePartitionManager implements AutoCloseable {
         int maxDeliveryCount,
         int maxInFlightMessages,
         Persister persister,
-        Metrics metrics
+        Metrics metrics,
+        int shareFetchPurgatoryPurgeIntervalRequests
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
