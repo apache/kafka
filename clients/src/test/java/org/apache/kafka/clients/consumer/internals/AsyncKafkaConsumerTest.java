@@ -1475,7 +1475,12 @@ public class AsyncKafkaConsumerTest {
 
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
+        ArgumentCaptor<UnsubscribeEvent> eventCaptor = ArgumentCaptor.forClass(UnsubscribeEvent.class);
+        verify(applicationEventHandler).add(eventCaptor.capture());
+
+        // check the deadline is set to the default API timeout
+        long deadline = time.milliseconds() + (int) ConsumerConfig.configDef().defaultValues().get(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        assertTrue(eventCaptor.getValue().deadlineMs() <= deadline);
     }
 
     @Test
