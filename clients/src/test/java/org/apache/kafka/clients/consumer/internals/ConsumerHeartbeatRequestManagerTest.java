@@ -769,6 +769,7 @@ public class ConsumerHeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         
         // HB1 times out
+        assertFalse(result.unsentRequests.isEmpty());
         result.unsentRequests.get(0)
                 .handler()
                 .onFailure(time.milliseconds(), new TimeoutException("timeout"));
