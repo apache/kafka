@@ -3382,7 +3382,43 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         assertEquals("Timeout of 1000ms expired before the last committed offset for partitions [test-0] could be determined. " +
             "Try tuning default.api.timeout.ms larger to relax the threshold.", timeoutException.getMessage());
     }
-    
+
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testPreventMultiThread(GroupProtocol groupProtocol) throws InterruptedException {
+        AtomicBoolean throwError = new AtomicBoolean(false);
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
+                new RoundRobinAssignor(), true, groupInstanceId);
+        consumer.subscribe(singletonList(topic));
+
+        Thread newThread = new Thread(null, () -> {
+            while (!throwError.get()) {
+                try {
+                    consumer.poll(Duration.ZERO);
+                } catch (ConcurrentModificationException e) {
+                    throwError.set(true);
+                }
+            }
+        });
+        newThread.start();
+
+        while (!throwError.get()) {
+            try {
+                consumer.poll(Duration.ZERO);
+            } catch (ConcurrentModificationException e) {
+                throwError.set(true);
+            }
+        }
+
+        newThread.join();
+    }
+
     private static final List<String> CLIENT_IDS = new ArrayList<>();
     public static class DeserializerForClientId implements Deserializer<byte[]> {
         @Override
