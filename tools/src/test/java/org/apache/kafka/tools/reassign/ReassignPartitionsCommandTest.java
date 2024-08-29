@@ -497,7 +497,7 @@ public class ReassignPartitionsCommandTest {
     }
 
     @ClusterTest
-    public void testCurrentReassignmentsToString() throws InterruptedException, ExecutionException {
+    public void testCurrentReassignmentsToStringAroundAssigment() throws Exception {
         createTopics();
         TopicPartition foo0 = new TopicPartition("foo", 0);
         produceMessages(foo0.topic(), foo0.partition(), 200);
@@ -511,14 +511,15 @@ public class ReassignPartitionsCommandTest {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             Map<TopicPartition, PartitionReassignmentState> finalAssignment = singletonMap(foo0,
                     new PartitionReassignmentState(asList(3, 1, 2), asList(3, 1, 2), true));
-            // Wait for the assignment to complete
-            String currentReassignments = curReassignmentsToString(admin);
+            
             assertEquals("Current partition reassignments:\n" +
-                    "foo-0: replicas: 3,1,2,0. adding: 3. removing: 0.", currentReassignments);
+                    "foo-0: replicas: 3,1,2,0. adding: 3. removing: 0.", 
+                    curReassignmentsToString(admin));
+            
             waitForVerifyAssignment(admin, assignment, false,
                     new VerifyAssignmentResult(finalAssignment));
-            currentReassignments = curReassignmentsToString(admin);
-            assertEquals("No partition reassignments found.", currentReassignments);
+            
+            assertEquals("No partition reassignments found.", curReassignmentsToString(admin));
         }
     }
 
