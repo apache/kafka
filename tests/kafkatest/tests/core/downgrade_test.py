@@ -19,7 +19,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import config_property
 from kafkatest.tests.end_to_end import EndToEndTest
-from kafkatest.version import LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
+from kafkatest.version import LATEST_2_4, LATEST_2_5, \
     LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, \
     LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_BRANCH, KafkaVersion
 
@@ -122,16 +122,6 @@ class TestDowngrade(EndToEndTest):
     # required static membership to be enabled
     @parametrize(version=str(LATEST_2_4), compression_types=["none"], static_membership=True)
     @parametrize(version=str(LATEST_2_4), compression_types=["zstd"], security_protocol="SASL_SSL", static_membership=True)
-    @parametrize(version=str(LATEST_2_3), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_3), compression_types=["zstd"], security_protocol="SASL_SSL")
-    @parametrize(version=str(LATEST_2_2), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_2), compression_types=["zstd"], security_protocol="SASL_SSL")
-    @parametrize(version=str(LATEST_2_1), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_1), compression_types=["lz4"], security_protocol="SASL_SSL")
-    @parametrize(version=str(LATEST_2_0), compression_types=["none"])
-    @parametrize(version=str(LATEST_2_0), compression_types=["snappy"], security_protocol="SASL_SSL")
-    @parametrize(version=str(LATEST_1_1), compression_types=["none"])
-    @parametrize(version=str(LATEST_1_1), compression_types=["lz4"], security_protocol="SASL_SSL")
     def test_upgrade_and_downgrade(self, version, compression_types, security_protocol="PLAINTEXT",
             static_membership=False):
         """Test upgrade and downgrade of Kafka cluster from old versions to the current version
