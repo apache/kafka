@@ -136,6 +136,9 @@ if __name__ == "__main__":
     """
     Parse JUnit XML reports and generate GitHub job summary in Markdown format.
 
+    A Markdown summary of the test results is written to stdout. This should be redirected to $GITHUB_STEP_SUMMARY
+    within the action. Additional debug logs are written to stderr.
+
     Exits with status code 0 if no tests failed, 1 otherwise.
     """
     if not os.getenv("GITHUB_WORKSPACE"):
@@ -153,9 +156,9 @@ if __name__ == "__main__":
     total_flaky = 0
     total_errors = 0
     total_time = 0
-    failed = []
-    flaky = []
-    skipped = []
+    failed_table = []
+    flaky_table = []
+    skipped_table = []
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing {report}")
@@ -180,17 +183,17 @@ if __name__ == "__main__":
                         continue
                     logger.debug(f"Found test failure: {test_failure}")
                     simple_class_name = test_failure.class_name.split(".")[-1]
-                    failed.append((simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
+                    failed_table.append((simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
                 for test_failure in suite.failed_tests:
                     if test_failure.key() not in flaky:
                         continue
                     logger.debug(f"Found flaky test: {test_failure}")
                     simple_class_name = test_failure.class_name.split(".")[-1]
-                    flaky.append((simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
+                    flaky_table.append((simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
                 for skipped_test in suite.skipped_tests:
                     simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
-                    skipped.append((simple_class_name, skipped_test.test_name))
+                    skipped_table.append((simple_class_name, skipped_test.test_name))
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
 
@@ -200,33 +203,33 @@ if __name__ == "__main__":
     summary = f"{total_tests} tests run in {duration}, {total_failures} {FAILED}, {total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, and {total_errors} errors."
     print("## Test Summary")
     print(f"{summary} {report_md}")
-    if len(failed) > 0:
-        logger.info(f"Found {len(failed)} test failures:")
+    if len(failed_table) > 0:
+        logger.info(f"Found {len(failed_table)} test failures:")
         print("### Failed Tests")
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
-        for row in failed:
+        for row in failed_table:
             logger.info(f"{FAILED} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
     print("\n")
-    if len(flaky) > 0:
-        logger.info(f"Found {len(failed)} flaky test failures:")
+    if len(flaky_table) > 0:
+        logger.info(f"Found {len(flaky_table)} flaky test failures:")
         print("### Flaky Tests")
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
-        for row in failed:
+        for row in flaky_table:
             logger.info(f"{FLAKY} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
     print("\n")
-    if len(skipped) > 0:
+    if len(skipped_table) > 0:
         print("<details>")
-        print("<summary>\n\n###Skipped Tests\n\n</summary>")
+        print(f"<summary>{len(skipped_table)} Skipped Tests</summary>")
         print("\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
-        for row in skipped:
+        for row in skipped_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
         print("</details>")
