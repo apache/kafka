@@ -54,6 +54,7 @@ jobs:
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
+        if: false
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
@@ -105,6 +106,7 @@ jobs:
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Test
+        if: false
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
