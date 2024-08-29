@@ -52,25 +52,23 @@ public class ShareCoordinatorConfig {
 
     public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG = "share.coordinator.snapshot.update.records.per.snapshot";
     public static final int SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DEFAULT = 500;
-    public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DOC = "The number of snapshot update records per share snapshot record.";
+    public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DOC = "The number of update records the share coordinator writes between snapshot records.";
 
     public static final String WRITE_TIMEOUT_MS_CONFIG = "share.coordinator.write.timeout.ms";
     public static final int WRITE_TIMEOUT_MS_DEFAULT = 5000;
-    public static final String WRITE_TIMEOUT_MS_DOC = "Offset commit will be delayed until all replicas for the state topic receive the commit " +
-        "or this timeout is reached. This is similar to the producer request timeout.";
+    public static final String WRITE_TIMEOUT_MS_DOC = "The duration in milliseconds that the share coordinator will wait for all replicas of the share-group state topic to receive a write.";
 
     public static final String LOAD_BUFFER_SIZE_CONFIG = "share.coordinator.load.buffer.size";
     public static final int LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;
-    public static final String LOAD_BUFFER_SIZE_DOC = "Batch size for reading from the offsets segments when loading offsets into the cache (soft-limit, overridden if records are too large).";
+    public static final String LOAD_BUFFER_SIZE_DOC = "Batch size for reading from the share-group state topic when loading state information into the cache (soft-limit, overridden if records are too large).";
 
     public static final String STATE_TOPIC_COMPRESSION_CODEC_CONFIG = "share.coordinator.state.topic.compression.codec";
     public static final CompressionType STATE_TOPIC_COMPRESSION_CODEC_DEFAULT = CompressionType.NONE;
-    public static final String STATE_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the share state topic - compression may be used to achieve \"atomic\" commits.";
+    public static final String STATE_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the share-group state topic.";
 
     public static final String APPEND_LINGER_MS_CONFIG = "share.coordinator.append.linger.ms";
     public static final int APPEND_LINGER_MS_DEFAULT = 10;
-    public static final String APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
-        "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";
+    public static final String APPEND_LINGER_MS_DOC = "The duration in milliseconds that the share coordinator will wait for writes to accumulate before flushing them to disk.";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(STATE_TOPIC_NUM_PARTITIONS_CONFIG, INT, STATE_TOPIC_NUM_PARTITIONS_DEFAULT, atLeast(1), HIGH, STATE_TOPIC_NUM_PARTITIONS_DOC)
