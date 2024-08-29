@@ -648,7 +648,6 @@ public class RestoreIntegrationTest {
 
         private final CountDownLatch onRestoreStartLatch = new CountDownLatch(1);
         private final CountDownLatch onRestoreEndLatch = new CountDownLatch(1);
-        private final CountDownLatch onRestoreSuspendedLatch = new CountDownLatch(1);
         private final CountDownLatch onBatchRestoredLatch = new CountDownLatch(1);
         private final AtomicInteger suspendedCounter = new AtomicInteger(0);
 
