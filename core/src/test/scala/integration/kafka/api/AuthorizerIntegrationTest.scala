@@ -40,7 +40,7 @@ import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartit
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
@@ -203,7 +203,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
           .transactionStates.asScala.find(_.transactionalId == transactionalId).get
           .errorCode
       )
-    })
+    }),
+    ApiKeys.CONSUMER_GROUP_HEARTBEAT -> ((resp: ConsumerGroupHeartbeatResponse) => Errors.forCode(resp.data.errorCode)),
+    ApiKeys.CONSUMER_GROUP_DESCRIBE -> ((resp: ConsumerGroupDescribeResponse) => Errors.forCode(
+      resp.data.groups.get(0).errorCode))
   )
 
   def findErrorForTopicId(id: Uuid, response: AbstractResponse): Errors = {
@@ -257,7 +260,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.LIST_PARTITION_REASSIGNMENTS -> clusterDescribeAcl,
     ApiKeys.OFFSET_DELETE -> groupReadAcl,
     ApiKeys.DESCRIBE_PRODUCERS -> topicReadAcl,
-    ApiKeys.DESCRIBE_TRANSACTIONS -> transactionalIdDescribeAcl
+    ApiKeys.DESCRIBE_TRANSACTIONS -> transactionalIdDescribeAcl,
+    ApiKeys.CONSUMER_GROUP_HEARTBEAT -> groupReadAcl,
+    ApiKeys.CONSUMER_GROUP_DESCRIBE -> groupDescribeAcl
   )
 
   private def createMetadataRequest(allowAutoTopicCreation: Boolean) = {
@@ -666,6 +671,16 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       )
   ).build()
 
+  private def consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+    new ConsumerGroupHeartbeatRequestData()
+      .setGroupId(group)
+      .setMemberEpoch(0)).build()
+
+  private def consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
+    new ConsumerGroupDescribeRequestData()
+      .setGroupIds(List(group).asJava)
+      .setIncludeAuthorizedOperations(false)).build()
+
   private def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest], topicExists: Boolean = true,
                            topicNames: Map[Uuid, String] = getTopicNames()) = {
     for ((key, request) <- requestKeyToRequest) {
@@ -696,12 +711,12 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testAuthorizationWithTopicExisting(quorum: String): Unit = {
     //First create the topic so we have a valid topic ID
     sendRequests(mutable.Map(ApiKeys.CREATE_TOPICS -> createTopicsRequest))
 
-    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+    var requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
       ApiKeys.PRODUCE -> createProduceRequest,
       ApiKeys.FETCH -> createFetchRequest,
@@ -740,6 +755,13 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       requestKeyToRequest += ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest
       requestKeyToRequest += ApiKeys.STOP_REPLICA -> stopReplicaRequest
       requestKeyToRequest += ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest
+    }
+
+    if (isNewGroupCoordinatorEnabled()) {
+      requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+        ApiKeys.CONSUMER_GROUP_HEARTBEAT -> consumerGroupHeartbeatRequest,
+        ApiKeys.CONSUMER_GROUP_DESCRIBE -> consumerGroupDescribeRequest
+      )
     }
     // Delete the topic last
     requestKeyToRequest += ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
@@ -2499,7 +2521,6 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     }
   }
 
-
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateAndCloseConsumerWithNoAccess(quorum: String): Unit = {
@@ -2507,6 +2528,68 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val closeConsumer: Executable = () => consumer.close()
     // Close consumer without consuming anything. close() call should pass successfully and throw no exception.
     assertDoesNotThrow(closeConsumer, "Exception not expected on closing consumer")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testConsumerGroupHeartbeatWithReadAcl(quorum: String): Unit = {
+    addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
+
+    val request = consumerGroupHeartbeatRequest
+    val resource = Set[ResourceType](GROUP)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testConsumerGroupHeartbeatWithOperationAll(quorum: String): Unit = {
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
+
+    val request = consumerGroupHeartbeatRequest
+    val resource = Set[ResourceType](GROUP)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testConsumerGroupHeartbeatWithoutReadAcl(quorum: String): Unit = {
+    removeAllClientAcls()
+
+    val request = consumerGroupHeartbeatRequest
+    val resource = Set[ResourceType](GROUP)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testConsumerGroupDescribeWithDescribeAcl(quorum: String): Unit = {
+    addAndVerifyAcls(groupDescribeAcl(groupResource), groupResource)
+
+    val request = consumerGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testConsumerGroupDescribeWithOperationAll(quorum: String): Unit = {
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
+
+    val request = consumerGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
+  def testConsumerGroupDescribeWithoutDescribeAcl(quorum: String): Unit = {
+    removeAllClientAcls()
+
+    val request = consumerGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
   }
 
   private def testDescribeClusterClusterAuthorizedOperations(
