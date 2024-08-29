@@ -27,6 +27,7 @@ import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.quota.ThrottleCallback
 
 import java.util.OptionalInt
 

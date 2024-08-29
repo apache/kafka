@@ -35,7 +35,7 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, 
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.AfterEach
@@ -293,8 +293,14 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     val features = new BrokerRegistrationRequestData.FeatureCollection()
     features.add(new BrokerRegistrationRequestData.Feature()
       .setName(MetadataVersion.FEATURE_NAME)
-      .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
+      .setMinSupportedVersion(MetadataVersion.latestProduction().featureLevel())
       .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()))
+    Features.PRODUCTION_FEATURES.forEach { feature =>
+      features.add(new BrokerRegistrationRequestData.Feature()
+        .setName(feature.featureName())
+        .setMinSupportedVersion(feature.minimumProduction())
+        .setMaxSupportedVersion(feature.latestTesting()))
+    }
     controllerServer.controller.registerBroker(
       ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
       new BrokerRegistrationRequestData()

@@ -14,28 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package kafka.testkit;
 
-package org.apache.kafka.server.group.share;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicLong;
 
-import org.apache.kafka.common.Uuid;
+public class KafkaClusterThreadFactory implements ThreadFactory {
+    private final String prefix;
+    private final Set<Long> threadIds = ConcurrentHashMap.newKeySet();
+    private final AtomicLong threadEpoch = new AtomicLong(0);
 
-import java.util.Objects;
+    KafkaClusterThreadFactory(String prefix) {
+        this.prefix = prefix;
+    }
 
-public class ShareGroupHelper {
+    @Override
+    public Thread newThread(Runnable r) {
+        String threadName = prefix + threadEpoch.addAndGet(1);
+        Thread thread = new Thread(r, threadName);
 
-    /**
-     * Calculates the coordinator key for finding a share coordinator.
-     *
-     * @param groupId Group ID
-     * @param topicId Topic ID
-     * @param partition Partition index
-     *
-     * @return The coordinator key
-     */
-    public static String coordinatorKey(String groupId, Uuid topicId, int partition) {
-        Objects.requireNonNull(groupId);
-        Objects.requireNonNull(topicId);
+        threadIds.add(thread.getId());
+        return thread;
+    }
 
-        return String.format("%s:%s:%d", groupId, topicId, partition);
+    public Set<Long> getThreadIds() {
+        return threadIds;
     }
 }

@@ -233,21 +233,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> brokers = new HashMap<>();
             Map<Integer, SharedServer> jointServers = new HashMap<>();
-            /*
-              Number of threads = Total number of brokers + Total number of controllers + Total number of Raft Managers
-                                = Total number of brokers + Total number of controllers * 2
-                                  (Raft Manager per broker/controller)
-             */
-            int numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
-            ExecutorService executorService = null;
             ControllerQuorumVotersFutureManager connectFutureManager =
                 new ControllerQuorumVotersFutureManager(nodes.controllerNodes().size());
             File baseDirectory = null;
 
             try {
                 baseDirectory = new File(nodes.baseDirectory());
-                executorService = Executors.newFixedThreadPool(numOfExecutorThreads,
-                    ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     SharedServer sharedServer = new SharedServer(
@@ -304,9 +295,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     brokers.put(node.id(), broker);
                 }
             } catch (Exception e) {
-                if (executorService != null) {
-                    ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
-                }
                 for (BrokerServer brokerServer : brokers.values()) {
                     brokerServer.shutdown();
                 }
@@ -319,7 +307,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
                 throw e;
             }
-            return new KafkaClusterTestKit(executorService,
+            return new KafkaClusterTestKit(
                     nodes,
                     controllers,
                     brokers,
@@ -359,7 +347,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
     }
 
+    private static final String KAFKA_CLUSTER_THREAD_PREFIX = "kafka-cluster-test-kit-";
     private final ExecutorService executorService;
+    private final KafkaClusterThreadFactory threadFactory = new KafkaClusterThreadFactory(KAFKA_CLUSTER_THREAD_PREFIX);
     private final TestKitNodes nodes;
     private final Map<Integer, ControllerServer> controllers;
     private final Map<Integer, BrokerServer> brokers;
@@ -368,7 +358,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final SimpleFaultHandlerFactory faultHandlerFactory;
 
     private KafkaClusterTestKit(
-        ExecutorService executorService,
         TestKitNodes nodes,
         Map<Integer, ControllerServer> controllers,
         Map<Integer, BrokerServer> brokers,
@@ -376,7 +365,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
         File baseDirectory,
         SimpleFaultHandlerFactory faultHandlerFactory
     ) {
-        this.executorService = executorService;
+        /*
+          Number of threads = Total number of brokers + Total number of controllers + Total number of Raft Managers
+                            = Total number of brokers + Total number of controllers * 2
+                              (Raft Manager per broker/controller)
+        */
+        int numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
+        this.executorService = Executors.newFixedThreadPool(numOfExecutorThreads, threadFactory);
         this.nodes = nodes;
         this.controllers = controllers;
         this.brokers = brokers;
@@ -649,6 +644,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         } finally {
             ThreadUtils.shutdownExecutorServiceQuietly(executorService, 5, TimeUnit.MINUTES);
         }
+        waitForAllThreads();
         faultHandlerFactory.fatalFaultHandler().maybeRethrowFirstException();
         faultHandlerFactory.nonFatalFaultHandler().maybeRethrowFirstException();
     }
@@ -660,5 +656,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
             entry.getValue().get();
             log.debug("{} successfully shut down.", entry.getKey());
         }
+    }
+
+    private void waitForAllThreads() throws InterruptedException {
+        TestUtils.waitForCondition(() -> Thread.getAllStackTraces().keySet()
+                    .stream().noneMatch(t -> threadFactory.getThreadIds().contains(t.getId())),
+                "Failed to wait for all threads to shut down.");
     }
 }

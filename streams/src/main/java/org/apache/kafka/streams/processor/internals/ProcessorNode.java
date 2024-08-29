@@ -99,7 +99,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         return children;
     }
 
-    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> child(final String childName) {
         return childByName.get(childName);
     }
 

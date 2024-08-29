@@ -17,7 +17,6 @@
 package kafka.controller
 
 import com.yammer.metrics.core.{Gauge, Timer}
-import kafka.api._
 import kafka.cluster.Broker
 import kafka.server.KafkaConfig
 import kafka.utils.Implicits._
@@ -34,6 +33,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -429,7 +429,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .setControllerEpoch(leaderIsrAndControllerEpoch.controllerEpoch)
         .setLeader(leaderAndIsr.leader)
         .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-        .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+        .setIsr(leaderAndIsr.isr)
         .setPartitionEpoch(leaderAndIsr.partitionEpoch)
         .setReplicas(replicaAssignment.replicas.map(Integer.valueOf).asJava)
         .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
@@ -478,7 +478,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
             else leaderAndIsr
           addUpdateMetadataRequestForBrokers(brokerIds, controllerEpoch, partition,
             updatedLeaderAndIsr.leader, updatedLeaderAndIsr.leaderEpoch, updatedLeaderAndIsr.partitionEpoch,
-            updatedLeaderAndIsr.isr, replicas, offlineReplicas)
+            updatedLeaderAndIsr.isr.asScala.map(_.toInt).toList, replicas, offlineReplicas)
         case None =>
           info(s"Leader not yet assigned for partition $partition. Skip sending UpdateMetadataRequest.")
       }
