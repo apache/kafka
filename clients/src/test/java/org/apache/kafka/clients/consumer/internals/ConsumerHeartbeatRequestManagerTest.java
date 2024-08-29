@@ -383,7 +383,6 @@ public class ConsumerHeartbeatRequestManagerTest {
 
     @Test
     public void testDisconnect() {
-        // The initial heartbeatInterval is set to 0
         createHeartbeatRequestStateWithZeroHeartbeatInterval();
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
@@ -396,15 +395,11 @@ public class ConsumerHeartbeatRequestManagerTest {
 
         time.sleep(DEFAULT_RETRY_BACKOFF_MS - 1);
         result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0,
-                result.unsentRequests.size(),
-                "No request should be generated before the backoff expires");
+        assertEquals(0, result.unsentRequests.size(), "No request should be generated before the backoff expires");
 
         time.sleep(1);
         result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1,
-                result.unsentRequests.size(),
-                "A new request should be generated after the backoff expires");
+        assertEquals(1, result.unsentRequests.size(), "A new request should be generated after the backoff expires");
     }
 
     @Test
