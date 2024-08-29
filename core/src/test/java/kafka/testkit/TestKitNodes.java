@@ -45,8 +45,6 @@ import java.util.stream.Stream;
 public class TestKitNodes {
     public static final int CONTROLLER_ID_OFFSET = 3000;
     public static final int BROKER_ID_OFFSET = 0;
-    public static final ListenerName BROKER_LISTENER_NAME = ListenerName.normalised("EXTERNAL");
-    public static final SecurityProtocol BROKER_SECURITY_PROTOCOL = SecurityProtocol.PLAINTEXT;
 
     public static class Builder {
         private boolean combined;
@@ -57,8 +55,8 @@ public class TestKitNodes {
         private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersion(MetadataVersion.latestTesting(), "testkit");
-        private ListenerName listenerName = BROKER_LISTENER_NAME;
-        private SecurityProtocol securityProtocol = BROKER_SECURITY_PROTOCOL;
+        private ListenerName listenerName;
+        private SecurityProtocol securityProtocol;
 
         public Builder setClusterId(String clusterId) {
             this.clusterId = clusterId;

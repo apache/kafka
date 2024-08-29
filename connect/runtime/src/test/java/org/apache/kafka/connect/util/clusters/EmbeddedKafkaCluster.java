@@ -47,6 +47,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -120,6 +122,8 @@ public class EmbeddedKafkaCluster {
         try {
             KafkaClusterTestKit.Builder clusterBuilder = new KafkaClusterTestKit.Builder(
                     new TestKitNodes.Builder()
+                            .setListenerName(ListenerName.normalised("EXTERNAL"))
+                            .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
                             .setCombined(true)
                             .setNumBrokerNodes(numBrokers)
                             // Reduce number of controllers for faster startup

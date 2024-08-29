@@ -22,6 +22,8 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion
@@ -59,6 +61,8 @@ class KafkaServerKRaftRegistrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -101,6 +105,8 @@ class KafkaServerKRaftRegistrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")

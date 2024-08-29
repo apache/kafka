@@ -118,7 +118,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             this.clusterConfig = clusterConfig;
             this.isCombined = isCombined;
             this.listenerName = clusterConfig.listenerName().map(ListenerName::normalised)
-                    .orElse(TestKitNodes.BROKER_LISTENER_NAME);
+                    .orElseGet(() -> ListenerName.forSecurityProtocol(clusterConfig.securityProtocol()));
         }
 
         @Override

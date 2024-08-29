@@ -46,6 +46,7 @@ public class TestKitNodeTest {
                 .setNumBrokerNodes(1)
                 .setNumControllerNodes(1)
                 .setListenerName(listenerName)
+                .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .build();
         assertEquals(listenerName, testKitNodes.externalListenerName());
     }

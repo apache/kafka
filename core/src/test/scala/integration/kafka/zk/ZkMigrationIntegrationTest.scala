@@ -32,12 +32,13 @@ import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{TimeoutException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocateProducerIdsResponse}
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.TOPIC
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -175,6 +176,8 @@ class ZkMigrationIntegrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -311,6 +314,8 @@ class ZkMigrationIntegrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(zkCluster.config().metadataVersion()).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -449,6 +454,8 @@ class ZkMigrationIntegrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_5_IV2).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -517,6 +524,8 @@ class ZkMigrationIntegrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_9_IV0).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -603,6 +612,8 @@ class ZkMigrationIntegrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(zkCluster.config().metadataVersion()).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -685,6 +696,8 @@ class ZkMigrationIntegrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_5_IV2).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -749,6 +762,8 @@ class ZkMigrationIntegrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
@@ -828,6 +843,8 @@ class ZkMigrationIntegrationTest {
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV0).
         setClusterId(clusterId).
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")

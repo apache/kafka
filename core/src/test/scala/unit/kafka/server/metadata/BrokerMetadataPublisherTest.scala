@@ -30,6 +30,8 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance}
@@ -101,6 +103,8 @@ class BrokerMetadataPublisherTest {
   def testReloadUpdatedFilesWithoutConfigChange(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -144,6 +148,8 @@ class BrokerMetadataPublisherTest {
   def testExceptionInUpdateCoordinator(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
+        setSecurityProtocol(SecurityProtocol.PLAINTEXT).
+        setListenerName(ListenerName.normalised("EXTERNAL")).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).
         setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV1).
