@@ -199,7 +199,6 @@ public class SharePartitionManager implements AutoCloseable {
         this.maxInFlightMessages = maxInFlightMessages;
         this.persister = persister;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
-        // TODO: The purge interval should be configurable. Will do it under KAFKA-17401.
         this.delayedShareFetchPurgatory = new DelayedOperationPurgatory<>("ShareFetch", this.timer, this.replicaManager.localBrokerId(), shareFetchPurgatoryPurgeIntervalRequests, true, true);
     }
 
