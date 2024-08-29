@@ -27,16 +27,16 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
-public class StreamsDelegatingMetricsReporter implements MetricsReporter {
+public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
 
 
-    private static final Logger LOG = LoggerFactory.getLogger(org.apache.kafka.streams.internals.metrics.StreamsDelegatingMetricsReporter.class);
+    private static final Logger LOG = LoggerFactory.getLogger(StreamsThreadDelegatingMetricsReporter.class);
     private Consumer<?, ?> consumer;
     final String threadId;
     private static final String THREAD_ID_TAG = "thread-id";
 
 
-    public StreamsDelegatingMetricsReporter(final Consumer<?, ?> consumer, final String threadId) {
+    public StreamsThreadDelegatingMetricsReporter(final Consumer<?, ?> consumer, final String threadId) {
         this.consumer = consumer;
         this.threadId = threadId;
     }
