@@ -31,5 +31,5 @@ jobs:
           GITHUB_CONTEXT: ${{ toJson(github) }}
       - uses: actions/download-artifact@v4
         with:
-          name: comment-17
+          name: comment-17.zip
           run-id: ${{ github.payload.workflow_run.id }}
