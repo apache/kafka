@@ -18,7 +18,8 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -227,8 +228,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
         Set<String> checkpointGroups = new HashSet<>();
         Set<String> irrelevantGroups = new HashSet<>();
 
+        ListConsumerGroupOffsetsResult result = listConsumerGroupOffsets(filteredGroups);
         for (String group : filteredGroups) {
-            Set<String> consumedTopics = listConsumerGroupOffsets(group).keySet().stream()
+            Set<String> consumedTopics = result.partitionsToOffsetAndMetadata(group).get().keySet().stream()
                     .map(TopicPartition::topic)
                     .filter(this::shouldReplicateByTopicFilter)
                     .collect(Collectors.toSet());
@@ -262,12 +264,13 @@ public class MirrorCheckpointConnector extends SourceConnector {
         );
     }
 
-    Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
+    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(List<String> groups)
             throws InterruptedException, ExecutionException {
+        Map<String, ListConsumerGroupOffsetsSpec> groupSpecs = groups.stream()
+                .collect(Collectors.toMap(group -> group, group -> new ListConsumerGroupOffsetsSpec()));
         return adminCall(
-                () -> sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(),
-                () -> String.format("list offsets for consumer group %s on %s cluster", group,
-                        config.sourceClusterAlias())
+                () -> sourceAdminClient.listConsumerGroupOffsets(groupSpecs),
+                () -> String.format("list offsets for consumer groups %s on %s cluster", groups, config.sourceClusterAlias())
         );
     }
 

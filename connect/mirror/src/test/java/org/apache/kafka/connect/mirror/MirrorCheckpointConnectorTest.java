@@ -17,7 +17,10 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -42,6 +45,7 @@ import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
@@ -151,7 +155,14 @@ public class MirrorCheckpointConnectorTest {
         doReturn(groups).when(connector).listConsumerGroups();
         doReturn(true).when(connector).shouldReplicateByTopicFilter(anyString());
         doReturn(true).when(connector).shouldReplicateByGroupFilter(anyString());
-        doReturn(offsets).when(connector).listConsumerGroupOffsets(anyString());
+
+        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = new HashMap<>();
+        futures.put(CoordinatorKey.byGroupId("g1"), KafkaFuture.completedFuture(offsets));
+        futures.put(CoordinatorKey.byGroupId("g2"), KafkaFuture.completedFuture(offsets));
+        ListConsumerGroupOffsetsResult offsetsResult = new ListConsumerGroupOffsetsResult(futures);
+        offsetsResult = spy(offsetsResult);
+        doReturn(offsetsResult).when(connector).listConsumerGroupOffsets(anyList());
+        doReturn(futures.get(CoordinatorKey.byGroupId("g1"))).when(offsetsResult).partitionsToOffsetAndMetadata("g1");
         Set<String> groupFound = connector.findConsumerGroups();
 
         Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
@@ -177,13 +188,11 @@ public class MirrorCheckpointConnectorTest {
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup1 = new HashMap<>();
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup2 = new HashMap<>();
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup3 = new HashMap<>();
-        Map<TopicPartition, OffsetAndMetadata> offsetsForGroup4 = new HashMap<>();
         offsetsForGroup1.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         offsetsForGroup1.put(new TopicPartition("t2", 0), new OffsetAndMetadata(0));
         offsetsForGroup2.put(new TopicPartition("t2", 0), new OffsetAndMetadata(0));
         offsetsForGroup2.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
         offsetsForGroup3.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
-        offsetsForGroup4.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
         doReturn(groups).when(connector).listConsumerGroups();
         doReturn(false).when(connector).shouldReplicateByTopicFilter("t1");
         doReturn(true).when(connector).shouldReplicateByTopicFilter("t2");
@@ -192,16 +201,23 @@ public class MirrorCheckpointConnectorTest {
         doReturn(true).when(connector).shouldReplicateByGroupFilter("g2");
         doReturn(true).when(connector).shouldReplicateByGroupFilter("g3");
         doReturn(false).when(connector).shouldReplicateByGroupFilter("g4");
-        doReturn(offsetsForGroup1).when(connector).listConsumerGroupOffsets("g1");
-        doReturn(offsetsForGroup2).when(connector).listConsumerGroupOffsets("g2");
-        doReturn(offsetsForGroup3).when(connector).listConsumerGroupOffsets("g3");
-        doReturn(offsetsForGroup4).when(connector).listConsumerGroupOffsets("g4");
+
+        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = new HashMap<>();
+        futures.put(CoordinatorKey.byGroupId("g1"), KafkaFuture.completedFuture(offsetsForGroup1));
+        futures.put(CoordinatorKey.byGroupId("g2"), KafkaFuture.completedFuture(offsetsForGroup2));
+        futures.put(CoordinatorKey.byGroupId("g3"), KafkaFuture.completedFuture(offsetsForGroup3));
+        ListConsumerGroupOffsetsResult offsetsResult = new ListConsumerGroupOffsetsResult(futures);
+        offsetsResult = spy(offsetsResult);
+        doReturn(offsetsResult).when(connector).listConsumerGroupOffsets(Arrays.asList("g1", "g2", "g3"));
+        doReturn(futures.get(CoordinatorKey.byGroupId("g1"))).when(offsetsResult).partitionsToOffsetAndMetadata("g1");
+        doReturn(futures.get(CoordinatorKey.byGroupId("g2"))).when(offsetsResult).partitionsToOffsetAndMetadata("g2");
+        doReturn(futures.get(CoordinatorKey.byGroupId("g3"))).when(offsetsResult).partitionsToOffsetAndMetadata("g3");
 
         Set<String> groupFound = connector.findConsumerGroups();
         Set<String> verifiedSet = new HashSet<>();
         verifiedSet.add("g1");
         verifiedSet.add("g2");
-        assertEquals(groupFound, verifiedSet);
+        assertEquals(verifiedSet, groupFound);
     }
 
     @Test
