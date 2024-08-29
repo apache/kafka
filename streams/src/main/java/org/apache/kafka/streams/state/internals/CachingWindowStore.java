@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -72,23 +71,10 @@ class CachingWindowStore
         this.maxObservedTimestamp = new AtomicLong(RecordQueue.UNKNOWN);
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        initInternal(asInternalProcessorContext(context), changelogTopic);
-        super.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
-        initInternal(asInternalProcessorContext(context), changelogTopic);
-        super.init(context, root);
-    }
-
-    private void initInternal(final InternalProcessorContext<?, ?> context, final String changelogTopic) {
-        this.context = context;
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        final String changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
+        this.context = asInternalProcessorContext(stateStoreContext);
         bytesSerdes = new StateSerdes<>(
             changelogTopic,
             Serdes.Bytes(),
@@ -100,6 +86,8 @@ class CachingWindowStore
                 putAndMaybeForward(entry, context);
             }
         });
+
+        super.init(stateStoreContext, root);
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,

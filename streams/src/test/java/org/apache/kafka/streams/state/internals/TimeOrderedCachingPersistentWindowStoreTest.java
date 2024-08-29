@@ -129,20 +129,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         cachingStore.close();
     }
 
-    @SuppressWarnings("deprecation")
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldDelegateDeprecatedInit(final boolean hasIndex) {
-        setUp(hasIndex);
-        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
-        when(inner.hasIndex()).thenReturn(hasIndex);
-
-        final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
-        outer.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-
-        verify(inner).init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-    }
-
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldDelegateInit(final boolean hasIndex) {

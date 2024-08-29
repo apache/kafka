@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -85,16 +84,6 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     @AfterEach
     public void after() {
         store.close();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test

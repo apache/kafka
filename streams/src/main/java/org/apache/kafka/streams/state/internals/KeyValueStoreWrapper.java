@@ -121,12 +121,6 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         return store.name();
     }
 
-    @Deprecated
-    @Override
-    public void init(final org.apache.kafka.streams.processor.ProcessorContext context, final StateStore root) {
-        store.init(context, root);
-    }
-
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         store.init(context, root);
