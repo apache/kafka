@@ -166,7 +166,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     .withLoader(loader)
                     .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
-                    .withDefaultWriteTimeOut(Duration.ofMillis(config.shareCoordinatorOffsetsCommitTimeoutMs()))
+                    .withDefaultWriteTimeOut(Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(coordinatorMetrics)
                     .withSerializer(new ShareCoordinatorRecordSerde())
@@ -296,7 +296,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 partitionData -> partitionFut.put(partitionData.partition(), runtime.scheduleWriteOperation(
                     "write-share-group-state",
                     topicPartitionFor(SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition())),
-                    Duration.ofMillis(config.shareCoordinatorOffsetsCommitTimeoutMs()),
+                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     coordinator -> coordinator.writeState(context, new WriteShareGroupStateRequestData()
                         .setGroupId(groupId)
                         .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()

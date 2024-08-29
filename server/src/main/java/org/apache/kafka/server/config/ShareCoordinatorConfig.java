@@ -54,9 +54,9 @@ public class ShareCoordinatorConfig {
     public static final int SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DEFAULT = 500;
     public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DOC = "The number of snapshot update records per share snapshot record.";
 
-    public static final String COMMIT_TIMEOUT_MS_CONFIG = "share.coordinator.commit.timeout.ms";
-    public static final int COMMIT_TIMEOUT_MS_DEFAULT = 5000;
-    public static final String COMMIT_TIMEOUT_MS_DOC = "Offset commit will be delayed until all replicas for the offsets topic receive the commit " +
+    public static final String WRITE_TIMEOUT_MS_CONFIG = "share.coordinator.write.timeout.ms";
+    public static final int WRITE_TIMEOUT_MS_DEFAULT = 5000;
+    public static final String WRITE_TIMEOUT_MS_DOC = "Offset commit will be delayed until all replicas for the state topic receive the commit " +
         "or this timeout is reached. This is similar to the producer request timeout.";
 
     public static final String LOAD_BUFFER_SIZE_CONFIG = "share.coordinator.load.buffer.size";
@@ -79,10 +79,10 @@ public class ShareCoordinatorConfig {
         .define(STATE_TOPIC_SEGMENT_BYTES_CONFIG, INT, STATE_TOPIC_SEGMENT_BYTES_DEFAULT, atLeast(1), HIGH, STATE_TOPIC_SEGMENT_BYTES_DOC)
         .define(NUM_THREADS_CONFIG, INT, NUM_THREADS_DEFAULT, atLeast(1), MEDIUM, NUM_THREADS_DOC)
         .define(SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, INT, SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DEFAULT, atLeast(1), MEDIUM, SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DOC)
-        .define(COMMIT_TIMEOUT_MS_CONFIG, INT, COMMIT_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, COMMIT_TIMEOUT_MS_DOC)
         .define(LOAD_BUFFER_SIZE_CONFIG, INT, LOAD_BUFFER_SIZE_DEFAULT, atLeast(1), HIGH, LOAD_BUFFER_SIZE_DOC)
         .define(STATE_TOPIC_COMPRESSION_CODEC_CONFIG, INT, (int) STATE_TOPIC_COMPRESSION_CODEC_DEFAULT.id, HIGH, STATE_TOPIC_COMPRESSION_CODEC_DOC)
-        .define(APPEND_LINGER_MS_CONFIG, INT, APPEND_LINGER_MS_DEFAULT, atLeast(0), MEDIUM, APPEND_LINGER_MS_DOC);
+        .define(APPEND_LINGER_MS_CONFIG, INT, APPEND_LINGER_MS_DEFAULT, atLeast(0), MEDIUM, APPEND_LINGER_MS_DOC)
+        .define(WRITE_TIMEOUT_MS_CONFIG, INT, WRITE_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, WRITE_TIMEOUT_MS_DOC);
 
     private final int stateTopicNumPartitions;
     private final short stateTopicReplicationFactor;
@@ -90,8 +90,8 @@ public class ShareCoordinatorConfig {
     private final int stateTopicSegmentBytes;
     private final int numThreads;
     private final int snapshotUpdateRecordsPerSnapshot;
-    private final int offsetsCommitTimeoutMs;
-    private final int offsetsLoadBufferSize;
+    private final int writeTimeoutMs;
+    private final int loadBufferSize;
     private final CompressionType compressionType;
     private final int appendLingerMs;
 
@@ -103,8 +103,8 @@ public class ShareCoordinatorConfig {
         stateTopicSegmentBytes = config.getInt(STATE_TOPIC_SEGMENT_BYTES_CONFIG);
         numThreads = config.getInt(NUM_THREADS_CONFIG);
         snapshotUpdateRecordsPerSnapshot = config.getInt(SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG);
-        offsetsCommitTimeoutMs = config.getInt(COMMIT_TIMEOUT_MS_CONFIG);
-        offsetsLoadBufferSize = config.getInt(LOAD_BUFFER_SIZE_CONFIG);
+        writeTimeoutMs = config.getInt(WRITE_TIMEOUT_MS_CONFIG);
+        loadBufferSize = config.getInt(LOAD_BUFFER_SIZE_CONFIG);
         compressionType = Optional.ofNullable(config.getInt(STATE_TOPIC_COMPRESSION_CODEC_CONFIG))
             .map(CompressionType::forId)
             .orElse(null);
@@ -135,12 +135,12 @@ public class ShareCoordinatorConfig {
         return snapshotUpdateRecordsPerSnapshot;
     }
 
-    public int shareCoordinatorOffsetsCommitTimeoutMs() {
-        return offsetsCommitTimeoutMs;
+    public int shareCoordinatorWriteTimeoutMs() {
+        return writeTimeoutMs;
     }
 
-    public int shareCoordinatorOffsetsLoadBufferSize() {
-        return offsetsLoadBufferSize;
+    public int shareCoordinatorLoadBufferSize() {
+        return loadBufferSize;
     }
 
     public int shareCoordinatorAppendLingerMs() {

@@ -648,7 +648,7 @@ class BrokerServer(
       time,
       replicaManager,
       serde,
-      config.shareCoordinatorConfig.shareCoordinatorOffsetsLoadBufferSize
+      config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
     )
     val writer = new CoordinatorPartitionWriter(
       replicaManager

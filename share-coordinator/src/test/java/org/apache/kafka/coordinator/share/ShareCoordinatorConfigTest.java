@@ -46,7 +46,7 @@ public class ShareCoordinatorConfigTest {
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_SEGMENT_BYTES_CONFIG, "1000");
         configs.put(ShareCoordinatorConfig.NUM_THREADS_CONFIG, "1");
         configs.put(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "50");
-        configs.put(ShareCoordinatorConfig.COMMIT_TIMEOUT_MS_CONFIG, "5000");
+        configs.put(ShareCoordinatorConfig.WRITE_TIMEOUT_MS_CONFIG, "5000");
         configs.put(ShareCoordinatorConfig.LOAD_BUFFER_SIZE_CONFIG, "555");
         configs.put(ShareCoordinatorConfig.APPEND_LINGER_MS_CONFIG, "10");
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_COMPRESSION_CODEC_CONFIG, String.valueOf(CompressionType.NONE.id));
