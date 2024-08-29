@@ -447,20 +447,24 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Uuid topicId = topicData.topicId();
         int partitionId = partitionData.partition();
 
-        if (topicId == null || partitionId < 0) {
-            return Optional.of(getWriteErrorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicId, partitionId));
+        if (topicId == null) {
+            return Optional.of(getWriteErrorResponse(Errors.INVALID_TOPIC_EXCEPTION, null, null, partitionId));
+        }
+
+        if (partitionId < 0) {
+            return Optional.of(getWriteErrorResponse(Errors.INVALID_PARTITIONS, null, topicId, partitionId));
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
         if (leaderEpochMap.containsKey(mapKey) && leaderEpochMap.get(mapKey) > partitionData.leaderEpoch()) {
-            return Optional.of(getWriteErrorResponse(Errors.FENCED_LEADER_EPOCH, topicId, partitionId));
+            return Optional.of(getWriteErrorResponse(Errors.FENCED_LEADER_EPOCH, null, topicId, partitionId));
         }
         if (stateEpochMap.containsKey(mapKey) && stateEpochMap.get(mapKey) > partitionData.stateEpoch()) {
-            return Optional.of(getWriteErrorResponse(Errors.FENCED_STATE_EPOCH, topicId, partitionId));
+            return Optional.of(getWriteErrorResponse(Errors.FENCED_STATE_EPOCH, null, topicId, partitionId));
         }
         if (metadataImage != null && (metadataImage.topics().getTopic(topicId) == null ||
             metadataImage.topics().getPartition(topicId, partitionId) == null)) {
-            return Optional.of(getWriteErrorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicId, partitionId));
+            return Optional.of(getWriteErrorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
         return Optional.empty();
@@ -474,8 +478,14 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Uuid topicId = topicData.topicId();
         int partitionId = partitionData.partition();
 
-        if (topicId == null || partitionId < 0) {
-            return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
+        if (topicId == null) {
+            return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(
+                null, partitionId, Errors.INVALID_TOPIC_EXCEPTION, Errors.INVALID_TOPIC_EXCEPTION.message()));
+        }
+
+        if (partitionId < 0) {
+            return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(
+                topicId, partitionId, Errors.INVALID_PARTITIONS, Errors.INVALID_PARTITIONS.message()));
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
@@ -493,10 +503,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     private CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> getWriteErrorResponse(
         Errors error,
+        Exception exception,
         Uuid topicId,
         int partitionId
     ) {
-        WriteShareGroupStateResponseData responseData = WriteShareGroupStateResponse.toErrorResponseData(topicId, partitionId, error, error.message());
+        String message = exception == null ? error.message() : exception.getMessage();
+        WriteShareGroupStateResponseData responseData = WriteShareGroupStateResponse.toErrorResponseData(topicId, partitionId, error, message);
         return new CoordinatorResult<>(Collections.emptyList(), responseData);
     }
 
