@@ -19,6 +19,7 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Optional;
 
@@ -107,6 +108,7 @@ public class ShareCoordinatorConfig {
             .map(CompressionType::forId)
             .orElse(null);
         appendLingerMs = config.getInt(APPEND_LINGER_MS_CONFIG);
+        validate();
     }
 
     public int shareCoordinatorStateTopicNumPartitions() {
@@ -147,5 +149,10 @@ public class ShareCoordinatorConfig {
 
     public CompressionType shareCoordinatorStateTopicCompressionType() {
         return compressionType;
+    }
+
+    private void validate() {
+        Utils.require(snapshotUpdateRecordsPerSnapshot >= 0 && snapshotUpdateRecordsPerSnapshot <= 500,
+            String.format("%s must be between [0, 500]", SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG));
     }
 }

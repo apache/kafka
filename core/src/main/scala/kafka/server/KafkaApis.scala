@@ -4449,10 +4449,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
     shareCoordinator match {
-      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        readShareGroupStateRequest.getErrorResponse(requestThrottleMs,
-          new ApiException("Share coordinator is not configured.")))
-        CompletableFuture.completedFuture[Unit](())
+      case None => CompletableFuture.completedFuture[Unit](())
       case Some(coordinator) => coordinator.readState(request.context, readShareGroupStateRequest.data)
         .handle[Unit] { (response, exception) =>
           if (exception != null) {
@@ -4470,10 +4467,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
     shareCoordinator match {
-      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        writeShareRequest.getErrorResponse(requestThrottleMs,
-          new ApiException("Share coordinator is not configured.")))
-        CompletableFuture.completedFuture[Unit](())
+      case None => CompletableFuture.completedFuture[Unit](())
       case Some(coordinator) => coordinator.writeState(request.context, writeShareRequest.data)
         .handle[Unit] { (response, exception) =>
           if (exception != null) {

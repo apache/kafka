@@ -363,7 +363,7 @@ class ShareCoordinatorShardTest {
         CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(context, request);
 
         WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toErrorResponseData(
-            TOPIC_ID, partition, Errors.INVALID_PARTITIONS, Errors.INVALID_PARTITIONS.message());
+            TOPIC_ID, partition, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_PARTITION_ID.getMessage());
         List<CoordinatorRecord> expectedRecords = Collections.emptyList();
 
         assertEquals(expectedData, result.response());
@@ -564,7 +564,7 @@ class ShareCoordinatorShardTest {
         ReadShareGroupStateResponseData result = shard.readState(request, 0L);
 
         ReadShareGroupStateResponseData expectedData = ReadShareGroupStateResponse.toErrorResponseData(
-            TOPIC_ID, partition, Errors.INVALID_PARTITIONS, Errors.INVALID_PARTITIONS.message());
+            TOPIC_ID, partition, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_PARTITION_ID.getMessage());
 
         assertEquals(expectedData, result);
 

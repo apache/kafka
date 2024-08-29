@@ -58,10 +58,11 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
 public class ShareCoordinatorService implements ShareCoordinator {
     private final ShareCoordinatorConfig config;
@@ -211,6 +212,15 @@ public class ShareCoordinatorService implements ShareCoordinator {
         return properties;
     }
 
+    /**
+     * The share coordinator startup method will get invoked from BrokerMetadataPublisher.
+     * At the time of writing, the publisher uses metadata cache to fetch the number of partitions
+     * of the share state topic. In case this information is not available, the user provided
+     * config will be used to fetch the value.
+     * This is consistent with the group coordinator startup functionality.
+     *
+     * @param shareGroupTopicPartitionCount - supplier returning the number of partitions for __share_group_state topic
+     */
     @Override
     public void startup(
         IntSupplier shareGroupTopicPartitionCount
@@ -222,7 +232,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         log.info("Starting up.");
         numPartitions = shareGroupTopicPartitionCount.getAsInt();
-        isActive.set(true);
         log.info("Startup complete.");
     }
 
@@ -234,7 +243,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
         }
 
         log.info("Shutting down.");
-        isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
         Utils.closeQuietly(shareCoordinatorMetrics, "share coordinator metrics");
         log.info("Shutdown complete.");
@@ -242,8 +250,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     @Override
     public CompletableFuture<WriteShareGroupStateResponseData> writeState(RequestContext context, WriteShareGroupStateRequestData request) {
-        log.debug("ShareCoordinatorService writeState request dump - {}", request);
-
         // Send an empty response if topic data is empty
         if (isEmpty(request.topics())) {
             log.error("Topic Data is empty: {}", request);
@@ -293,21 +299,35 @@ public class ShareCoordinatorService implements ShareCoordinator {
             Map<Integer, CompletableFuture<WriteShareGroupStateResponseData>> partitionFut =
                 futureMap.computeIfAbsent(topicData.topicId(), k -> new HashMap<>());
             topicData.partitions().forEach(
-                partitionData -> partitionFut.put(partitionData.partition(), runtime.scheduleWriteOperation(
-                    "write-share-group-state",
-                    topicPartitionFor(SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition())),
-                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
-                    coordinator -> coordinator.writeState(context, new WriteShareGroupStateRequestData()
-                        .setGroupId(groupId)
-                        .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                            .setTopicId(topicData.topicId())
-                            .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(partitionData.partition())
-                                .setStartOffset(partitionData.startOffset())
-                                .setLeaderEpoch(partitionData.leaderEpoch())
-                                .setStateEpoch(partitionData.stateEpoch())
-                                .setStateBatches(partitionData.stateBatches()))))))))
-            );
+                partitionData -> {
+                    CompletableFuture<WriteShareGroupStateResponseData> future = runtime.scheduleWriteOperation(
+                            "write-share-group-state",
+                            topicPartitionFor(SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition())),
+                            Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+                            coordinator -> coordinator.writeState(context, new WriteShareGroupStateRequestData()
+                                .setGroupId(groupId)
+                                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                                    .setTopicId(topicData.topicId())
+                                    .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                                        .setPartition(partitionData.partition())
+                                        .setStartOffset(partitionData.startOffset())
+                                        .setLeaderEpoch(partitionData.leaderEpoch())
+                                        .setStateEpoch(partitionData.stateEpoch())
+                                        .setStateBatches(partitionData.stateBatches())))))))
+                        .exceptionally(exception -> handleOperationException(
+                            "write-share-group-state",
+                            request,
+                            exception,
+                            (error, message) -> WriteShareGroupStateResponse.toErrorResponseData(
+                                topicData.topicId(),
+                                partitionData.partition(),
+                                error,
+                                "Unable to write share group state: " + exception.getMessage()
+                            ),
+                            log
+                        ));
+                    partitionFut.put(partitionData.partition(), future);
+                });
         });
 
         // Combine all futures into a single CompletableFuture<Void>
@@ -323,21 +343,14 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     topicEntry.forEach(
                         // map of partition id -> responses from api
                         (partitionId, responseFut) -> {
-                            try {
-                                long timeTaken = time.hiResClockMs() - startTime;
-                                // This is the future returned by runtime.scheduleWriteOperation which returns when the
-                                // operation has completed including
-                                WriteShareGroupStateResponseData partitionData = responseFut.get(5000L, TimeUnit.MILLISECONDS);
-                                shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, timeTaken);
-                                partitionResults.addAll(partitionData.results().get(0).partitions());
-                            } catch (Exception e) {
-                                log.error("Error while writing share group state", e);
-                                partitionResults.add(WriteShareGroupStateResponse.toErrorResponsePartitionResult(
-                                    partitionId,
-                                    Errors.UNKNOWN_SERVER_ERROR,
-                                    "Unable to write share group state: " + e.getMessage()
-                                ));
-                            }
+                            long timeTaken = time.hiResClockMs() - startTime;
+                            // This is the future returned by runtime.scheduleWriteOperation which returns when the
+                            // operation has completed including error information. When this line executes, the future
+                            // should be complete as we used CompletableFuture::allOf to get a combined future from
+                            // all futures in the map.
+                            WriteShareGroupStateResponseData partitionData = responseFut.getNow(null);
+                            shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, timeTaken);
+                            partitionResults.addAll(partitionData.results().get(0).partitions());
                         }
                     );
                     writeStateResults.add(WriteShareGroupStateResponse.toResponseWriteStateResult(topicId, partitionResults));
@@ -350,8 +363,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     @Override
     public CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request) {
-        log.debug("ShareCoordinatorService readState request dump - {}", request);
-
         String groupId = request.groupId();
         // A map to store the futures for each topicId and partition.
         Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateResponseData>>> futureMap = new HashMap<>();
@@ -413,14 +424,20 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     "read-share-group-state",
                     topicPartitionFor(coordinatorKey),
                     (coordinator, offset) -> coordinator.readState(requestForCurrentPartition, offset)
-                );
-                if (futureMap.containsKey(topicId)) {
-                    futureMap.get(topicId).put(partitionData.partition(), future);
-                } else {
-                    HashMap<Integer, CompletableFuture<ReadShareGroupStateResponseData>> map = new HashMap<>();
-                    map.put(partitionData.partition(), future);
-                    futureMap.put(topicId, map);
-                }
+                ).exceptionally(exception -> handleOperationException(
+                    "read-share-group-state",
+                    request,
+                    exception,
+                    (error, message) -> ReadShareGroupStateResponse.toErrorResponseData(
+                        topicData.topicId(),
+                        partitionData.partition(),
+                        error,
+                        "Unable to read share group state: " + exception.getMessage()
+                    ),
+                    log
+                ));
+                futureMap.computeIfAbsent(topicId, k -> new HashMap<>());
+                futureMap.get(topicId).put(partitionData.partition(), future);
             });
         });
 
@@ -436,18 +453,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new LinkedList<>();
                     topicEntry.forEach(
                         (partitionId, responseFut) -> {
-                            try {
-                                partitionResults.add(
-                                    responseFut.get(5000L, TimeUnit.MILLISECONDS).results().get(0).partitions().get(0)
-                                );
-                            } catch (Exception e) {
-                                log.error("Error while reading share group state", e);
-                                partitionResults.add(ReadShareGroupStateResponse.toErrorResponsePartitionResult(
-                                    partitionId,
-                                    Errors.UNKNOWN_SERVER_ERROR,
-                                    "Unable to read share group state: " + e.getMessage()
-                                ));
-                            }
+                            // responseFut would already be completed by now since we have used
+                            // CompletableFuture::allOf to create a combined future from the future map.
+                            partitionResults.add(
+                                responseFut.getNow(null).results().get(0).partitions().get(0)
+                            );
                         }
                     );
                     readStateResult.add(ReadShareGroupStateResponse.toResponseReadStateResult(topicId, partitionResults));

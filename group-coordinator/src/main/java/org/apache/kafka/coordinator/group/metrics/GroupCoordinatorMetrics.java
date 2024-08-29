@@ -70,7 +70,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String GROUP_COUNT_PROTOCOL_TAG = "protocol";
     public static final String SHARE_GROUP_PROTOCOL_TAG = GROUP_COUNT_PROTOCOL_TAG;
     public static final String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
-    public static final String SHARE_GROUP_COUNT_METRIC_NAME = "share-group-count";
+    public static final String SHARE_GROUP_COUNT_METRIC_NAME = "group-count";
     public static final String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
     public static final String SHARE_GROUP_COUNT_STATE_TAG = CONSUMER_GROUP_COUNT_STATE_TAG;
 
@@ -170,21 +170,24 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in empty state.",
-            Collections.singletonMap(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.EMPTY.toString())
+            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
+            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.EMPTY.toString()
         );
 
         shareGroupCountStableMetricName = metrics.metricName(
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in stable state.",
-            Collections.singletonMap(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.STABLE.toString())
+            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
+            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.STABLE.toString()
         );
 
         shareGroupCountDeadMetricName = metrics.metricName(
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in dead state.",
-            Collections.singletonMap(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.DEAD.toString())
+            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
+            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.DEAD.toString()
         );
 
         registerGauges();
@@ -236,11 +239,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
         Sensor shareGroupRebalanceSensor = metrics.sensor(SHARE_GROUP_REBALANCES_SENSOR_NAME);
         shareGroupRebalanceSensor.add(new Meter(
-            metrics.metricName("share-group-rebalance-rate",
+            metrics.metricName("rebalance-rate",
                 METRICS_GROUP,
                 "The rate of share group rebalances",
                 SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString()),
-            metrics.metricName("share-group-rebalance-count",
+            metrics.metricName("rebalance-count",
                 METRICS_GROUP,
                 "The total number of share group rebalances",
                 SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString())));

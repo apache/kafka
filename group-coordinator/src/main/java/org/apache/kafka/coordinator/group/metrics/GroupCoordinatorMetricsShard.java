@@ -298,6 +298,14 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             long value = numOffsetsTimelineGaugeCounter.timelineLong.get(offset);
             numOffsetsTimelineGaugeCounter.atomicLong.set(value);
         }
+
+        this.shareGroupGauges.forEach((__, gaugeCounter) -> {
+            long value;
+            synchronized (gaugeCounter.timelineLong) {
+                value = gaugeCounter.timelineLong.get(offset);
+            }
+            gaugeCounter.atomicLong.set(value);
+        });
     }
 
     /**

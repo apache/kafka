@@ -77,6 +77,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private MetadataImage metadataImage;
     private final int snapshotUpdateRecordsPerSnapshot;
 
+    public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
+    public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
+
     public static class Builder implements CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> {
         private ShareCoordinatorConfig config;
         private LogContext logContext;
@@ -142,8 +145,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 throw new IllegalArgumentException("CoordinatorMetrics must be set and be of type ShareCoordinatorMetrics.");
             if (topicPartition == null)
                 throw new IllegalArgumentException("TopicPartition must be set.");
-            if (config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot() < 0 || config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot() > 500)
-                throw new IllegalArgumentException("SnapshotUpdateRecordsPerSnapshot must be between 0 and 500.");
 
             ShareCoordinatorMetricsShard metricsShard = ((ShareCoordinatorMetrics) coordinatorMetrics)
                 .newMetricsShard(snapshotRegistry, topicPartition);
@@ -280,7 +281,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         RequestContext context,
         WriteShareGroupStateRequestData request
     ) {
-        log.debug("Write request dump - {}", request);
         // records to write (with both key and value of snapshot type), response to caller
         // only one key will be there in the request by design
 
@@ -385,7 +385,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return CoordinatorResult(records, response)
      */
     public ReadShareGroupStateResponseData readState(ReadShareGroupStateRequestData request, Long offset) {
-        log.debug("Read request dump - {}", request);
         // records to read (with the key of snapshot type), response to caller
         // only one key will be there in the request by design
         Optional<ReadShareGroupStateResponseData> error = maybeGetReadStateError(request, offset);
@@ -448,11 +447,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         int partitionId = partitionData.partition();
 
         if (topicId == null) {
-            return Optional.of(getWriteErrorResponse(Errors.INVALID_TOPIC_EXCEPTION, null, null, partitionId));
+            return Optional.of(getWriteErrorResponse(Errors.INVALID_REQUEST, NULL_TOPIC_ID, null, partitionId));
         }
 
         if (partitionId < 0) {
-            return Optional.of(getWriteErrorResponse(Errors.INVALID_PARTITIONS, null, topicId, partitionId));
+            return Optional.of(getWriteErrorResponse(Errors.INVALID_REQUEST, NEGATIVE_PARTITION_ID, topicId, partitionId));
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
@@ -480,12 +479,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         if (topicId == null) {
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(
-                null, partitionId, Errors.INVALID_TOPIC_EXCEPTION, Errors.INVALID_TOPIC_EXCEPTION.message()));
+                null, partitionId, Errors.INVALID_REQUEST, NULL_TOPIC_ID.getMessage()));
         }
 
         if (partitionId < 0) {
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(
-                topicId, partitionId, Errors.INVALID_PARTITIONS, Errors.INVALID_PARTITIONS.message()));
+                topicId, partitionId, Errors.INVALID_REQUEST, NEGATIVE_PARTITION_ID.getMessage()));
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);

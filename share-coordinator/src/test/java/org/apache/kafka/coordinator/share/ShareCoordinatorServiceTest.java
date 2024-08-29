@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
+import org.apache.kafka.server.util.FutureUtils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -50,6 +51,7 @@ import java.util.concurrent.TimeoutException;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -516,5 +518,94 @@ class ShareCoordinatorServiceTest {
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     .setErrorMessage("Share coordinator is not available.")))));
         assertEquals(expectedResult, result);
+    }
+
+    @Test
+    public void testWriteFutureReturnsError() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorConfigTest.createConfig(ShareCoordinatorConfigTest.testConfigMap()),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any()))
+            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+
+        assertEquals(new WriteShareGroupStateResponseData()
+                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition)
+                        .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                        .setErrorMessage("Unable to write share group state: This server does not host this topic-partition."))))),
+            service.writeState(
+                requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
+                new WriteShareGroupStateRequestData().setGroupId(groupId)
+                    .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                        .setTopicId(topicId)
+                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                            .setPartition(partition)
+                            .setLeaderEpoch(1)
+                            .setStartOffset(1)
+                            .setStateEpoch(1)
+                            .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                                .setFirstOffset(2)
+                                .setLastOffset(10)
+                                .setDeliveryCount((short) 1)
+                                .setDeliveryState((byte) 1)))
+                        ))
+                    ))
+            ).get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testReadFutureReturnsError() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorConfigTest.createConfig(ShareCoordinatorConfigTest.testConfigMap()),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+
+        when(runtime.scheduleReadOperation(any(), any(), any()))
+            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+
+        assertEquals(new ReadShareGroupStateResponseData()
+                .setResults(Collections.singletonList(new ReadShareGroupStateResponseData.ReadStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition)
+                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                        .setErrorMessage("Unable to read share group state: The server experienced an unexpected error when processing the request."))))),
+            service.readState(
+                requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
+                new ReadShareGroupStateRequestData().setGroupId(groupId)
+                    .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                        .setTopicId(topicId)
+                        .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
+                            .setPartition(partition)
+                            .setLeaderEpoch(1)
+                        ))
+                    ))
+            ).get(5, TimeUnit.SECONDS)
+        );
     }
 }
