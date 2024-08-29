@@ -105,17 +105,19 @@ public abstract class AbstractAuthorizerDataTest {
         Set<AclBinding> actualSet = new HashSet<>();
         actual.forEach(actualSet::add);
 
-        assertEquals(expectedSet.size(), actualSet.size(), "Wrong number of ACLs returned");
-
         List<String> errMsgs = new ArrayList<>();
-        Iterator<AclBinding> expectedIter = expectedSet.iterator();
-        Iterator<AclBinding> actualIter = actualSet.iterator();
-        for (int i = 0; i < expectedSet.size(); i++) {
-            AclBinding expectedElement = expectedIter.next();
-            AclBinding actualElement = actualIter.next();
+        if (expectedSet.size() != actualSet.size()) {
+            errMsgs.add(format("Wrong number of ACLs returned.  Expected:%s Actual:%s", expectedSet.size(), actualSet.size()));
+        } else {
+            Iterator<AclBinding> expectedIter = expectedSet.iterator();
+            Iterator<AclBinding> actualIter = actualSet.iterator();
+            for (int i = 0; i < expectedSet.size(); i++) {
+                AclBinding expectedElement = expectedIter.next();
+                AclBinding actualElement = actualIter.next();
 
-            if (!expectedElement.equals(actualElement)) {
-                errMsgs.add(format("Expected: %s but got %s", expectedElement, actualElement));
+                if (!expectedElement.equals(actualElement)) {
+                    errMsgs.add(format("Expected: %s but got %s", expectedElement, actualElement));
+                }
             }
         }
         if (!errMsgs.isEmpty()) {
@@ -123,7 +125,7 @@ public abstract class AbstractAuthorizerDataTest {
             expectedSet.forEach(e -> errMsgs.add(e.toString()));
             errMsgs.add("ACTUAL SET");
             actualSet.forEach(e -> errMsgs.add(e.toString()));
-            fail(format("ACLs do not match%n%s", String.join(System.lineSeparator(),errMsgs)));
+            fail(format("ACLs do not match%n%s", String.join(System.lineSeparator(), errMsgs)));
         }
 //        assertArrayEquals(expectedSet.toArray(), actualSet.toArray());
     }
