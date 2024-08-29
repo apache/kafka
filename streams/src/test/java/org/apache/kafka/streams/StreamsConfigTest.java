@@ -32,12 +32,12 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
-import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.RecordCollectorTest;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 
@@ -1661,21 +1661,21 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSetAndGetProductionExceptionHandlerWhenOnlyNewConfigIsSet() {
-        props.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, DefaultProductionExceptionHandler.class);
+        props.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, RecordCollectorTest.ProductionExceptionHandlerMock.class);
         streamsConfig = new StreamsConfig(props);
-        assertEquals(DefaultProductionExceptionHandler.class, streamsConfig.productionExceptionHandler().getClass());
+        assertEquals(RecordCollectorTest.ProductionExceptionHandlerMock.class, streamsConfig.productionExceptionHandler().getClass());
     }
 
     @SuppressWarnings("deprecation")
     @Test
     public void shouldUseNewProductionExceptionHandlerWhenBothConfigsAreSet() {
-        props.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, DefaultProductionExceptionHandler.class);
-        props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
+        props.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, RecordCollectorTest.ProductionExceptionHandlerMock.class);
+        props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, DefaultProductionExceptionHandler.class);
 
         try (LogCaptureAppender streamsConfigLogs = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
             streamsConfigLogs.setClassLogger(StreamsConfig.class, Level.WARN);
             streamsConfig = new StreamsConfig(props);
-            assertEquals(DefaultProductionExceptionHandler.class, streamsConfig.productionExceptionHandler().getClass());
+            assertEquals(RecordCollectorTest.ProductionExceptionHandlerMock.class, streamsConfig.productionExceptionHandler().getClass());
 
             final long warningMessageWhenBothConfigsAreSet = streamsConfigLogs.getMessages().stream()
                 .filter(m -> m.contains("Both the deprecated and new config for production exception handler are configured."))

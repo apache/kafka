@@ -548,7 +548,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * {@code default.production.exception.handler}
-     * @deprecated since 4.0. Use {@link #PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG} instead
+     * @deprecated since 4.0; Use {@link #PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG} instead
      */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
@@ -1952,7 +1952,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * @deprecated as of kafka 4.0; use {@link #deserializationExceptionHandler()} instead
+     * @deprecated since kafka 4.0; use {@link #deserializationExceptionHandler()} instead
      */
     @Deprecated
     @SuppressWarnings("WeakerAccess")
@@ -1974,7 +1974,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * @deprecated as of kafka 4.0; use {@link #processingExceptionHandler()} instead
+     * @deprecated since kafka 4.0; use {@link #productionExceptionHandler()} instead
      */
     @Deprecated
     @SuppressWarnings("WeakerAccess")
