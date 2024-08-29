@@ -33,7 +33,8 @@ logger.addHandler(handler)
 
 FAILED = "FAILED ❌"
 FLAKY = "FLAKY ⚠️ "
-SKIPPED = "SKIPPED ⚠️ "
+SKIPPED = "SKIPPED 🙈"
+
 
 def get_env(key: str) -> str:
     value = os.getenv(key)
@@ -153,6 +154,7 @@ if __name__ == "__main__":
     total_errors = 0
     total_time = 0
     failed = []
+    flaky = []
     skipped = []
     for report in reports:
         with open(report, "r") as fp:
@@ -178,13 +180,13 @@ if __name__ == "__main__":
                         continue
                     logger.debug(f"Found test failure: {test_failure}")
                     simple_class_name = test_failure.class_name.split(".")[-1]
-                    failed.append((simple_class_name, test_failure.test_name, FAILED, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
+                    failed.append((simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
                 for test_failure in suite.failed_tests:
                     if test_failure.key() not in flaky:
                         continue
                     logger.debug(f"Found flaky test: {test_failure}")
                     simple_class_name = test_failure.class_name.split(".")[-1]
-                    failed.append((simple_class_name, test_failure.test_name, FLAKY, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
+                    flaky.append((simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
                 for skipped_test in suite.skipped_tests:
                     simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
@@ -200,17 +202,27 @@ if __name__ == "__main__":
     print(f"{summary} {report_md}")
     if len(failed) > 0:
         logger.info(f"Found {len(failed)} test failures:")
-        print("## Failed Tests")
-        print(f"| Module | Test | Result | Message | Time |")
-        print(f"| ------ | ---- | ------ | ------- | ---- |")
+        print("### Failed Tests")
+        print(f"| Module | Test | Message | Time |")
+        print(f"| ------ | ---- | ------- | ---- |")
         for row in failed:
-            logger.info(f"{row[2]} {row[0]} > {row[1]}")
+            logger.info(f"{FAILED} {row[0]} > {row[1]}")
+            row_joined = " | ".join(row)
+            print(f"| {row_joined} |")
+    print("\n")
+    if len(flaky) > 0:
+        logger.info(f"Found {len(failed)} flaky test failures:")
+        print("### Flaky Tests")
+        print(f"| Module | Test | Message | Time |")
+        print(f"| ------ | ---- | ------- | ---- |")
+        for row in failed:
+            logger.info(f"{FLAKY} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
     print("\n")
     if len(skipped) > 0:
         print("<details>")
-        print("<summary>Skipped Tests</summary>")
+        print("<summary>\n\n###Skipped Tests\n\n</summary>")
         print("\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
