@@ -177,7 +177,7 @@ public class TestOutputTopic<K, V> {
      * @return size of topic queue.
      */
     public final long getQueueSize() {
-        return driver.getQueueSize(topic);
+        return driver.queueSize(topic);
     }
 
     /**

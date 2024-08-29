@@ -205,7 +205,7 @@ public class MockInternalProcessorContext extends org.apache.kafka.streams.proce
     }
 
     @Override
-    public ProcessorMetadata getProcessorMetadata() {
+    public ProcessorMetadata processorMetadata() {
         return processorMetadata;
     }
 
