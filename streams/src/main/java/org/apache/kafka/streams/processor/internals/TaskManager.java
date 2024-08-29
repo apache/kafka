@@ -577,9 +577,16 @@ public class TaskManager {
             for (final Map.Entry<Task, Set<TopicPartition>> entry : initialStandbyTasksToRecycle.entrySet()) {
                 final Task task = entry.getKey();
                 final Set<TopicPartition> inputPartitions = entry.getValue();
-                recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, failedTasks);
-                activeTasksToCreate.remove(task.id());
+                // if the task fails to recycle, don't remove it from the set of actives to create, because we still need to create it
+                if (recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, failedTasks)) {
+                    activeTasksToCreate.remove(task.id());
+                }
             }
+
+            // if any standby tasks failed to recycle, close them dirty
+            tasksToCloseDirty.forEach(task ->
+                closeTaskDirty(task, false)
+            );
         }
 
         // use initial Standbys as real Standby tasks
@@ -987,10 +994,13 @@ public class TaskManager {
             && !tasks.hasPendingTasksToInit();
     }
 
-    private void recycleTaskFromStateUpdater(final Task task,
-                                             final Set<TopicPartition> inputPartitions,
-                                             final Set<Task> tasksToCloseDirty,
-                                             final Map<TaskId, RuntimeException> taskExceptions) {
+    /**
+     * @return true if the Task successfully recycled, otherwise returns false
+     */
+    private boolean recycleTaskFromStateUpdater(final Task task,
+                                                final Set<TopicPartition> inputPartitions,
+                                                final Set<Task> tasksToCloseDirty,
+                                                final Map<TaskId, RuntimeException> taskExceptions) {
         Task newTask = null;
         try {
             task.suspend();
@@ -998,6 +1008,7 @@ public class TaskManager {
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
             tasks.addPendingTasksToInit(Collections.singleton(newTask));
+            return true;
         } catch (final RuntimeException e) {
             final TaskId taskId = task.id();
             final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
@@ -1012,6 +1023,7 @@ public class TaskManager {
             }
 
             taskExceptions.putIfAbsent(taskId, e);
+            return false;
         }
     }
 
