@@ -295,8 +295,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // If using NamedTopologies, filter out any that are no longer recognized/have been removed
         final Map<TaskId, Long> taskOffsetSums = taskManager.topologyMetadata().hasNamedTopologies() ?
-            filterMap(taskManager.getTaskOffsetSums(), t -> currentNamedTopologies.contains(t.getKey().topologyName())) :
-            taskManager.getTaskOffsetSums();
+            filterMap(taskManager.taskOffsetSums(), t -> currentNamedTopologies.contains(t.getKey().topologyName())) :
+            taskManager.taskOffsetSums();
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,

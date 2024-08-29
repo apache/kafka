@@ -21,6 +21,7 @@ plugins {
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
 def isJenkins = System.getenv('JENKINS_URL') != null
 def isCI = isGithubActions || isJenkins
+def currentJvm = JavaVersion.current()
 
 develocity {
     server = "https://ge.apache.org"
@@ -40,6 +41,7 @@ develocity {
         } else {
             tag "local"
         }
+        tag "JDK$currentJvm"
     }
 }
 
