@@ -352,12 +352,6 @@ public class MeteredVersionedKeyValueStore<K, V>
         return internal.name();
     }
 
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        internal.init(context, root);
-    }
-
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
         internal.init(context, root);

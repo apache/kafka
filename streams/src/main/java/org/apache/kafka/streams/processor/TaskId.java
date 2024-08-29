@@ -21,14 +21,7 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Objects;
-
-import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.readTaskIdFrom;
-import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.writeTaskIdTo;
 
 /**
  * The task ID representation composed as subtopology (aka topicGroupId) plus the assigned partition ID.
@@ -40,11 +33,9 @@ public class TaskId implements Comparable<TaskId> {
     public static final String NAMED_TOPOLOGY_DELIMITER = "__";
 
     /** The ID of the subtopology, aka topicGroupId. */
-    @Deprecated
-    public final int topicGroupId;
+    private final int topicGroupId;
     /** The ID of the partition. */
-    @Deprecated
-    public final int partition;
+    private final int partition;
 
     /** The namedTopology that this task belongs to, or null if it does not belong to one */
     private final String topologyName;
@@ -112,40 +103,6 @@ public class TaskId implements Comparable<TaskId> {
         } catch (final Exception e) {
             throw new TaskIdFormatException(taskIdStr);
         }
-    }
-
-    /**
-     * @throws IOException if cannot write to output stream
-     * @deprecated since 3.0, for internal use, will be removed
-     */
-    @Deprecated
-    public void writeTo(final DataOutputStream out, final int version) throws IOException {
-        writeTaskIdTo(this, out, version);
-    }
-
-    /**
-     * @throws IOException if cannot read from input stream
-     * @deprecated since 3.0, for internal use, will be removed
-     */
-    @Deprecated
-    public static TaskId readFrom(final DataInputStream in, final int version) throws IOException {
-        return readTaskIdFrom(in, version);
-    }
-
-    /**
-     * @deprecated since 3.0, for internal use, will be removed
-     */
-    @Deprecated
-    public void writeTo(final ByteBuffer buf, final int version) {
-        writeTaskIdTo(this, buf, version);
-    }
-
-    /**
-     * @deprecated since 3.0, for internal use, will be removed
-     */
-    @Deprecated
-    public static TaskId readFrom(final ByteBuffer buf, final int version) {
-        return readTaskIdFrom(buf, version);
     }
 
     @Override

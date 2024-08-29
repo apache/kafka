@@ -280,7 +280,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.configured_for_zk_migration = False
         
         # Set use_new_coordinator based on context and arguments.
-        default_use_new_coordinator = False
+        # The new group coordinator is used by default in kraft mode.
+        default_use_new_coordinator = self.quorum_info.using_kraft and version == DEV_BRANCH
        
         if use_new_coordinator is None:
             arg_name = 'use_new_coordinator'
@@ -1710,7 +1711,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
-    def list_consumer_groups(self, node=None, command_config=None):
+    def list_consumer_groups(self, node=None, command_config=None, state=None, type=None):
         """ Get list of consumer groups.
         """
         if node is None:
@@ -1727,6 +1728,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
                command_config)
+        if state is not None:
+            cmd += " --state %s" % state
+        if type is not None:
+            cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
 
     def describe_consumer_group(self, group, node=None, command_config=None):
