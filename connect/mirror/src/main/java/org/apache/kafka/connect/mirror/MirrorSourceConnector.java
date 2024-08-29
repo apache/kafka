@@ -66,7 +66,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -126,17 +125,6 @@ public class MirrorSourceConnector extends SourceConnector {
         this.configPropertyFilter = configPropertyFilter;
     }
 
-    // visible for testing the deprecated setting "use.incremental.alter.configs"
-    // this constructor should be removed when the deprecated setting is removed in Kafka 4.0
-    MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
-                          MirrorSourceConfig config, ConfigPropertyFilter configPropertyFilter, Admin targetAdmin) {
-        this.sourceAndTarget = sourceAndTarget;
-        this.replicationPolicy = replicationPolicy;
-        this.configPropertyFilter = configPropertyFilter;
-        this.config = config;
-        this.targetAdminClient = targetAdmin;                      
-    }
-        
     // visible for testing
     MirrorSourceConnector(Admin sourceAdminClient, Admin targetAdminClient, MirrorSourceConfig config) {
         this.sourceAdminClient = sourceAdminClient;
@@ -616,14 +604,12 @@ public class MirrorSourceConnector extends SourceConnector {
             configOps.put(configResource, ops);
         }
         log.trace("Syncing configs for {} topics.", configOps.size());
-        AtomicReference<Boolean> encounteredError = new AtomicReference<>(false);
         adminCall(() -> {
             targetAdminClient.incrementalAlterConfigs(configOps).values()
                 .forEach((k, v) -> v.whenComplete((x, e) -> {
-                    if (e instanceof UnsupportedVersionException && !encounteredError.get()) {
+                    if (e instanceof UnsupportedVersionException) {
                         log.error("Failed to sync configs for topic {} on cluster {} with " +
                                 "IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
-                        encounteredError.set(true);
                         context.raiseError(new ConnectException("the target cluster '"
                                 + sourceAndTarget.target() + "' is not compatible with " +
                                 "IncrementalAlterConfigs " +
