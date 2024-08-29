@@ -75,6 +75,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -1631,14 +1632,14 @@ public class ShareConsumerTest {
         return new KafkaShareConsumer<>(props, keyDeserializer, valueDeserializer);
     }
 
-    private void warmup() throws InterruptedException {
+    private void warmup() throws InterruptedException, ExecutionException, TimeoutException {
         createTopic(warmupTp.topic());
         TestUtils.waitForCondition(() ->
                         !scala.collection.JavaConverters.seqAsJavaList(cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL"))).isEmpty(),
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-        producer.send(record);
+        producer.send(record).get(5000, TimeUnit.MILLISECONDS);
         KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "warmupgroup1");
         Set<String> subscription = Collections.singleton(warmupTp.topic());
         shareConsumer.subscribe(subscription);
