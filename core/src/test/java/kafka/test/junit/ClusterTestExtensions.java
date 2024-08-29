@@ -50,6 +50,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -201,7 +202,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
         }
 
-        return repeatTestContexts(contexts);
+        return contexts;
     }
 
     @SuppressWarnings("unchecked")
@@ -225,7 +226,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ClusterTestDefaults defaults
     ) {
         int repeatCount = getTestRepeatCount();
-        List<TestTemplateInvocationContext> ret = repeatedClusterTests(repeatCount, clusterTests)
+        List<TestTemplateInvocationContext> ret = IntStream.range(0, repeatCount)
+            .mapToObj(ignored -> Arrays.stream(clusterTests))
+            .flatMap(Function.identity())
             .flatMap(clusterTest -> processClusterTestInternal(context, clusterTest, defaults).stream())
             .collect(Collectors.toList());
 
@@ -233,7 +236,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             throw new IllegalStateException("processClusterTests method should provide at least one config");
         }
 
-        return repeatTestContexts(ret);
+        return ret;
     }
 
     private List<TestTemplateInvocationContext> processClusterTestInternal(
@@ -274,7 +277,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.toList());
     }
 
-    Stream<ClusterTest> repeatedClusterTests(int repeatCount, ClusterTest... clusterTestAnnots) {
+    Stream<ClusterTest> repeatedClusterTests(int repeatCount, ClusterTest[] clusterTestAnnots) {
         ClusterTest[] repeatedTests = new ClusterTest[clusterTestAnnots.length * repeatCount];
         for (int testIdx = 0; testIdx < clusterTestAnnots.length; testIdx++) {
             for (int repeatIdx = 0; repeatIdx < repeatCount; repeatIdx++) {
@@ -283,26 +286,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         }
 
         return Arrays.stream(repeatedTests);
-    }
-
-    private List<TestTemplateInvocationContext> repeatTestContexts(
-        List<TestTemplateInvocationContext> contexts
-    ) {
-        int count;
-        try {
-            String repeatCount = System.getProperty("kafka.cluster.test.repeat", "1");
-            count = Integer.parseInt(repeatCount);
-        } catch (NumberFormatException e) {
-            count = 1;
-        }
-        if (count <= 1) {
-            return contexts;
-        }
-        List<TestTemplateInvocationContext> repeatedContexts = new ArrayList<>(contexts.size() * count);
-        for (int i = 0; i < count; i++) {
-            repeatedContexts.addAll(contexts);
-        }
-        return repeatedContexts;
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {
