@@ -93,6 +93,7 @@ import static org.apache.kafka.tools.ToolsTestUtils.assignThrottledPartitionRepl
 import static org.apache.kafka.tools.ToolsTestUtils.throttleAllBrokersReplication;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.curReassignmentsToString;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAssignment;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -492,6 +493,32 @@ public class ReassignPartitionsCommandTest {
                             new TopicPartitionReplica(topicPartition.topic(), topicPartition.partition(), targetBrokerId),
                             new CompletedMoveState(reassignment.targetDir)
                     ), false));
+        }
+    }
+
+    @ClusterTest
+    public void testCurrentReassignmentsToString() throws InterruptedException, ExecutionException {
+        createTopics();
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        produceMessages(foo0.topic(), foo0.partition(), 200);
+
+        // Execute the assignment
+        String assignment = "{\"version\":1,\"partitions\":" +
+                "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[3,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+                "]}";
+
+        runExecuteAssignment(false, assignment, -1L, -1L);
+        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            Map<TopicPartition, PartitionReassignmentState> finalAssignment = singletonMap(foo0,
+                    new PartitionReassignmentState(asList(3, 1, 2), asList(3, 1, 2), true));
+            // Wait for the assignment to complete
+            String currentReassignments = curReassignmentsToString(admin);
+            assertEquals("Current partition reassignments:\n" +
+                    "foo-0: replicas: 3,1,2,0. adding: 3. removing: 0.", currentReassignments);
+            waitForVerifyAssignment(admin, assignment, false,
+                    new VerifyAssignmentResult(finalAssignment));
+            currentReassignments = curReassignmentsToString(admin);
+            assertEquals("No partition reassignments found.", currentReassignments);
         }
     }
 
