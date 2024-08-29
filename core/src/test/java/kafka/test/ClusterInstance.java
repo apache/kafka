@@ -188,9 +188,10 @@ public interface ClusterInstance {
         waitForTopic(topic, 0);
     }
     
-    default void createTopic(String topicName, int partitions, short replicas) {
+    default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
         try (Admin admin = createAdminClient()) {
             admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
+            waitForTopic(topicName, partitions);
         }
     }
 

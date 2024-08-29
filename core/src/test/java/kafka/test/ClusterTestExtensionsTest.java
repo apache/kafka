@@ -244,7 +244,6 @@ public class ClusterTestExtensionsTest {
         int partitions = 3;
         short replicas = 3;
         clusterInstance.createTopic(topicName, partitions, replicas);
-        clusterInstance.waitForTopic(topicName, partitions);
 
         try (Admin admin = clusterInstance.createAdminClient()) {
             Assertions.assertTrue(admin.listTopics().listings().get().stream().anyMatch(s -> s.name().equals(topicName)));
