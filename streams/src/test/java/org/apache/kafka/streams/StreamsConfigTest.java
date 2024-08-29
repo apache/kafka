@@ -1687,9 +1687,9 @@ public class StreamsConfigTest {
     @SuppressWarnings("deprecation")
     @Test
     public void shouldUseOldProductionExceptionHandlerWhenOnlyOldConfigIsSet() {
-        props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, DefaultProductionExceptionHandler.class);
+        props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, RecordCollectorTest.ProductionExceptionHandlerMock.class);
         streamsConfig = new StreamsConfig(props);
-        assertEquals(DefaultProductionExceptionHandler.class, streamsConfig.productionExceptionHandler().getClass());
+        assertEquals(RecordCollectorTest.ProductionExceptionHandlerMock.class, streamsConfig.productionExceptionHandler().getClass());
     }
 
     static class MisconfiguredSerde implements Serde<Object> {
