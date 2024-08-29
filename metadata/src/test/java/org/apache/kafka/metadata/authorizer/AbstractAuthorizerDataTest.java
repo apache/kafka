@@ -98,13 +98,34 @@ public abstract class AbstractAuthorizerDataTest {
     }
 
     protected void assertSameAcls(Iterable<StandardAcl> expected, Iterable<AclBinding> actual) {
+        // order of ACLs is not guaranteed so use a hashmap to get them in the same order
         Set<AclBinding> expectedSet = new HashSet<>();
         expected.forEach(acl -> expectedSet.add(acl.toBinding()));
 
         Set<AclBinding> actualSet = new HashSet<>();
         actual.forEach(actualSet::add);
 
-        assertArrayEquals(expectedSet.toArray(), actualSet.toArray());
+        assertEquals(expectedSet.size(), actualSet.size(), "Wrong number of ACLs returned");
+
+        List<String> errMsgs = new ArrayList<>();
+        Iterator<AclBinding> expectedIter = expectedSet.iterator();
+        Iterator<AclBinding> actualIter = actualSet.iterator();
+        for (int i = 0; i < expectedSet.size(); i++) {
+            AclBinding expectedElement = expectedIter.next();
+            AclBinding actualElement = actualIter.next();
+
+            if (!expectedElement.equals(actualElement)) {
+                errMsgs.add(format("Expected: %s but got %s", expectedElement, actualElement));
+            }
+        }
+        if (!errMsgs.isEmpty()) {
+            errMsgs.add("EXPECTED SET");
+            expectedSet.forEach(e -> errMsgs.add(e.toString()));
+            errMsgs.add("ACTUAL SET");
+            actualSet.forEach(e -> errMsgs.add(e.toString()));
+            fail(format("ACLs do not match%n%s", String.join(System.lineSeparator(),errMsgs)));
+        }
+//        assertArrayEquals(expectedSet.toArray(), actualSet.toArray());
     }
 
     protected <T> void assertSameSet(Iterable<T> expected, Iterable<T> actual, String msg) {
