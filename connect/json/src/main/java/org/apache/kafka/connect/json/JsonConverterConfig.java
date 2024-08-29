@@ -29,6 +29,7 @@ import java.util.Map;
 /**
  * Configuration options for {@link JsonConverter} instances.
  */
+@SuppressWarnings("this-escape")
 public class JsonConverterConfig extends ConverterConfig {
 
     public static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
@@ -96,7 +97,6 @@ public class JsonConverterConfig extends ConverterConfig {
     private final boolean replaceNullWithDefault;
     private final byte[] schemaContent;
 
-    @SuppressWarnings("this-escape")
     public JsonConverterConfig(Map<String, ?> props) {
         super(CONFIG, props);
         this.schemasEnabled = getBoolean(SCHEMAS_ENABLE_CONFIG);
