@@ -54,7 +54,6 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
@@ -1443,12 +1442,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // be no following rebalance.
             //
             // See the ApplicationEventProcessor.process() method that handles this event for more detail.
-            applicationEventHandler.add(new AssignmentChangeEvent(subscriptions.allConsumed(), time.milliseconds()));
-
-            log.info("Assigned to partition(s): {}", partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
-
-            if (subscriptions.assignFromUser(new HashSet<>(partitions)))
-                applicationEventHandler.add(new NewTopicsMetadataUpdateRequestEvent());
+            Timer timer = time.timer(defaultApiTimeoutMs);
+            AssignmentChangeEvent assignmentChangeEvent = new AssignmentChangeEvent(timer.currentTimeMs(), calculateDeadlineMs(timer), partitions);
+            applicationEventHandler.addAndGet(assignmentChangeEvent);
         } finally {
             release();
         }

@@ -219,6 +219,8 @@ public final class ConsumerUtils {
         try {
             return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof IllegalStateException)
+                throw (IllegalStateException) e.getCause();
             throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);
@@ -231,6 +233,8 @@ public final class ConsumerUtils {
         try {
             return future.get();
         } catch (ExecutionException e) {
+            if (e.getCause() instanceof IllegalStateException)
+                throw (IllegalStateException) e.getCause();
             throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);
