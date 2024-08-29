@@ -438,7 +438,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @Override
     public long timestamp() {
         if (recordTimestamp == null) {
-            throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata().");
+            throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setRecordTimestamp().");
         }
         return recordTimestamp;
     }
