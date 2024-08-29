@@ -119,7 +119,7 @@ import org.apache.kafka.common.TopicPartition;
 public interface ConsumerRebalanceListener {
 
     /**
-     * A callback method the user can implement to provide handling of offset commits **sent to** a customized store.
+     * A callback method the user can implement to provide handling of offset commits **managed in** a customized store.
      * This method will be called during a rebalance operation when the consumer has to give up some partitions.
      * It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
      * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
@@ -127,7 +127,7 @@ public interface ConsumerRebalanceListener {
      * custom offset store to prevent duplicate data.
      * <p>
      * In eager rebalancing, it will always be called at the start of a rebalance and after the consumer stops fetching data.
-     * In cooperative rebalancing, it will be called at the end of a rebalance on the set of partitions being revoked if and only if the set is non-empty.
+     * In cooperative rebalancing, it will be called at the end of a rebalance on the set of partitions being revoked iff the set is non-empty.
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.
      * <p>
      * It is common for the revocation callback to use the consumer instance in order to commit offsets. It is possible
@@ -144,7 +144,7 @@ public interface ConsumerRebalanceListener {
     void onPartitionsRevoked(Collection<TopicPartition> partitions);
 
     /**
-     * A callback method the user can implement to be notified when partitions are assigned to this consumer.
+     * A callback method the user can implement to provide handling when partitions are assigned to this consumer.
      * This method will be called after the partition re-assignment completes and before the consumer starts fetching data
      * and only as the result of a {@link Consumer#poll(java.time.Duration) poll(long)} call.
      * <p>
@@ -178,7 +178,7 @@ public interface ConsumerRebalanceListener {
      * For example, this function is called if a consumer's session timeout has expired, or if a fatal error has been
      * received indicating the consumer is no longer part of the group.
      * <p>
-     * By default, it just triggers {@link ConsumerRebalanceListener#onPartitionsRevoked}; for users who want to distinguish
+     * By default this function triggers {@link ConsumerRebalanceListener#onPartitionsRevoked}; for users who want to distinguish
      * the handling logic of revoked partitions v.s. lost partitions, they can override the default implementation.
      * <p>
      * It is possible
