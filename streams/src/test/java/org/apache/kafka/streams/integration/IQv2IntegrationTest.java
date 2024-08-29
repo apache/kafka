@@ -37,7 +37,6 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -355,12 +354,6 @@ public class IQv2IntegrationTest {
                         @Override
                         public String name() {
                             return STORE_NAME;
-                        }
-
-                        @Deprecated
-                        @Override
-                        public void init(final ProcessorContext context, final StateStore root) {
-                            throw new UnsupportedOperationException();
                         }
 
                         @Override
