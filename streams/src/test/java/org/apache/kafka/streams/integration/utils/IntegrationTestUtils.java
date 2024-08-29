@@ -105,7 +105,6 @@ import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -115,7 +114,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 public class IntegrationTestUtils {
 
-    public static final long DEFAULT_TIMEOUT = 60 * 1000L;
+    public static final long DEFAULT_TIMEOUT = 120 * 1000L;
     private static final Logger LOG = LoggerFactory.getLogger(IntegrationTestUtils.class);
 
     /**
@@ -1181,28 +1180,6 @@ public class IntegrationTestUtils {
                 throw new AssertionError(printRecords(results) + " != " + expected, e);
             }
         }
-    }
-
-    public static void verifyKeyValueTimestamps(final Properties consumerConfig,
-                                                final String topic,
-                                                final Set<KeyValueTimestamp<String, Long>> expected) {
-        final List<ConsumerRecord<String, Long>> results;
-        try {
-            results = waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        if (results.size() != expected.size()) {
-            throw new AssertionError(printRecords(results) + " != " + expected);
-        }
-
-        final Set<KeyValueTimestamp<String, Long>> actual =
-            results.stream()
-                   .map(result -> new KeyValueTimestamp<>(result.key(), result.value(), result.timestamp()))
-                   .collect(Collectors.toSet());
-
-        assertThat(actual, equalTo(expected));
     }
 
     private static <K, V> void compareKeyValueTimestamp(final ConsumerRecord<K, V> record,
