@@ -51,6 +51,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private final SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData;
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap;
+    private final Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete = new LinkedHashMap<>();
 
     private static final Logger log = LoggerFactory.getLogger(DelayedShareFetch.class);
 
@@ -82,7 +83,13 @@ public class DelayedShareFetch extends DelayedOperation {
         if (shareFetchPartitionData.future().isDone())
             return;
 
-        Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = topicPartitionDataForAcquirablePartitions();
+        Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData;
+        // tryComplete did not invoke forceComplete, so we need to check if we have any partitions to fetch.
+        if (topicPartitionDataFromTryComplete.isEmpty())
+            topicPartitionData = topicPartitionDataForAcquirablePartitions();
+        // tryComplete invoked forceComplete, so we can use the data from tryComplete.
+        else
+            topicPartitionData = topicPartitionDataFromTryComplete;
         try {
             if (topicPartitionData.isEmpty()) {
                 // No locks for share partitions could be acquired, so we complete the request with an empty response.
@@ -140,21 +147,29 @@ public class DelayedShareFetch extends DelayedOperation {
                 shareFetchPartitionData.groupId(), shareFetchPartitionData.memberId(),
                 shareFetchPartitionData.partitionMaxBytes().keySet());
 
-        boolean canAnyPartitionBeAcquired = false;
         for (TopicIdPartition topicIdPartition: shareFetchPartitionData.partitionMaxBytes().keySet()) {
             SharePartition sharePartition = partitionCacheMap.get(new SharePartitionManager.SharePartitionKey(
                     shareFetchPartitionData.groupId(), topicIdPartition));
+            int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes().getOrDefault(topicIdPartition, 0);
             if (sharePartition.maybeAcquireFetchLock()) {
                 if (sharePartition.canAcquireRecords()) {
-                    canAnyPartitionBeAcquired = true;
+                    topicPartitionDataFromTryComplete.put(
+                            topicIdPartition,
+                            new FetchRequest.PartitionData(
+                                    topicIdPartition.topicId(),
+                                    sharePartition.nextFetchOffset(),
+                                    0,
+                                    partitionMaxBytes,
+                                    Optional.empty()
+                            )
+                    );
+                } else {
+                    sharePartition.releaseFetchLock();
                 }
-                sharePartition.releaseFetchLock();
-                if (canAnyPartitionBeAcquired)
-                    break;
             }
         }
 
-        if (canAnyPartitionBeAcquired)
+        if (!topicPartitionDataFromTryComplete.isEmpty())
             return forceComplete();
         log.info("Can't acquire records for any partition in the share fetch request for group {}, member {}, " +
                 "topic partitions {}", shareFetchPartitionData.groupId(),
