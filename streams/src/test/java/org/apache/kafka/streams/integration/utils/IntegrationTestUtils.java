@@ -75,6 +75,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -1167,6 +1168,10 @@ public class IntegrationTestUtils {
         if (results.size() != expected.size()) {
             throw new AssertionError(printRecords(results) + " != " + expected);
         }
+        // sort expected and results by key before comparing them
+        expected.sort(Comparator.comparing(e -> e.key().toString()));
+        results.sort(Comparator.comparing(e -> e.key().toString()));
+
         final Iterator<KeyValueTimestamp<K, V>> expectedIterator = expected.iterator();
         for (final ConsumerRecord<K, V> result : results) {
             final KeyValueTimestamp<K, V> expected1 = expectedIterator.next();
