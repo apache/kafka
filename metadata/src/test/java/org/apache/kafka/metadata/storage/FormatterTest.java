@@ -30,6 +30,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
 import org.apache.kafka.test.TestUtils;
@@ -340,6 +341,9 @@ public class FormatterTest {
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(MetadataVersion.latestProduction().featureLevel()),
                     (short) 0));
+            expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(GroupVersion.FEATURE_NAME).
+                setFeatureLevel(GroupVersion.GV_1.featureLevel()), (short) 0));
             if (version > 0) {
                 expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                     setName(TestFeatureVersion.FEATURE_NAME).
@@ -356,7 +360,7 @@ public class FormatterTest {
             formatter1.formatter.setSupportedFeatures(Arrays.asList(Features.values()));
             formatter1.formatter.setFeatureLevel("nonexistent.feature", (short) 1);
             assertEquals("Unsupported feature: nonexistent.feature. Supported features " +
-                    "are: kraft.version, test.feature.version, transaction.version",
+                    "are: group.version, kraft.version, test.feature.version, transaction.version",
                 assertThrows(FormatterException.class,
                     () -> formatter1.formatter.run()).
                         getMessage());

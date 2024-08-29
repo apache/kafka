@@ -72,7 +72,7 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{GroupVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch, ShareFetchContext}
@@ -3809,8 +3809,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       )
   }
 
+  private def groupVersion(): GroupVersion = {
+    GroupVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(GroupVersion.FEATURE_NAME, 0.toShort))
+  }
+
   private def isConsumerGroupProtocolEnabled(): Boolean = {
-    groupCoordinator.isNewGroupCoordinator && config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
+    groupCoordinator.isNewGroupCoordinator &&
+      config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) &&
+      groupVersion().isConsumerRebalanceProtocolSupported
   }
 
   def handleConsumerGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
