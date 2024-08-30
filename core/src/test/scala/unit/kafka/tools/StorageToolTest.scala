@@ -472,6 +472,8 @@ Found problem:
       s"Output did not contain expected feature mapping: $output")
     assertTrue(output.contains("transaction.version=0"),
       s"Output did not contain expected feature mapping: $output")
+    assertTrue(output.contains("group.version=0"),
+      s"Output did not contain expected feature mapping: $output")
   }
 
   @Test

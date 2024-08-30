@@ -314,9 +314,9 @@ public class FeatureCommand {
                 System.out.printf("%s=%d%n", feature.featureName(), featureLevel);
             }
         } catch (IllegalArgumentException e) {
-            throw new TerseException("Unsupported release.version " + releaseVersion +
-                ". Supported release.version are " + metadataVersionsToString(
-                MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
+            throw new TerseException("Unsupported release version '" + releaseVersion + "'." +
+                " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+                " to " + MetadataVersion.LATEST_PRODUCTION);
         }
     }
 

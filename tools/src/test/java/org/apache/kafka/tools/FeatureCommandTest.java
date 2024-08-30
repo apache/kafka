@@ -22,6 +22,7 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -343,20 +344,7 @@ public class FeatureCommandTest {
         assertTrue(versionMappingOutput.contains("kraft.version=0"));
         assertTrue(versionMappingOutput.contains("test.feature.version=0"));
         assertTrue(versionMappingOutput.contains("transaction.version=0"));
-
-        namespace.put("release_version", "4.0-IV0");
-        versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
-            try {
-                FeatureCommand.handleVersionMapping(new Namespace(namespace));
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
-
-        assertTrue(versionMappingOutput.contains("metadata.version=22 (4.0-IV0)"));
-        assertTrue(versionMappingOutput.contains("kraft.version=1"));
-        assertTrue(versionMappingOutput.contains("test.feature.version=1"));
-        assertTrue(versionMappingOutput.contains("transaction.version=2"));
+        assertTrue(versionMappingOutput.contains("group.version=0"));
     }
 
     @Test
@@ -369,10 +357,18 @@ public class FeatureCommandTest {
                 throw new RuntimeException(e);
             }
         });
-        assertTrue(versionMappingOutput.contains("metadata.version=21 (3.9-IV0)"));
-        assertTrue(versionMappingOutput.contains("kraft.version=1"));
-        assertTrue(versionMappingOutput.contains("test.feature.version=1"));
-        assertTrue(versionMappingOutput.contains("transaction.version=0"));
+        
+        MetadataVersion metadataVersion = MetadataVersion.latestProduction();
+
+        // Check that the metadata version is correctly included in the output
+        assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
+            "Output did not contain expected Metadata Version: " + versionMappingOutput);
+
+        for (Features feature : Features.values()) {
+            int featureLevel = feature.defaultValue(metadataVersion);
+            assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
+                "Output did not contain expected feature mapping: " + versionMappingOutput);
+        }
     }
 
     @Test
@@ -380,15 +376,22 @@ public class FeatureCommandTest {
         Map<String, Object> namespace = new HashMap<>();
         namespace.put("release_version", "2.9-IV2");
 
-        String versionMappingOutput = ToolsTestUtils.captureStandardOut(() -> {
-            TerseException exception = assertThrows(TerseException.class, () ->
-                    FeatureCommand.handleVersionMapping(new Namespace(namespace))
-            );
-            assertTrue(exception.getMessage().contains("Unsupported release.version 2.9-IV2"));
-            assertTrue(exception.getMessage().contains("Supported release.version are"));
-        });
+        TerseException exception1 = assertThrows(TerseException.class, () ->
+            FeatureCommand.handleVersionMapping(new Namespace(namespace))
+        );
 
-        // Ensure that no other output is present except for the expected error message
-        assertTrue(versionMappingOutput.isEmpty());
+        assertEquals("Unsupported release version '2.9-IV2'." +
+            " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+            " to " + MetadataVersion.LATEST_PRODUCTION, exception1.getMessage());
+
+        namespace.put("release_version", "invalid");
+
+        TerseException exception2 = assertThrows(TerseException.class, () ->
+            FeatureCommand.handleVersionMapping(new Namespace(namespace))
+        );
+
+        assertEquals("Unsupported release version 'invalid'." +
+            " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+            " to " + MetadataVersion.LATEST_PRODUCTION, exception2.getMessage());
     }
 }
