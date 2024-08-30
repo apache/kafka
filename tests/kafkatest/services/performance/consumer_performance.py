@@ -28,8 +28,6 @@ class ConsumerPerformanceService(PerformanceService):
         "zookeeper" "The connection string for the zookeeper connection in the form host:port. Multiple URLS can
                      be given to allow fail-over. This option is only used with the old consumer."
 
-        "broker-list", "A broker list to use for connecting if using the new consumer."
-
         "topic", "REQUIRED: The topic to consume from."
 
         "group", "The group id to consume on."
@@ -40,10 +38,6 @@ class ConsumerPerformanceService(PerformanceService):
                         start with the latest message present in the log rather than the earliest message."
 
         "socket-buffer-size", "The size of the tcp RECV size."
-
-        "threads", "Number of processing threads."
-
-        "num-fetch-threads", "Number of fetcher threads. Defaults to 1"
 
         "new-consumer", "Use the new consumer implementation."
         "consumer.config", "Consumer config properties file."
@@ -92,8 +86,6 @@ class ConsumerPerformanceService(PerformanceService):
         # These less-frequently used settings can be updated manually after instantiation
         self.fetch_size = None
         self.socket_buffer_size = None
-        self.threads = None
-        self.num_fetch_threads = None
         self.group = None
         self.from_latest = None
 
@@ -110,7 +102,9 @@ class ConsumerPerformanceService(PerformanceService):
         if self.new_consumer:
             if version <= LATEST_0_10_0:
                 args['new-consumer'] = ""
-            args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+                args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+            else:
+                args['bootstrap-server'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         else:
             args['zookeeper'] = self.kafka.zk_connect_setting()
 
@@ -119,12 +113,6 @@ class ConsumerPerformanceService(PerformanceService):
 
         if self.socket_buffer_size is not None:
             args['socket-buffer-size'] = self.socket_buffer_size
-
-        if self.threads is not None:
-            args['threads'] = self.threads
-
-        if self.num_fetch_threads is not None:
-            args['num-fetch-threads'] = self.num_fetch_threads
 
         if self.group is not None:
             args['group'] = self.group
