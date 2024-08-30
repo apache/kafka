@@ -44,7 +44,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         this.queryableName = queryableName;
     }
 
-    public String getQueryableName() {
+    public String queryableName() {
         return queryableName;
     }
 
