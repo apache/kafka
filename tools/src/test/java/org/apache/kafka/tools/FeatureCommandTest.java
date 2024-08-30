@@ -355,7 +355,7 @@ public class FeatureCommandTest {
 
         assertTrue(versionMappingOutput.contains("metadata.version=22 (4.0-IV0)"));
         assertTrue(versionMappingOutput.contains("kraft.version=1"));
-        assertTrue(versionMappingOutput.contains("test.feature.version=2"));
+        assertTrue(versionMappingOutput.contains("test.feature.version=1"));
         assertTrue(versionMappingOutput.contains("transaction.version=2"));
     }
 
