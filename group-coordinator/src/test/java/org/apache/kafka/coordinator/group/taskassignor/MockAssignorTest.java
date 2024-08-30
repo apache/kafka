@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -43,9 +44,10 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 Collections.emptyMap(),
-                Collections.emptyList()
+                Collections.emptyList(),
+                new HashMap<>()
             ),
-            x -> 5
+            new TopologyDescriberImpl(5)
         );
 
         assertEquals(0, result.members().size());
@@ -69,9 +71,10 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 Collections.singletonMap("test_member", memberSpec),
-                Collections.singletonList("test-subtopology")
+                Collections.singletonList("test-subtopology"),
+                new HashMap<>()
             ),
-            x -> 4
+            new TopologyDescriberImpl(4)
         );
 
         assertEquals(1, result.members().size());
@@ -111,9 +114,10 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 mkMap(mkEntry("test_member1", memberSpec1), mkEntry("test_member2", memberSpec2)),
-                Arrays.asList("test-subtopology1", "test-subtopology2")
+                Arrays.asList("test-subtopology1", "test-subtopology2"),
+                new HashMap<>()
             ),
-            x -> 4
+            new TopologyDescriberImpl(4)
         );
 
         final Map<String, Set<Integer>> expected1 = mkMap(
@@ -167,9 +171,10 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 mkMap(mkEntry("test_member1", memberSpec1), mkEntry("test_member2", memberSpec2)),
-                Arrays.asList("test-subtopology1", "test-subtopology2")
+                Arrays.asList("test-subtopology1", "test-subtopology2"),
+                new HashMap<>()
             ),
-            x -> 4
+            new TopologyDescriberImpl(4)
         );
 
         assertEquals(2, result.members().size());
@@ -185,6 +190,22 @@ public class MockAssignorTest {
             mkEntry("test-subtopology1", mkSet(1)),
             mkEntry("test-subtopology2", mkSet(1, 2, 3))
         ), testMember2.activeTasks());
+    }
+
+    static class TopologyDescriberImpl implements TopologyDescriber {
+        final int numPartitions;
+
+        TopologyDescriberImpl(int numPartitions) {
+            this.numPartitions = numPartitions;
+        }
+        @Override
+        public int numPartitions(String subtopologyId) {
+            return numPartitions;
+        }
+        @Override
+        public boolean isStateful(String subtopologyId) {
+            return false;
+        }
     }
 
 }

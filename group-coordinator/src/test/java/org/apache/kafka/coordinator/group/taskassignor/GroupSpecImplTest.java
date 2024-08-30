@@ -55,7 +55,8 @@ public class GroupSpecImplTest {
 
         groupSpec = new GroupSpecImpl(
             members,
-            subtopologies
+            subtopologies,
+            new HashMap<>()
         );
     }
 

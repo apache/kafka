@@ -211,7 +211,7 @@ public class TargetAssignmentBuilderTest {
             Map<String, Map<Integer, String>> invertedTargetAssignment = TaskAssignmentTestUtil.invertedTargetAssignment(memberSpecs);
 
             // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, new ArrayList<>(topology.subtopologies().keySet()));
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, new ArrayList<>(topology.subtopologies().keySet()), new HashMap<>());
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.

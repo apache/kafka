@@ -35,14 +35,18 @@ public class GroupSpecImpl implements GroupSpec {
      */
     private final List<String> subtopologies;
 
+    private final Map<String, String> assignmentConfigs;
+
     public GroupSpecImpl(
         Map<String, AssignmentMemberSpec> members,
-        List<String> subtopologies
+        List<String> subtopologies,
+        Map<String, String> assignmentConfigs
     ) {
         Objects.requireNonNull(members);
         Objects.requireNonNull(subtopologies);
         this.members = members;
         this.subtopologies = subtopologies;
+        this.assignmentConfigs = assignmentConfigs;
     }
 
     /**
@@ -59,6 +63,11 @@ public class GroupSpecImpl implements GroupSpec {
     }
 
     @Override
+    public Map<String, String> assignmentConfigs() {
+        return assignmentConfigs;
+    }
+
+    @Override
     public boolean equals(final Object o) {
         if (this == o) {
             return true;
@@ -68,7 +77,8 @@ public class GroupSpecImpl implements GroupSpec {
         }
         final GroupSpecImpl groupSpec = (GroupSpecImpl) o;
         return Objects.equals(members, groupSpec.members)
-            && Objects.equals(subtopologies, groupSpec.subtopologies);
+            && Objects.equals(subtopologies, groupSpec.subtopologies)
+            && Objects.equals(assignmentConfigs, groupSpec.assignmentConfigs);
     }
 
     @Override
