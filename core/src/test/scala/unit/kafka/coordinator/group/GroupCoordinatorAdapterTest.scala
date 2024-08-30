@@ -79,7 +79,7 @@ class GroupCoordinatorAdapterTest {
   }
 
   @Test
-  def testStreamsInitialize(): Unit = {
+  def testStreamsGroupInitialize(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
@@ -87,7 +87,7 @@ class GroupCoordinatorAdapterTest {
     val request = new StreamsGroupInitializeRequestData()
       .setGroupId("group")
 
-    val future = adapter.streamsInitialize(ctx, request)
+    val future = adapter.streamsGroupInitialize(ctx, request)
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
@@ -95,7 +95,7 @@ class GroupCoordinatorAdapterTest {
   }
 
   @Test
-  def testStreamsHeartbeat(): Unit = {
+  def testStreamsGroupHeartbeat(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
@@ -103,7 +103,7 @@ class GroupCoordinatorAdapterTest {
     val request = new StreamsGroupHeartbeatRequestData()
       .setGroupId("group")
 
-    val future = adapter.streamsHeartbeat(ctx, request)
+    val future = adapter.streamsGroupHeartbeat(ctx, request)
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)

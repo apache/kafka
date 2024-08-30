@@ -63,7 +63,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final ConsumerMembershipManager membershipManager;
 
-    private final StreamsInitializeRequestManager streamsInitializeRequestManager;
+    private final StreamsGroupInitializeRequestManager streamsGroupInitializeRequestManager;
 
     private final BackgroundEventHandler backgroundEventHandler;
 
@@ -82,7 +82,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         final Time time,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
-        final StreamsInitializeRequestManager streamsInitializeRequestManager,
+        final StreamsGroupInitializeRequestManager streamsGroupInitializeRequestManager,
         final ConsumerMembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
         final Metrics metrics,
@@ -92,7 +92,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
         this.membershipManager = membershipManager;
-        this.streamsInitializeRequestManager = streamsInitializeRequestManager;
+        this.streamsGroupInitializeRequestManager = streamsGroupInitializeRequestManager;
         this.backgroundEventHandler = backgroundEventHandler;
         int maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -189,12 +189,12 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 Errors error =
                     Errors.forCode(((StreamsGroupHeartbeatResponse) response.responseBody()).data().errorCode());
                 if (error == Errors.NONE) {
-                    logger.debug("StreamsHeartbeat responded successfully: {}", response);
+                    logger.debug("StreamsGroupHeartbeat responded successfully: {}", response);
                 } else {
-                    logger.error("StreamsHeartbeat failed because of {}: {}", error, response);
+                    logger.error("StreamsGroupHeartbeat failed because of {}: {}", error, response);
                 }
             } else {
-                logger.error("StreamsHeartbeat failed because of unexpected exception.", exception);
+                logger.error("StreamsGroupHeartbeat failed because of unexpected exception.", exception);
             }
         });
     }
@@ -203,13 +203,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
         this.heartbeatState.reset();
         if (exception instanceof RetriableException) {
-            String message = String.format("StreamsHeartbeatRequest failed because of the retriable exception. " +
+            String message = String.format("StreamsGroupHeartbeatRequest failed because of the retriable exception. " +
                     "Will retry in %s ms: %s",
                 heartbeatRequestState.remainingBackoffMs(responseTimeMs),
                 exception.getMessage());
             logger.debug(message);
         } else {
-            logger.error("StreamsHeartbeatRequest failed due to fatal error", exception);
+            logger.error("StreamsGroupHeartbeatRequest failed due to fatal error", exception);
             handleFatalFailure(exception);
         }
     }
@@ -230,7 +230,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.resetTimer();
 
         if (data.shouldInitializeTopology()) {
-            streamsInitializeRequestManager.initialize();
+            streamsGroupInitializeRequestManager.initialize();
         }
         if (data.partitionsByUserEndpoint() != null) {
             streamsInterface.partitionsByHost.set(convertHostInfoMap(data));
@@ -340,7 +340,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         switch (error) {
             case NOT_COORDINATOR:
                 // the manager should retry immediately when the coordinator node becomes available again
-                message = String.format("StreamsHeartbeatRequest failed because the group coordinator %s is incorrect. " +
+                message = String.format("StreamsGroupHeartbeatRequest failed because the group coordinator %s is incorrect. " +
                         "Will attempt to find the coordinator again and retry",
                     coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
@@ -350,7 +350,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
-                message = String.format("StreamsHeartbeatRequest failed because the group coordinator %s is not available. " +
+                message = String.format("StreamsGroupHeartbeatRequest failed because the group coordinator %s is not available. " +
                         "Will attempt to find the coordinator again and retry",
                     coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
@@ -361,7 +361,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // the manager will backoff and retry
-                message = String.format("StreamsHeartbeatRequest failed because the group coordinator %s is still loading." +
+                message = String.format("StreamsGroupHeartbeatRequest failed because the group coordinator %s is still loading." +
                         "Will retry",
                     coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
@@ -370,12 +370,12 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             case GROUP_AUTHORIZATION_FAILED:
                 GroupAuthorizationException exception =
                     GroupAuthorizationException.forGroupId(membershipManager.groupId());
-                logger.error("StreamsHeartbeatRequest failed due to group authorization failure: {}", exception.getMessage());
+                logger.error("StreamsGroupHeartbeatRequest failed due to group authorization failure: {}", exception.getMessage());
                 handleFatalFailure(error.exception(exception.getMessage()));
                 break;
 
             case UNRELEASED_INSTANCE_ID:
-                logger.error("StreamsHeartbeatRequest failed due to the instance id {} was not released: {}",
+                logger.error("StreamsGroupHeartbeatRequest failed due to the instance id {} was not released: {}",
                     membershipManager.groupInstanceId().orElse("null"), errorMessage);
                 handleFatalFailure(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
                 break;
@@ -384,12 +384,12 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             case GROUP_MAX_SIZE_REACHED:
             case UNSUPPORTED_ASSIGNOR:
             case UNSUPPORTED_VERSION:
-                logger.error("StreamsHeartbeatRequest failed due to error: {}", error);
+                logger.error("StreamsGroupHeartbeatRequest failed due to error: {}", error);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
 
             case FENCED_MEMBER_EPOCH:
-                message = String.format("StreamsHeartbeatRequest failed for member %s because epoch %s is fenced.",
+                message = String.format("StreamsGroupHeartbeatRequest failed for member %s because epoch %s is fenced.",
                     membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
@@ -398,7 +398,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 break;
 
             case UNKNOWN_MEMBER_ID:
-                message = String.format("StreamsHeartbeatRequest failed because member %s is unknown.",
+                message = String.format("StreamsGroupHeartbeatRequest failed because member %s is unknown.",
                     membershipManager.memberId());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
@@ -408,7 +408,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
             default:
                 // If the manager receives an unknown error - there could be a bug in the code or a new error code
-                logger.error("StreamsHeartbeatRequest failed due to unexpected error: {}", error);
+                logger.error("StreamsGroupHeartbeatRequest failed due to unexpected error: {}", error);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
         }
@@ -604,7 +604,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 .collect(Collectors.toList());
         }
 
-        // Fields of StreamsHeartbeatRequest sent in the most recent request
+        // Fields of StreamsGroupHeartbeatRequest sent in the most recent request
         static class SentFields {
 
             private int rebalanceTimeoutMs = -1;

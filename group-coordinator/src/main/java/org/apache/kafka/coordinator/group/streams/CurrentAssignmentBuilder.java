@@ -56,17 +56,17 @@ public class CurrentAssignmentBuilder {
     private BiFunction<String, Integer, Integer> currentTaskEpoch;
 
     /**
-     * The active tasks owned by the streams. This is directly provided by the member in the StreamsHeartbeat request.
+     * The active tasks owned by the streams. This is directly provided by the member in the StreamsGroupHeartbeat request.
      */
     private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks;
 
     /**
-     * The standby tasks owned by the streams. This is directly provided by the member in the StreamsHeartbeat request.
+     * The standby tasks owned by the streams. This is directly provided by the member in the StreamsGroupHeartbeat request.
      */
     private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks;
 
     /**
-     * The warmup tasks owned by the streams. This is directly provided by the member in the StreamsHeartbeat request.
+     * The warmup tasks owned by the streams. This is directly provided by the member in the StreamsGroupHeartbeat request.
      */
     private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks;
 
@@ -110,7 +110,7 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Sets the active tasks currently owned by the member. This comes directly from the last StreamsHeartbeat request. This is used to
+     * Sets the active tasks currently owned by the member. This comes directly from the last StreamsGroupHeartbeat request. This is used to
      * determine if the member has revoked the necessary tasks.
      *
      * @param ownedActiveTasks A list of topic-tasks.
@@ -124,7 +124,7 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Sets the standby tasks currently owned by the member. This comes directly from the last StreamsHeartbeat request. This is used to
+     * Sets the standby tasks currently owned by the member. This comes directly from the last StreamsGroupHeartbeat request. This is used to
      * determine if the member has revoked the necessary tasks.
      *
      * @param ownedStandbyTasks A list of topic-tasks.
@@ -138,7 +138,7 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Sets the warmup tasks currently owned by the member. This comes directly from the last StreamsHeartbeat request. This is used to
+     * Sets the warmup tasks currently owned by the member. This comes directly from the last StreamsGroupHeartbeat request. This is used to
      * determine if the member has revoked the necessary tasks.
      *
      * @param ownedWarmupTasks A list of topic-tasks.
@@ -178,7 +178,7 @@ public class CurrentAssignmentBuilder {
                 // When the member is in the UNREVOKED_TASKS state, we wait
                 // until the member has revoked the necessary tasks. They are
                 // considered revoked when they are not anymore reported in the
-                // owned tasks set in the StreamsHeartbeat API.
+                // owned tasks set in the StreamsGroupHeartbeat API.
 
                 // If the member provides its owned tasks. We verify if it still
                 // owns any of the revoked tasks. If it does, we cannot progress.

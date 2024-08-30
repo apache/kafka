@@ -134,7 +134,7 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
-    public void testStreamsInitialize() {
+    public void testStreamsGroupInitialize() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -157,16 +157,16 @@ public class GroupCoordinatorShardTest {
             new StreamsGroupInitializeResponseData()
         );
 
-        when(groupMetadataManager.streamsInitialize(
+        when(groupMetadataManager.streamsGroupInitialize(
             context,
             request
         )).thenReturn(result);
 
-        assertEquals(result, coordinator.streamsInitialize(context, request));
+        assertEquals(result, coordinator.streamsGroupInitialize(context, request));
     }
 
     @Test
-    public void testStreamsHeartbeat() {
+    public void testStreamsGroupHeartbeat() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -189,12 +189,12 @@ public class GroupCoordinatorShardTest {
             new StreamsGroupHeartbeatResponseData()
         );
 
-        when(groupMetadataManager.streamsHeartbeat(
+        when(groupMetadataManager.streamsGroupHeartbeat(
             context,
             request
         )).thenReturn(result);
 
-        assertEquals(result, coordinator.streamsHeartbeat(context, request));
+        assertEquals(result, coordinator.streamsGroupHeartbeat(context, request));
     }
     
     @Test

@@ -51,20 +51,20 @@ class StreamsGroupInitializeRequestManagerTest {
     public void shouldPollEmptyResult() {
         final CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         final StreamsAssignmentInterface streamsAssignmentInterface = mock(StreamsAssignmentInterface.class);
-        final StreamsInitializeRequestManager streamsInitializeRequestManager = new StreamsInitializeRequestManager(
+        final StreamsGroupInitializeRequestManager streamsGroupInitializeRequestManager = new StreamsGroupInitializeRequestManager(
             logContext,
             groupId,
             streamsAssignmentInterface,
             coordinatorRequestManager
         );
 
-        final NetworkClientDelegate.PollResult pollResult = streamsInitializeRequestManager.poll(0);
+        final NetworkClientDelegate.PollResult pollResult = streamsGroupInitializeRequestManager.poll(0);
 
         assertEquals(NetworkClientDelegate.PollResult.EMPTY, pollResult);
     }
 
     @Test
-    public void shouldPollStreamsInitializeRequest() {
+    public void shouldPollStreamsGroupInitializeRequest() {
         final Node node = mock(Node.class);
         final CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(node));
@@ -90,23 +90,23 @@ class StreamsGroupInitializeRequestManagerTest {
         when(streamsAssignmentInterface.subtopologyMap()).thenReturn(
             mkMap(mkEntry(subtopologyName1, subtopology1))
         );
-        final StreamsInitializeRequestManager streamsInitializeRequestManager = new StreamsInitializeRequestManager(
+        final StreamsGroupInitializeRequestManager streamsGroupInitializeRequestManager = new StreamsGroupInitializeRequestManager(
             logContext,
             groupId,
             streamsAssignmentInterface,
             coordinatorRequestManager
         );
 
-        streamsInitializeRequestManager.initialize();
-        final NetworkClientDelegate.PollResult pollResult = streamsInitializeRequestManager.poll(0);
+        streamsGroupInitializeRequestManager.initialize();
+        final NetworkClientDelegate.PollResult pollResult = streamsGroupInitializeRequestManager.poll(0);
 
         assertEquals(1, pollResult.unsentRequests.size());
         final NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
         assertTrue(unsentRequest.node().isPresent());
         assertEquals(node, unsentRequest.node().get());
         assertEquals(ApiKeys.STREAMS_GROUP_INITIALIZE, unsentRequest.requestBuilder().apiKey());
-        final StreamsGroupInitializeRequest.Builder streamsInitializeRequestBuilder = (StreamsGroupInitializeRequest.Builder) unsentRequest.requestBuilder();
-        final StreamsGroupInitializeRequest streamsGroupInitializeRequest = streamsInitializeRequestBuilder.build();
+        final StreamsGroupInitializeRequest.Builder streamsGroupInitializeRequestBuilder = (StreamsGroupInitializeRequest.Builder) unsentRequest.requestBuilder();
+        final StreamsGroupInitializeRequest streamsGroupInitializeRequest = streamsGroupInitializeRequestBuilder.build();
         final StreamsGroupInitializeRequestData streamsGroupInitializeRequestData = streamsGroupInitializeRequest.data();
         assertEquals(ApiKeys.STREAMS_GROUP_INITIALIZE.id, streamsGroupInitializeRequestData.apiKey());
         assertEquals(groupId, streamsGroupInitializeRequestData.groupId());

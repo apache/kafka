@@ -86,7 +86,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private CoordinatorRequestManager coordinatorRequestManager;
 
     @Mock
-    private StreamsInitializeRequestManager streamsInitializeRequestManager;
+    private StreamsGroupInitializeRequestManager streamsGroupInitializeRequestManager;
 
     @Mock
     private ConsumerMembershipManager membershipManager;
@@ -141,7 +141,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             time,
             config,
             coordinatorRequestManager,
-            streamsInitializeRequestManager,
+            streamsGroupInitializeRequestManager,
             membershipManager,
             backgroundEventHandler,
             metrics,
@@ -333,7 +333,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
         mockResponse(data);
 
-        verify(streamsInitializeRequestManager).initialize();
+        verify(streamsGroupInitializeRequestManager).initialize();
     }
 
     private void mockResponse(final StreamsGroupHeartbeatResponseData data) {

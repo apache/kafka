@@ -267,25 +267,25 @@ public class GroupMetadataManagerTest {
         Exception ex;
 
         // GroupId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()));
         assertEquals("GroupId can't be empty.", ex.getMessage());
 
         // GroupId can't be all whitespaces.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId("   ")));
         assertEquals("GroupId can't be empty.", ex.getMessage());
 
         // RebalanceTimeoutMs must be present in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(0)));
         assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
 
         // ActiveTasks must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(0)
@@ -295,7 +295,7 @@ public class GroupMetadataManagerTest {
         assertEquals("ActiveTasks must be empty when (re-)joining.", ex.getMessage());
 
         // StandbyTasks must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(0)
@@ -305,7 +305,7 @@ public class GroupMetadataManagerTest {
         assertEquals("StandbyTasks must be empty when (re-)joining.", ex.getMessage());
 
         // WarmupTasks must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(0)
@@ -316,14 +316,14 @@ public class GroupMetadataManagerTest {
 
         // MemberId must be non-empty in all requests except for the first one where it
         // could be empty (epoch != 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberEpoch(1)));
         assertEquals("MemberId can't be empty.", ex.getMessage());
 
         // InstanceId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberId(Uuid.randomUuid().toString())
@@ -332,7 +332,7 @@ public class GroupMetadataManagerTest {
         assertEquals("InstanceId can't be empty.", ex.getMessage());
 
         // RackId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
                 .setGroupId("foo")
                 .setMemberId(Uuid.randomUuid().toString())
@@ -341,8 +341,8 @@ public class GroupMetadataManagerTest {
         assertEquals("RackId can't be empty.", ex.getMessage());
 
 //       TODO: // ServerAssignor must exist if provided in all requests.
-//        ex = assertThrows(UnsupportedAssignorException.class, () -> context.streamsHeartbeat(
-//            new StreamsHeartbeatRequestData()
+//        ex = assertThrows(UnsupportedAssignorException.class, () -> context.streamsGroupHeartbeat(
+//            new StreamsGroupHeartbeatRequestData()
 //                .setGroupId("foo")
 //                .setMemberId(Uuid.randomUuid().toString())
 //                .setMemberEpoch(1)
@@ -15324,15 +15324,15 @@ public class GroupMetadataManagerTest {
 //                    )
 //                )
 //        );
-//        CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> result =
-//            context.streamsInitialize(
-//                new StreamsInitializeRequestData()
+//        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result =
+//            context.streamsGroupInitialize(
+//                new streamsGroupInitializeRequestData()
 //                    .setGroupId(groupId)
 //                    .setTopology(topology)
 //            );
 //
 //        assertEquals(
-//            new StreamsInitializeResponseData(),
+//            new StreamsGroupInitializeResponseData(),
 //            result.response()
 //        );
 //
@@ -15394,15 +15394,15 @@ public class GroupMetadataManagerTest {
 //                    )
 //                )
 //        );
-//        CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> result =
-//            context.streamsInitialize(
-//                new StreamsInitializeRequestData()
+//        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result =
+//            context.streamsGroupInitialize(
+//                new streamsGroupInitializeRequestData()
 //                    .setGroupId(groupId)
 //                    .setTopology(topology)
 //            );
 //
 //        assertEquals(
-//            new StreamsInitializeResponseData()
+//            new StreamsGroupInitializeResponseData()
 //                .setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code())
 //                .setErrorMessage("Internal topics changelog do not exist."),
 //            result.response()

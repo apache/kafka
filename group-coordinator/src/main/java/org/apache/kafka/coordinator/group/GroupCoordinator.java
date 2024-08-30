@@ -91,12 +91,12 @@ public interface GroupCoordinator {
      * Initialize a Streams Group.
      *
      * @param context           The request context.
-     * @param request           The StreamsHeartbeatRequest data.
+     * @param request           The StreamsGroupInitializeRequest data.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
-    CompletableFuture<StreamsGroupInitializeResponseData> streamsInitialize(
+    CompletableFuture<StreamsGroupInitializeResponseData> streamsGroupInitialize(
         RequestContext context,
         StreamsGroupInitializeRequestData request
     );
@@ -105,12 +105,12 @@ public interface GroupCoordinator {
      * Heartbeat to a Streams Group.
      *
      * @param context           The request context.
-     * @param request           The StreamsHeartbeatResponseData data.
+     * @param request           The StreamsGroupHeartbeatResponseData data.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
-    CompletableFuture<StreamsGroupHeartbeatResponseData> streamsHeartbeat(
+    CompletableFuture<StreamsGroupHeartbeatResponseData> streamsGroupHeartbeat(
         RequestContext context,
         StreamsGroupHeartbeatRequestData request
     );

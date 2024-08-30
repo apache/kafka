@@ -276,8 +276,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
         case ApiKeys.STREAMS_GROUP_DESCRIBE => handleStreamsGroupDescribe(request).exceptionally(handleError)
-        case ApiKeys.STREAMS_GROUP_INITIALIZE => handleStreamsInitialize(request).exceptionally(handleError)
-        case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsHeartbeat(request).exceptionally(handleError)
+        case ApiKeys.STREAMS_GROUP_INITIALIZE => handleStreamsGroupInitialize(request).exceptionally(handleError)
+        case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsGroupHeartbeat(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3878,27 +3878,27 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def isStreamsGroupProtocolEnabled(): Boolean = {
     config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.STREAMS)
   }
-  
-  def handleStreamsInitialize(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    val streamsInitializeRequest = request.body[StreamsGroupInitializeRequest]
+
+  def handleStreamsGroupInitialize(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val streamsGroupInitializeRequest = request.body[StreamsGroupInitializeRequest]
 
     // TODO: Check ACLs on CREATE TOPIC & DESCRIBE_CONFIGS
 
     if (!isStreamsGroupProtocolEnabled()) {
       // The API is not supported by the "old" group coordinator (the default). If the
       // new one is not enabled, we fail directly here.
-      requestHelper.sendMaybeThrottle(request, streamsInitializeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, streamsGroupInitializeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
-    } else if (!authHelper.authorize(request.context, READ, GROUP, streamsInitializeRequest.data.groupId)) {
-      requestHelper.sendMaybeThrottle(request, streamsInitializeRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+    } else if (!authHelper.authorize(request.context, READ, GROUP, streamsGroupInitializeRequest.data.groupId)) {
+      requestHelper.sendMaybeThrottle(request, streamsGroupInitializeRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      groupCoordinator.streamsInitialize(
+      groupCoordinator.streamsGroupInitialize(
         request.context,
-        streamsInitializeRequest.data,
+        streamsGroupInitializeRequest.data,
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          requestHelper.sendMaybeThrottle(request, streamsInitializeRequest.getErrorResponse(exception))
+          requestHelper.sendMaybeThrottle(request, streamsGroupInitializeRequest.getErrorResponse(exception))
         } else {
           requestHelper.sendMaybeThrottle(request, new StreamsGroupInitializeResponse(response))
         }
@@ -3906,24 +3906,24 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleStreamsHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    val streamsHeartbeatRequest = request.body[StreamsGroupHeartbeatRequest]
+  def handleStreamsGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val streamsGroupHeartbeatRequest = request.body[StreamsGroupHeartbeatRequest]
 
     if (!isStreamsGroupProtocolEnabled()) {
       // The API is not supported by the "old" group coordinator (the default). If the
       // new one is not enabled, we fail directly here.
-      requestHelper.sendMaybeThrottle(request, streamsHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
-    } else if (!authHelper.authorize(request.context, READ, GROUP, streamsHeartbeatRequest.data.groupId)) {
-      requestHelper.sendMaybeThrottle(request, streamsHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+    } else if (!authHelper.authorize(request.context, READ, GROUP, streamsGroupHeartbeatRequest.data.groupId)) {
+      requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      groupCoordinator.streamsHeartbeat(
+      groupCoordinator.streamsGroupHeartbeat(
         request.context,
-        streamsHeartbeatRequest.data,
+        streamsGroupHeartbeatRequest.data,
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
-          requestHelper.sendMaybeThrottle(request, streamsHeartbeatRequest.getErrorResponse(exception))
+          requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(exception))
         } else {
           requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(response))
         }
