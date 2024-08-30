@@ -3326,6 +3326,22 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         assertEquals("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.", exception.getMessage());
     }
 
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testEmptyGroupId(GroupProtocol groupProtocol) {
+        KafkaException e = assertThrows(KafkaException.class, () -> newConsumer(groupProtocol, ""));
+        assertInstanceOf(InvalidGroupIdException.class, e.getCause());
+        assertEquals("The configured group.id should not be an empty string or whitespace.", e.getCause().getMessage());
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testGroupIdWithWhitespace(GroupProtocol groupProtocol) {
+        KafkaException e = assertThrows(KafkaException.class, () -> newConsumer(groupProtocol, " "));
+        assertInstanceOf(InvalidGroupIdException.class, e.getCause());
+        assertEquals("The configured group.id should not be an empty string or whitespace.", e.getCause().getMessage());
+    }
+
     private KafkaConsumer<String, String> consumerForCheckingTimeoutException(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
