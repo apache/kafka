@@ -130,8 +130,6 @@ public class CoordinatorRequestManager implements RequestManager {
      * attempt to discover a new coordinator. For any other exception type, no action is performed.
      *
      * @param exception     The exception to handle, which was received as part of a request response.
-     *                      If this is an instance of {@link DisconnectException}, the coordinator is marked as unknown.
-     *                      For other types of exceptions, no action is performed.
      * @param currentTimeMs The current time in milliseconds.
      */
     public void handleCoordinatorDisconnect(Throwable exception, long currentTimeMs) {
