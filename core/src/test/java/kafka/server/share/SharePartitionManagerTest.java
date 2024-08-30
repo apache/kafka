@@ -1022,7 +1022,7 @@ public class SharePartitionManagerTest {
             .build();
 
         doAnswer(invocation -> {
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            releaseFetchQueueAndPartitionsLock(sharePartitionManager, groupId, partitionMaxBytes.keySet());
             return null;
         }).when(replicaManager).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
 
@@ -1225,35 +1225,35 @@ public class SharePartitionManagerTest {
             assertEquals(4, sp1.nextFetchOffset());
             assertEquals(10, sp2.nextFetchOffset());
             assertEquals(20, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            releaseFetchQueueAndPartitionsLock(sharePartitionManager, groupId, partitionMaxBytes.keySet());
             return null;
         }).doAnswer(invocation -> {
             assertEquals(15, sp0.nextFetchOffset());
             assertEquals(1, sp1.nextFetchOffset());
             assertEquals(25, sp2.nextFetchOffset());
             assertEquals(15, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            releaseFetchQueueAndPartitionsLock(sharePartitionManager, groupId, partitionMaxBytes.keySet());
             return null;
         }).doAnswer(invocation -> {
             assertEquals(6, sp0.nextFetchOffset());
             assertEquals(18, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(23, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            releaseFetchQueueAndPartitionsLock(sharePartitionManager, groupId, partitionMaxBytes.keySet());
             return null;
         }).doAnswer(invocation -> {
             assertEquals(30, sp0.nextFetchOffset());
             assertEquals(5, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(16, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            releaseFetchQueueAndPartitionsLock(sharePartitionManager, groupId, partitionMaxBytes.keySet());
             return null;
         }).doAnswer(invocation -> {
             assertEquals(25, sp0.nextFetchOffset());
             assertEquals(5, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(16, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
+            releaseFetchQueueAndPartitionsLock(sharePartitionManager, groupId, partitionMaxBytes.keySet());
             return null;
         }).when(replicaManager).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
 
@@ -1922,6 +1922,11 @@ public class SharePartitionManagerTest {
                 actualValidPartitions.add(topicIdPartition));
         assertEquals(expectedErroneousSet, actualErroneousPartitions);
         assertEquals(expectedValidSet, actualValidPartitions);
+    }
+
+    private void releaseFetchQueueAndPartitionsLock(SharePartitionManager sharePartitionManager, String groupId, Set<TopicIdPartition> topicIdPartitions) {
+        topicIdPartitions.forEach(tp -> sharePartitionManager.sharePartition(groupId, tp).releaseFetchLock());
+        sharePartitionManager.releaseProcessFetchQueueLock();
     }
 
     private static class SharePartitionManagerBuilder {
