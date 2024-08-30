@@ -200,7 +200,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void performActionsOnTasks() {
             tasksAndActionsLock.lock();
             try {
-                for (final TaskAndAction taskAndAction : getTasksAndActions()) {
+                for (final TaskAndAction taskAndAction : tasksAndActions()) {
                     final Action action = taskAndAction.action();
                     switch (action) {
                         case ADD:
@@ -458,7 +458,7 @@ public class DefaultStateUpdater implements StateUpdater {
             changelogReader.clear();
         }
 
-        private List<TaskAndAction> getTasksAndActions() {
+        private List<TaskAndAction> tasksAndActions() {
             final List<TaskAndAction> tasksAndActionsToProcess = new ArrayList<>(tasksAndActions);
             tasksAndActions.clear();
             return tasksAndActionsToProcess;
