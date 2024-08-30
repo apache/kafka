@@ -1474,7 +1474,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             fetchBuffer.retainAll(Collections.emptySet());
-            Timer timer = time.timer(Long.MAX_VALUE);
+            Timer timer = time.timer(defaultApiTimeoutMs);
             UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
             applicationEventHandler.add(unsubscribeEvent);
             log.info("Unsubscribing all topics or patterns and assigned partitions {}",
