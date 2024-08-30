@@ -52,7 +52,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -328,12 +327,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // case it times out, subsequent attempts will also use the event in order to wait for the results.
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchCommittedFuture;
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
-            if (pendingOffsetFetchEvent != null) {
-                // This will be the case where we were waiting for a fetch committed offsets request
-                // to update positions, but the set of initializing partitions changed. We need to
-                // cancel the pending future, to ensure that it's results are not used to update
-                pendingOffsetFetchEvent.result.cancel(true);
-            }
             // Need to generate a new request to fetch committed offsets
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
             fetchCommittedFuture = commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
@@ -346,15 +339,12 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // completing the result future for the current attempt to initWithCommittedOffsetsIfNeeded
         fetchCommittedFuture.whenComplete((offsets, error) -> {
             pendingOffsetFetchEvent = null;
-            if (error instanceof CancellationException) {
-                // Abort updating positions
-                return;
-            }
-            // If an offset fetch triggered to update positions finishes without being
-            // cancelled, we update positions even if the original event expired. The event
-            // is cancelled whenever the set of partitions to initialize changes
+
+            // Ensure we only set positions for the partitions that still require one (ex. some partitions may have
+            // been assigned a position manually)
             if (error == null) {
-                refreshCommittedOffsets(offsets, metadata, subscriptionState);
+                Map<TopicPartition, OffsetAndMetadata> offsetsToApply = offsetsForInitializingPartitions(offsets);
+                refreshCommittedOffsets(offsetsToApply, metadata, subscriptionState);
                 result.complete(null);
             } else {
                 log.error("Error fetching committed offsets to update positions", error);
@@ -362,6 +352,17 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             }
         });
 
+        return result;
+    }
+
+    private Map<TopicPartition, OffsetAndMetadata> offsetsForInitializingPartitions(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        Set<TopicPartition> currentlyInitializingPartitions = subscriptionState.initializingPartitions();
+        Map<TopicPartition, OffsetAndMetadata> result = new HashMap<>();
+        offsets.forEach((key, value) -> {
+            if (currentlyInitializingPartitions.contains(key)) {
+                result.put(key, value);
+            }
+        });
         return result;
     }
 
