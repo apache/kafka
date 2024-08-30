@@ -179,22 +179,22 @@ if __name__ == "__main__":
                 # tests pass and then fail in the same run. Because of this, we need to capture all passed and all
                 # failed for each suite. Then we can find flakes by taking the intersection of those two.
                 all_suite_passed = {test.key() for test in suite.passed_tests}
-                all_suite_failed = {test.key() for test in suite.failed_tests}
-                flaky = all_suite_passed & all_suite_failed
-                all_tests = all_suite_passed | all_suite_failed
+                all_suite_failed = {test.key(): test for test in suite.failed_tests}
+                flaky = all_suite_passed & all_suite_failed.keys()
+                all_tests = all_suite_passed | all_suite_failed.keys()
                 total_tests += len(all_tests)
                 total_flaky += len(flaky)
                 total_failures += len(all_suite_failed) - len(flaky)
                 total_success += len(all_suite_passed) - len(flaky)
 
-                # Display failures first
-                for test_failure in suite.failed_tests:
+                # Display failures first. Iterate across the unique failed tests to avoid duplicates in table.
+                for test_failure in all_suite_failed.values():
                     if test_failure.key() in flaky:
                         continue
                     logger.debug(f"Found test failure: {test_failure}")
                     simple_class_name = test_failure.class_name.split(".")[-1]
                     failed_table.append((simple_class_name, test_failure.test_name, test_failure.failure_message, f"{test_failure.time:0.2f}s"))
-                for test_failure in suite.failed_tests:
+                for test_failure in all_suite_failed.values():
                     if test_failure.key() not in flaky:
                         continue
                     logger.debug(f"Found flaky test: {test_failure}")
