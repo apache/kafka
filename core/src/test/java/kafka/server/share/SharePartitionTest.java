@@ -4339,7 +4339,6 @@ public class SharePartitionTest {
         // Acknowledge subset with another member.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge("member-2",
                 Collections.singletonList(new ShareAcknowledgementBatch(9, 11, Collections.singletonList((byte) 1))));
-//        assertNull(ackResult.join());
         assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(ackResult, InvalidRecordStateException.class);
     }

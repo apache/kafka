@@ -1611,9 +1611,9 @@ public class SharePartition {
         long lastOffset,
         long delayMs
     ) {
-        AcquisitionLockTimerTask acquistionLockTimerTask = acquisitionLockTimerTask(memberId, firstOffset, lastOffset, delayMs);
-        timer.add(acquistionLockTimerTask);
-        return acquistionLockTimerTask;
+        AcquisitionLockTimerTask acquisitionLockTimerTask = acquisitionLockTimerTask(memberId, firstOffset, lastOffset, delayMs);
+        timer.add(acquisitionLockTimerTask);
+        return acquisitionLockTimerTask;
     }
 
     private AcquisitionLockTimerTask acquisitionLockTimerTask(
