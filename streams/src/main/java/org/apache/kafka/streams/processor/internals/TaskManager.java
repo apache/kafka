@@ -108,6 +108,7 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
+    final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetAndMetadataPerTask = new HashMap<>();
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final ProcessId processId,
@@ -180,6 +181,10 @@ public class TaskManager {
 
     boolean rebalanceInProgress() {
         return rebalanceInProgress;
+    }
+
+    public Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetAndMetadataPerTask() {
+        return offsetAndMetadataPerTask;
     }
 
     void handleRebalanceStart(final Set<String> subscribedTopics) {
@@ -1921,6 +1926,19 @@ public class TaskManager {
             if (task instanceof StreamTask) {
                 if (task.inputPartitions().contains(topicPartition)) {
                     ((StreamTask) task).updateEndOffsets(topicPartition, offset);
+                }
+            }
+        }
+    }
+
+    public void updateTaskOffsetAndMetadata(final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata) {
+        for (final Task task : tasks.activeTasks()) {
+            if (task instanceof StreamTask) {
+                for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetAndMetadata.entrySet()) {
+                    if (task.inputPartitions().contains(entry.getKey())) {
+                        this.offsetAndMetadataPerTask.putIfAbsent(task, new HashMap<>());
+                        this.offsetAndMetadataPerTask.get(task).put(entry.getKey(), entry.getValue());
+                    }
                 }
             }
         }

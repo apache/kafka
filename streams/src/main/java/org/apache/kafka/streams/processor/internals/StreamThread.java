@@ -1244,6 +1244,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                 .ifPresent(t -> taskManager.updateTaskEndMetadata(topicPartition, t.offset()));
         }
 
+        taskManager.updateTaskOffsetAndMetadata(records.nextOffsets());
+
         log.debug("Main Consumer poll completed in {} ms and fetched {} records from partitions {}",
             pollLatency, numRecords, records.partitions());
 

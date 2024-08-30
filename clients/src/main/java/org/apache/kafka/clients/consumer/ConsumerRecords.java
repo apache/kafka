@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -88,6 +89,10 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         for (List<ConsumerRecord<K, V>> recs: this.records.values())
             count += recs.size();
         return count;
+    }
+
+    public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
+        return new HashMap<>();
     }
 
     private static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {
