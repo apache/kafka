@@ -459,7 +459,7 @@ public class CommitRequestManagerTest {
         // Commit should mark the coordinator unknown and fail with RetriableCommitFailedException.
         assertTrue(commitResult.isDone());
         assertFutureThrows(commitResult, RetriableCommitFailedException.class);
-        assertCoordinatorDisconnectOnDisconnect();
+        assertCoordinatorDisconnectHandling();
     }
 
     @Test
@@ -782,7 +782,7 @@ public class CommitRequestManagerTest {
 
         // Request not completed just yet, but should have marked the coordinator unknown
         assertFalse(result.isDone());
-        assertCoordinatorDisconnectOnDisconnect();
+        assertCoordinatorDisconnectHandling();
 
         time.sleep(retryBackoffMs);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -922,7 +922,7 @@ public class CommitRequestManagerTest {
         assertRetryBackOff(commitRequestManager, retryBackoffMs);
     }
 
-    private void assertCoordinatorDisconnectOnDisconnect() {
+    private void assertCoordinatorDisconnectHandling() {
         verify(coordinatorRequestManager).handleCoordinatorDisconnect(any(), anyLong());
     }
 
