@@ -134,7 +134,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val exception = assertThrows(classOf[ExecutionException], () => {
         brokenClient.alterConfigs(
         Map(brokerLoggerConfigResource -> new Config(alterLogLevelsEntries)).asJava,
-          new AlterConfigsOptions().timeoutMs(0)).all()
+          new AlterConfigsOptions().timeoutMs(0)).all().get()
       })
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally brokenClient.close(time.Duration.ZERO)
@@ -3328,7 +3328,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertInstanceOf(classOf[TimeoutException], exception.getCause)
     } finally client.close(time.Duration.ZERO)
   }
-  
+
   /**
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
