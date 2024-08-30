@@ -57,6 +57,12 @@ public class TopologyMetadata implements TopologyDescriber {
         return topology;
     }
 
+    @Override
+    public boolean isStateful(String subtopologyId) {
+        //TODO
+        return false;
+    }
+
     /**
      * The number of partitions for the given subtopology ID.
      *

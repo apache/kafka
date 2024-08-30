@@ -284,7 +284,8 @@ public class TargetAssignmentBuilder {
             newGroupAssignment = assignor.assign(
                 new GroupSpecImpl(
                     Collections.unmodifiableMap(memberSpecs),
-                    new ArrayList<>(topology.subtopologies().keySet())
+                    new ArrayList<>(topology.subtopologies().keySet()),
+                    new HashMap<>()
                 ),
                 new TopologyMetadata(subscriptionMetadata, topology)
             );
