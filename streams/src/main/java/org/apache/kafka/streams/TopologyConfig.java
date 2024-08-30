@@ -230,7 +230,7 @@ public class TopologyConfig extends AbstractConfig {
             timestampExtractorSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         }
 
-        final String deserializationExceptionHandlerKey = originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) ?
+        final String deserializationExceptionHandlerKey = globalAppConfigs.originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) ?
             DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG :
             DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
