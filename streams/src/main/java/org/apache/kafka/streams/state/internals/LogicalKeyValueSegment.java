@@ -19,8 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
 
@@ -136,9 +136,8 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         return name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final StateStoreContext context, final StateStore root) {
         throw new UnsupportedOperationException("cannot initialize a logical segment");
     }
 
