@@ -609,7 +609,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                ClientResponse resp,
                                                long responseCompletionTimeMs) {
         try {
-            //acknowledgeRequestState.handleShareAcknowledgeSuccess(resp);
             log.debug("Completed ShareAcknowledge request from node {} successfully", fetchTarget.id());
             ShareAcknowledgeResponse response = (ShareAcknowledgeResponse) resp.responseBody();
 
