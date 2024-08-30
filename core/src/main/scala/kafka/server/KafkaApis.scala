@@ -72,11 +72,12 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{GroupVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch, ShareFetchContext}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
@@ -3808,8 +3809,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       )
   }
 
+  private def groupVersion(): GroupVersion = {
+    GroupVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(GroupVersion.FEATURE_NAME, 0.toShort))
+  }
+
   private def isConsumerGroupProtocolEnabled(): Boolean = {
-    groupCoordinator.isNewGroupCoordinator && config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
+    groupCoordinator.isNewGroupCoordinator &&
+      config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) &&
+      groupVersion().isConsumerRebalanceProtocolSupported
   }
 
   def handleConsumerGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -4193,13 +4200,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManagerInstance.releaseAcquiredRecords(groupId, memberId).
+            sharePartitionManagerInstance.releaseSession(groupId, memberId).
               whenComplete((releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
-                  error(s"Release acquired records on share session close with correlation from client ${request.header.clientId}  " +
+                  error(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Release acquired records on share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
                 }
               )
           }
@@ -4415,13 +4422,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
         } else {
           if (shareSessionEpoch == ShareRequestMetadata.FINAL_EPOCH) {
-            sharePartitionManagerInstance.releaseAcquiredRecords(groupId, memberId).
+            sharePartitionManagerInstance.releaseSession(groupId, memberId).
               whenComplete{ (releaseAcquiredRecordsData, throwable) =>
                 if (throwable != null) {
-                  debug(s"Release acquired records on share session close with correlation from client ${request.header.clientId}  " +
+                  debug(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Release acquired records on share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
                 }
               }
           }
