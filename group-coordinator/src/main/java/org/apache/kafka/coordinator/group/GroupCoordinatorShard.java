@@ -104,7 +104,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.coordinator.group.taskassignor.MockAssignor;
 import org.apache.kafka.coordinator.group.taskassignor.StickyTaskAssignor;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -363,35 +362,35 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Handles a StreamsInitialize request.
+     * Handles a StreamsGroupInitialize request.
      *
      * @param context The request context.
-     * @param request The actual StreamsInitialize request.
+     * @param request The actual StreamsGroupInitialize request.
      *
-     * @return A Result containing the StreamsInitialize response and
+     * @return A Result containing the StreamsGroupInitialize response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsInitialize(
+    public CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsGroupInitialize(
         RequestContext context,
         StreamsGroupInitializeRequestData request
     ) {
-        return groupMetadataManager.streamsInitialize(context, request);
+        return groupMetadataManager.streamsGroupInitialize(context, request);
     }
 
     /**
-     * Handles a StreamsHeartbeat request.
+     * Handles a StreamsGroupHeartbeat request.
      *
      * @param context The request context.
-     * @param request The actual StreamsHeartbeat request.
+     * @param request The actual StreamsGroupHeartbeat request.
      *
-     * @return A Result containing the StreamsHeartbeat response and
+     * @return A Result containing the StreamsGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
+    public CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> streamsGroupHeartbeat(
         RequestContext context,
         StreamsGroupHeartbeatRequestData request
     ) {
-        return groupMetadataManager.streamsHeartbeat(context, request);
+        return groupMetadataManager.streamsGroupHeartbeat(context, request);
     }
 
     /**

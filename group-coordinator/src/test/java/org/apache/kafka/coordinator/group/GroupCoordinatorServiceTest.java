@@ -261,7 +261,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testStreamsInitializeWhenNotStarted() throws ExecutionException, InterruptedException {
+    public void testStreamsGroupInitializeWhenNotStarted() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -274,7 +274,7 @@ public class GroupCoordinatorServiceTest {
         StreamsGroupInitializeRequestData request = new StreamsGroupInitializeRequestData()
             .setGroupId("foo");
 
-        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsInitialize(
+        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsGroupInitialize(
             requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
@@ -287,7 +287,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testStreamsInitialize() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testStreamsGroupInitialize() throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -311,7 +311,7 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupInitializeResponseData()
         ));
 
-        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsInitialize(
+        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsGroupInitialize(
             requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
@@ -319,7 +319,7 @@ public class GroupCoordinatorServiceTest {
         assertEquals(new StreamsGroupInitializeResponseData(), future.get(5, TimeUnit.SECONDS));
     }
 
-    private static Stream<Arguments> testStreamsInitializeWithExceptionSource() {
+    private static Stream<Arguments> testStreamsGroupInitializeWithExceptionSource() {
         return Stream.of(
             Arguments.arguments(new UnknownTopicOrPartitionException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
             Arguments.arguments(new NotEnoughReplicasException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
@@ -335,8 +335,8 @@ public class GroupCoordinatorServiceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testStreamsInitializeWithExceptionSource")
-    public void testStreamsInitializeWithException(
+    @MethodSource("testStreamsGroupInitializeWithExceptionSource")
+    public void testStreamsGroupInitializeWithException(
         Throwable exception,
         short expectedErrorCode,
         String expectedErrorMessage
@@ -362,7 +362,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
-        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsInitialize(
+        CompletableFuture<StreamsGroupInitializeResponseData> future = service.streamsGroupInitialize(
             requestContext(ApiKeys.STREAMS_GROUP_INITIALIZE),
             request
         );
@@ -376,7 +376,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testStreamsHeartbeatWhenNotStarted() throws ExecutionException, InterruptedException {
+    public void testStreamsGroupHeartbeatWhenNotStarted() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -389,7 +389,7 @@ public class GroupCoordinatorServiceTest {
         StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
             .setGroupId("foo");
 
-        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsHeartbeat(
+        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsGroupHeartbeat(
             requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
             request
         );
@@ -402,7 +402,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testStreamsHeartbeat() throws ExecutionException, InterruptedException, TimeoutException {
+    public void testStreamsGroupHeartbeat() throws ExecutionException, InterruptedException, TimeoutException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -426,7 +426,7 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResponseData()
         ));
 
-        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsHeartbeat(
+        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsGroupHeartbeat(
             requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
             request
         );
@@ -434,7 +434,7 @@ public class GroupCoordinatorServiceTest {
         assertEquals(new StreamsGroupHeartbeatResponseData(), future.get(5, TimeUnit.SECONDS));
     }
 
-    private static Stream<Arguments> testStreamsHeartbeatWithExceptionSource() {
+    private static Stream<Arguments> testStreamsGroupHeartbeatWithExceptionSource() {
         return Stream.of(
             Arguments.arguments(new UnknownTopicOrPartitionException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
             Arguments.arguments(new NotEnoughReplicasException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
@@ -449,8 +449,8 @@ public class GroupCoordinatorServiceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testStreamsHeartbeatWithExceptionSource")
-    public void testStreamsHeartbeatWithException(
+    @MethodSource("testStreamsGroupHeartbeatWithExceptionSource")
+    public void testStreamsGroupHeartbeatWithException(
         Throwable exception,
         short expectedErrorCode,
         String expectedErrorMessage
@@ -476,7 +476,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
-        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsHeartbeat(
+        CompletableFuture<StreamsGroupHeartbeatResponseData> future = service.streamsGroupHeartbeat(
             requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
             request
         );

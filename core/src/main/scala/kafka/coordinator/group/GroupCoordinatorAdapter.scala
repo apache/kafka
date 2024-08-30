@@ -78,7 +78,7 @@ private[group] class GroupCoordinatorAdapter(
     ))
   }
 
-  override def streamsInitialize(
+  override def streamsGroupInitialize(
                                    context: RequestContext,
                                    request: StreamsGroupInitializeRequestData
                                  ): CompletableFuture[StreamsGroupInitializeResponseData] = {
@@ -87,7 +87,7 @@ private[group] class GroupCoordinatorAdapter(
     ))
   }
 
-  override def streamsHeartbeat(
+  override def streamsGroupHeartbeat(
                                  context: RequestContext,
                                  request: StreamsGroupHeartbeatRequestData
                                ): CompletableFuture[StreamsGroupHeartbeatResponseData] = {

@@ -1606,7 +1606,7 @@ public class GroupMetadataManager {
      * @throws InvalidRequestException if the request is not valid.
      * @throws UnsupportedAssignorException if the assignor is not supported.
      */
-    private void throwIfStreamsInitializeRequestIsInvalid(
+    private void throwIfStreamsGroupInitializeRequestIsInvalid(
         StreamsGroupInitializeRequestData request
     ) throws InvalidRequestException, UnsupportedAssignorException {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
@@ -1628,7 +1628,7 @@ public class GroupMetadataManager {
      * @throws InvalidRequestException if the request is not valid.
      * @throws UnsupportedAssignorException if the assignor is not supported.
      */
-    private void throwIfStreamsHeartbeatRequestIsInvalid(
+    private void throwIfStreamsGroupHeartbeatRequestIsInvalid(
         StreamsGroupHeartbeatRequestData request
     ) throws InvalidRequestException, UnsupportedAssignorException {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
@@ -2159,9 +2159,9 @@ public class GroupMetadataManager {
      * @param ownedWarmupTasks   The list of owned warmup tasks from the request or null.
      * @param userEndpoint
      * @param clientTags
-     * @return A Result containing the StreamsHeartbeat response and a list of records to update the state machine.
+     * @return A Result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
-    private CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
+    private CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> streamsGroupHeartbeat(
         String groupId,
         String memberId,
         int memberEpoch,
@@ -2338,15 +2338,15 @@ public class GroupMetadataManager {
             || hasAssignedStandbyTasksChanged(member, updatedMember)
             || hasAssignedWarmupTasksChanged(member, updatedMember)
         ) {
-            response.setActiveTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedActiveTasks()));
-            response.setStandbyTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedStandbyTasks()));
-            response.setWarmupTasks(createStreamsHeartbeatResponseTaskIds(updatedMember.assignedWarmupTasks()));
+            response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedActiveTasks()));
+            response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedStandbyTasks()));
+            response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedWarmupTasks()));
         }
 
         return new CoordinatorResult<>(records, response);
     }
 
-    private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
+    private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
         return taskIds.entrySet().stream()
             .map(entry -> new StreamsGroupHeartbeatResponseData.TaskIds()
                 .setSubtopology(entry.getKey())
@@ -2556,10 +2556,10 @@ public class GroupMetadataManager {
      *
      * @param groupId       The group id from the request.
      * @param subtopologies The list of subtopologies
-     * @return A Result containing the StreamsInitialize response and a list of records to update the state machine.
+     * @return A Result containing the StreamsGroupInitialize response and a list of records to update the state machine.
      */
-    private CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsInitialize(String groupId,
-                                                                                                       List<StreamsGroupInitializeRequestData.Subtopology> subtopologies)
+    private CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsGroupInitialize(String groupId,
+                                                                                                            List<StreamsGroupInitializeRequestData.Subtopology> subtopologies)
         throws ApiException {
         final List<CoordinatorRecord> records = new ArrayList<>();
 
@@ -3271,13 +3271,13 @@ public class GroupMetadataManager {
      * @param targetAssignmentEpoch The target assignment epoch.
      * @param targetAssignment      The target assignment.
      * @param ownedActiveTasks      The list of active tasks owned by the member. This
-     *                              is reported in the StreamsHeartbeat API and
+     *                              is reported in the StreamsGroupHeartbeat API and
      *                              it could be null if not provided.
      * @param ownedStandbyTasks     The list of standby owned by the member. This
-     *                              is reported in the StreamsHeartbeat API and
+     *                              is reported in the StreamsGroupHeartbeat API and
      *                              it could be null if not provided.
      * @param ownedWarmupTasks      The list of warmup tasks owned by the member. This
-     *                              is reported in the StreamsHeartbeat API and
+     *                              is reported in the StreamsGroupHeartbeat API and
      *                              it could be null if not provided.
      * @param records               The list to accumulate any new records.
      * @return The received member if no changes have been made; or a new
@@ -3561,7 +3561,7 @@ public class GroupMetadataManager {
      * @param memberId      The member id from the request.
      * @param memberEpoch   The member epoch from the request.
      *
-     * @return A Result containing the StreamsHeartbeat response and
+     * @return A Result containing the StreamsGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> streamsGroupLeave(
@@ -4385,40 +4385,40 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handles a StreamsInitialize request.
+     * Handles a StreamsGroupInitialize request.
      *
      * @param context The request context.
-     * @param request The actual StreamsInitialize request.
+     * @param request The actual StreamsGroupInitialize request.
      *
-     * @return A Result containing the StreamsInitialize response and
+     * @return A Result containing the StreamsGroupInitialize response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsInitialize(
+    public CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsGroupInitialize(
         RequestContext context,
         StreamsGroupInitializeRequestData request
     ) throws ApiException {
-        throwIfStreamsInitializeRequestIsInvalid(request);
+        throwIfStreamsGroupInitializeRequestIsInvalid(request);
 
-        return streamsInitialize(
+        return streamsGroupInitialize(
             request.groupId(),
             request.topology()
         );
     }
 
     /**
-     * Handles a StreamsHeartbeat request.
+     * Handles a StreamsGroupHeartbeat request.
      *
      * @param context The request context.
-     * @param request The actual StreamsHeartbeat request.
+     * @param request The actual StreamsGroupHeartbeat request.
      *
-     * @return A Result containing the StreamsHeartbeat response and
+     * @return A Result containing the StreamsGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
+    public CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> streamsGroupHeartbeat(
         RequestContext context,
         StreamsGroupHeartbeatRequestData request
     ) throws ApiException {
-        throwIfStreamsHeartbeatRequestIsInvalid(request);
+        throwIfStreamsGroupHeartbeatRequestIsInvalid(request);
 
         if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // -2 means that a static member wants to leave the group.
@@ -4429,7 +4429,7 @@ public class GroupMetadataManager {
                 request.memberEpoch()
             );
         } else {
-            return streamsHeartbeat(
+            return streamsGroupHeartbeat(
                 request.groupId(),
                 request.memberId(),
                 request.memberEpoch(),

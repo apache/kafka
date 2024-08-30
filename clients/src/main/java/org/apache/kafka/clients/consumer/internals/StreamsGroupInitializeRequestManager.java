@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public class StreamsInitializeRequestManager implements RequestManager {
+public class StreamsGroupInitializeRequestManager implements RequestManager {
 
     private final Logger logger;
     private final String groupId;
@@ -40,10 +40,10 @@ public class StreamsInitializeRequestManager implements RequestManager {
     private Optional<NetworkClientDelegate.UnsentRequest> unsentRequest = Optional.empty();
 
 
-    StreamsInitializeRequestManager(final LogContext logContext,
-                                    final String groupId,
-                                    final StreamsAssignmentInterface streamsAssignmentInterface,
-                                    final CoordinatorRequestManager coordinatorRequestManager) {
+    StreamsGroupInitializeRequestManager(final LogContext logContext,
+                                         final String groupId,
+                                         final StreamsAssignmentInterface streamsAssignmentInterface,
+                                         final CoordinatorRequestManager coordinatorRequestManager) {
         this.logger = logContext.logger(getClass());
         this.groupId = groupId;
         this.streamsAssignmentInterface = streamsAssignmentInterface;
@@ -70,11 +70,11 @@ public class StreamsInitializeRequestManager implements RequestManager {
         streamsGroupInitializeRequestData.setGroupId(groupId);
         final List<StreamsGroupInitializeRequestData.Subtopology> topology = getTopologyFromStreams();
         streamsGroupInitializeRequestData.setTopology(topology);
-        final StreamsGroupInitializeRequest.Builder streamsInitializeRequestBuilder = new StreamsGroupInitializeRequest.Builder(
+        final StreamsGroupInitializeRequest.Builder streamsGroupInitializeRequestBuilder = new StreamsGroupInitializeRequest.Builder(
             streamsGroupInitializeRequestData
         );
         return new NetworkClientDelegate.UnsentRequest(
-            streamsInitializeRequestBuilder,
+            streamsGroupInitializeRequestBuilder,
             coordinatorRequestManager.coordinator()
         );
     }
