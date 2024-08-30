@@ -72,7 +72,7 @@ public class QuotaUtils {
         if (measurable instanceof Rate) {
             return (Rate) measurable;
         } else {
-            throw new IllegalArgumentException("Metric $name is not a Rate metric, value " + measurable);
+            throw new IllegalArgumentException("Metric " + name + " is not a Rate metric, value " + measurable);
         }
     }
 
