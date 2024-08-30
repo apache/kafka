@@ -86,7 +86,6 @@ class ConsumerGroupCommandTestUtils {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
 
         return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(CO_KRAFT))
@@ -99,7 +98,6 @@ class ConsumerGroupCommandTestUtils {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false");
 
         return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(ZK))
