@@ -473,8 +473,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
         taskManager.setMainConsumer(mainConsumer);
         referenceContainer.mainConsumer = mainConsumer;
-        
-        final StreamsThreadDelegatingMetricsReporter reporter = new StreamsThreadDelegatingMetricsReporter(mainConsumer, threadId);
+
+        final String stateUpdaterId = stateUpdaterEnabled ? threadId.replace("-StreamThread-", "-StateUpdater-") : "NA";
+        final StreamsThreadDelegatingMetricsReporter reporter = new StreamsThreadDelegatingMetricsReporter(mainConsumer, threadId, stateUpdaterId);
         streamsMetrics.metricsRegistry().addReporter(reporter);
 
         final StreamThread streamThread = new StreamThread(
