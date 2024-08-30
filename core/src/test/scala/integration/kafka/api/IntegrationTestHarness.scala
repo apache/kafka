@@ -73,7 +73,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     }
     if (isNewGroupCoordinatorEnabled()) {
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
-      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer"))
     }
     if (isShareGroupTest()) {
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))

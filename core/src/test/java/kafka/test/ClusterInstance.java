@@ -31,7 +31,6 @@ import org.apache.kafka.test.TestUtils;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -40,7 +39,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 
 public interface ClusterInstance {
 
@@ -160,15 +159,11 @@ public interface ClusterInstance {
     }
 
     default Set<GroupProtocol> supportedGroupProtocols() {
-        Map<String, String> serverProperties = config().serverProperties();
-        Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
-        supportedGroupProtocols.add(CLASSIC);
-
-        if (serverProperties.getOrDefault(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "").contains("consumer")) {
-            supportedGroupProtocols.add(CONSUMER);
+        if (isKRaftTest()) {
+            return mkSet(CLASSIC, CONSUMER);
+        } else {
+            return Collections.singleton(CLASSIC);
         }
-
-        return Collections.unmodifiableSet(supportedGroupProtocols);
     }
 
     //---------------------------[modify]---------------------------//

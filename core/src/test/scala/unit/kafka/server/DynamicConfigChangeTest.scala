@@ -64,7 +64,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val cfg = TestUtils.createBrokerConfig(0, zkConnectOrNull)
     if (isNewGroupCoordinatorEnabled()) {
       cfg.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true")
-      cfg.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     }
     List(KafkaConfig.fromProps(cfg))
   }
