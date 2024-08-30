@@ -159,7 +159,7 @@ public interface ClusterInstance {
     }
 
     default Set<GroupProtocol> supportedGroupProtocols() {
-        if (isKRaftTest()) {
+        if (isKRaftTest() && brokers().values().stream().allMatch(b -> b.dataPlaneRequestProcessor().isConsumerGroupProtocolEnabled())) {
             return mkSet(CLASSIC, CONSUMER);
         } else {
             return Collections.singleton(CLASSIC);

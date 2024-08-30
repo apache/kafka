@@ -49,6 +49,8 @@ import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 
 @ClusterTestDefaults(types = {Type.ZK}, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
@@ -197,7 +199,14 @@ public class ClusterTestExtensionsTest {
         Assertions.assertEquals(supportedGroupProtocols, clusterInstance.supportedGroupProtocols());
     }
 
-    @ClusterTest(types = {Type.ZK})
+    @ClusterTests({
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
+        }),
+        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
+        })
+    })
     public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
         Assertions.assertEquals(Collections.singleton(CLASSIC), clusterInstance.supportedGroupProtocols());
     }
