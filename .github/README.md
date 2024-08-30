@@ -2,7 +2,7 @@
 
 ## Overview
 
-The entry point for our build is the "CI" workflow which is define in ci.yml.
+The entry point for our build is the "CI" workflow which is defined in ci.yml.
 This is used for both PR and trunk builds. The jobs and steps of the workflow
 are defined in build.yml.
 
@@ -22,7 +22,7 @@ Here you can change your notification preferences.
 > This only works for committers (who have ASF accounts on ge.apache.org).
 
 There are two ways committers can have build scans published. The simplest
-way is to push their branches to apache/kafka. This will allow Github Actions to
+way is to push their branches to apache/kafka. This will allow GitHub Actions to
 have access to the repository secret needed to publish the scan.
 
 Alternatively, committers create pull requests against their own forks and

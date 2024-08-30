@@ -193,8 +193,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
         int repeatCount = getTestRepeatCount();
-        List<TestTemplateInvocationContext> contexts = generateClusterConfigurations(repeatCount, context, annot.value())
-            .stream()
+        List<TestTemplateInvocationContext> contexts = IntStream.range(0, repeatCount)
+            .mapToObj(__ -> generateClusterConfigurations(context, annot.value()).stream())
+            .flatMap(Function.identity())
             .flatMap(config -> config.clusterTypes().stream().map(type -> type.invocationContexts(baseDisplayName, config)))
             .collect(Collectors.toList());
 
@@ -207,17 +208,12 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
     @SuppressWarnings("unchecked")
     private List<ClusterConfig> generateClusterConfigurations(
-        int repeatCount,
         ExtensionContext context,
         String generateClustersMethods
     ) {
         Object testInstance = context.getTestInstance().orElse(null);
         Method method = ReflectionUtils.getRequiredMethod(context.getRequiredTestClass(), generateClustersMethods);
-        List<ClusterConfig> configs = new ArrayList<>();
-        for (int i = 0; i < repeatCount; i++) {
-            configs.addAll((List<ClusterConfig>) ReflectionUtils.invokeMethod(method, testInstance));
-        }
-        return configs;
+        return (List<ClusterConfig>) ReflectionUtils.invokeMethod(method, testInstance);
     }
 
     private List<TestTemplateInvocationContext> processClusterTests(
@@ -227,7 +223,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     ) {
         int repeatCount = getTestRepeatCount();
         List<TestTemplateInvocationContext> ret = IntStream.range(0, repeatCount)
-            .mapToObj(ignored -> Arrays.stream(clusterTests))
+            .mapToObj(__ -> Arrays.stream(clusterTests))
             .flatMap(Function.identity())
             .flatMap(clusterTest -> processClusterTestInternal(context, clusterTest, defaults).stream())
             .collect(Collectors.toList());
@@ -275,17 +271,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return Arrays.stream(types)
             .map(type -> type.invocationContexts(context.getRequiredTestMethod().getName(), config))
             .collect(Collectors.toList());
-    }
-
-    Stream<ClusterTest> repeatedClusterTests(int repeatCount, ClusterTest[] clusterTestAnnots) {
-        ClusterTest[] repeatedTests = new ClusterTest[clusterTestAnnots.length * repeatCount];
-        for (int testIdx = 0; testIdx < clusterTestAnnots.length; testIdx++) {
-            for (int repeatIdx = 0; repeatIdx < repeatCount; repeatIdx++) {
-                repeatedTests[testIdx * repeatCount + repeatIdx] = clusterTestAnnots[testIdx];
-            }
-        }
-
-        return Arrays.stream(repeatedTests);
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {
