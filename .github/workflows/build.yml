@@ -95,6 +95,18 @@ jobs:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+      - name: Clean up old test results
+        run: |
+          rm -rf server/build/test-results
+          rm -rf server-common/build/test-results
+          rm -rf clients/build/test-results
+          rm -rf raft/build/test-results
+          rm -rf core/build/test-results
+          rm -rf generator/build/test-results
+          rm -rf connect/build/test-results
+          rm -rf metadata/build/test-results
+          rm -rf streams/build/test-results
+          rm -rf storage/build/test-results
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
