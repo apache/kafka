@@ -16,9 +16,6 @@
  */
 package kafka.log.remote.quota;
 
-import kafka.server.QuotaType;
-import kafka.utils.QuotaUtils;
-
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -29,6 +26,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.SensorAccess;
+import org.apache.kafka.server.quota.QuotaType;
+import org.apache.kafka.server.quota.QuotaUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
