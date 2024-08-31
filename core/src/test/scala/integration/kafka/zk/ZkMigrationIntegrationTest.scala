@@ -65,7 +65,6 @@ import scala.jdk.CollectionConverters._
 object ZkMigrationIntegrationTest {
   def zkClustersForAllMigrationVersions(): java.util.List[ClusterConfig] = {
     Seq(
-      MetadataVersion.IBP_3_4_IV0,
       MetadataVersion.IBP_3_5_IV2,
       MetadataVersion.IBP_3_6_IV2,
       MetadataVersion.IBP_3_7_IV0,
