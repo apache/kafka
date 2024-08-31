@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ConsumerRecordTest {
 
@@ -49,6 +50,7 @@ public class ConsumerRecordTest {
         assertEquals(ConsumerRecord.NULL_SIZE, record.serializedValueSize());
         assertEquals(Optional.empty(), record.leaderEpoch());
         assertEquals(Optional.empty(), record.deliveryCount());
+        assertNotNull(record.leaderEpoch());
         assertEquals(new RecordHeaders(), record.headers());
     }
 
@@ -97,5 +99,33 @@ public class ConsumerRecordTest {
         assertEquals(leaderEpoch, record.leaderEpoch());
         assertEquals(deliveryCount, record.deliveryCount());
         assertEquals(headers, record.headers());
+    }
+
+    @Test
+    public void testLeaderEpochChange() {
+        String topic = "topic";
+        int partition = 0;
+        long offset = 23;
+        long timestamp = 23434217432432L;
+        TimestampType timestampType = TimestampType.CREATE_TIME;
+        String key = "key";
+        String value = "value";
+        int serializedKeySize = 100;
+        int serializedValueSize = 1142;
+        Optional<Integer> leaderEpoch = Optional.of(1);
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add(new RecordHeader("header key", "header value".getBytes(StandardCharsets.UTF_8)));
+        ConsumerRecord<String, String> record = new ConsumerRecord<>(topic, partition, offset, timestamp, timestampType,
+                serializedKeySize, serializedValueSize, key, value, headers, leaderEpoch);
+
+        assertEquals(record.leaderEpoch(), leaderEpoch);
+        assertNotNull(record.leaderEpoch());
+        leaderEpoch = Optional.of(2);
+
+        record = new ConsumerRecord<>(topic, partition, offset, timestamp, timestampType,
+                serializedKeySize, serializedValueSize, key, value, headers, leaderEpoch);
+
+        assertEquals(record.leaderEpoch(), leaderEpoch);
     }
 }
