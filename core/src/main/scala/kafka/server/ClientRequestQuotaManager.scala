@@ -18,13 +18,12 @@ package kafka.server
 
 import java.util.concurrent.TimeUnit
 import kafka.network.RequestChannel
-import kafka.utils.QuotaUtils
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
-import org.apache.kafka.server.quota.ClientQuotaCallback
+import org.apache.kafka.server.quota.{ClientQuotaCallback, QuotaType, QuotaUtils}
 
 import scala.jdk.CollectionConverters._
 
@@ -34,7 +33,7 @@ object ClientRequestQuotaManager {
   // create once.
   private val DefaultInactiveExemptSensorExpirationTimeSeconds: Long = Long.MaxValue
 
-  private val ExemptSensorName = "exempt-" + QuotaType.Request
+  private val ExemptSensorName = "exempt-" + QuotaType.REQUEST
 }
 
 class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
@@ -42,11 +41,11 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
                                 private val time: Time,
                                 private val threadNamePrefix: String,
                                 private val quotaCallback: Option[ClientQuotaCallback])
-    extends ClientQuotaManager(config, metrics, QuotaType.Request, time, threadNamePrefix, quotaCallback) {
+    extends ClientQuotaManager(config, metrics, QuotaType.REQUEST, time, threadNamePrefix, quotaCallback) {
 
   private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
   private val exemptMetricName = metrics.metricName("exempt-request-time",
-    QuotaType.Request.toString, "Tracking exempt-request-time utilization percentage")
+    QuotaType.REQUEST.toString, "Tracking exempt-request-time utilization percentage")
 
   val exemptSensor: Sensor = getOrCreateSensor(ClientRequestQuotaManager.ExemptSensorName,
     ClientRequestQuotaManager.DefaultInactiveExemptSensorExpirationTimeSeconds,
@@ -85,7 +84,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   override protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
-    metrics.metricName("request-time", QuotaType.Request.toString,
+    metrics.metricName("request-time", QuotaType.REQUEST.toString,
       "Tracking request-time per user/client-id",
       quotaMetricTags.asJava)
   }

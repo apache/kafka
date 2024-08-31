@@ -48,6 +48,7 @@ import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledExcep
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.config.QuotaConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.quota.QuotaUtils
 import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
 
