@@ -49,4 +49,6 @@ runs:
           caches
           notifications
           jdks
+        gradle-home-cache-excludes: |
+          **/build/test-results
         cache-cleanup: on-success
