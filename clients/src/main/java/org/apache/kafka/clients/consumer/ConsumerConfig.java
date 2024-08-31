@@ -37,7 +37,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,7 +44,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.clients.consumer.RangeAssignor.RANGE_ASSIGNOR_NAME;
@@ -733,14 +731,15 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void checkPartitionAssigmentStrategy() {
-        List<String> assignmentStrategies = getList(PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
-        Set<String> defaultAssignmentStrategiesClassNames = PARTITION_ASSIGNOR_DEFAULT_VALUE.stream()
-                .map(Class::getName).collect(Collectors.toSet());
+        List<Object> assignmentStrategies = (List<Object>) get(PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
         if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CONSUMER.name())) {
-            if ((!new HashSet<>(assignmentStrategies).containsAll(defaultAssignmentStrategiesClassNames) &&
-                    !new HashSet<>(assignmentStrategies).containsAll(PARTITION_ASSIGNOR_DEFAULT_VALUE)) ||
-                    assignmentStrategies.size() != PARTITION_ASSIGNOR_DEFAULT_VALUE.size()) {
+            if (PARTITION_ASSIGNOR_DEFAULT_VALUE.size() != assignmentStrategies.size() ||
+                    !PARTITION_ASSIGNOR_DEFAULT_VALUE.stream()
+                            .allMatch(clz -> assignmentStrategies.stream()
+                                    .anyMatch(obj -> clz.equals(obj) || clz.getName().equals(obj)))
+            ) {
                 throw new ConfigException(PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
             }
         }
