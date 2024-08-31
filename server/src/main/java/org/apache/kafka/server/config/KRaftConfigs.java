@@ -37,7 +37,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 public class KRaftConfigs {
     /** KRaft mode configs */
     public static final String PROCESS_ROLES_CONFIG = "process.roles";
-    public static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
+    public static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker, controller' if it is both. " +
             "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for ZooKeeper clusters.";
 
     public static final String INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG = "initial.broker.registration.timeout.ms";
