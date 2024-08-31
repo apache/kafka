@@ -3386,9 +3386,6 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
     public void testPreventMultiThread(GroupProtocol groupProtocol) throws InterruptedException {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
