@@ -522,7 +522,7 @@ public class SharePartitionManager implements AutoCloseable {
     // Add the share fetch request to the delayed share fetch purgatory to process the fetch request if it can be
     // completed else watch until it can be completed/timeout.
     private void addDelayedShareFetch(DelayedShareFetch delayedShareFetch, Set<Object> keys) {
-        this.delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, CollectionConverters.asScala(keys).toSeq());
+        delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch, CollectionConverters.asScala(keys).toSeq());
     }
 
     @Override
@@ -560,6 +560,16 @@ public class SharePartitionManager implements AutoCloseable {
             return;
         }
 
+        if (shareFetchPartitionData.partitionMaxBytes.isEmpty()) {
+            // If there are no partitions to fetch then complete the future with an empty map.
+            shareFetchPartitionData.future.complete(Collections.emptyMap());
+            // Release the lock so that other threads can process the queue.
+            releaseProcessFetchQueueLock();
+            if (!fetchQueue.isEmpty())
+                maybeProcessFetchQueue();
+            return;
+        }
+
         try {
             shareFetchPartitionData.partitionMaxBytes.keySet().forEach(topicIdPartition -> {
                 SharePartitionKey sharePartitionKey = sharePartitionKey(
@@ -570,7 +580,7 @@ public class SharePartitionManager implements AutoCloseable {
                     k -> {
                         long start = time.hiResClockMs();
                         SharePartition partition = new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxInFlightMessages, maxDeliveryCount,
-                            recordLockDurationMs, timer, time, persister);
+                            recordLockDurationMs, timer, time, persister, delayedShareFetchPurgatory);
                         this.shareGroupMetrics.partitionLoadTime(start);
                         return partition;
                     });
@@ -596,15 +606,6 @@ public class SharePartitionManager implements AutoCloseable {
                 }
             });
 
-            if (shareFetchPartitionData.partitionMaxBytes.isEmpty()) {
-                // If there are no partitions to fetch then complete the future with an empty map.
-                shareFetchPartitionData.future.complete(Collections.emptyMap());
-                // Release the lock so that other threads can process the queue.
-                releaseProcessFetchQueueLock();
-                if (!fetchQueue.isEmpty())
-                    maybeProcessFetchQueue();
-                return;
-            }
             if (topicPartitionData.isEmpty()) {
                 // No locks for any of the share partitions in the fetch request could be acquired.
                 Set<Object> delayedShareFetchWatchKeys = new HashSet<>();

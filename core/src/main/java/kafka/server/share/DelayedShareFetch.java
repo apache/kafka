@@ -51,7 +51,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private final SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData;
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap;
-    private final Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete = new LinkedHashMap<>();
+    private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete = new LinkedHashMap<>();
 
     private static final Logger log = LoggerFactory.getLogger(DelayedShareFetch.class);
 
@@ -146,28 +146,7 @@ public class DelayedShareFetch extends DelayedOperation {
         log.trace("Try to complete the delayed share fetch request for group {}, member {}, topic partitions {}",
                 shareFetchPartitionData.groupId(), shareFetchPartitionData.memberId(),
                 shareFetchPartitionData.partitionMaxBytes().keySet());
-
-        for (TopicIdPartition topicIdPartition: shareFetchPartitionData.partitionMaxBytes().keySet()) {
-            SharePartition sharePartition = partitionCacheMap.get(new SharePartitionManager.SharePartitionKey(
-                    shareFetchPartitionData.groupId(), topicIdPartition));
-            int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes().getOrDefault(topicIdPartition, 0);
-            if (sharePartition.maybeAcquireFetchLock()) {
-                if (sharePartition.canAcquireRecords()) {
-                    topicPartitionDataFromTryComplete.put(
-                            topicIdPartition,
-                            new FetchRequest.PartitionData(
-                                    topicIdPartition.topicId(),
-                                    sharePartition.nextFetchOffset(),
-                                    0,
-                                    partitionMaxBytes,
-                                    Optional.empty()
-                            )
-                    );
-                } else {
-                    sharePartition.releaseFetchLock();
-                }
-            }
-        }
+        topicPartitionDataFromTryComplete = topicPartitionDataForAcquirablePartitions();
 
         if (!topicPartitionDataFromTryComplete.isEmpty())
             return forceComplete();

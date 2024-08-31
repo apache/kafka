@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.server.DelayedOperationPurgatory;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
@@ -228,6 +229,11 @@ public class SharePartition {
      */
     private int stateEpoch;
 
+    /**
+     * The delayed share fetch purgatory is used to store the share fetch requests that could not be processed immediately.
+     */
+    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
+
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -236,7 +242,8 @@ public class SharePartition {
         int recordLockDurationMs,
         Timer timer,
         Time time,
-        Persister persister
+        Persister persister,
+        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -250,6 +257,7 @@ public class SharePartition {
         this.timer = timer;
         this.time = time;
         this.persister = persister;
+        this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
         // Initialize the partition.
         initialize();
     }
@@ -1607,6 +1615,11 @@ public class SharePartition {
 
             // Update the cached state and start and end offsets after releasing the acquisition lock on timeout.
             maybeUpdateCachedStateAndOffsets();
+
+            // If we have an acquisition lock timeout for a share-partition, then we should check if
+            // there is a pending share fetch request for the share-partition and complete it.
+            DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(topicIdPartition, groupId);
+            delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
         } finally {
             lock.writeLock().unlock();
         }
