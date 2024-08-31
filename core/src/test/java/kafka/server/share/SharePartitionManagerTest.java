@@ -1863,6 +1863,46 @@ public class SharePartitionManagerTest {
         verify(replicaManager, times(1)).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
     }
 
+    @Test
+    public void testFetchQueueProcessingAlwaysReleasesProcessFetchQueueLock() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+                1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
+        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData1 = new SharePartitionManager.ShareFetchPartitionData(
+                fetchParams, groupId, memberId, new CompletableFuture<>(), partitionMaxBytes);
+
+        ConcurrentLinkedQueue<SharePartitionManager.ShareFetchPartitionData> fetchQueue = new ConcurrentLinkedQueue<>();
+        fetchQueue.add(shareFetchPartitionData1);
+
+        // Scenario 1 - Fetch queue contains 1 element.
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().withFetchQueue(fetchQueue).build();
+
+        sharePartitionManager.maybeProcessFetchQueue();
+        assertFalse(sharePartitionManager.getProcessFetchQueueLock());
+
+        // Scenario 2 - Fetch queue is empty.
+        sharePartitionManager = SharePartitionManagerBuilder.builder().withFetchQueue(new ConcurrentLinkedQueue<>()).build();
+
+        sharePartitionManager.maybeProcessFetchQueue();
+        assertFalse(sharePartitionManager.getProcessFetchQueueLock());
+
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData2 = new SharePartitionManager.ShareFetchPartitionData(
+                fetchParams, groupId, memberId, new CompletableFuture<>(), Collections.emptyMap());
+        fetchQueue = new ConcurrentLinkedQueue<>();
+        fetchQueue.add(shareFetchPartitionData2);
+
+        // Scenario 3 - Fetch queue contains no topic-partitions
+        sharePartitionManager = SharePartitionManagerBuilder.builder().withFetchQueue(fetchQueue).build();
+
+        sharePartitionManager.maybeProcessFetchQueue();
+        assertFalse(sharePartitionManager.getProcessFetchQueueLock());
+    }
+
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
         return new ShareFetchResponseData.PartitionData().setPartitionIndex(0);
     }

@@ -521,7 +521,11 @@ public class SharePartitionManager implements AutoCloseable {
             // The queue is already being processed hence avoid re-triggering.
             return;
         }
-        processFetchQueue();
+        try {
+            processFetchQueue();
+        } finally {
+            releaseProcessFetchQueueLock();
+        }
     }
 
     private void processFetchQueue() {
@@ -609,7 +613,7 @@ public class SharePartitionManager implements AutoCloseable {
                                             shareFetchPartitionData.future.complete(result);
                                         }
                                         // Releasing the partitions lock before moving ahead with the next request in queue.
-                                        releasePartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
+                                        releasePartitionLocks(shareFetchPartitionData.groupId, topicPartitionData.keySet());
                                     });
                             return BoxedUnit.UNIT;
                         });
@@ -618,10 +622,9 @@ public class SharePartitionManager implements AutoCloseable {
                 // In case exception occurs then release the locks so queue can be further processed.
                 log.error("Error processing fetch queue for share partitions", e);
                 shareFetchPartitionData.future.completeExceptionally(e);
-                releasePartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
+                releasePartitionLocks(shareFetchPartitionData.groupId, topicPartitionData.keySet());
             }
         }
-        releaseProcessFetchQueueLock();
     }
 
     // Visible for testing.
@@ -687,7 +690,7 @@ public class SharePartitionManager implements AutoCloseable {
         processFetchQueueLock.set(false);
     }
 
-    private void releasePartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
+    private void releasePartitionLocks(String groupId, Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> partitionCacheMap.get(sharePartitionKey(groupId, tp)).releaseFetchLock());
     }
 
@@ -697,6 +700,11 @@ public class SharePartitionManager implements AutoCloseable {
 
     SharePartition sharePartition(String groupId, TopicIdPartition topicIdPartition) {
         return partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+    }
+
+    // Visible for testing.
+    boolean getProcessFetchQueueLock() {
+        return processFetchQueueLock.get();
     }
 
     /**
