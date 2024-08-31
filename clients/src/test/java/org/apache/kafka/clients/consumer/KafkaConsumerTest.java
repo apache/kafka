@@ -3386,7 +3386,6 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
     public void testPreventMultiThread(GroupProtocol groupProtocol) throws InterruptedException {
-        AtomicBoolean throwError = new AtomicBoolean(false);
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
 
@@ -3397,26 +3396,19 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
                 new RoundRobinAssignor(), true, groupInstanceId);
         consumer.subscribe(singletonList(topic));
 
-        Thread newThread = new Thread(null, () -> {
-            while (!throwError.get()) {
-                try {
-                    consumer.poll(Duration.ZERO);
-                } catch (ConcurrentModificationException e) {
-                    throwError.set(true);
-                }
-            }
-        });
-        newThread.start();
 
-        while (!throwError.get()) {
-            try {
-                consumer.poll(Duration.ZERO);
-            } catch (ConcurrentModificationException e) {
-                throwError.set(true);
-            }
+        client.enableBlockingUntilWakeup(1);
+        ExecutorService service = Executors.newSingleThreadExecutor();
+        service.execute(() -> consumer.poll(Duration.ofSeconds(5)));
+        try {
+            TimeUnit.SECONDS.sleep(1);
+            assertThrows(ConcurrentModificationException.class, () -> consumer.poll(Duration.ZERO));
+            client.wakeup();
+            consumer.wakeup();
+        } finally {
+            service.shutdown();
+            assertTrue(service.awaitTermination(10, TimeUnit.SECONDS));
         }
-
-        newThread.join();
     }
 
     private static final List<String> CLIENT_IDS = new ArrayList<>();
