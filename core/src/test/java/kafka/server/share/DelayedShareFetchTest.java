@@ -81,6 +81,11 @@ public class DelayedShareFetchTest {
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
         DelayedShareFetch delayedShareFetch = new DelayedShareFetch(shareFetchPartitionData, mock(ReplicaManager.class), partitionCacheMap);
+
+        // tryComplete on the first attempt does not try to acquire share partitions.
+        assertFalse(delayedShareFetch.tryComplete());
+        assertFalse(delayedShareFetch.isCompleted());
+
         // Since there is no partition that can be acquired, tryComplete should return false.
         assertFalse(delayedShareFetch.tryComplete());
         assertFalse(delayedShareFetch.isCompleted());
@@ -115,6 +120,11 @@ public class DelayedShareFetchTest {
         when(sp1.canAcquireRecords()).thenReturn(false);
         DelayedShareFetch delayedShareFetch = new DelayedShareFetch(shareFetchPartitionData, mock(ReplicaManager.class), partitionCacheMap);
         assertFalse(delayedShareFetch.isCompleted());
+
+        // tryComplete on the first attempt does not try to acquire share partitions.
+        assertFalse(delayedShareFetch.tryComplete());
+        assertFalse(delayedShareFetch.isCompleted());
+
         // Since sp1 can be acquired, tryComplete should return true.
         assertTrue(delayedShareFetch.tryComplete());
         assertTrue(delayedShareFetch.isCompleted());

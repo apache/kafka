@@ -650,6 +650,10 @@ public class SharePartitionManager implements AutoCloseable {
                             }
                             // Releasing the lock to move ahead with the next request in queue.
                             releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
+                            // If we have a fetch request completed for a topic-partition, it means  the HWM has advanced,
+                            // then we should check if there is a pending share fetch request for the topic-partition and complete it.
+                            result.keySet().forEach(topicIdPartition -> delayedShareFetchPurgatory.checkAndComplete(
+                                new DelayedShareFetchKey(topicIdPartition, shareFetchPartitionData.groupId)));
                         });
                     return BoxedUnit.UNIT;
                 });
