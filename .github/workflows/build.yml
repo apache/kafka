@@ -95,6 +95,10 @@ jobs:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+      - name: List files 1
+        run: |
+          pwd
+          find .
       - name: Clean up old test results
         run: |
           rm -rf server/build/test-results
@@ -107,6 +111,10 @@ jobs:
           rm -rf metadata/build/test-results
           rm -rf streams/build/test-results
           rm -rf storage/build/test-results
+      - name: List files 2
+        run: |
+          pwd
+          find .
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
@@ -121,6 +129,10 @@ jobs:
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
           test
+      - name: List files 3
+        run: |
+          pwd
+          find .
       - name: Archive JUnit reports
         if: always()
         uses: actions/upload-artifact@v4
