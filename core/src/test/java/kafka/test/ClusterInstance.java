@@ -25,6 +25,7 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.test.TestUtils;
@@ -185,6 +186,13 @@ public interface ClusterInstance {
 
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
+    }
+    
+    default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
+        try (Admin admin = createAdminClient()) {
+            admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
+            waitForTopic(topicName, partitions);
+        }
     }
 
     void waitForReadyBrokers() throws InterruptedException;
