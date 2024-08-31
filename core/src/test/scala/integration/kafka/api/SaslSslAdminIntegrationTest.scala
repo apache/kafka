@@ -430,19 +430,6 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testCreateDelegationTokenWithNegativeTimeout(quorum: String): Unit = {
-    client = createAdminClient
-    val timeout = -1
-
-    val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
-    val tokenInfo = client.createDelegationToken(options).delegationToken.get.tokenInfo
-
-    assertEquals(maxLifeTime, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
-    assertTrue(tokenInfo.maxTimestamp >= tokenInfo.expiryTimestamp)
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
   def testExpiredTimeStampLargerThanMaxLifeStamp(quorum: String): Unit = {
     client = createAdminClient
     val timeout = -1
