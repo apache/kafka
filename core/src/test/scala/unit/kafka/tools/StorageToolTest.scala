@@ -464,16 +464,18 @@ Found problem:
     assertEquals(0, runVersionMappingCommand(stream, "3.3-IV3"))
 
     val output = stream.toString()
-    assertTrue(output.contains("metadata.version=7 (3.3-IV3)"),
-      s"Output did not contain expected Metadata Version: $output")
-    assertTrue(output.contains("kraft.version=0"),
-      s"Output did not contain expected feature mapping: $output")
-    assertTrue(output.contains("test.feature.version=0"),
-      s"Output did not contain expected feature mapping: $output")
-    assertTrue(output.contains("transaction.version=0"),
-      s"Output did not contain expected feature mapping: $output")
-    assertTrue(output.contains("group.version=0"),
-      s"Output did not contain expected feature mapping: $output")
+    val metadataVersion = MetadataVersion.IBP_3_3_IV3
+    // Check that the metadata version is correctly included in the output
+    assertTrue(output.contains(s"metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})"),
+      s"Output did not contain expected Metadata Version: $output"
+    )
+
+    for (feature <- Features.values()) {
+      val featureLevel = feature.defaultValue(metadataVersion)
+      assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
+        s"Output did not contain expected feature mapping: $output"
+      )
+    }
   }
 
   @Test

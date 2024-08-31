@@ -340,11 +340,17 @@ public class FeatureCommandTest {
             }
         });
 
-        assertTrue(versionMappingOutput.contains("metadata.version=7 (3.3-IV3)"));
-        assertTrue(versionMappingOutput.contains("kraft.version=0"));
-        assertTrue(versionMappingOutput.contains("test.feature.version=0"));
-        assertTrue(versionMappingOutput.contains("transaction.version=0"));
-        assertTrue(versionMappingOutput.contains("group.version=0"));
+        MetadataVersion metadataVersion = MetadataVersion.IBP_3_3_IV3;
+
+        // Check that the metadata version is correctly included in the output
+        assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
+            "Output did not contain expected Metadata Version: " + versionMappingOutput);
+
+        for (Features feature : Features.values()) {
+            int featureLevel = feature.defaultValue(metadataVersion);
+            assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
+                "Output did not contain expected feature mapping: " + versionMappingOutput);
+        }
     }
 
     @Test
