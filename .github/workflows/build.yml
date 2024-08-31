@@ -22,6 +22,10 @@ on:
         description: "Should the Gradle cache be read-only?"
         default: "true"
         type: string
+      gradle-cache-write-only:
+        description: "Should the Gradle cache be write-only?"
+        default: "false"
+        type: string
       github-actions-opt-in:
         description: "Should we run the opt-in steps?"
         default: "false"
@@ -52,6 +56,7 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
         # Gradle flags
@@ -94,6 +99,7 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Test
         # Gradle flags
