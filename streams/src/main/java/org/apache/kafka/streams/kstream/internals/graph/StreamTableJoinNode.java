@@ -79,7 +79,7 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
                     if (!topologyBuilder.isStoreVersioned(storeName)) {
                         throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
                     }
-                    if (gracePeriod.toMillis() > topologyBuilder.getHistoryRetention(storeName)) {
+                    if (gracePeriod.toMillis() > topologyBuilder.historyRetention(storeName)) {
                         throw new IllegalArgumentException("History retention must be at least grace period.");
                     }
                 }

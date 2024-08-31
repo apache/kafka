@@ -35,6 +35,8 @@ import org.slf4j.Logger;
 
 import java.util.Collections;
 
+import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
+
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
  * heartbeat request using the state stored in the membership manager and enqueues it to
@@ -194,6 +196,32 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * This is provided so that the {@link ApplicationEventProcessor} can access the state for querying or updating.
      */
     public abstract AbstractMembershipManager<R> membershipManager();
+
+    /**
+     * Generate a heartbeat request to leave the group if the state is still LEAVING when this is
+     * called to close the consumer.
+     * <p/>
+     * Note that when closing the consumer, even though an event to Unsubscribe is generated
+     * (triggers callbacks and sends leave group), it could be the case that the Unsubscribe event
+     * processing does not complete in time and moves on to close the managers (ex. calls to
+     * close with zero timeout). So we could end up on this pollOnClose with the member in
+     * {@link MemberState#PREPARE_LEAVING} (ex. app thread did not have the time to process the
+     * event to execute callbacks), or {@link MemberState#LEAVING} (ex. the leave request could
+     * not be sent due to coordinator not available at that time). In all cases, the pollOnClose
+     * will be triggered right before sending the final requests, so we ensure that we generate
+     * the request to leave if needed.
+     *
+     * @param currentTimeMs The current system time in milliseconds at which the method was called
+     * @return PollResult containing the request to send
+     */
+    @Override
+    public PollResult pollOnClose(long currentTimeMs) {
+        if (membershipManager().isLeavingGroup()) {
+            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+        }
+        return EMPTY;
+    }
 
     /**
      * Returns the delay for which the application thread can safely wait before it should be responsive

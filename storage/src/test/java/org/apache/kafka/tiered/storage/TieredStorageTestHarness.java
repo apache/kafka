@@ -72,7 +72,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     @SuppressWarnings("deprecation")
     @Override
-    public Seq<Properties> kraftControllerConfigs() {
+    public Seq<Properties> kraftControllerConfigs(TestInfo testInfo) {
         return JavaConverters.asScalaBuffer(Collections.singletonList(overridingProps())).toSeq();
     }
 

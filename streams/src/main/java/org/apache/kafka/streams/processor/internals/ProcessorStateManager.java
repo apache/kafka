@@ -244,7 +244,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return globalStores.get(name);
     }
 
@@ -379,7 +379,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public StateStore getStore(final String name) {
+    public StateStore store(final String name) {
         if (stores.containsKey(name)) {
             return stores.get(name).stateStore;
         } else {
