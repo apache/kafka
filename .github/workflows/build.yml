@@ -18,6 +18,9 @@ name: Check and Test
 on:
   workflow_call:
     inputs:
+      gradle-task:
+        description: "Which task(s) to run"
+        type: string
       gradle-cache-read-only:
         description: "Should the Gradle cache be read-only?"
         default: "true"
@@ -108,7 +111,7 @@ jobs:
           -PignoreFailures=true -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          test
+          ${{ inputs.gradle-task }}
       - name: Archive JUnit reports
         if: always()
         uses: actions/upload-artifact@v4
