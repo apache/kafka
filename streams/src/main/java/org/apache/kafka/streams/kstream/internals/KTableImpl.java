@@ -1007,14 +1007,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, TableJoined.with(null, null), materialized, true);
     }
 
-    private final Function<Optional<Set<Integer>>, Integer> getPartition = maybeMulticastPartitions -> {
+    private final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition = maybeMulticastPartitions -> {
         if (!maybeMulticastPartitions.isPresent()) {
-            return null;
+            return Optional.empty();
         }
         if (maybeMulticastPartitions.get().size() != 1) {
             throw new IllegalArgumentException("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set");
         }
-        return maybeMulticastPartitions.get().iterator().next();
+        return maybeMulticastPartitions;
     };
 
 
@@ -1163,9 +1163,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String finalRepartitionTopicName = renamed.suffixWithOrElseGet("-subscription-response", builder, SUBSCRIPTION_RESPONSE) + TOPIC_SUFFIX;
         builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
 
+        final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner =
+                (topic, key, subscriptionResponseWrapper, numPartitions) -> {
+                    final Integer partition = subscriptionResponseWrapper.getPrimaryPartition();
+                    return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
+                };
+
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> foreignResponseSinkPartitioner =
                 tableJoinedInternal.partitioner() == null
-                        ? (topic, key, subscriptionResponseWrapper, numPartitions) -> subscriptionResponseWrapper.getPrimaryPartition()
+                        ? defaultForeignResponseSinkPartitioner
                         : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =

@@ -18,9 +18,7 @@ package kafka.server
 
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import scala.collection.Seq
-
 import kafka.server.Constants._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
@@ -30,6 +28,7 @@ import org.apache.kafka.common.metrics.stats.SimpleRate
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.SensorAccess
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig
+import org.apache.kafka.server.quota.QuotaType
 
 trait ReplicaQuota {
   def record(value: Long): Unit

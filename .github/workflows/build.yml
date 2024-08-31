@@ -82,7 +82,7 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 17, 11 ]
-    if: ${{ inputs.github-actions-opt-in }}
+    if: ${{ inputs.github-actions-opt-in == 'true' }}
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code

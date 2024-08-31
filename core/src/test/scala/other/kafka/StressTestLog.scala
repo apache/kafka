@@ -20,7 +20,6 @@ package kafka
 import java.util.Properties
 import java.util.concurrent.atomic._
 import kafka.log._
-import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.config.TopicConfig
@@ -29,6 +28,7 @@ import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 /**
  * A stress test that instantiates a log and then runs continual appends against it from one thread and continual reads against it
