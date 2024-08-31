@@ -207,7 +207,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                 while (it.hasNext()) {
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> nextKeyValue = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
-                    sharedTimeTracker.minTime = timestampedKeyAndJoinSide.getTimestamp();
+                    sharedTimeTracker.minTime = timestampedKeyAndJoinSide.timestamp();
                     if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
                         // if windows are open for both joinSides we can break since there are no more candidates to emit
                         break;
@@ -250,8 +250,8 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         private void forwardNonJoinedOuterRecords(final Record<K, VThis> record,
                                                   final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide,
                                                   final LeftOrRightValue<VLeft, VRight> leftOrRightValue) {
-            final K key = timestampedKeyAndJoinSide.getKey();
-            final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
+            final K key = timestampedKeyAndJoinSide.key();
+            final long timestamp = timestampedKeyAndJoinSide.timestamp();
             final VThis thisValue = getThisValue(leftOrRightValue);
             final VOther otherValue = getOtherValue(leftOrRightValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);

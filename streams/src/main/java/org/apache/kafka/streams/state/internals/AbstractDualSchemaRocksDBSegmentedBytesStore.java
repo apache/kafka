@@ -113,7 +113,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     public void remove(final Bytes rawBaseKey) {
         final long timestamp = baseKeySchema.segmentTimestamp(rawBaseKey);
         observedStreamTime = Math.max(observedStreamTime, timestamp);
-        final S segment = segments.getSegmentForTimestamp(timestamp);
+        final S segment = segments.segmentForTimestamp(timestamp);
         if (segment == null) {
             return;
         }
@@ -227,7 +227,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             }
         }
 
-        final S segment = segments.getSegmentForTimestamp(timestampFromRawKey);
+        final S segment = segments.segmentForTimestamp(timestampFromRawKey);
         if (segment == null) {
             return null;
         }

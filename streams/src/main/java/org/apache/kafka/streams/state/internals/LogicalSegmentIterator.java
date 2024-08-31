@@ -95,16 +95,16 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
                 // fact all use the same physical RocksDB under-the-hood.
                 this.snapshotOwner = segment;
                 // take a RocksDB snapshot to return the segments content at the query time (in order to guarantee consistency)
-                this.snapshot = snapshotOwner.getSnapshot();
+                this.snapshot = snapshotOwner.snapshot();
             }
 
             final byte[] rawSegmentValue = segment.get(key, snapshot);
             if (rawSegmentValue != null) { // this segment contains record(s) with the specified key
                 if (segment.id() == -1) { // this is the latestValueStore
-                    final long recordTimestamp = RocksDBVersionedStore.LatestValueFormatter.getTimestamp(rawSegmentValue);
+                    final long recordTimestamp = RocksDBVersionedStore.LatestValueFormatter.timestamp(rawSegmentValue);
                     if (recordTimestamp <= toTime) {
                         // latest value satisfies timestamp bound
-                        queryResults.add(new VersionedRecord<>(RocksDBVersionedStore.LatestValueFormatter.getValue(rawSegmentValue), recordTimestamp));
+                        queryResults.add(new VersionedRecord<>(RocksDBVersionedStore.LatestValueFormatter.value(rawSegmentValue), recordTimestamp));
                     }
                 } else {
                     // this segment contains records with the specified key and time range

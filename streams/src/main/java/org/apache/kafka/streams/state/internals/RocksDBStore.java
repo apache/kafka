@@ -365,7 +365,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
-    public Snapshot getSnapshot() {
+    public Snapshot snapshot() {
         return db.getSnapshot();
     }
 

@@ -65,11 +65,11 @@ public class TimestampedKeyAndJoinSide<K> {
         return leftSide;
     }
 
-    public K getKey() {
+    public K key() {
         return key;
     }
 
-    public long getTimestamp() {
+    public long timestamp() {
         return timestamp;
     }
 

@@ -59,12 +59,12 @@ class KStreamKStreamJoinRightSide<K, VLeft, VRight, VOut> extends KStreamKStream
 
         @Override
         public VRight getThisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
-            return leftOrRightValue.getRightValue();
+            return leftOrRightValue.rightValue();
         }
 
         @Override
         public VLeft getOtherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
-            return leftOrRightValue.getLeftValue();
+            return leftOrRightValue.leftValue();
         }
     }
 }

@@ -61,7 +61,6 @@ import java.util.function.Function;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
-import static org.apache.kafka.streams.state.internals.StoreQueryUtils.getDeserializeValue;
 
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
@@ -263,7 +262,7 @@ public class MeteredKeyValueStore<K, V>
             final KeyValueIterator<K, V> resultIterator = new MeteredKeyValueTimestampedIterator(
                 iterator,
                 getSensor,
-                getDeserializeValue(serdes, wrapped())
+                StoreQueryUtils.deserializeValue(serdes, wrapped())
             );
             final QueryResult<KeyValueIterator<K, V>> typedQueryResult =
                 InternalQueryResultUtil.copyAndSubstituteDeserializedResult(
@@ -289,7 +288,7 @@ public class MeteredKeyValueStore<K, V>
         final QueryResult<byte[]> rawResult =
             wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
-            final Function<byte[], V> deserializer = getDeserializeValue(serdes, wrapped());
+            final Function<byte[], V> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final V value = deserializer.apply(rawResult.getResult());
             final QueryResult<V> typedQueryResult =
                 InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, value);

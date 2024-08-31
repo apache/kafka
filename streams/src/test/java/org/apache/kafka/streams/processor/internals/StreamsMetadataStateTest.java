@@ -292,7 +292,6 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, mkSet(hostOne), 2);
 
-
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("merged-table",  "the-key",
             (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(2)));
 

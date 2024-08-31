@@ -47,7 +47,7 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTEN
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
-import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.readWriteStore;
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.wrapWithReadWriteStore;
 
 public class ProcessorContextImpl extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
     // the below are null for standby tasks
@@ -182,7 +182,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
         }
 
         final StateStore store = stateManager.store(name);
-        return (S) readWriteStore(store);
+        return (S) wrapWithReadWriteStore(store);
     }
 
     @Override
