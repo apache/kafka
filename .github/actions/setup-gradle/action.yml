@@ -44,6 +44,7 @@ runs:
         gradle-version: wrapper
         develocity-access-key: ${{ inputs.develocity-access-key }}
         cache-read-only: ${{ inputs.gradle-cache-read-only }}
+        cache-write-only: ${{ !inputs.gradle-cache-read-only }}
         # Cache downloaded JDKs in addition to the default directories.
         gradle-home-cache-includes: |
           caches
