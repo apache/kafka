@@ -11546,7 +11546,6 @@ class KafkaApisTest extends Logging {
     ).asJava
 
     val config = Map(
-      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
       ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
     )
 
@@ -11602,7 +11601,6 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
     val config = Map(
-      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
       ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
     )
 
@@ -11658,7 +11656,6 @@ class KafkaApisTest extends Logging {
     ).asJava
 
     val config = Map(
-      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
       ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
     )
 
@@ -11710,7 +11707,6 @@ class KafkaApisTest extends Logging {
     ).asJava
 
     val config = Map(
-      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
       ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
     )
 
