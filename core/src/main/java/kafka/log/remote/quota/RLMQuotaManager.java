@@ -25,9 +25,9 @@ import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.SensorAccess;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.quota.QuotaUtils;
+import org.apache.kafka.server.quota.SensorAccess;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
