@@ -214,7 +214,7 @@ commons-digester-2.1
 commons-io-2.11.0
 commons-lang3-3.12.0
 commons-logging-1.2
-commons-validator-1.7
+commons-validator-1.9.0
 error_prone_annotations-2.10.0
 jackson-annotations-2.16.2
 jackson-core-2.16.2
