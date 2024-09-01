@@ -115,6 +115,10 @@ jobs:
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
           test
+      - name: list files
+        run: |
+          pwd
+          find .
       - name: Archive JUnit reports
         if: always()
         uses: actions/upload-artifact@v4
