@@ -113,7 +113,7 @@ jobs:
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
-          -PdisableJUnitReport=${{ inputs.gradle-cache-write-only }}
+          -PdisableJUnitReport=${{ inputs.gradle-cache-write-only }} \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
