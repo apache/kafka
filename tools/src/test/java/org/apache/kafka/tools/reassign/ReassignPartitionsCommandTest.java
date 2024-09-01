@@ -95,6 +95,7 @@ import static org.apache.kafka.tools.ToolsTestUtils.throttleAllBrokersReplicatio
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generateAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAssignment;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -196,6 +197,24 @@ public class ReassignPartitionsCommandTest {
                 ListOffsetsResultInfo result = admin.listOffsets(Collections.singletonMap(foo0, new OffsetSpec.LatestSpec())).partitionResult(foo0).get();
                 return result.offset() == 100;
             }, "Timeout for waiting offset");
+        }
+    }
+    
+    @ClusterTest
+    public void testGenerateAssignmentWithBootstrapServer() throws Exception {
+        createTopics();
+        TopicPartition foo0 = new TopicPartition("foo", 0);
+        produceMessages(foo0.topic(), foo0.partition(), 100);
+
+        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            String assignment = "{\"version\":1,\"partitions\":" +
+                    "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[3,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+                    "]}";
+            generateAssignment(admin, assignment, "1,2,3", false);
+            Map<TopicPartition, PartitionReassignmentState> finalAssignment = singletonMap(foo0,
+                    new PartitionReassignmentState(asList(0, 1, 2), asList(3, 1, 2), true));
+            waitForVerifyAssignment(admin, assignment, false,
+                    new VerifyAssignmentResult(finalAssignment));
         }
     }
 

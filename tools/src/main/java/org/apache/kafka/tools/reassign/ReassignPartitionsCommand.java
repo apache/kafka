@@ -158,7 +158,7 @@ public class ReassignPartitionsCommand {
 
     private static void validateBootstrapControllerNotSupportedAction(ReassignPartitionsCommandOptions opts) {
         if (opts.options.has(opts.bootstrapControllerOpt)) {
-            if (opts.options.has(opts.verifyOpt) || opts.options.has(opts.listOpt)) {
+            if (opts.options.has(opts.verifyOpt) || opts.options.has(opts.listOpt) || opts.options.has(opts.executeOpt) || opts.options.has(opts.generateOpt)) {
                 throw new UnsupportedOperationException("The --bootstrap-controller option is not supported with these action.");
             }
         }
