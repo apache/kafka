@@ -573,7 +573,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> storeBuilder;
 
         if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
-            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();
+            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().logConfig();
             storeBuilder = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(
                 storeName,
                 keySerde,
@@ -1165,7 +1165,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner =
                 (topic, key, subscriptionResponseWrapper, numPartitions) -> {
-                    final Integer partition = subscriptionResponseWrapper.getPrimaryPartition();
+                    final Integer partition = subscriptionResponseWrapper.primaryPartition();
                     return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
                 };
 
