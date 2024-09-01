@@ -101,46 +101,25 @@ jobs:
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
           gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
-      - name: List files 1
-        run: |
-          pwd
-          find .
-      - name: Clean up old test results
-        run: |
-          rm -rf server/build/test-results
-          rm -rf server-common/build/test-results
-          rm -rf clients/build/test-results
-          rm -rf raft/build/test-results
-          rm -rf core/build/test-results
-          rm -rf generator/build/test-results
-          rm -rf connect/build/test-results
-          rm -rf metadata/build/test-results
-          rm -rf streams/build/test-results
-          rm -rf storage/build/test-results
-      - name: List files 2
-        run: |
-          pwd
-          find .
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
         # --continue:     Keep running even if a test fails
+        # -PdisableJUnitReport  Prevent the JUnit XML and HTML reports from being cached
         # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
         timeout-minutes: 180  # 3 hours
         continue-on-error: true
         run: |
           ./gradlew --info --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
+          -PdisableJUnitReport=${{ inputs.gradle-cache-write-only }}
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
           test
-      - name: list files 3
-        run: |
-          pwd
-          find .
       - name: Archive JUnit reports
+        if: ${{ inputs.gradle-cache-write-only }}
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
@@ -149,6 +128,7 @@ jobs:
             **/build/reports/tests/test/*
           if-no-files-found: ignore
       - name: Parse JUnit tests
+        if: ${{ inputs.gradle-cache-write-only }}
         run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
