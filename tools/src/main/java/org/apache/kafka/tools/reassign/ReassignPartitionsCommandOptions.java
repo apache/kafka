@@ -55,7 +55,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         listOpt = parser.accepts("list", "List all active partition reassignments.");
 
         // Arguments
-        bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping.")
+        bootstrapServerOpt = parser.accepts("bootstrap-server", "the server(s) to use for bootstrapping.")
             .withOptionalArg()
             .describedAs("Server(s) to use for bootstrapping")
             .ofType(String.class);
