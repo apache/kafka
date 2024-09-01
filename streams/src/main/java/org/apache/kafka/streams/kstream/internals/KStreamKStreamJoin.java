@@ -170,9 +170,9 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
         protected abstract TimestampedKeyAndJoinSide<K> makeOtherKey(final K key, final long timestamp);
 
-        protected abstract VThis getThisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
+        protected abstract VThis thisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
-        protected abstract VOther getOtherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
+        protected abstract VOther otherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
         private void emitNonJoinedOuterRecords(final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> store,
                                                final Record<K, VThis> record) {
@@ -252,8 +252,8 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                                                   final LeftOrRightValue<VLeft, VRight> leftOrRightValue) {
             final K key = timestampedKeyAndJoinSide.key();
             final long timestamp = timestampedKeyAndJoinSide.timestamp();
-            final VThis thisValue = getThisValue(leftOrRightValue);
-            final VOther otherValue = getOtherValue(leftOrRightValue);
+            final VThis thisValue = thisValue(leftOrRightValue);
+            final VOther otherValue = otherValue(leftOrRightValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);
             context().forward(
                     record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)
