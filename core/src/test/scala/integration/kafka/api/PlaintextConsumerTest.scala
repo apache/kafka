@@ -16,7 +16,7 @@ import java.time.Duration
 import java.util
 import java.util.Arrays.asList
 import java.util.{Collections, Locale, Optional, Properties}
-import kafka.server.{KafkaBroker, QuotaType}
+import kafka.server.KafkaBroker
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
@@ -27,6 +27,7 @@ import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.server.quota.QuotaType
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
@@ -629,15 +630,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                   "client-id", clientId)
         assertNull(broker.metrics.metric(metricName), "Metric should not have been created " + metricName)
     }
-    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
-    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
-    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Fetch, consumerClientId))
-    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Fetch, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.PRODUCE, producerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.PRODUCE, producerClientId))
+    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.FETCH, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.FETCH, consumerClientId))
 
-    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, producerClientId))
-    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
-    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
-    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.REQUEST, producerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.REQUEST, producerClientId))
+    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.REQUEST, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.REQUEST, consumerClientId))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
