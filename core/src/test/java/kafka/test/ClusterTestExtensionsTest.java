@@ -32,6 +32,7 @@ import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -230,6 +231,24 @@ public class ClusterTestExtensionsTest {
     public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
         Assertions.assertTrue(clusterInstance.supportedGroupProtocols().contains(CLASSIC));
         Assertions.assertEquals(1, clusterInstance.supportedGroupProtocols().size());
+    }
+
+
+
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 3)
+    public void testCreateTopic(ClusterInstance clusterInstance) throws Exception {
+        String topicName = "test";
+        int numPartition = 3;
+        short numReplicas = 3;
+        clusterInstance.createTopic(topicName, numPartition, numReplicas);
+
+        try (Admin admin = clusterInstance.createAdminClient()) {
+            Assertions.assertTrue(admin.listTopics().listings().get().stream().anyMatch(s -> s.name().equals(topicName)));
+            List<TopicPartitionInfo> partitions = admin.describeTopics(Collections.singleton(topicName)).allTopicNames().get()
+                    .get(topicName).partitions();
+            Assertions.assertEquals(numPartition, partitions.size());
+            Assertions.assertTrue(partitions.stream().allMatch(partition -> partition.replicas().size() == numReplicas));
+        }
     }
 
     @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)

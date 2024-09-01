@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -112,16 +111,6 @@ public class CachingInMemorySessionStoreTest {
     @AfterEach
     public void after() {
         cachingStore.close();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final SessionStore<Bytes, byte[]> inner = mock(InMemorySessionStore.class);
-        final CachingSessionStore outer = new CachingSessionStore(inner, SEGMENT_INTERVAL);
-        when(inner.name()).thenReturn("store");
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test
