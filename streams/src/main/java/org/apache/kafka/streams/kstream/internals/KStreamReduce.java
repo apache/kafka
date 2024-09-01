@@ -75,7 +75,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
             );
             store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store.getStore(),
+                store.store(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);

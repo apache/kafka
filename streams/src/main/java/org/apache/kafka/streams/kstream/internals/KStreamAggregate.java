@@ -79,7 +79,7 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
                 (StreamsMetricsImpl) context.metrics());
             store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store.getStore(),
+                store.store(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
