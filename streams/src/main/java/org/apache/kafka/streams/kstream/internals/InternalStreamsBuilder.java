@@ -364,10 +364,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private void rewriteRepartitionNodes() {
         final Set<BaseRepartitionNode<?, ?>> nodes = new NodesWithRelaxedNullKeyJoinDownstream(root).find();
         for (final BaseRepartitionNode<?, ?> partitionNode : nodes) {
-            if (partitionNode.getProcessorParameters() != null) {
+            if (partitionNode.processorParameters() != null) {
                 partitionNode.setProcessorParameters(new ProcessorParameters<>(
                     new KStreamFilter<>((k, v) -> k != null, false),
-                    partitionNode.getProcessorParameters().processorName()
+                    partitionNode.processorParameters().processorName()
                 ));
             }
         }
@@ -445,9 +445,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
                 if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
-                    if (child.nodeName().equals(joinNode.getThisWindowedStreamProcessorParameters().processorName())) {
+                    if (child.nodeName().equals(joinNode.thisWindowedStreamProcessorParameters().processorName())) {
                         left = child;
-                    } else if (child.nodeName().equals(joinNode.getOtherWindowedStreamProcessorParameters().processorName())) {
+                    } else if (child.nodeName().equals(joinNode.otherWindowedStreamProcessorParameters().processorName())) {
                         right = child;
                     }
                 }

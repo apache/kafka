@@ -82,9 +82,9 @@ public class SubscriptionResponseWrapperSerdeTest {
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
 
-        assertArrayEquals(hashedValue, result.getOriginalValueHash());
-        assertEquals(foreignValue, result.getForeignValue());
-        assertNull(result.getPrimaryPartition());
+        assertArrayEquals(hashedValue, result.originalValueHash());
+        assertEquals(foreignValue, result.foreignValue());
+        assertNull(result.primaryPartition());
     }
 
     @Test
@@ -96,9 +96,9 @@ public class SubscriptionResponseWrapperSerdeTest {
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
 
-        assertArrayEquals(hashedValue, result.getOriginalValueHash());
-        assertNull(result.getForeignValue());
-        assertNull(result.getPrimaryPartition());
+        assertArrayEquals(hashedValue, result.originalValueHash());
+        assertNull(result.foreignValue());
+        assertNull(result.primaryPartition());
     }
 
     @Test
@@ -111,9 +111,9 @@ public class SubscriptionResponseWrapperSerdeTest {
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
 
-        assertArrayEquals(hashedValue, result.getOriginalValueHash());
-        assertEquals(foreignValue, result.getForeignValue());
-        assertNull(result.getPrimaryPartition());
+        assertArrayEquals(hashedValue, result.originalValueHash());
+        assertEquals(foreignValue, result.foreignValue());
+        assertNull(result.primaryPartition());
     }
 
     @Test
@@ -126,9 +126,9 @@ public class SubscriptionResponseWrapperSerdeTest {
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = srwSerde.deserializer().deserialize(null, serResponse);
 
-        assertArrayEquals(hashedValue, result.getOriginalValueHash());
-        assertEquals(foreignValue, result.getForeignValue());
-        assertNull(result.getPrimaryPartition());
+        assertArrayEquals(hashedValue, result.originalValueHash());
+        assertEquals(foreignValue, result.foreignValue());
+        assertNull(result.primaryPartition());
     }
 
     @Test
