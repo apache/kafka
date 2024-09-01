@@ -108,7 +108,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
     }
 
-    public StateStore getStore() {
+    public StateStore store() {
         return store;
     }
 
