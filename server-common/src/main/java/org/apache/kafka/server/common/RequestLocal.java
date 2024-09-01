@@ -47,6 +47,7 @@ public class RequestLocal implements AutoCloseable {
         return bufferSupplier;
     }
 
+    @Override
     public void close() {
         bufferSupplier.close();
     }
