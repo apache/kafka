@@ -262,7 +262,7 @@ class ControllerApisTest {
     val fetchRequestData = new FetchRequestData()
     val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
     controllerApis = createControllerApis(None, new MockController.Builder().build())
-    controllerApis.handle(request, RequestLocal.NO_CACHING)
+    controllerApis.handle(request, RequestLocal.noCaching)
 
 
     verify(raftManager).handleRequest(
@@ -1234,7 +1234,7 @@ class ControllerApisTest {
   ): T = {
     val req = buildRequest(request)
 
-    controllerApis.handle(req, RequestLocal.NO_CACHING)
+    controllerApis.handle(req, RequestLocal.noCaching)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])

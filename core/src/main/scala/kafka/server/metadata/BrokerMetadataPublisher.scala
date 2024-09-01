@@ -170,7 +170,7 @@ class BrokerMetadataPublisher(
             }
           }
           if (deletedTopicPartitions.nonEmpty) {
-            groupCoordinator.onPartitionsDeleted(deletedTopicPartitions.asJava, RequestLocal.NO_CACHING.bufferSupplier)
+            groupCoordinator.onPartitionsDeleted(deletedTopicPartitions.asJava, RequestLocal.noCaching.bufferSupplier)
           }
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +

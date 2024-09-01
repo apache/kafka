@@ -110,7 +110,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            transactionTimeoutMs: Int,
                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
                            responseCallback: InitProducerIdCallback,
-                           requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                           requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
 
     if (transactionalId == null) {
       // if the transactional id is null, then always blindly accept the request
@@ -393,7 +393,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback,
-                                       requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                                       requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       debug(s"Returning ${Errors.INVALID_REQUEST} error code to client for $transactionalId's AddPartitions request")
       responseCallback(Errors.INVALID_REQUEST)
@@ -488,7 +488,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
                            responseCallback: EndTxnCallback,
-                           requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                           requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     endTransaction(transactionalId,
       producerId,
       producerEpoch,
@@ -722,7 +722,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               TransactionResult.ABORT,
               isFromClient = false,
               onComplete(txnIdAndPidEpoch),
-              RequestLocal.NO_CACHING)
+              RequestLocal.noCaching)
           }
       }
     }

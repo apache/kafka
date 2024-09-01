@@ -95,7 +95,7 @@ final class KafkaMetadataLog private (
       log.appendAsLeader(records.asInstanceOf[MemoryRecords],
         leaderEpoch = epoch,
         origin = AppendOrigin.RAFT_LEADER,
-        requestLocal = RequestLocal.NO_CACHING
+        requestLocal = RequestLocal.noCaching
       )
     )
   }

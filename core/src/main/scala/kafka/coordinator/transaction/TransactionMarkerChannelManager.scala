@@ -376,7 +376,7 @@ class TransactionMarkerChannelManager(
       }
 
     txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch,
-      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.NO_CACHING)
+      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.noCaching)
   }
 
   def addTxnMarkersToBrokerQueue(producerId: Long,

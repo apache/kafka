@@ -758,7 +758,7 @@ class ReplicaManager(val config: KafkaConfig,
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
                     recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
-                    requestLocal: RequestLocal = RequestLocal.NO_CACHING,
+                    requestLocal: RequestLocal = RequestLocal.noCaching,
                     actionQueue: ActionQueue = this.defaultActionQueue,
                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
@@ -814,7 +814,7 @@ class ReplicaManager(val config: KafkaConfig,
                           entriesPerPartition: Map[TopicPartition, MemoryRecords],
                           responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                           recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
-                          requestLocal: RequestLocal = RequestLocal.NO_CACHING,
+                          requestLocal: RequestLocal = RequestLocal.noCaching,
                           actionQueue: ActionQueue = this.defaultActionQueue,
                           transactionSupportedOperation: TransactionSupportedOperation): Unit = {
 

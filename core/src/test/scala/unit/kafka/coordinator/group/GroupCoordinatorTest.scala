@@ -3553,7 +3553,7 @@ class GroupCoordinatorTest {
   def testDeleteOffsetOfNonExistingGroup(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
-      RequestLocal.NO_CACHING)
+      RequestLocal.noCaching)
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
     assertTrue(topics.isEmpty)
@@ -3565,7 +3565,7 @@ class GroupCoordinatorTest {
     dynamicJoinGroup(groupId, memberId, "My Protocol", protocols)
     val tp = new TopicPartition("foo", 0)
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
-      RequestLocal.NO_CACHING)
+      RequestLocal.noCaching)
 
     assertEquals(Errors.NON_EMPTY_GROUP, groupError)
     assertTrue(topics.isEmpty)
@@ -3604,7 +3604,7 @@ class GroupCoordinatorTest {
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(ti1p0.topicPartition),
-      RequestLocal.NO_CACHING)
+      RequestLocal.noCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3632,7 +3632,7 @@ class GroupCoordinatorTest {
     assertEquals(Map(tip -> Errors.NONE), validOffsetCommitResult)
 
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tip.topicPartition),
-      RequestLocal.NO_CACHING)
+      RequestLocal.noCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3647,7 +3647,7 @@ class GroupCoordinatorTest {
 
     val tp = new TopicPartition("foo", 0)
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
-      RequestLocal.NO_CACHING)
+      RequestLocal.noCaching)
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
     assertTrue(topics.isEmpty)
@@ -3685,7 +3685,7 @@ class GroupCoordinatorTest {
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(ti1p0.topicPartition),
-      RequestLocal.NO_CACHING)
+      RequestLocal.noCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3728,7 +3728,7 @@ class GroupCoordinatorTest {
     when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(ti1p0.topicPartition, ti2p0.topicPartition),
-      RequestLocal.NO_CACHING)
+      RequestLocal.noCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(2, topics.size)
@@ -4201,7 +4201,7 @@ class GroupCoordinatorTest {
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     groupCoordinator.handleTxnCommitOffsets(groupId, transactionalId, producerId, producerEpoch,
-      memberId, groupInstanceId, generationId, offsets, responseCallback, RequestLocal.NO_CACHING, ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
+      memberId, groupInstanceId, generationId, offsets, responseCallback, RequestLocal.noCaching, ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     result
   }

@@ -218,7 +218,7 @@ object AbstractCoordinatorConcurrencyTest {
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
-                               requestLocal: RequestLocal = RequestLocal.NO_CACHING,
+                               requestLocal: RequestLocal = RequestLocal.noCaching,
                                actionQueue: ActionQueue = null,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
 

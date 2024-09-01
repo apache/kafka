@@ -146,7 +146,7 @@ class CoordinatorPartitionWriter(
       origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = Map(tp -> records),
       responseCallback = results => appendResults = results,
-      requestLocal = RequestLocal.NO_CACHING,
+      requestLocal = RequestLocal.noCaching,
       verificationGuards = Map(tp -> verificationGuard),
       delayedProduceLock = None,
       // We can directly complete the purgatories here because we don't hold

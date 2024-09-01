@@ -714,7 +714,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestProduction,
-                     requestLocal: RequestLocal = RequestLocal.NO_CACHING,
+                     requestLocal: RequestLocal = RequestLocal.noCaching,
                      verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)

@@ -25,13 +25,17 @@ import java.util.Objects;
  * When each request is handled by one thread, efficient data structures with no locking or atomic operations
  * can be used (see RequestLocal.withThreadConfinedCaching).
  */
-public class RequestLocal {
-    public static final RequestLocal NO_CACHING = new RequestLocal(BufferSupplier.NO_CACHING);
+public class RequestLocal implements AutoCloseable {
+    private static final RequestLocal NO_CACHING = new RequestLocal(BufferSupplier.NO_CACHING);
 
     private final BufferSupplier bufferSupplier;
 
     public RequestLocal(BufferSupplier bufferSupplier) {
         this.bufferSupplier = bufferSupplier;
+    }
+
+    public static RequestLocal noCaching() {
+        return NO_CACHING;
     }
 
     /** The returned instance should be confined to a single thread. */

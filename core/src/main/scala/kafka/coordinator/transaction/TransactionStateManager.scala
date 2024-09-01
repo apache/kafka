@@ -283,7 +283,7 @@ class TransactionStateManager(brokerId: Int,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
         responseCallback = removeFromCacheCallback,
-        requestLocal = RequestLocal.NO_CACHING)
+        requestLocal = RequestLocal.noCaching)
     }
   }
 

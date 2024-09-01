@@ -71,7 +71,7 @@ class KafkaRequestHandlerTest {
             time.sleep(ms)
             handler.stop()
           },
-          RequestLocal.NO_CACHING)
+          RequestLocal.noCaching)
         // Execute the callback asynchronously.
         CompletableFuture.runAsync(() => callback(1))
         request.apiLocalCompleteTimeNanos = time.nanoseconds
@@ -109,7 +109,7 @@ class KafkaRequestHandlerTest {
         (_: RequestLocal, _: Int) => {
           handler.stop()
         },
-        RequestLocal.NO_CACHING)
+        RequestLocal.noCaching)
       // Execute the callback asynchronously.
       CompletableFuture.runAsync(() => callback(1))
     }

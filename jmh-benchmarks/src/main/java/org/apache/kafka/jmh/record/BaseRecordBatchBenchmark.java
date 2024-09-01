@@ -91,7 +91,7 @@ public abstract class BaseRecordBatchBenchmark {
         startingOffset = messageVersion == 2 ? 0 : 42;
 
         if (bufferSupplierStr.equals("NO_CACHING")) {
-            requestLocal = RequestLocal.NO_CACHING;
+            requestLocal = RequestLocal.noCaching();
         } else if (bufferSupplierStr.equals("CREATE")) {
             requestLocal = RequestLocal.withThreadConfinedCaching();
         } else {

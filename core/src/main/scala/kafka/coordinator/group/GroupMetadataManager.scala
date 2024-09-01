@@ -242,7 +242,7 @@ class GroupMetadataManager(brokerId: Int,
   def storeGroup(group: GroupMetadata,
                  groupAssignment: Map[String, Array[Byte]],
                  responseCallback: Errors => Unit,
-                 requestLocal: RequestLocal = RequestLocal.NO_CACHING): Unit = {
+                 requestLocal: RequestLocal = RequestLocal.noCaching): Unit = {
     getMagic(partitionFor(group.groupId)) match {
       case Some(magicValue) =>
         // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
@@ -450,7 +450,7 @@ class GroupMetadataManager(brokerId: Int,
                    responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
                    producerId: Long = RecordBatch.NO_PRODUCER_ID,
                    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
-                   requestLocal: RequestLocal = RequestLocal.NO_CACHING,
+                   requestLocal: RequestLocal = RequestLocal.noCaching,
                    verificationGuard: Option[VerificationGuard]): Unit = {
     if (!group.hasReceivedConsistentOffsetCommits)
       warn(s"group: ${group.groupId} with leader: ${group.leaderOrNull} has received offset commits from consumers as well " +
@@ -838,7 +838,7 @@ class GroupMetadataManager(brokerId: Int,
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
     val currentTimestamp = time.milliseconds()
-    val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, RequestLocal.NO_CACHING,
+    val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, RequestLocal.noCaching,
       _.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs))
     offsetExpiredSensor.record(numOffsetsRemoved)
     if (numOffsetsRemoved > 0)

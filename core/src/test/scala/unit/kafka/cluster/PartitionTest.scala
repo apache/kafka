@@ -3355,7 +3355,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      requestLocal = RequestLocal.noCaching
     )
 
     listener1.verify()
@@ -3368,7 +3368,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k2".getBytes, "v2".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(
@@ -3386,7 +3386,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(
@@ -3444,7 +3444,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      requestLocal = RequestLocal.noCaching
     )
 
     listener.verify()
@@ -3541,7 +3541,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = records,
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      requestLocal = RequestLocal.noCaching
     )
 
     listener.verify()
@@ -3565,7 +3565,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NO_CACHING
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(
