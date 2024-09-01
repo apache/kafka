@@ -50,7 +50,7 @@ class ReadOnlyTaskTest {
             add("changelogOffsets");
             add("state");
             add("id");
-            add("getStore");
+            add("store");
         }
     };
 
