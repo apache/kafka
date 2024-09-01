@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.stats.SimpleRate
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig
-import org.apache.kafka.server.quota.QuotaType
+import org.apache.kafka.server.quota.{QuotaType, SensorAccess}
 
 trait ReplicaQuota {
   def record(value: Long): Unit
