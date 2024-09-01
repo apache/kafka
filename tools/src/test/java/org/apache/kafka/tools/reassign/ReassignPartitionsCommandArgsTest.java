@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(60)
 public class ReassignPartitionsCommandArgsTest {
-    public static final String MISSING_BOOTSTRAP_SERVER_MSG = "Please specify either --bootstrap-server";
+    public static final String MISSING_BOOTSTRAP_SERVER_MSG = "Please specify either --bootstrap-server or --bootstrap-controller";
 
     @BeforeEach
     public void setUp() {

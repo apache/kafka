@@ -129,7 +129,7 @@ public class ReassignPartitionsCommand {
             Properties props = opts.options.has(opts.commandConfigOpt)
                 ? Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
                 : new Properties();
-            
+            validateBootstrapControllerNotSupportedAction(opts);
             if (opts.options.has(opts.bootstrapControllerOpt)) {
                 props.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, opts.options.valueOf(opts.bootstrapControllerOpt));
             } else {
@@ -153,6 +153,14 @@ public class ReassignPartitionsCommand {
         // If the command failed, exit with a non-zero exit code.
         if (failed) {
             Exit.exit(1);
+        }
+    }
+
+    private static void validateBootstrapControllerNotSupportedAction(ReassignPartitionsCommandOptions opts) {
+        if (opts.options.has(opts.bootstrapControllerOpt)) {
+            if (opts.options.has(opts.verifyOpt) || opts.options.has(opts.listOpt)) {
+                throw new UnsupportedOperationException("The --bootstrap-controller option is not supported with these action.");
+            }
         }
     }
 
