@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -565,12 +564,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return pendingRequests.unsentOffsetFetches;
     }
 
-    private void handleCoordinatorDisconnect(Throwable exception, long currentTimeMs) {
-        if (exception instanceof DisconnectException) {
-            coordinatorRequestManager.markCoordinatorUnknown(exception.getMessage(), currentTimeMs);
-        }
-    }
-
     /**
      * Update latest member ID and epoch used by the member.
      *
@@ -883,7 +876,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 } else {
                     log.debug("{} completed with error", requestDescription(), error);
                     onFailedAttempt(requestCompletionTimeMs);
-                    handleCoordinatorDisconnect(error, requestCompletionTimeMs);
+                    coordinatorRequestManager.handleCoordinatorDisconnect(error, requestCompletionTimeMs);
                     future().completeExceptionally(error);
                 }
             } catch (Throwable t) {
