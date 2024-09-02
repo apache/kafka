@@ -282,14 +282,14 @@ public class SharePartitionManager implements AutoCloseable {
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
             SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
             if (sharePartition != null) {
-                CompletableFuture<Errors> future = sharePartition.acknowledge(memberId, acknowledgePartitionBatches).thenApply(throwable -> {
-                    if (throwable.isPresent()) {
-                        return Errors.forException(throwable.get());
+                CompletableFuture<Errors> future = new CompletableFuture<>();
+                sharePartition.acknowledge(memberId, acknowledgePartitionBatches).whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        future.complete(Errors.forException(throwable));
+                        return;
                     }
-                    acknowledgePartitionBatches.forEach(batch -> {
-                        batch.acknowledgeTypes().forEach(this.shareGroupMetrics::recordAcknowledgement);
-                    });
-                    return Errors.NONE;
+                    acknowledgePartitionBatches.forEach(batch -> batch.acknowledgeTypes().forEach(this.shareGroupMetrics::recordAcknowledgement));
+                    future.complete(Errors.NONE);
                 });
 
                 // If we have an acknowledgement completed for a topic-partition, then we should check if
@@ -353,11 +353,13 @@ public class SharePartitionManager implements AutoCloseable {
                 log.error("No share partition found for groupId {} topicPartition {} while releasing acquired topic partitions", groupId, topicIdPartition);
                 futuresMap.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
             } else {
-                CompletableFuture<Errors> future = sharePartition.releaseAcquiredRecords(memberId).thenApply(throwable -> {
-                    if (throwable.isPresent()) {
-                        return Errors.forException(throwable.get());
+                CompletableFuture<Errors> future = new CompletableFuture<>();
+                sharePartition.releaseAcquiredRecords(memberId).whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        future.complete(Errors.forException(throwable));
+                        return;
                     }
-                    return Errors.NONE;
+                    future.complete(Errors.NONE);
                 });
                 // If we have a release acquired request completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
