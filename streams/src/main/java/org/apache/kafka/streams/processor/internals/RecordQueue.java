@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
+import java.util.Optional;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 
@@ -179,6 +180,11 @@ public class RecordQueue {
 
     public Long headRecordOffset() {
         return headRecord == null ? null : headRecord.offset();
+    }
+
+    @SuppressWarnings("OptionalAssignedToNull")
+    public Optional<Integer> headRecordLeaderEpoch() {
+        return headRecord == null ? null : headRecord.leaderEpoch();
     }
 
     /**
