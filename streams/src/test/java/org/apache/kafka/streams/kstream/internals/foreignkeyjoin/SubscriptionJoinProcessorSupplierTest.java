@@ -77,7 +77,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
-                    newValue.getHash(),
+                    newValue.hash(),
                     null,
                     null),
                 1L
@@ -111,7 +111,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
-                    newValue.getHash(),
+                    newValue.hash(),
                     null,
                     12
                 ),
@@ -146,7 +146,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
-                    newValue.getHash(),
+                    newValue.hash(),
                     "foo",
                     null
                 ),
@@ -181,7 +181,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
-                    newValue.getHash(),
+                    newValue.hash(),
                     "foo",
                      12
                 ),
@@ -216,7 +216,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
-                    newValue.getHash(),
+                    newValue.hash(),
                     "foo",
                     null
                 ),
@@ -237,7 +237,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
-                    newValue.getHash(),
+                    newValue.hash(),
                     null,
                     null
                 ),
@@ -270,7 +270,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
-                    newValue.getHash(),
+                    newValue.hash(),
                     "foo",
                     12
                 ),
@@ -291,7 +291,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
-                    newValue.getHash(),
+                    newValue.hash(),
                     null,
                     12
                 ),

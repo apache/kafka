@@ -116,11 +116,11 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         return isSelfJoin;
     }
 
-    public ProcessorParameters<K, V1, ?, ?> getThisWindowedStreamProcessorParameters() {
+    public ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters() {
         return thisWindowedStreamProcessorParameters;
     }
 
-    public ProcessorParameters<K, V2, ?, ?> getOtherWindowedStreamProcessorParameters() {
+    public ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters() {
         return otherWindowedStreamProcessorParameters;
     }
 

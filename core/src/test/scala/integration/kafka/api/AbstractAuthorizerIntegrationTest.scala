@@ -98,8 +98,8 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
     addNodeProperties(properties)
   }
 
-  override def kraftControllerConfigs(): collection.Seq[Properties] = {
-    val controllerConfigs = super.kraftControllerConfigs()
+  override def kraftControllerConfigs(testInfo: TestInfo): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs(testInfo)
     controllerConfigs.foreach(addNodeProperties)
     controllerConfigs
   }

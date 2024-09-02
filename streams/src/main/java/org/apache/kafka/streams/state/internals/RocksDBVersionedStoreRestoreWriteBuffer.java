@@ -90,7 +90,7 @@ public class RocksDBVersionedStoreRestoreWriteBuffer {
         // flush segments first, as this is consistent with the store always writing to
         // older segments/stores before later ones
         try (final WriteBatch segmentsBatch = new WriteBatch()) {
-            final List<WriteBufferSegmentWithDbFallback> allSegments = restoreClient.getReverseSegments(Long.MIN_VALUE);
+            final List<WriteBufferSegmentWithDbFallback> allSegments = restoreClient.reversedSegments(Long.MIN_VALUE);
             if (allSegments.size() > 0) {
                 // collect entries into write batch
                 for (final WriteBufferSegmentWithDbFallback bufferSegment : allSegments) {
@@ -186,12 +186,12 @@ public class RocksDBVersionedStoreRestoreWriteBuffer {
     private class RocksDBVersionedStoreRestoreClient implements VersionedStoreClient<WriteBufferSegmentWithDbFallback> {
 
         @Override
-        public byte[] getLatestValue(final Bytes key) {
+        public byte[] latestValue(final Bytes key) {
             final Optional<byte[]> bufferValue = latestValueWriteBuffer.get(key);
             if (bufferValue != null) {
                 return bufferValue.orElse(null);
             }
-            return dbClient.getLatestValue(key);
+            return dbClient.latestValue(key);
         }
 
         @Override
@@ -221,13 +221,13 @@ public class RocksDBVersionedStoreRestoreWriteBuffer {
         }
 
         @Override
-        public List<WriteBufferSegmentWithDbFallback> getReverseSegments(final long timestampFrom) {
+        public List<WriteBufferSegmentWithDbFallback> reversedSegments(final long timestampFrom) {
             // head and not tail because the map is sorted in reverse order
             final long segmentFrom = segmentIdForTimestamp(timestampFrom);
             final List<WriteBufferSegmentWithDbFallback> bufferSegments =
                 new ArrayList<>(segmentsWriteBuffer.headMap(segmentFrom, true).values());
 
-            final List<LogicalKeyValueSegment> dbSegments = dbClient.getReverseSegments(timestampFrom);
+            final List<LogicalKeyValueSegment> dbSegments = dbClient.reversedSegments(timestampFrom);
 
             // merge segments from db with segments from write buffer
             final List<WriteBufferSegmentWithDbFallback> allSegments = new ArrayList<>();

@@ -119,6 +119,7 @@ import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
@@ -205,7 +206,6 @@ public final class QuorumController implements Controller {
         private QuorumFeatures quorumFeatures = null;
         private short defaultReplicationFactor = 3;
         private int defaultNumPartitions = 1;
-        private int defaultMinIsr = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
@@ -224,6 +224,7 @@ public final class QuorumController implements Controller {
         private long delegationTokenMaxLifeMs;
         private long delegationTokenExpiryTimeMs;
         private long delegationTokenExpiryCheckIntervalMs;
+        private long uncleanLeaderElectionCheckIntervalMs = TimeUnit.MINUTES.toMillis(5);
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -281,11 +282,6 @@ public final class QuorumController implements Controller {
 
         public Builder setDefaultNumPartitions(int defaultNumPartitions) {
             this.defaultNumPartitions = defaultNumPartitions;
-            return this;
-        }
-
-        public Builder setDefaultMinIsr(int defaultMinIsr) {
-            this.defaultMinIsr = defaultMinIsr;
             return this;
         }
 
@@ -379,6 +375,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setUncleanLeaderElectionCheckIntervalMs(long uncleanLeaderElectionCheckIntervalMs) {
+            this.uncleanLeaderElectionCheckIntervalMs = uncleanLeaderElectionCheckIntervalMs;
+            return this;
+        }
+
         public QuorumController build() throws Exception {
             if (raftClient == null) {
                 throw new IllegalStateException("You must set a raft client.");
@@ -418,7 +419,6 @@ public final class QuorumController implements Controller {
                     quorumFeatures,
                     defaultReplicationFactor,
                     defaultNumPartitions,
-                    defaultMinIsr,
                     replicaPlacer,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
@@ -436,7 +436,8 @@ public final class QuorumController implements Controller {
                     delegationTokenMaxLifeMs,
                     delegationTokenExpiryTimeMs,
                     delegationTokenExpiryCheckIntervalMs,
-                    eligibleLeaderReplicasEnabled
+                    eligibleLeaderReplicasEnabled,
+                    uncleanLeaderElectionCheckIntervalMs
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -849,6 +850,9 @@ public final class QuorumController implements Controller {
             // with leader that is not the preferred leader.
             maybeScheduleNextBalancePartitionLeaders();
 
+            // Schedule a new unclean leader election if there are partitions that do not have a leader.
+            maybeScheduleNextElectUncleanLeaders();
+
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
                 if (featureControl.inPreMigrationMode() && flags.contains(RUNS_IN_PREMIGRATION)) {
@@ -1250,6 +1254,7 @@ public final class QuorumController implements Controller {
             // metadata.version and other in-memory state.
             maybeScheduleNextExpiredDelegationTokenSweep();
             maybeScheduleNextBalancePartitionLeaders();
+            maybeScheduleNextElectUncleanLeaders();
             maybeScheduleNextWriteNoOpRecord();
         }
     }
@@ -1270,6 +1275,7 @@ public final class QuorumController implements Controller {
             clusterControl.deactivate();
             cancelMaybeFenceReplicas();
             cancelMaybeBalancePartitionLeaders();
+            cancelMaybeNextElectUncleanLeaders();
             cancelNextWriteNoOpRecord();
         } catch (Throwable e) {
             fatalFaultHandler.handleFault("exception while renouncing leadership", e);
@@ -1344,7 +1350,13 @@ public final class QuorumController implements Controller {
             );
 
             ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_BALANCE_PARTITION_LEADERS, () -> {
+                long startTimeNs = time.nanoseconds();
                 ControllerResult<Boolean> result = replicationControl.maybeBalancePartitionLeaders();
+                long endTimeNs = time.nanoseconds();
+                long durationNs = endTimeNs - startTimeNs;
+                log.info("maybeBalancePartitionLeaders: generated {} records in {} microseconds.{}",
+                    result.records().size(), NANOSECONDS.toMicros(durationNs),
+                        result.response() ? " Rescheduling immediately." : "");
 
                 // reschedule the operation after the leaderImbalanceCheckIntervalNs interval.
                 // Mark the imbalance event as completed and reschedule if necessary
@@ -1380,6 +1392,54 @@ public final class QuorumController implements Controller {
     private void cancelMaybeBalancePartitionLeaders() {
         imbalancedScheduled = ImbalanceSchedule.DEFERRED;
         queue.cancelDeferred(MAYBE_BALANCE_PARTITION_LEADERS);
+    }
+
+    private static final String MAYBE_ELECT_UNCLEAN_LEADERS = "maybeElectUncleanLeaders";
+
+    private void maybeScheduleNextElectUncleanLeaders() {
+        if (uncleanScheduled != ImbalanceSchedule.SCHEDULED &&
+                replicationControl.areSomePartitionsLeaderless()) {
+            log.debug(
+                "Scheduling write event for {} because scheduled ({}), and areSomePartitionsLeaderless ({})",
+                MAYBE_ELECT_UNCLEAN_LEADERS,
+                uncleanScheduled,
+                replicationControl.areSomePartitionsLeaderless()
+            );
+
+            ControllerWriteEvent<Boolean> event = new ControllerWriteEvent<>(MAYBE_ELECT_UNCLEAN_LEADERS, () -> {
+                long startTimeNs = time.nanoseconds();
+                ControllerResult<Boolean> result = replicationControl.maybeElectUncleanLeaders();
+                long endTimeNs = time.nanoseconds();
+                long durationNs = endTimeNs - startTimeNs;
+                log.info("maybeElectUncleanLeaders: generated {} records in {} microseconds.{}",
+                        result.records().size(), NANOSECONDS.toMicros(durationNs),
+                        result.response() ? " Rescheduling immediately." : "");
+                if (result.response()) {
+                    uncleanScheduled = ImbalanceSchedule.IMMEDIATELY;
+                } else {
+                    uncleanScheduled = ImbalanceSchedule.DEFERRED;
+                }
+                return result;
+            }, EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME));
+
+            long delayNs = time.nanoseconds();
+            if (uncleanScheduled == ImbalanceSchedule.DEFERRED) {
+                delayNs += uncleanLeaderElectionCheckIntervalNs;
+            } else {
+                // The current implementation of KafkaEventQueue always picks from the deferred collection of operations
+                // before picking from the non-deferred collection of operations. This can result in some unfairness if
+                // deferred operation are scheduled for immediate execution. This delays them by a small amount of time.
+                delayNs += NANOSECONDS.convert(10, TimeUnit.MILLISECONDS);
+            }
+            queue.scheduleDeferred(MAYBE_ELECT_UNCLEAN_LEADERS, new EarliestDeadlineFunction(delayNs), event);
+            uncleanScheduled = ImbalanceSchedule.SCHEDULED;
+        }
+    }
+
+
+    private void cancelMaybeNextElectUncleanLeaders() {
+        uncleanScheduled = ImbalanceSchedule.DEFERRED;
+        queue.cancelDeferred(MAYBE_ELECT_UNCLEAN_LEADERS);
     }
 
     private static final String WRITE_NO_OP_RECORD = "writeNoOpRecord";
@@ -1742,6 +1802,11 @@ public final class QuorumController implements Controller {
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
     /**
+     * Tracks the scheduling state for unclean leader election operations.
+     */
+    private ImbalanceSchedule uncleanScheduled = ImbalanceSchedule.DEFERRED;
+
+    /**
      * Tracks if the write of the NoOpRecord has been scheduled.
      */
     private boolean noOpRecordScheduled = false;
@@ -1756,6 +1821,11 @@ public final class QuorumController implements Controller {
     private final boolean zkMigrationEnabled;
 
     private final boolean eligibleLeaderReplicasEnabled;
+
+    /**
+     * The number of nanoseconds between unclean leader election checks.
+     */
+    private final long uncleanLeaderElectionCheckIntervalNs;
 
     /**
      * The maximum number of records per batch to allow.
@@ -1780,7 +1850,6 @@ public final class QuorumController implements Controller {
         QuorumFeatures quorumFeatures,
         short defaultReplicationFactor,
         int defaultNumPartitions,
-        int defaultMinIsr,
         ReplicaPlacer replicaPlacer,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
@@ -1798,7 +1867,8 @@ public final class QuorumController implements Controller {
         long delegationTokenMaxLifeMs,
         long delegationTokenExpiryTimeMs,
         long delegationTokenExpiryCheckIntervalMs,
-        boolean eligibleLeaderReplicasEnabled
+        boolean eligibleLeaderReplicasEnabled,
+        long uncleanLeaderElectionCheckIntervalMs
     ) {
         this.nonFatalFaultHandler = nonFatalFaultHandler;
         this.fatalFaultHandler = fatalFaultHandler;
@@ -1868,7 +1938,6 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setDefaultReplicationFactor(defaultReplicationFactor).
             setDefaultNumPartitions(defaultNumPartitions).
-            setDefaultMinIsr(defaultMinIsr).
             setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled).
             setMaxElectionsPerImbalance(ReplicationControlManager.MAX_ELECTIONS_PER_IMBALANCE).
             setConfigurationControl(configurationControl).
@@ -1904,6 +1973,8 @@ public final class QuorumController implements Controller {
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.recordRedactor = new RecordRedactor(configSchema);
         this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
+        this.uncleanLeaderElectionCheckIntervalNs =
+            TimeUnit.MILLISECONDS.toNanos(uncleanLeaderElectionCheckIntervalMs);
 
         log.info("Creating new QuorumController with clusterId {}.{}{}",
             clusterId, zkMigrationEnabled ? " ZK migration mode is enabled." : "",
@@ -2171,11 +2242,14 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerRegistrationRequestData request
     ) {
+        // populate finalized features map with latest known kraft version for validation
+        Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+        controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
         return appendWriteEvent("registerBroker", context.deadlineNs(),
             () -> {
                 ControllerResult<BrokerRegistrationReply> result = clusterControl.
-                    registerBroker(request, offsetControl.nextWriteOffset(), featureControl.
-                        finalizedFeatures(Long.MAX_VALUE));
+                    registerBroker(request, offsetControl.nextWriteOffset(),
+                        new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE));
                 rescheduleMaybeFenceStaleBrokers();
                 return result;
             },
