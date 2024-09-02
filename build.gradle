@@ -506,6 +506,8 @@ subprojects {
       junitXml.required = !userDisableJUnitReports
       html.required = !userDisableJUnitReports
     }
+
+    outputs.cacheIf { true }
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
