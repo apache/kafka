@@ -48,14 +48,12 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     )
   )
   def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(): Unit = {
-    val logManager = cluster.brokers().asScala.head._2.logManager
-    val consumer = TestUtils.createConsumer(cluster.bootstrapServers())
-
-    try {
+    withConsumer(groupId = "group", groupProtocol = GroupProtocol.CLASSIC) { consumer =>
       consumer.commitSync(Map(
         new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
       ).asJava)
 
+      val logManager = cluster.brokers().asScala.head._2.logManager
       def getGroupMetadataLogOpt: Option[UnifiedLog] =
         logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
 
@@ -68,8 +66,6 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
         .filter(_ != CompressionType.GZIP)
 
       assertEquals(Seq.empty, incorrectCompressionCodecs, "Incorrect compression codecs should be empty")
-    } finally {
-      consumer.close()
     }
   }
 

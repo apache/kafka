@@ -296,7 +296,7 @@ public class ClassicGroup implements Group {
      * @return True if the group is a simple group.
      */
     public boolean isSimpleGroup() {
-        return !this.protocolType.isPresent() && isEmpty() && pendingJoinMembers.isEmpty();
+        return !protocolType.isPresent() && isEmpty() && pendingJoinMembers.isEmpty();
     }
 
     /**

@@ -838,8 +838,9 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ConsumerGroup.
-     * @throws IllegalStateException if the group does not exist and createIfNotExists is false or
-     *                               if the group is not a consumer group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
+     *                                  if the group is not a consumer group.
+     * @throws IllegalStateException    if the group does not have the expected type.
      * Package private for testing.
      */
     ConsumerGroup getOrMaybeCreatePersistedConsumerGroup(
@@ -849,7 +850,7 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new IllegalStateException(String.format("Consumer group %s not found", groupId));
+            throw new GroupIdNotFoundException(String.format("Consumer group %s not found", groupId));
         }
 
         if (group == null) {
@@ -3215,7 +3216,7 @@ public class GroupMetadataManager {
         ConsumerGroup consumerGroup;
         try {
             consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
-        } catch (IllegalStateException ex) {
+        } catch (GroupIdNotFoundException ex) {
             // If the group does not exist and a tombstone is replayed, we can ignore it.
             return;
         }
@@ -3344,7 +3345,7 @@ public class GroupMetadataManager {
             ConsumerGroup consumerGroup;
             try {
                 consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
-            } catch (IllegalStateException ex) {
+            } catch (GroupIdNotFoundException ex) {
                 // If the group does not exist, we can ignore the tombstone.
                 return;
             }
@@ -3384,7 +3385,7 @@ public class GroupMetadataManager {
         ConsumerGroup group;
         try {
             group = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
-        } catch (IllegalStateException ex) {
+        } catch (GroupIdNotFoundException ex) {
             // If the group does not exist, we can ignore the tombstone.
             return;
         }
@@ -3421,7 +3422,7 @@ public class GroupMetadataManager {
             ConsumerGroup group;
             try {
                 group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
-            } catch (IllegalStateException ex) {
+            } catch (GroupIdNotFoundException ex) {
                 // If the group does not exist, we can ignore the tombstone.
                 return;
             }
@@ -3450,7 +3451,7 @@ public class GroupMetadataManager {
             ConsumerGroup group;
             try {
                 group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
-            } catch (IllegalStateException ex) {
+            } catch (GroupIdNotFoundException ex) {
                 // If the group does not exist, we can ignore the tombstone.
                 return;
             }
@@ -3487,7 +3488,7 @@ public class GroupMetadataManager {
             ConsumerGroup group;
             try {
                 group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
-            } catch (IllegalStateException ex) {
+            } catch (GroupIdNotFoundException ex) {
                 // If the group does not exist, we can ignore the tombstone.
                 return;
             }
