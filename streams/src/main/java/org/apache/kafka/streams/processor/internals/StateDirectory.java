@@ -221,6 +221,9 @@ public class StateDirectory implements AutoCloseable {
                 final ProcessorTopology topology = topologyMetadata.buildSubtopology(id);
                 final Set<TopicPartition> inputPartitions = topology.sourceTopics().stream().map(topic -> new TopicPartition(topic, id.partition())).collect(Collectors.toSet());
 
+                // we still check whether the Task sub-topology is stateful, even though we know its directory contains
+                // state, because it's possible the topology has changed since that data was written, and is now stateless
+                // this therefore prevents us from creating unnecessary Tasks just because of some left-over state
                 if (topology.hasStateWithChangelogs()) {
                     final ProcessorStateManager stateManager = new ProcessorStateManager(
                         id,
@@ -312,6 +315,8 @@ public class StateDirectory implements AutoCloseable {
         final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
         for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
             if (predicate.test(entry.getValue()) && tasksForLocalState.remove(entry.getKey()) != null) {
+                // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
+                // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
                 drainedTasks.add(entry.getValue());
             }
         }
