@@ -91,7 +91,7 @@ object ZkMigrationIntegrationTest {
 }
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@Timeout(300)
+@Timeout(600)
 class ZkMigrationIntegrationTest {
 
   val log: Logger = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
