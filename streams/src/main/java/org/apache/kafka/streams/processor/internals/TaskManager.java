@@ -480,21 +480,15 @@ public class TaskManager {
                                                 final Set<Task> tasksToCloseClean) {
         final Map<Task, Set<TopicPartition>> pendingStandbyTasksToRecycle = assignPendingTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
         final Map<Task, Set<TopicPartition>> pendingStandbyTasksToUse = assignPendingTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-        final Set<TaskId> recycledPendingTasks = new HashSet<>(pendingStandbyTasksToRecycle.size() + pendingStandbyTasksToUse.size());
 
         // if this was the last local thread to receive its assignment, close all the remaining Tasks, as they are not needed
         stateDirectory.closePendingTasksIfLastAssginedThread();
 
-        // recycle the pending standbys to active, and remove them from the set of actives that need to be created
-        tasksToRecycle.putAll(pendingStandbyTasksToRecycle);
+        // recycle the pending standbys to active
         tasks.addStandbyTasks(pendingStandbyTasksToRecycle.keySet());
-        pendingStandbyTasksToRecycle.keySet().forEach(task -> activeTasksToCreate.remove(task.id()));
-        recycledPendingTasks.addAll(pendingStandbyTasksToRecycle.keySet().stream().map(Task::id).collect(Collectors.toSet()));
 
         // use pending Standbys as real Standby tasks
         tasks.addStandbyTasks(pendingStandbyTasksToUse.keySet());
-        pendingStandbyTasksToUse.keySet().forEach(task -> standbyTasksToCreate.remove(task.id()));
-        recycledPendingTasks.addAll(pendingStandbyTasksToUse.keySet().stream().map(Task::id).collect(Collectors.toSet()));
 
         for (final Task task : tasks.allTasks()) {
             final TaskId taskId = task.id();
@@ -517,7 +511,7 @@ public class TaskManager {
                     tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
                 }
                 standbyTasksToCreate.remove(taskId);
-            } else if (!recycledPendingTasks.contains(taskId)) {
+            } else {
                 tasksToCloseClean.add(task);
             }
         }
