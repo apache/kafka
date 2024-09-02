@@ -34,7 +34,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
 
 import java.time.Duration;
 
-import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.wrapWithReadWriteStore;
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object, Object> {
 
@@ -59,8 +59,8 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
     @SuppressWarnings("unchecked")
     @Override
     public <S extends StateStore> S getStateStore(final String name) {
-        final StateStore store = stateManager.getGlobalStore(name);
-        return (S) getReadWriteStore(store);
+        final StateStore store = stateManager.globalStore(name);
+        return (S) wrapWithReadWriteStore(store);
     }
 
     @SuppressWarnings("unchecked")

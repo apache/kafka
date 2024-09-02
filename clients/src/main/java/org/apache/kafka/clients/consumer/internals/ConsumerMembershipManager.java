@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
@@ -103,7 +104,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
  * the user if the callbacks fail. This manager is only concerned about the callbacks completion to
  * know that it can proceed with the reconciliation.
  */
-public class ConsumerMembershipManager extends AbstractMembershipManager<ConsumerGroupHeartbeatResponseData> {
+public class ConsumerMembershipManager extends AbstractMembershipManager<ConsumerGroupHeartbeatResponse> {
 
     /**
      * Group instance ID to be used by the member, provided when creating the current membership manager.
@@ -150,17 +151,17 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      Time time,
                                      Metrics metrics) {
         this(groupId,
-                groupInstanceId,
-                rebalanceTimeoutMs,
-                serverAssignor,
-                subscriptions,
-                commitRequestManager,
-                metadata,
-                logContext,
-                clientTelemetryReporter,
-                backgroundEventHandler,
-                time,
-                new ConsumerRebalanceMetricsManager(metrics));
+            groupInstanceId,
+            rebalanceTimeoutMs,
+            serverAssignor,
+            subscriptions,
+            commitRequestManager,
+            metadata,
+            logContext,
+            clientTelemetryReporter,
+            backgroundEventHandler,
+            time,
+            new ConsumerRebalanceMetricsManager(metrics));
     }
 
     // Visible for testing
@@ -177,12 +178,12 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               Time time,
                               RebalanceMetricsManager metricsManager) {
         super(groupId,
-                subscriptions,
-                metadata,
-                logContext.logger(ConsumerMembershipManager.class),
-                clientTelemetryReporter,
-                time,
-                metricsManager);
+            subscriptions,
+            metadata,
+            logContext.logger(ConsumerMembershipManager.class),
+            clientTelemetryReporter,
+            time,
+            metricsManager);
         this.groupInstanceId = groupInstanceId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.serverAssignor = serverAssignor;
@@ -202,11 +203,12 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponseData response) {
-        if (response.errorCode() != Errors.NONE.code()) {
+    public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponse response) {
+        ConsumerGroupHeartbeatResponseData responseData = response.data();
+        if (responseData.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
-                    Errors.forCode(response.errorCode())
+                    Errors.forCode(responseData.errorCode())
             );
             throw new IllegalArgumentException(errorMessage);
         }
@@ -231,15 +233,15 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         // changed. Initially the member id is empty, and it is updated when the member joins the
         // group. This is done here to avoid updating the label on every heartbeat response. Also
         // check if the member id is null, as the schema defines it as nullable.
-        if (response.memberId() != null && !response.memberId().equals(memberId)) {
+        if (responseData.memberId() != null && !responseData.memberId().equals(memberId)) {
             clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
-                    Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, response.memberId())));
+                    Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, responseData.memberId())));
         }
 
-        this.memberId = response.memberId();
-        updateMemberEpoch(response.memberEpoch());
+        this.memberId = responseData.memberId();
+        updateMemberEpoch(responseData.memberEpoch());
 
-        ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
+        ConsumerGroupHeartbeatResponseData.Assignment assignment = responseData.assignment();
 
         if (assignment != null) {
             if (!state.canHandleNewAssignment()) {

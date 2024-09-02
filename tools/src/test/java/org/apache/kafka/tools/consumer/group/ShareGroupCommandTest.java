@@ -49,7 +49,9 @@ import java.util.Set;
 import joptsimple.OptionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -127,6 +129,15 @@ public class ShareGroupCommandTest {
         assertEquals(1, lags.size());
         assertEquals(20, lags.get(new TopicPartition("topic1", 0)));
         service.close();
+    }
+
+    @Test
+    public void testPrintEmptyGroupState() {
+        assertFalse(ShareGroupService.maybePrintEmptyGroupState("group", ShareGroupState.EMPTY, 0));
+        assertFalse(ShareGroupService.maybePrintEmptyGroupState("group", ShareGroupState.DEAD, 0));
+        assertFalse(ShareGroupService.maybePrintEmptyGroupState("group", ShareGroupState.STABLE, 0));
+        assertTrue(ShareGroupService.maybePrintEmptyGroupState("group", ShareGroupState.STABLE, 1));
+        assertTrue(ShareGroupService.maybePrintEmptyGroupState("group", ShareGroupState.UNKNOWN, 1));
     }
 
     @Test

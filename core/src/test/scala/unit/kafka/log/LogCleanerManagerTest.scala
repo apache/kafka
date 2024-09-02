@@ -20,7 +20,6 @@ package kafka.log
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -30,9 +29,11 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
+import java.lang.{Long => JLong}
 import java.util
 import scala.collection.mutable
 import scala.compat.java8.OptionConverters._
@@ -66,7 +67,7 @@ class LogCleanerManagerTest extends Logging {
       cleanerCheckpoints.toMap
     }
 
-    override def updateCheckpoints(dataDir: File, partitionToUpdateOrAdd: Option[(TopicPartition,Long)] = None,
+    override def updateCheckpoints(dataDir: File, partitionToUpdateOrAdd: Option[(TopicPartition, JLong)] = None,
                                    partitionToRemove: Option[TopicPartition] = None): Unit = {
       assert(partitionToRemove.isEmpty, "partitionToRemove argument with value not yet handled")
       val (tp, offset) = partitionToUpdateOrAdd.getOrElse(

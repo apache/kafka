@@ -77,22 +77,46 @@ public class DefaultMessageFormatterTest {
         formatter.writeTo(record, new PrintStream(out));
         assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tNO_HEADERS\tkey\tvalue\n", out.toString());
 
+        configs.put("print.delivery", "true");
+        formatter.configure(configs);
+        out = new ByteArrayOutputStream();
+        formatter.writeTo(record, new PrintStream(out));
+        assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tDelivery:NOT_PRESENT\tNO_HEADERS\tkey\tvalue\n", out.toString());
+
+        configs.put("print.epoch", "true");
+        formatter.configure(configs);
+        out = new ByteArrayOutputStream();
+        formatter.writeTo(record, new PrintStream(out));
+        assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tDelivery:NOT_PRESENT\tEpoch:NOT_PRESENT\tNO_HEADERS\tkey\tvalue\n", out.toString());
+
         RecordHeaders headers = new RecordHeaders();
         headers.add("h1", "v1".getBytes());
         headers.add("h2", "v2".getBytes());
         record = new ConsumerRecord<>("topic", 0, 123, 123L, TimestampType.CREATE_TIME, -1, -1, "key".getBytes(), "value".getBytes(),
-                headers, Optional.empty());
+                headers, Optional.of(58), Optional.of((short) 1));
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123\tPartition:0\tOffset:123\th1:v1,h2:v2\tkey\tvalue\n", out.toString());
+        assertEquals("CreateTime:123\tPartition:0\tOffset:123\tDelivery:1\tEpoch:58\th1:v1,h2:v2\tkey\tvalue\n", out.toString());
 
         configs.put("print.value", "false");
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123\tPartition:0\tOffset:123\th1:v1,h2:v2\tkey\n", out.toString());
+        assertEquals("CreateTime:123\tPartition:0\tOffset:123\tDelivery:1\tEpoch:58\th1:v1,h2:v2\tkey\n", out.toString());
 
         configs.put("key.separator", "<sep>");
+        formatter.configure(configs);
+        out = new ByteArrayOutputStream();
+        formatter.writeTo(record, new PrintStream(out));
+        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>Delivery:1<sep>Epoch:58<sep>h1:v1,h2:v2<sep>key\n", out.toString());
+
+        configs.put("print.delivery", "false");
+        formatter.configure(configs);
+        out = new ByteArrayOutputStream();
+        formatter.writeTo(record, new PrintStream(out));
+        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>Epoch:58<sep>h1:v1,h2:v2<sep>key\n", out.toString());
+
+        configs.put("print.epoch", "false");
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
