@@ -396,7 +396,7 @@ public class StreamsGroupTest {
     @Test
     public void testGroupState() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+        assertEquals(StreamsGroup.StreamsGroupState.INITIALIZING, streamsGroup.state());
 
         StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
             .setState(MemberState.STABLE)
@@ -406,6 +406,11 @@ public class StreamsGroupTest {
 
         streamsGroup.updateMember(member1);
         streamsGroup.setGroupEpoch(1);
+
+        assertEquals(MemberState.STABLE, member1.state());
+        assertEquals(StreamsGroup.StreamsGroupState.INITIALIZING, streamsGroup.state());
+
+        streamsGroup.setTopology(new StreamsTopology("topology-id", Collections.emptyMap()));
 
         assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
@@ -668,7 +673,7 @@ public class StreamsGroupTest {
     public void testValidateDeleteGroup() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+        assertEquals(StreamsGroup.StreamsGroupState.INITIALIZING, streamsGroup.state());
         assertDoesNotThrow(streamsGroup::validateDeleteGroup);
 
         StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
@@ -676,6 +681,7 @@ public class StreamsGroupTest {
             .setPreviousMemberEpoch(0)
             .build();
         streamsGroup.updateMember(member1);
+        streamsGroup.setTopology(new StreamsTopology("topology-id", Collections.emptyMap()));
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
@@ -689,6 +695,10 @@ public class StreamsGroupTest {
 
         assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
+
+        streamsGroup.removeMember("member1");
+        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+        assertDoesNotThrow(streamsGroup::validateDeleteGroup);
     }
 
     @Test
@@ -717,14 +727,13 @@ public class StreamsGroupTest {
         );
         StreamsGroup group = new StreamsGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.idempotentCreateSnapshot(0);
-        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
-        assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("initializing"), 0));
+        assertFalse(group.isInStates(Collections.singleton("Initializing"), 0));
 
-        group.updateMember(new StreamsGroupMember.Builder("member1")
-            .build());
-        snapshotRegistry.idempotentCreateSnapshot((1));
-        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
-        assertTrue(group.isInStates(Collections.singleton("stable"), 1));
-        assertFalse(group.isInStates(Collections.singleton("empty"), 1));
+        group.setTopology(new StreamsTopology("topology-id", Collections.emptyMap()));
+        snapshotRegistry.idempotentCreateSnapshot(1);
+        assertTrue(group.isInStates(Collections.singleton("initializing"), 0));
+        assertTrue(group.isInStates(Collections.singleton("empty"), 1));
+        assertFalse(group.isInStates(Collections.singleton("initializing"), 1));
     }
 }

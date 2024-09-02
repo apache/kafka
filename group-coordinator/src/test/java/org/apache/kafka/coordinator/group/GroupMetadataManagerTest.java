@@ -55,6 +55,9 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupInitializeRequestData;
+import org.apache.kafka.common.message.StreamsGroupInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -91,6 +94,7 @@ import org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelper
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -123,6 +127,8 @@ import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals;
@@ -365,6 +371,440 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicRegex("t*")));
         assertEquals("SubscribedTopicRegex is not supported yet.", ex.getMessage());
+    }
+
+    @Test
+    public void testJoiningNonExistingStreamsGroup() {
+        String groupId = "group-id";
+        int rebalanceTimeoutMs = 300000;
+        String topologyId = "topology-id";
+        String processId = "process-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        StreamsGroupHeartbeatRequestData heartbeat = buildFirstStreamsGroupHeartbeatRequest(groupId, topologyId, processId, rebalanceTimeoutMs);
+
+        CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> result = context.streamsGroupHeartbeat(heartbeat);
+
+        assertNotNull(result.response());
+        StreamsGroupHeartbeatResponseData response = result.response();
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertFalse(response.memberId().isEmpty());
+        assertEquals(1, response.memberEpoch());
+        assertTrue(response.shouldInitializeTopology());
+        assertTrue(response.activeTasks().isEmpty());
+        assertTrue(response.standbyTasks().isEmpty());
+        assertTrue(response.warmupTasks().isEmpty());
+        List<CoordinatorRecord> coordinatorRecords = result.records();
+        assertEquals(5, coordinatorRecords.size());
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(groupId, 1)));
+        StreamsGroupMember member = new StreamsGroupMember.Builder(response.memberId())
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(rebalanceTimeoutMs)
+            .setTopologyId(topologyId)
+            .setProcessId(processId)
+            .build();
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupMemberRecord(groupId, member)));
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 1)));
+        assertTrue(coordinatorRecords.contains(
+            CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(
+                groupId,
+                member.memberId(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        ));
+        StreamsGroupMember updatedMember = new org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder(member)
+            .withTargetAssignment(
+                1,
+                new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap())
+            )
+            .withCurrentActiveTaskEpoch((a, b) -> 1)
+            .withOwnedActiveTasks(Collections.emptyList())
+            .withOwnedStandbyTasks(Collections.emptyList())
+            .withOwnedWarmupTasks(Collections.emptyList())
+            .build();
+        CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, updatedMember);
+        assertEquals(StreamsGroup.StreamsGroupState.INITIALIZING, context.streamsGroupState("group-id"));
+        assertTrue(context.timer.isScheduled("topology-initialization-timeout-group-id-topology-id"));
+        assertEquals(rebalanceTimeoutMs, context.timer.timeout("topology-initialization-timeout-group-id-topology-id").deadlineMs - context.time.milliseconds());
+    }
+
+    @Test
+    public void testJoiningExistingInitializingStreamsGroup() {
+        String groupId = "group-id";
+        int rebalanceTimeoutMs = 300000;
+        String topologyId = "topology-id";
+        String processId = "process-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        StreamsGroupHeartbeatRequestData heartbeatToCreateAndRequestInitGroup =
+            buildFirstStreamsGroupHeartbeatRequest(groupId, topologyId, processId, rebalanceTimeoutMs);
+        context.streamsGroupHeartbeat(heartbeatToCreateAndRequestInitGroup);
+        StreamsGroupHeartbeatRequestData heartbeat =
+            buildFirstStreamsGroupHeartbeatRequest(groupId, topologyId, processId, rebalanceTimeoutMs);
+
+        CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> result = context.streamsGroupHeartbeat(heartbeat);
+
+        assertNotNull(result.response());
+        StreamsGroupHeartbeatResponseData response = result.response();
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertFalse(response.memberId().isEmpty());
+        assertEquals(2, response.memberEpoch());
+        assertFalse(response.shouldInitializeTopology());
+        assertTrue(response.activeTasks().isEmpty());
+        assertTrue(response.standbyTasks().isEmpty());
+        assertTrue(response.warmupTasks().isEmpty());
+        List<CoordinatorRecord> coordinatorRecords = result.records();
+        assertEquals(5, coordinatorRecords.size());
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(groupId, 2)));
+        StreamsGroupMember member = new StreamsGroupMember.Builder(response.memberId())
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setRebalanceTimeoutMs(rebalanceTimeoutMs)
+            .setTopologyId(topologyId)
+            .setProcessId(processId)
+            .build();
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupMemberRecord(groupId, member)));
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 2)));
+        assertTrue(coordinatorRecords.contains(
+            CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(
+                groupId,
+                member.memberId(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        ));
+        StreamsGroupMember updatedMember = new org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder(member)
+            .withTargetAssignment(
+                1,
+                new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap())
+            )
+            .withCurrentActiveTaskEpoch((a, b) -> 1)
+            .withOwnedActiveTasks(Collections.emptyList())
+            .withOwnedStandbyTasks(Collections.emptyList())
+            .withOwnedWarmupTasks(Collections.emptyList())
+            .build();
+        CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, updatedMember);
+        assertEquals(StreamsGroup.StreamsGroupState.INITIALIZING, context.streamsGroupState("group-id"));
+    }
+
+    @Test
+    public void testInitTopologyExistingInitializingStreamsGroup() {
+        String groupId = "group-id";
+        int rebalanceTimeoutMs = 300000;
+        String topologyId = "topology-id";
+        String processId = "process-id";
+        String inputTopicName = "input-topic";
+        String subtopologyId = "subtopology-id";
+        Uuid inputTopicId = Uuid.randomUuid();
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(inputTopicId, inputTopicName, 3)
+            .addRacks()
+            .build();
+        MockTaskAssignor assignor = new MockTaskAssignor("mock");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .withTaskAssignors(Collections.singletonList(assignor))
+            .build();
+        StreamsGroupHeartbeatRequestData heartbeatToCreateAndRequestInitGroup =
+            buildFirstStreamsGroupHeartbeatRequest(groupId, topologyId, processId, rebalanceTimeoutMs);
+        final CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> heartbeatResult =
+            context.streamsGroupHeartbeat(heartbeatToCreateAndRequestInitGroup);
+        final List<StreamsGroupInitializeRequestData.Subtopology> subtopologies = new ArrayList<>();
+        subtopologies.add(new StreamsGroupInitializeRequestData.Subtopology()
+            .setSubtopologyId(subtopologyId)
+            .setRepartitionSinkTopics(Collections.emptyList())
+            .setRepartitionSourceTopics(Collections.emptyList())
+            .setSourceTopics(Collections.singletonList("input-topic"))
+        );
+        prepareStreamsGroupAssignment(assignor, heartbeatResult.response().memberId(), subtopologyId);
+        StreamsGroupInitializeRequestData initialize = new StreamsGroupInitializeRequestData()
+            .setGroupId(groupId)
+            .setTopologyId(topologyId)
+            .setTopology(subtopologies);
+
+        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
+
+        assertNotNull(result.response());
+        StreamsGroupInitializeResponseData response = result.response();
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        List<CoordinatorRecord> coordinatorRecords = result.records();
+        assertEquals(5, coordinatorRecords.size());
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(groupId, 2)));
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupTopologyRecord(groupId, subtopologies)));
+        org.apache.kafka.coordinator.group.streams.TopicMetadata topicMetadata = new org.apache.kafka.coordinator.group.streams.TopicMetadata(
+            inputTopicId,
+            inputTopicName,
+            3,
+            mkMap(
+                mkEntry(0, mkSet("rack0", "rack1")),
+                mkEntry(1, mkSet("rack1", "rack2")),
+                mkEntry(2, mkSet("rack2", "rack3"))
+            )
+        );
+        assertTrue(coordinatorRecords.contains(
+            CoordinatorStreamsRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId, mkMap(mkEntry(inputTopicName, topicMetadata)))
+        ));
+        assertTrue(coordinatorRecords.contains(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 2)));
+        assertTrue(coordinatorRecords.contains(
+            CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(
+                groupId,
+                heartbeatResult.response().memberId(),
+                TaskAssignmentTestUtil.mkAssignment(TaskAssignmentTestUtil.mkTaskAssignment(subtopologyId, 0, 1, 2)),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+            )
+        ));
+        assertFalse(context.timer.isScheduled("topology-initialization-timeout-group-id-topology-id"));
+        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, context.streamsGroupState("group-id"));
+    }
+
+    @Test
+    public void testInitTopologyWithWrongGroupId() {
+        String groupId = "group-id";
+        int rebalanceTimeoutMs = 300000;
+        String topologyId = "topology-id";
+        String processId = "process-id";
+        String inputTopicName = "input-topic";
+        String subtopologyId = "subtopology-id";
+        Uuid inputTopicId = Uuid.randomUuid();
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(inputTopicId, inputTopicName, 3)
+            .addRacks()
+            .build();
+        MockTaskAssignor assignor = new MockTaskAssignor("mock");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .withTaskAssignors(Collections.singletonList(assignor))
+            .build();
+        StreamsGroupHeartbeatRequestData heartbeatToCreateAndRequestInitGroup =
+            buildFirstStreamsGroupHeartbeatRequest(groupId, topologyId, processId, rebalanceTimeoutMs);
+        final CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> heartbeatResult =
+            context.streamsGroupHeartbeat(heartbeatToCreateAndRequestInitGroup);
+        final List<StreamsGroupInitializeRequestData.Subtopology> subtopologies = new ArrayList<>();
+        subtopologies.add(new StreamsGroupInitializeRequestData.Subtopology()
+            .setSubtopologyId(subtopologyId)
+            .setRepartitionSinkTopics(Collections.emptyList())
+            .setRepartitionSourceTopics(Collections.emptyList())
+            .setSourceTopics(Collections.singletonList("input-topic"))
+        );
+        prepareStreamsGroupAssignment(assignor, heartbeatResult.response().memberId(), subtopologyId);
+        final String wrongGroupId = "wrong-" + groupId;
+        StreamsGroupInitializeRequestData initialize = new StreamsGroupInitializeRequestData()
+            .setGroupId(wrongGroupId)
+            .setTopologyId(topologyId)
+            .setTopology(subtopologies);
+
+        final GroupIdNotFoundException groupIdNotFoundException =
+            assertThrows(GroupIdNotFoundException.class, () -> context.streamsGroupInitialize(initialize));
+
+        assertEquals(
+            "Streams group " + wrongGroupId + " not found.",
+            groupIdNotFoundException.getMessage()
+        );
+    }
+
+    @Test
+    public void testInitTopologyWithWrongTopologyId() {
+        String groupId = "group-id";
+        int rebalanceTimeoutMs = 300000;
+        String topologyId = "topology-id";
+        String processId = "process-id";
+        String inputTopicName = "input-topic";
+        String subtopologyId = "subtopology-id";
+        Uuid inputTopicId = Uuid.randomUuid();
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(inputTopicId, inputTopicName, 3)
+            .addRacks()
+            .build();
+        MockTaskAssignor assignor = new MockTaskAssignor("mock");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .withTaskAssignors(Collections.singletonList(assignor))
+            .build();
+        StreamsGroupHeartbeatRequestData heartbeatToCreateAndRequestInitGroup =
+            buildFirstStreamsGroupHeartbeatRequest(groupId, topologyId, processId, rebalanceTimeoutMs);
+        final CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> heartbeatResult =
+            context.streamsGroupHeartbeat(heartbeatToCreateAndRequestInitGroup);
+        final List<StreamsGroupInitializeRequestData.Subtopology> subtopologies = new ArrayList<>();
+        subtopologies.add(new StreamsGroupInitializeRequestData.Subtopology()
+            .setSubtopologyId(subtopologyId)
+            .setRepartitionSinkTopics(Collections.emptyList())
+            .setRepartitionSourceTopics(Collections.emptyList())
+            .setSourceTopics(Collections.singletonList("input-topic"))
+        );
+        prepareStreamsGroupAssignment(assignor, heartbeatResult.response().memberId(), subtopologyId);
+        final String wrongTopologyId = "wrong-" + topologyId;
+        StreamsGroupInitializeRequestData initialize = new StreamsGroupInitializeRequestData()
+            .setGroupId(groupId)
+            .setTopologyId(wrongTopologyId)
+            .setTopology(subtopologies);
+
+        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
+
+        assertNotNull(result.response());
+        StreamsGroupInitializeResponseData response = result.response();
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertTrue(result.records().isEmpty());
+    }
+
+    @Test
+    public void testInitTopologyForInitializedStreamsGroup() {
+        String groupId = "group-id";
+        int rebalanceTimeoutMs = 300000;
+        String topologyId = "topology-id";
+        String processId = "process-id";
+        String inputTopicName = "input-topic";
+        String subtopologyId = "subtopology-id";
+        Uuid inputTopicId = Uuid.randomUuid();
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(inputTopicId, inputTopicName, 3)
+            .addRacks()
+            .build();
+        MockTaskAssignor assignor = new MockTaskAssignor("mock");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .withTaskAssignors(Collections.singletonList(assignor))
+            .build();
+        StreamsGroupHeartbeatRequestData heartbeatToCreateAndRequestInitGroup =
+            buildFirstStreamsGroupHeartbeatRequest(groupId, topologyId, processId, rebalanceTimeoutMs);
+        final CoordinatorResult<StreamsGroupHeartbeatResponseData, CoordinatorRecord> heartbeatResult =
+            context.streamsGroupHeartbeat(heartbeatToCreateAndRequestInitGroup);
+        final List<StreamsGroupInitializeRequestData.Subtopology> subtopologies = new ArrayList<>();
+        subtopologies.add(new StreamsGroupInitializeRequestData.Subtopology()
+            .setSubtopologyId(subtopologyId)
+            .setRepartitionSinkTopics(Collections.emptyList())
+            .setRepartitionSourceTopics(Collections.emptyList())
+            .setSourceTopics(Collections.singletonList("input-topic"))
+        );
+        prepareStreamsGroupAssignment(assignor, heartbeatResult.response().memberId(), subtopologyId);
+        StreamsGroupInitializeRequestData initialize = new StreamsGroupInitializeRequestData()
+            .setGroupId(groupId)
+            .setTopologyId(topologyId)
+            .setTopology(subtopologies);
+
+        context.streamsGroupInitialize(initialize);
+        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result = context.streamsGroupInitialize(initialize);
+
+        assertNotNull(result.response());
+        StreamsGroupInitializeResponseData response = result.response();
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertTrue(result.records().isEmpty());
+    }
+
+    @Test
+    public void testTopologyInitializationMissingInternalTopics() {
+        String groupId = "group-id";
+        int rebalanceTimeoutMs = 300000;
+        String topologyId = "topology-id";
+        String processId = "process-id";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "repartition";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addRacks()
+                .build())
+            .build();
+        StreamsGroupHeartbeatRequestData heartbeatToCreateAndRequestInitGroup =
+            buildFirstStreamsGroupHeartbeatRequest(groupId, topologyId, processId, rebalanceTimeoutMs);
+        context.streamsGroupHeartbeat(heartbeatToCreateAndRequestInitGroup);
+        assertThrows(GroupIdNotFoundException.class, () ->
+            context.groupMetadataManager.consumerGroup(groupId));
+        final List<StreamsGroupInitializeRequestData.Subtopology> topology = Collections.singletonList(
+            new StreamsGroupInitializeRequestData.Subtopology()
+                .setSubtopologyId("subtopology-id")
+                .setSourceTopics(Collections.singletonList("bar"))
+                .setRepartitionSourceTopics(
+                    Collections.singletonList(
+                        new StreamsGroupInitializeRequestData.TopicInfo()
+                            .setName("repartition")
+                            .setPartitions(4)
+                            .setTopicConfigs(Collections.singletonList(
+                                new StreamsGroupInitializeRequestData.TopicConfig()
+                                    .setKey("config-name1")
+                                    .setValue("config-value1")
+                            ))
+                    )
+                )
+                .setStateChangelogTopics(
+                    Collections.singletonList(
+                        new StreamsGroupInitializeRequestData.TopicInfo()
+                            .setName("changelog")
+                            .setTopicConfigs(Collections.singletonList(
+                                new StreamsGroupInitializeRequestData.TopicConfig()
+                                    .setKey("config-name2")
+                                    .setValue("config-value2")
+                            ))
+                    )
+                )
+        );
+        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result =
+            context.streamsGroupInitialize(
+                new StreamsGroupInitializeRequestData()
+                    .setGroupId(groupId)
+                    .setTopologyId(topologyId)
+                    .setTopology(topology)
+            );
+
+        assertEquals(
+            new StreamsGroupInitializeResponseData()
+                .setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code())
+                .setErrorMessage("Internal topics changelog do not exist."),
+            result.response()
+        );
+        
+        assertTrue(result.records().isEmpty());
+    }
+
+    private StreamsGroupHeartbeatRequestData buildFirstStreamsGroupHeartbeatRequest(
+        final String groupId,
+        final String topologyId,
+        final String processId,
+        final int rebalanceTimeoutMs) {
+
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId("")
+            .setMemberEpoch(0)
+            .setInstanceId(null)
+            .setRackId(null)
+            .setRebalanceTimeoutMs(rebalanceTimeoutMs)
+            .setTopologyId(topologyId)
+            .setActiveTasks(Collections.emptyList())
+            .setStandbyTasks(Collections.emptyList())
+            .setWarmupTasks(Collections.emptyList())
+            .setProcessId(processId)
+            .setUserEndpoint(null)
+            .setClientTags(null)
+            .setTaskOffsets(null)
+            .setTaskEndOffsets(null)
+            .setShutdownApplication(false);
+    }
+
+    private void prepareStreamsGroupAssignment(final MockTaskAssignor assignor,
+                                               final String memberId,
+                                               final String subtopologyId) {
+        assignor.prepareGroupAssignment(new org.apache.kafka.coordinator.group.taskassignor.GroupAssignment(
+            mkMap(
+                mkEntry(
+                    memberId,
+                    new org.apache.kafka.coordinator.group.taskassignor.MemberAssignment(
+                        mkMap(
+                            mkEntry(
+                                subtopologyId,
+                                mkSet(0, 1, 2)
+                            )
+                        ),
+                        Collections.emptyMap(),
+                        Collections.emptyMap()
+                    )
+                )
+            )
+        ));
     }
 
     @Test
@@ -8881,7 +9321,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(streamsGroupIds.get(0))
-                .setGroupState(StreamsGroup.StreamsGroupState.EMPTY.toString())
+                .setGroupState(StreamsGroup.StreamsGroupState.INITIALIZING.toString())
                 .setAssignmentEpoch(0),
             new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
@@ -8891,7 +9331,7 @@ public class GroupMetadataManagerTest {
                         new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap())
                     )
                 ))
-                .setGroupState(StreamsGroup.StreamsGroupState.ASSIGNING.toString())
+                .setGroupState(StreamsGroup.StreamsGroupState.INITIALIZING.toString())
         );
         List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(streamsGroupIds);
 
@@ -8940,8 +9380,8 @@ public class GroupMetadataManagerTest {
 
         StreamsGroupMember.Builder memberBuilder2 = new StreamsGroupMember.Builder(memberId2);
         context.replay(CoordinatorStreamsRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder2.build()));
-        context.replay(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(streamsGroupId, memberId2, assignmentMap, assignmentMap, assignmentMap));
-        context.replay(CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
+        context.replay(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(streamsGroupId, memberId2, assignmentMap, assignmentMap, assignmentMap));
+        context.replay(CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
         context.replay(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(streamsGroupId, epoch + 2));
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(Collections.singletonList(streamsGroupId), context.lastCommittedOffset);
@@ -8961,7 +9401,7 @@ public class GroupMetadataManagerTest {
                 memberBuilder1.build().asStreamsGroupDescribeMember(new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap())),
                 memberBuilder2.build().asStreamsGroupDescribeMember(new org.apache.kafka.coordinator.group.streams.Assignment(assignmentMap, assignmentMap, assignmentMap))
             ))
-            .setGroupState(StreamsGroup.StreamsGroupState.ASSIGNING.toString())
+            .setGroupState(StreamsGroup.StreamsGroupState.INITIALIZING.toString())
             .setGroupEpoch(epoch + 2);
         assertEquals(1, actual.size());
         assertEquals(describedGroup, actual.get(0));
@@ -15271,144 +15711,4 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedSuccessCount, successCount);
         return memberIds;
     }
-
-    // TODO: bring back topology initialization unit tests
-//    @Test
-//    public void testTopologyInitialization() {
-//        String groupId = "fooup";
-//
-//        Uuid fooTopicId = Uuid.randomUuid();
-//        String fooTopicName = "repartition";
-//        Uuid barTopicId = Uuid.randomUuid();
-//        String barTopicName = "changelog";
-//
-//        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-//            .withMetadataImage(new MetadataImageBuilder()
-//                .addTopic(fooTopicId, fooTopicName, 6)
-//                .addTopic(barTopicId, barTopicName, 3)
-//                .addRacks()
-//                .build())
-//            .build();
-//
-//        context.createStreamsGroup(groupId);
-//
-//        assertThrows(GroupIdNotFoundException.class, () ->
-//            context.groupMetadataManager.consumerGroup(groupId));
-//
-//        final List<Subtopology> topology = Collections.singletonList(
-//            new Subtopology()
-//                .setSubtopology("subtopology-id")
-//                .setSinkTopics(Collections.singletonList("foo"))
-//                .setSourceTopics(Collections.singletonList("bar"))
-//                .setRepartitionSourceTopics(
-//                    Collections.singletonList(
-//                        new TopicInfo()
-//                            .setName("repartition")
-//                            .setPartitions(4)
-//                            .setTopicConfigs(Collections.singletonList(
-//                                new TopicConfig()
-//                                    .setKey("config-name1")
-//                                    .setValue("config-value1")
-//                            ))
-//                    )
-//                )
-//                .setStateChangelogTopics(
-//                    Collections.singletonList(
-//                        new TopicInfo()
-//                            .setName("changelog")
-//                            .setTopicConfigs(Collections.singletonList(
-//                                new TopicConfig()
-//                                    .setKey("config-name2")
-//                                    .setValue("config-value2")
-//                            ))
-//                    )
-//                )
-//        );
-//        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result =
-//            context.streamsGroupInitialize(
-//                new streamsGroupInitializeRequestData()
-//                    .setGroupId(groupId)
-//                    .setTopology(topology)
-//            );
-//
-//        assertEquals(
-//            new StreamsGroupInitializeResponseData(),
-//            result.response()
-//        );
-//
-//        List<CoordinatorRecord> expectedRecords = Arrays.asList(
-//            CoordinatorRecordHelpers.newStreamsGroupTopologyRecord(
-//                groupId,
-//                topology
-//            )
-//        );
-//
-//        assertRecordsEquals(expectedRecords, result.records());
-//    }
-//
-//    @Test
-//    public void testTopologyInitializationMissingInternalTopics() {
-//        String groupId = "fooup";
-//
-//        Uuid fooTopicId = Uuid.randomUuid();
-//        String fooTopicName = "repartition";
-//
-//        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-//            .withMetadataImage(new MetadataImageBuilder()
-//                .addTopic(fooTopicId, fooTopicName, 6)
-//                .addRacks()
-//                .build())
-//            .build();
-//
-//        context.createStreamsGroup(groupId);
-//
-//        assertThrows(GroupIdNotFoundException.class, () ->
-//            context.groupMetadataManager.consumerGroup(groupId));
-//
-//        final List<Subtopology> topology = Collections.singletonList(
-//            new Subtopology()
-//                .setSubtopology("subtopology-id")
-//                .setSinkTopics(Collections.singletonList("foo"))
-//                .setSourceTopics(Collections.singletonList("bar"))
-//                .setRepartitionSourceTopics(
-//                    Collections.singletonList(
-//                        new TopicInfo()
-//                            .setName("repartition")
-//                            .setPartitions(4)
-//                            .setTopicConfigs(Collections.singletonList(
-//                                new TopicConfig()
-//                                    .setKey("config-name1")
-//                                    .setValue("config-value1")
-//                            ))
-//                    )
-//                )
-//                .setStateChangelogTopics(
-//                    Collections.singletonList(
-//                        new TopicInfo()
-//                            .setName("changelog")
-//                            .setTopicConfigs(Collections.singletonList(
-//                                new TopicConfig()
-//                                    .setKey("config-name2")
-//                                    .setValue("config-value2")
-//                            ))
-//                    )
-//                )
-//        );
-//        CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> result =
-//            context.streamsGroupInitialize(
-//                new streamsGroupInitializeRequestData()
-//                    .setGroupId(groupId)
-//                    .setTopology(topology)
-//            );
-//
-//        assertEquals(
-//            new StreamsGroupInitializeResponseData()
-//                .setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code())
-//                .setErrorMessage("Internal topics changelog do not exist."),
-//            result.response()
-//        );
-//
-//        assertTrue(result.records().isEmpty());
-//
-//    }
 }

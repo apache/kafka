@@ -443,6 +443,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         public int size() {
             return tasks.size();
         }
+
+        @Override
+        public boolean isScheduled(String key) {
+            return tasks.containsKey(key);
+        }
     }
 
     /**

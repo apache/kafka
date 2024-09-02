@@ -73,6 +73,9 @@ public class StreamsAssignmentInterface {
         return assignmentConfiguration;
     }
 
+    // ToDo: As long as we do not compute the topology ID, let's use a constant one
+    public final String topologyId = "topology-id";
+
     // TODO: This needs to be used somewhere
     public Map<TaskId, Long> taskLags() {
         return taskLags;

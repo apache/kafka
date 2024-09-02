@@ -1007,16 +1007,16 @@ public class GroupCoordinatorShardTest {
 
         // Confirm the cleanup is scheduled when the coordinator is initially loaded.
         coordinator.onLoaded(image);
-        assertTrue(timer.contains(GROUP_EXPIRATION_KEY));
+        assertTrue(timer.isScheduled(GROUP_EXPIRATION_KEY));
 
         // Confirm that it is rescheduled after completion.
         mockTime.sleep(1000L);
         List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> tasks = timer.poll();
         assertEquals(1, tasks.size());
-        assertTrue(timer.contains(GROUP_EXPIRATION_KEY));
+        assertTrue(timer.isScheduled(GROUP_EXPIRATION_KEY));
 
         coordinator.onUnloaded();
-        assertFalse(timer.contains(GROUP_EXPIRATION_KEY));
+        assertFalse(timer.isScheduled(GROUP_EXPIRATION_KEY));
     }
 
     @Test
@@ -1056,9 +1056,9 @@ public class GroupCoordinatorShardTest {
             return null;
         }).when(groupMetadataManager).maybeDeleteGroup(eq("group-id"), recordsCapture.capture());
 
-        assertFalse(timer.contains(GROUP_EXPIRATION_KEY));
+        assertFalse(timer.isScheduled(GROUP_EXPIRATION_KEY));
         CoordinatorResult<Void, CoordinatorRecord> result = coordinator.cleanupGroupMetadata();
-        assertTrue(timer.contains(GROUP_EXPIRATION_KEY));
+        assertTrue(timer.isScheduled(GROUP_EXPIRATION_KEY));
 
         List<CoordinatorRecord> expectedRecords = Arrays.asList(offsetCommitTombstone, groupMetadataTombstone);
         assertEquals(expectedRecords, result.records());

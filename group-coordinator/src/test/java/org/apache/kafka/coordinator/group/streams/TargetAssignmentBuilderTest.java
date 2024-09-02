@@ -40,8 +40,8 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
-import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochRecord;
-import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord;
+import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTaskAssignment;
@@ -299,7 +299,7 @@ public class TargetAssignmentBuilderTest {
         );
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(Collections.singletonList(newStreamsTargetAssignmentEpochRecord(
+        assertEquals(Collections.singletonList(newStreamsGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         )), result.records());
@@ -338,7 +338,7 @@ public class TargetAssignmentBuilderTest {
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(Collections.singletonList(newStreamsTargetAssignmentEpochRecord(
+        assertEquals(Collections.singletonList(newStreamsGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         )), result.records());
@@ -391,17 +391,17 @@ public class TargetAssignmentBuilderTest {
         assertEquals(3, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 4, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
                 mkTaskAssignment(barSubtopologyId, 1, 2, 3)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
-        assertEquals(newStreamsTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(2));
@@ -461,21 +461,21 @@ public class TargetAssignmentBuilderTest {
         assertEquals(4, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1, 2),
                 mkTaskAssignment(barSubtopologyId, 1, 2)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 3, 4),
                 mkTaskAssignment(barSubtopologyId, 3, 4)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 3));
 
-        assertEquals(newStreamsTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(3));
@@ -547,21 +547,21 @@ public class TargetAssignmentBuilderTest {
         assertEquals(4, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1, 2),
                 mkTaskAssignment(barSubtopologyId, 1, 2)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 3, 4),
                 mkTaskAssignment(barSubtopologyId, 3, 4)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 3));
 
-        assertEquals(newStreamsTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(3));
@@ -629,17 +629,17 @@ public class TargetAssignmentBuilderTest {
 
         // Member 1 has no record because its assignment did not change.
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 3, 4, 5),
                 mkTaskAssignment(barSubtopologyId, 3, 4, 5)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 6),
                 mkTaskAssignment(barSubtopologyId, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
-        assertEquals(newStreamsTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(2));
@@ -703,17 +703,17 @@ public class TargetAssignmentBuilderTest {
         assertEquals(3, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
                 mkTaskAssignment(barSubtopologyId, 1, 2, 3)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 4, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
-        assertEquals(newStreamsTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(2));
@@ -783,13 +783,13 @@ public class TargetAssignmentBuilderTest {
         assertEquals(2, result.records().size());
 
         assertUnorderedListEquals(Collections.singletonList(
-            newStreamsTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
                 mkTaskAssignment(fooSubtopologyId, 5, 6),
                 mkTaskAssignment(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 1));
 
-        assertEquals(newStreamsTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         ), result.records().get(1));

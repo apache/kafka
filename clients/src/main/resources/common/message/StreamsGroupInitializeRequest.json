@@ -23,10 +23,12 @@
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },
+    { "name": "TopologyId", "type": "string", "versions": "0+",
+      "about": "The ID of the topology." },
     { "name":  "Topology", "type": "[]Subtopology", "versions": "0+",
       "about": "The sub-topologies of the streams application.",
       "fields": [
-        { "name": "Subtopology", "type": "string", "versions": "0+",
+        { "name": "SubtopologyId", "type": "string", "versions": "0+",
           "about": "String to uniquely identify the sub-topology. Deterministically generated from the topology" },
         { "name": "SourceTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology reads from." },

@@ -82,18 +82,18 @@ public class StreamsGroupBuilder {
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->
             records.add(
-                CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(groupId, memberId,
+                CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                     assignment.activeTasks(), assignment.standbyTasks(), assignment.warmupTasks()))
         );
 
         // Add target assignment epoch.
-        records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochRecord(groupId,
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId,
             assignmentEpoch));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
             records.add(
-                CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentRecord(groupId, member))
+                CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member))
         );
 
         return records;

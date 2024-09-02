@@ -202,7 +202,7 @@ public class CoordinatorStreamsRecordHelpers {
         );
     }
 
-    public static CoordinatorRecord newStreamsTargetAssignmentRecord(
+    public static CoordinatorRecord newStreamsGroupTargetAssignmentRecord(
         String groupId,
         String memberId,
         Map<String, Set<Integer>> activeTasks,
@@ -258,7 +258,7 @@ public class CoordinatorStreamsRecordHelpers {
      * @param memberId The streams group member id.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsTargetAssignmentTombstoneRecord(
+    public static CoordinatorRecord newStreamsGroupTargetAssignmentTombstoneRecord(
         String groupId,
         String memberId
     ) {
@@ -274,7 +274,7 @@ public class CoordinatorStreamsRecordHelpers {
     }
 
 
-    public static CoordinatorRecord newStreamsTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newStreamsGroupTargetAssignmentEpochRecord(
         String groupId,
         int assignmentEpoch
     ) {
@@ -298,7 +298,7 @@ public class CoordinatorStreamsRecordHelpers {
      * @param groupId The streams group id.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newStreamsGroupTargetAssignmentEpochTombstoneRecord(
         String groupId
     ) {
         return new CoordinatorRecord(
@@ -311,7 +311,7 @@ public class CoordinatorStreamsRecordHelpers {
         );
     }
 
-    public static CoordinatorRecord newStreamsCurrentAssignmentRecord(
+    public static CoordinatorRecord newStreamsGroupCurrentAssignmentRecord(
         String groupId,
         StreamsGroupMember member
     ) {
@@ -343,7 +343,7 @@ public class CoordinatorStreamsRecordHelpers {
      * @param memberId The streams group member id.
      * @return The record.
      */
-    public static CoordinatorRecord newStreamsCurrentAssignmentTombstoneRecord(
+    public static CoordinatorRecord newStreamsGroupCurrentAssignmentTombstoneRecord(
         String groupId,
         String memberId
     ) {
@@ -397,7 +397,7 @@ public class CoordinatorStreamsRecordHelpers {
                 return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
             }).collect(Collectors.toList());
 
-            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSubtopology(subtopology.subtopology())
+            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSubtopology(subtopology.subtopologyId())
                 .setSourceTopics(subtopology.sourceTopics()).setRepartitionSinkTopics(subtopology.repartitionSinkTopics())
                 .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
         });

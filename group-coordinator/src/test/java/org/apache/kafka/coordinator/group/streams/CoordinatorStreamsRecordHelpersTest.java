@@ -34,7 +34,7 @@ class CoordinatorStreamsRecordHelpersTest {
     public void testNewStreamsGroupTopologyRecord() {
         List<StreamsGroupInitializeRequestData.Subtopology> topology =
             Collections.singletonList(new StreamsGroupInitializeRequestData.Subtopology()
-                .setSubtopology("subtopology-id")
+                .setSubtopologyId("subtopology-id")
                 .setRepartitionSinkTopics(Collections.singletonList("foo"))
                 .setSourceTopics(Collections.singletonList("bar"))
                 .setRepartitionSourceTopics(
