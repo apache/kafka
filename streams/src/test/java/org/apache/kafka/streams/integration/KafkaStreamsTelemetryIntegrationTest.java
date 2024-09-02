@@ -25,6 +25,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -71,6 +73,7 @@ import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -132,20 +135,13 @@ public class KafkaStreamsTelemetryIntegrationTest {
                     IntegrationTestUtils.DEFAULT_TIMEOUT,
                     () -> "Kafka Streams never transitioned to a RUNNING state.");
             
-            final List<String> streamsThreadMetrics = streams.metrics().values().stream().filter(m -> m.metricName().tags().containsKey("thread-id"))
-                    .map(m -> m.metricName().name()).sorted().collect(Collectors.toList());
+            final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
+                    .filter(metricName -> metricName.tags().containsKey("thread-id")).collect(Collectors.toList());
+            
+            final List<MetricName> consumerPassedStreamMetricNames = INTERCEPTING_CONSUMERS.get(0).addedMetrics.stream().map(KafkaMetric::metricName).collect(Collectors.toList());
 
-            final List<String> consumerPassedStreamMetricNames = INTERCEPTING_CONSUMERS.get(0).addedMetrics.stream().map(m -> m.metricName().name()).sorted().collect(Collectors.toList());
-            if (consumerPassedStreamMetricNames.size() > streamsThreadMetrics.size()) {
-                log.info("Streams metrics size={} passed consumer size={}", streamsThreadMetrics.size(), consumerPassedStreamMetricNames.size());
-                log.info("Unfiltered streams metrics size={}", streams.metrics().values().size());
-                final List<String> consumerPassedCopy = new ArrayList<>(consumerPassedStreamMetricNames);
-                log.info("Consumer passed copy size {}", consumerPassedCopy.size());
-                consumerPassedCopy.removeAll(streamsThreadMetrics);
-                log.info("EXTRA metric names {}", consumerPassedCopy);
-            }
             assertEquals(streamsThreadMetrics.size(), consumerPassedStreamMetricNames.size());
-            assertEquals(streamsThreadMetrics, consumerPassedStreamMetricNames);
+            consumerPassedStreamMetricNames.forEach(metricName -> assertTrue(streamsThreadMetrics.contains(metricName)));
         }
     }
 
@@ -259,10 +255,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
         @Override
         public void unregisterMetric(final KafkaMetric metric) {
+            addedMetrics.remove(metric);
             removedMetrics.add(metric);
             super.unregisterMetric(metric);
         }
     }
-
-
 }
