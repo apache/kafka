@@ -99,6 +99,8 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
                 test_case_failed = False
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
+                if failure_message:
+                    failure_message = failure_message.replace('\n', ' ').replace('\r', ' ')
                 failure_class = elem.get("type")
                 failure_stack_trace = elem.text
                 failure = partial_test_case(failure_message, failure_class, failure_stack_trace)
