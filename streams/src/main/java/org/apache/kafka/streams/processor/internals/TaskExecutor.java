@@ -96,6 +96,7 @@ public class TaskExecutor {
         try {
             while (processed < maxNumRecords && task.process(now)) {
                 task.clearTaskTimeout();
+                task.setConsumedOffsetsAndMetadata(taskManager.offsetAndMetadataPerTask().get(task));
                 processed++;
             }
             // TODO: enable regardless of whether using named topologies

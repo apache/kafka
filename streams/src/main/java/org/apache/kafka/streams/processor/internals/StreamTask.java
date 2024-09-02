@@ -89,6 +89,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final AbstractPartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
     private final Map<TopicPartition, Optional<Integer>> consumedLeaderEpochs;
+    private Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata;
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
@@ -280,6 +281,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
+    public void setConsumedOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata) {
+        this.consumedOffsetsAndMetadata = consumedOffsetsAndMetadata;
+    }
+
     public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
         mainConsumer.pause(partitionsForOffsetReset);
         resetOffsetsForPartitions.addAll(partitionsForOffsetReset);
@@ -469,24 +474,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         Optional<Integer> leaderEpoch = partitionGroup.headRecordLeaderEpoch(partition);
         final long partitionTime = partitionGroup.partitionTimestamp(partition);
         if (offset == null) {
-            try {
-                offset = mainConsumer.position(partition);
-                // If we happen to commit the next offset after the last consumed record, use it's
-                // leader epoch. Otherwise, we do not know the leader epoch.
-                if (consumedOffsets.containsKey(partition) && offset == consumedOffsets.get(partition) + 1) {
-                    leaderEpoch = consumedLeaderEpochs.get(partition);
-                } else {
-                    leaderEpoch = Optional.empty();
-                }
-            } catch (final TimeoutException error) {
-                // the `consumer.position()` call should never block, because we know that we did process data
-                // for the requested partition and thus the consumer should have a valid local position
-                // that it can return immediately
-
-                // hence, a `TimeoutException` indicates a bug and thus we rethrow it as fatal `IllegalStateException`
-                throw new IllegalStateException(error);
-            } catch (final KafkaException fatal) {
-                throw new StreamsException(fatal);
+            if (consumedOffsetsAndMetadata.containsKey(partition)) {
+                leaderEpoch = consumedOffsetsAndMetadata.get(partition).leaderEpoch();
+            }
+            else {
+                leaderEpoch = Optional.empty();
             }
         }
         return new OffsetAndMetadata(offset,
