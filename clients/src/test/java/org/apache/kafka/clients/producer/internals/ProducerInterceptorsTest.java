@@ -146,16 +146,16 @@ public class ProducerInterceptorsTest {
 
         // verify onAck is called on all interceptors
         RecordMetadata meta = new RecordMetadata(tp, 0, 0, 0, 0, 0);
-        interceptors.onAcknowledgement(meta, null);
+        interceptors.onAcknowledgement(meta, null, null);
         assertEquals(2, onAckCount);
 
         // verify that onAcknowledgement exceptions do not propagate
         interceptor1.injectOnAcknowledgementError(true);
-        interceptors.onAcknowledgement(meta, null);
+        interceptors.onAcknowledgement(meta, null, null);
         assertEquals(4, onAckCount);
 
         interceptor2.injectOnAcknowledgementError(true);
-        interceptors.onAcknowledgement(meta, null);
+        interceptors.onAcknowledgement(meta, null, null);
         assertEquals(6, onAckCount);
 
         interceptors.close();

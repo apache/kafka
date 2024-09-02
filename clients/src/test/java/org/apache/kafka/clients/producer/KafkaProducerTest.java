@@ -47,7 +47,9 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.EndTxnResponseData;
@@ -2397,7 +2399,15 @@ public class KafkaProducerTest {
         }
 
         @Override
-        public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+        public void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
+            if (headers == null) {
+                return;
+            }
+            if (!(headers instanceof RecordHeaders)) {
+                return;
+            }
+            RecordHeaders recordHeaders = (RecordHeaders) headers;
+            assertTrue(recordHeaders.isReadOnly());
         }
 
         @Override
