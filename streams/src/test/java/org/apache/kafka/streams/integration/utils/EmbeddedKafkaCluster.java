@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -111,7 +112,7 @@ public class EmbeddedKafkaCluster {
                                 final Map<Integer, Map<String, String>> brokerConfigOverrides,
                                 final long mockTimeMillisStart,
                                 final long mockTimeNanoStart) {
-        addDefaultBrokerPropsIfAbsent(brokerConfig, numBrokers);
+        addDefaultBrokerPropsIfAbsent(brokerConfig);
 
         if (!brokerConfigOverrides.isEmpty() && brokerConfigOverrides.size() != numBrokers) {
             throw new IllegalArgumentException("Size of brokerConfigOverrides " + brokerConfigOverrides.size()
@@ -389,14 +390,16 @@ public class EmbeddedKafkaCluster {
         return consumer;
     }
 
-    private void addDefaultBrokerPropsIfAbsent(final Properties brokerConfig, final int numBrokers) {
-        brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
-        brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(numBrokers));
+    private void addDefaultBrokerPropsIfAbsent(final Properties brokerConfig) {
         brokerConfig.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
-        brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 0);
-        brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, 5);
-        brokerConfig.putIfAbsent(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 5);
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "0");
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5");
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+        brokerConfig.putIfAbsent(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, "5");
+        brokerConfig.putIfAbsent(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
         brokerConfig.putIfAbsent(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        brokerConfig.putIfAbsent(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
     }
 
     public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
