@@ -127,7 +127,7 @@ class Benchmark(Test):
         self.producer = ProducerPerformanceService(
             self.test_context, 1, self.kafka,
             topic=TOPIC_REP_THREE, num_records=self.msgs_large, record_size=DEFAULT_RECORD_SIZE,
-            throughput=1000, version=client_version, settings={
+            throughput=-1, version=client_version, settings={
                 'acks': 1,
                 'compression.type': compression_type,
                 'batch.size': self.batch_size,
