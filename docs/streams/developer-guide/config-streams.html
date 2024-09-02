@@ -70,9 +70,11 @@ settings.put(... , ...);</code></pre>
           <li><a class="reference internal" href="#optional-configuration-parameters" id="id6">Optional configuration parameters</a>
             <ul>
               <li><a class="reference internal" href="#acceptable-recovery-lag" id="id27">acceptable.recovery.lag</a></li>
-              <li><a class="reference internal" href="#default-deserialization-exception-handler" id="id7">default.deserialization.exception.handler</a></li>
+              <li><a class="reference internal" href="#default-deserialization-exception-handler" id="id7">default.deserialization.exception.handler (deprecated)</a></li>
+              <li><a class="reference internal" href="#deserialization-exception-handler" id="id42">deserialization.exception.handler</a></li>
               <li><a class="reference internal" href="#default-key-serde" id="id8">default.key.serde</a></li>
-              <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler</a></li>
+              <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler (deprecated)</a></li>
+              <li><a class="reference internal" href="#production-exception-handler" id="id43">production.exception.handler</a></li>
               <li><a class="reference internal" href="#timestamp-extractor" id="id15">default.timestamp.extractor</a></li>
               <li><a class="reference internal" href="#default-value-serde" id="id9">default.value.serde</a></li>
               <li><a class="reference internal" href="#log-summary-interval-ms" id="id40">log.summary.interval.ms</a></li>
@@ -281,7 +283,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">The frequency in milliseconds with which to save the position (offsets in source topics) of tasks.</td>
             <td>30000 milliseconds (30 seconds)</td>
           </tr>
-          <tr class="row-odd"><td>default.deserialization.exception.handler</td>
+          <tr class="row-odd"><td>default.deserialization.exception.handler (Deprecated. Use deserialization.exception.handler instead.)</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">LogAndContinueExceptionHandler</span></code></td>
@@ -292,7 +294,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               set by the user or all serdes must be passed in explicitly (see also default.value.serde).</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
-          <tr class="row-odd"><td>default.production.exception.handler</td>
+          <tr class="row-odd"><td>default.production.exception.handler (Deprecated. Use production.exception.handler instead.)</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
@@ -491,7 +493,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
         <div class="section" id="default-deserialization-exception-handler">
           <span id="streams-developer-guide-deh"></span><h4><a class="toc-backref" href="#id7">default.deserialization.exception.handler</a><a class="headerlink" href="#default-deserialization-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>The default deserialization exception handler allows you to manage record exceptions that fail to deserialize. This
+            <div><p>The default deserialization exception handler (Deprecated. See <h4><a class="toc-backref" href="#id42">deserialization.exception.handler</a><a class="headerlink" href="#deserialization-exception-handler" title="Permalink to this headline"></a></h4> instead.) allows you to manage record exceptions that fail to deserialize. This
               can be caused by corrupt data, incorrect serialization logic, or unhandled record types. The implemented exception
               handler needs to return a <code>FAIL</code> or <code>CONTINUE</code> depending on the record and the exception thrown. Returning
               <code>FAIL</code> will signal that Streams should shut down and <code>CONTINUE</code> will signal that Streams should ignore the issue
@@ -543,7 +545,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
         <div class="section" id="default-production-exception-handler">
           <span id="streams-developer-guide-peh"></span><h4><a class="toc-backref" href="#id24">default.production.exception.handler</a><a class="headerlink" href="#default-production-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>The default production exception handler allows you to manage exceptions triggered when trying to interact with a broker
+            <div><p>The default production exception handler (Deprecated. See <h4><a class="toc-backref" href="#id43">production.exception.handler</a><a class="headerlink" href="#production-exception-handler" title="Permalink to this headline"></a></h4> instead.) allows you to manage exceptions triggered when trying to interact with a broker
               such as attempting to produce a record that is too large. By default, Kafka provides and uses the <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html">DefaultProductionExceptionHandler</a>
               that always fails when these exceptions occur.</p>
 
