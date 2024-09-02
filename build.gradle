@@ -84,7 +84,7 @@ ext {
 
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
-  userDisableJUnitReports = project.hasProperty('disableJUnitReports') ? disableJUnitReports.toBoolean() : false
+  userDisableJUnitReports = project.hasProperty('disableJUnitReports') && disableJUnitReports.toBoolean()
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
@@ -253,7 +253,7 @@ if (repo != null) {
   rat.enabled = false
 }
 println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
-println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
+println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries, disableJUnitReports=$userDisableJUnitReports")
 
 subprojects {
 
@@ -538,6 +538,12 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
+
+    // Disable reports in some cases
+    reports {
+      junitXml.required = !userDisableJUnitReports
+      html.required = !userDisableJUnitReports
+    }
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
@@ -567,6 +573,12 @@ subprojects {
         maxRetries = userMaxTestRetries
         maxFailures = userMaxTestRetryFailures
       }
+    }
+
+    // Disable reports in some cases
+    reports {
+      junitXml.required = !userDisableJUnitReports
+      html.required = !userDisableJUnitReports
     }
   }
 
