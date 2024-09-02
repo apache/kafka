@@ -648,6 +648,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             acknowledgeRequestState.handleAcknowledgeErrorCode(tip, response.error());
                             metricsManager.recordLatency(resp.requestLatencyMs());
                         }));
+                        acknowledgeRequestState.processingComplete();
                     }
                 } else {
                     AtomicBoolean shouldRetry = new AtomicBoolean(false);
@@ -948,10 +949,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         public void moveToIncompleteAcks(TopicIdPartition tip) {
             Acknowledgements acks = inFlightAcknowledgements.remove(tip);
             if (acks != null) {
-                Acknowledgements existingAcks = incompleteAcknowledgements.putIfAbsent(tip, acks);
-                if (existingAcks != null) {
-                    incompleteAcknowledgements.get(tip).merge(acks);
-                }
+                incompleteAcknowledgements.put(tip, acks);
             }
         }
 
