@@ -114,7 +114,7 @@ class StreamsGroupInitializeRequestManagerTest {
         final List<StreamsGroupInitializeRequestData.Subtopology> subtopologies = streamsGroupInitializeRequestData.topology();
         assertEquals(1, subtopologies.size());
         final StreamsGroupInitializeRequestData.Subtopology subtopology = subtopologies.get(0);
-        assertEquals(subtopologyName1, subtopology.subtopology());
+        assertEquals(subtopologyName1, subtopology.subtopologyId());
         assertEquals(new ArrayList<>(sourceTopics), subtopology.sourceTopics());
         assertEquals(new ArrayList<>(sinkTopics), subtopology.repartitionSinkTopics());
         assertEquals(repartitionTopics.size(), subtopology.repartitionSourceTopics().size());

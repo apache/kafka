@@ -68,6 +68,7 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
     private NetworkClientDelegate.UnsentRequest makeRequest() {
         final StreamsGroupInitializeRequestData streamsGroupInitializeRequestData = new StreamsGroupInitializeRequestData();
         streamsGroupInitializeRequestData.setGroupId(groupId);
+        streamsGroupInitializeRequestData.setTopologyId(streamsAssignmentInterface.topologyId);
         final List<StreamsGroupInitializeRequestData.Subtopology> topology = getTopologyFromStreams();
         streamsGroupInitializeRequestData.setTopology(topology);
         final StreamsGroupInitializeRequest.Builder streamsGroupInitializeRequestBuilder = new StreamsGroupInitializeRequest.Builder(
@@ -91,7 +92,7 @@ public class StreamsGroupInitializeRequestManager implements RequestManager {
     private static StreamsGroupInitializeRequestData.Subtopology getSubtopologyFromStreams(final String subtopologyName,
                                                                                            final StreamsAssignmentInterface.Subtopology subtopology) {
         final StreamsGroupInitializeRequestData.Subtopology subtopologyData = new StreamsGroupInitializeRequestData.Subtopology();
-        subtopologyData.setSubtopology(subtopologyName);
+        subtopologyData.setSubtopologyId(subtopologyName);
         subtopologyData.setSourceTopics(new ArrayList<>(subtopology.sourceTopics));
         subtopologyData.setRepartitionSinkTopics(new ArrayList<>(subtopology.sinkTopics));
         subtopologyData.setRepartitionSourceTopics(getRepartitionTopicsInfoFromStreams(subtopology));

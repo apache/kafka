@@ -29,8 +29,6 @@ import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -49,11 +47,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.INITIALIZING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.RECONCILING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.STABLE;
 
@@ -64,6 +62,7 @@ public class StreamsGroup implements Group {
 
     public enum StreamsGroupState {
         EMPTY("Empty"),
+        INITIALIZING("Initializing"),
         ASSIGNING("Assigning"),
         RECONCILING("Reconciling"),
         STABLE("Stable"),
@@ -189,7 +188,7 @@ public class StreamsGroup implements Group {
     ) {
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
-        this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
+        this.state = new TimelineObject<>(snapshotRegistry, INITIALIZING);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -246,6 +245,7 @@ public class StreamsGroup implements Group {
 
     public void setTopology(StreamsTopology topology) {
         this.topology.set(Optional.of(topology));
+        maybeUpdateGroupState();
     }
 
     /**
@@ -648,9 +648,10 @@ public class StreamsGroup implements Group {
      */
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
         TopicsImage topicsImage,
-        ClusterImage clusterImage
+        ClusterImage clusterImage,
+        StreamsTopology topology
     ) {
-        Set<String> subscribedTopicNames = topology.get().map(StreamsTopology::topicSubscription).orElse(Collections.emptySet());
+        Set<String> subscribedTopicNames = topology.topicSubscription();
 
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
@@ -683,6 +684,24 @@ public class StreamsGroup implements Group {
         });
 
         return Collections.unmodifiableMap(newSubscriptionMetadata);
+    }
+
+    /**
+     * Computes the subscription metadata based on the current subscription info.
+     *
+     * @param topicsImage          The current metadata for all available topics.
+     * @param clusterImage         The current metadata for the Kafka cluster.
+     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
+     */
+    public Map<String, TopicMetadata> computeSubscriptionMetadata(
+        TopicsImage topicsImage,
+        ClusterImage clusterImage
+    ) {
+        Optional<StreamsTopology> topology = this.topology.get();
+        if (topology.isPresent()) {
+            return computeSubscriptionMetadata(topicsImage, clusterImage, topology.get());
+        }
+        return Collections.emptyMap();
     }
 
     /**
@@ -791,7 +810,7 @@ public class StreamsGroup implements Group {
      */
     @Override
     public void validateDeleteGroup() throws ApiException {
-        if (state() != StreamsGroupState.EMPTY) {
+        if (state() != StreamsGroupState.EMPTY && state() != StreamsGroupState.INITIALIZING) {
             throw Errors.NON_EMPTY_GROUP.exception();
         }
     }
@@ -809,13 +828,13 @@ public class StreamsGroup implements Group {
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
         members().forEach((memberId, member) ->
-            records.add(CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId(), memberId))
         );
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
             records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
@@ -865,7 +884,9 @@ public class StreamsGroup implements Group {
     private void maybeUpdateGroupState() {
         StreamsGroupState previousState = state.get();
         StreamsGroupState newState = STABLE;
-        if (members.isEmpty()) {
+        if (topology() == null) {
+            newState = INITIALIZING;
+        } else if (members.isEmpty()) {
             newState = EMPTY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             newState = ASSIGNING;
@@ -1058,7 +1079,7 @@ public class StreamsGroup implements Group {
         records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord(groupId(), groupEpoch()));
 
         members().forEach((streamsGroupMemberId, streamsGroupMember) ->
-            records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(
                 groupId(),
                 streamsGroupMemberId,
                 targetAssignment(streamsGroupMemberId).activeTasks(),
@@ -1067,11 +1088,11 @@ public class StreamsGroup implements Group {
             ))
         );
 
-        records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId(), groupEpoch()));
         records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId(), subscriptionMetadata()));
 
         members().forEach((__, streamsGroupMember) ->
-            records.add(CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentRecord(groupId(), streamsGroupMember))
+            records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId(), streamsGroupMember))
         );
     }
 
@@ -1114,10 +1135,5 @@ public class StreamsGroup implements Group {
             }
         }
         return false;
-    }
-
-    public void setTopology(final StreamsGroupTopologyValue topology) {
-        this.topology.set(Optional.of(new StreamsTopology(topology.topologyId(), topology.topology().stream().collect(Collectors.toMap(
-            Subtopology::subtopology, x -> x)))));
     }
 }

@@ -205,14 +205,14 @@ import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.STREAMS_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
-import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentRecord;
-import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsCurrentAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentRecord;
+import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupMemberRecord;
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupMemberTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupPartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupTopologyRecord;
-import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedActiveTasksChanged;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedStandbyTasksChanged;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedWarmupTasksChanged;
@@ -1120,7 +1120,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            log.info("Reading persisted streams group {}", groupId);
+            log.info("Creating persisted streams group {}", groupId);
             StreamsGroup streamsGroup = new StreamsGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, streamsGroup);
             metrics.onStreamsGroupStateTransition(null, streamsGroup.state());
@@ -2318,7 +2318,10 @@ public class GroupMetadataManager {
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
 
-        if (group.topology() == null) {
+        boolean requestTopologyInitialization = false;
+        if (group.topology() == null && !isTopologyInitializationScheduled(groupId, topologyId)) {
+            requestTopologyInitialization = true;
+            scheduleStreamsGroupTopologyInitializationTimeout(groupId, topologyId, memberId, rebalanceTimeoutMs);
             log.info("Asking member {} at {} to initialize the topology", memberId, clientHost);
         }
 
@@ -2326,7 +2329,7 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setShouldInitializeTopology(group.topology() == null)
+            .setShouldInitializeTopology(requestTopologyInitialization)
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs);
 
         // The assignment is only provided in the following cases:
@@ -2555,18 +2558,27 @@ public class GroupMetadataManager {
      * Handles the initialization of the topology information on the broker side, that will be reused by all members of the group.
      *
      * @param groupId       The group id from the request.
-     * @param subtopologies The list of subtopologies
+     * @param topologyId    The topology ID.
+     * @param subtopologies The list of subtopologies.
      * @return A Result containing the StreamsGroupInitialize response and a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupInitializeResponseData, CoordinatorRecord> streamsGroupInitialize(String groupId,
+                                                                                                       String topologyId,
                                                                                                             List<StreamsGroupInitializeRequestData.Subtopology> subtopologies)
         throws ApiException {
+
         final List<CoordinatorRecord> records = new ArrayList<>();
 
-        log.info("Initializing topology for group {} to {}", groupId, subtopologies);
+        log.info("Initializing topology {} for group {} to {}", topologyId, groupId, subtopologies);
 
         final StreamsGroup group = getOrMaybeCreateStreamsGroup(groupId, false, records);
         throwIfNull(group, "group does not exist");
+
+        if (!isTopologyInitializationScheduled(groupId, topologyId)) {
+            log.warn("No topology to initialize for group ID {} and topology ID {} found.", groupId, topologyId);
+            StreamsGroupInitializeResponseData response = new StreamsGroupInitializeResponseData();
+            return new CoordinatorResult<>(records, response);
+        }
 
         // TODO: For the POC, only check if internal topics exist
         Set<String> missingTopics = new HashSet<>();
@@ -2582,6 +2594,9 @@ public class GroupMetadataManager {
                 }
             }
         }
+
+        cancelStreamsGroupTopologyInitializationTimeout(groupId, topologyId);
+
         if (!missingTopics.isEmpty()) {
             StreamsGroupInitializeResponseData response =
                 new StreamsGroupInitializeResponseData()
@@ -2592,11 +2607,65 @@ public class GroupMetadataManager {
         } else {
             records.add(newStreamsGroupTopologyRecord(groupId, subtopologies));
 
+            final StreamsTopology topology = new StreamsTopology(topologyId, subtopologies);
+
+            computeFirstTargetAssignmentAfterTopologyInitialization(group, records, topology);
+
             StreamsGroupInitializeResponseData response = new StreamsGroupInitializeResponseData();
 
             return new CoordinatorResult<>(records, response);
         }
 
+    }
+
+    // ToDo: verify how much code we can share with Streams heartbeat handler
+    private void computeFirstTargetAssignmentAfterTopologyInitialization(StreamsGroup group,
+                                                                         List<CoordinatorRecord> records,
+                                                                         StreamsTopology topology) {
+        String groupId = group.groupId();
+        final long currentTimeMs = time.milliseconds();
+        int groupEpoch = group.groupEpoch();
+
+        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata =
+            group.computeSubscriptionMetadata(
+                metadataImage.topics(),
+                metadataImage.cluster(),
+                topology
+            );
+        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            log.info("[GroupId {}] Computed new partition metadata: {}.", groupId, subscriptionMetadata);
+            records.add(newStreamsGroupPartitionMetadataRecord(groupId, subscriptionMetadata));
+        }
+        groupEpoch += 1;
+        records.add(newStreamsGroupEpochRecord(groupId, groupEpoch));
+        log.info("[GroupId {}] Bumped streams group epoch to {}.", groupId, groupEpoch);
+        metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
+        group.setMetadataRefreshDeadline(currentTimeMs + streamsGroupMetadataRefreshIntervalMs, groupEpoch);
+
+        // TODO: Read the preferred server assignor from the group configuration
+        String preferredServerAssignor = defaultTaskAssignor.name();
+        try {
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder assignmentResultBuilder =
+                new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(group.groupId(), groupEpoch, taskAssignors.get(preferredServerAssignor))
+                    .withMembers(group.members())
+                    .withTopology(topology)
+                    .withStaticMembers(group.staticMembers())
+                    .withSubscriptionMetadata(subscriptionMetadata)
+                    .withTargetAssignment(group.targetAssignment());
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
+                assignmentResultBuilder
+                    .build();
+
+            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor: {}.",
+                group.groupId(), groupEpoch, preferredServerAssignor, assignmentResult.targetAssignment());
+
+            records.addAll(assignmentResult.records());
+        } catch (PartitionAssignorException ex) {
+            String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
+                groupEpoch, ex.getMessage());
+            log.error("[GroupId {}] {}.", group.groupId(), msg);
+            throw new UnknownServerException(msg, ex);
+        }
     }
 
     /**
@@ -3307,7 +3376,7 @@ public class GroupMetadataManager {
             .build();
 
         if (!updatedMember.equals(member)) {
-            records.add(newStreamsCurrentAssignmentRecord(groupId, updatedMember));
+            records.add(newStreamsGroupCurrentAssignmentRecord(groupId, updatedMember));
 
             log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
                     + "assignedActiveTasks={}, assignedStandbyTasks={}, assignedWarmupTasks={} and revokedPartitions={}.",
@@ -3673,7 +3742,7 @@ public class GroupMetadataManager {
             .build();
 
         return new CoordinatorResult<>(
-            Collections.singletonList(newStreamsCurrentAssignmentRecord(group.groupId(), leavingStaticMember)),
+            Collections.singletonList(newStreamsGroupCurrentAssignmentRecord(group.groupId(), leavingStaticMember)),
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(member.memberId())
                 .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
@@ -3832,8 +3901,8 @@ public class GroupMetadataManager {
      * @param memberId      The member id.
      */
     private void removeStreamsMember(List<CoordinatorRecord> records, String groupId, String memberId) {
-        records.add(newStreamsCurrentAssignmentTombstoneRecord(groupId, memberId));
-        records.add(newStreamsTargetAssignmentTombstoneRecord(groupId, memberId));
+        records.add(newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId));
+        records.add(newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId));
         records.add(newStreamsGroupMemberTombstoneRecord(groupId, memberId));
     }
 
@@ -4067,6 +4136,49 @@ public class GroupMetadataManager {
     }
     
     /**
+     * Schedules (or reschedules) the topology initialisation timeout for the member.
+     *
+     * @param groupId                      The group id.
+     * @param topologyId                   The topology id.
+     * @param memberId                     The member id.
+     * @param topologyIntializationTimeout The topology initialization timeout.
+     */
+    private void scheduleStreamsGroupTopologyInitializationTimeout(
+        String groupId,
+        String topologyId,
+        String memberId,
+        int topologyIntializationTimeout
+    ) {
+        timer.schedule(
+            streamsTopologyInitializationTimeoutKey(groupId, topologyId),
+            topologyIntializationTimeout,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the timeout for the topology intialization expired.")
+        );
+    }
+
+    /**
+     * Verifies if the topology initialization timeout is scheduled.
+     *
+     * @param groupId       The group id.
+     * @param topologyId    The topology id.
+     * @return              {@code true} if the topology initialization timeout is scheduled, {@code false} otherwise.
+     */
+    private boolean isTopologyInitializationScheduled(String groupId, String topologyId) {
+        return timer.isScheduled(streamsTopologyInitializationTimeoutKey(groupId, topologyId));
+    }
+
+    /**
+     * Cancels the topology initialization timeout.
+     *
+     * @param groupId       The group id.
+     * @param topologyId     The topology id.
+     */
+    private void cancelStreamsGroupTopologyInitializationTimeout(String groupId, String topologyId) {
+        timer.cancel(streamsTopologyInitializationTimeoutKey(groupId, topologyId));
+    }
+
     /**
      * Cancels the session timeout of the member.
      *
@@ -4401,6 +4513,7 @@ public class GroupMetadataManager {
 
         return streamsGroupInitialize(
             request.groupId(),
+            request.topologyId(),
             request.topology()
         );
     }
@@ -5364,6 +5477,10 @@ public class GroupMetadataManager {
 
     public static String streamsGroupRebalanceTimeoutKey(String groupId, String memberId) {
         return "rebalance-timeout-" + groupId + "-" + memberId;
+    }
+
+    public static String streamsTopologyInitializationTimeoutKey(String groupId, String topologyId) {
+        return "topology-initialization-timeout-" + groupId + "-" + topologyId;
     }
 
     /**

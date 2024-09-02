@@ -516,6 +516,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             final StreamsAssignmentInterface streamsInterface,
             final ConsumerMembershipManager membershipManager,
             final int rebalanceTimeoutMs) {
+
             this.membershipManager = membershipManager;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
             this.sentFields = new StreamsGroupHeartbeatRequestManager.HeartbeatState.SentFields();
@@ -531,6 +532,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
             // GroupId - always sent
             data.setGroupId(membershipManager.groupId());
+
+            // TopologyId - always sent
+            data.setTopologyId(streamsInterface.topologyId);
 
             // MemberId - always sent, empty until it has been received from the coordinator
             data.setMemberId(membershipManager.memberId());

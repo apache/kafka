@@ -306,7 +306,7 @@ public class TargetAssignmentBuilder {
 
             if (oldMemberAssignment == null) {
                 // If the member had no assignment, we always create a record for it.
-                records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(
+                records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(
                     groupId,
                     memberId,
                     newMemberAssignment.activeTasks(),
@@ -317,7 +317,7 @@ public class TargetAssignmentBuilder {
                 // If the member had an assignment, we only create a record if the
                 // new assignment is different.
                 if (!newMemberAssignment.equals(oldMemberAssignment)) {
-                    records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentRecord(
+                    records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(
                         groupId,
                         memberId,
                         newMemberAssignment.activeTasks(),
@@ -329,7 +329,7 @@ public class TargetAssignmentBuilder {
         });
 
         // Bump the target assignment epoch.
-        records.add(CoordinatorStreamsRecordHelpers.newStreamsTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, groupEpoch));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
     }
