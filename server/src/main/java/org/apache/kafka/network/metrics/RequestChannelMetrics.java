@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 public class RequestChannelMetrics {
@@ -43,7 +44,11 @@ public class RequestChannelMetrics {
     }
 
     public RequestMetrics apply(String metricName) {
-        return metricsMap.get(metricName);
+        RequestMetrics requestMetrics = metricsMap.get(metricName);
+        if (requestMetrics == null) {
+            throw new NoSuchElementException("No RequestMetrics for " + metricName);
+        }
+        return requestMetrics;
     }
 
     public void close() {

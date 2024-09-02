@@ -75,6 +75,8 @@ public class RequestMetrics {
     // This shows the memory allocated for compression/conversions excluding the actual request size
     public final Optional<Histogram> tempMemoryBytesHist;
 
+    // For compatibility - this metrics group was previously defined within
+    // a Scala class named `kafka.network.RequestMetrics`
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.network", "RequestMetrics");
     private final String name;
     private final Map<String, String> tags;
