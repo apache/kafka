@@ -273,11 +273,11 @@ public class StateDirectory implements AutoCloseable {
         }
     }
 
-    public boolean hasInitialTasks() {
+    public boolean hasPendingTasks() {
         return !tasksForLocalState.isEmpty();
     }
 
-    public Task assignInitialTask(final TaskId taskId) {
+    public Task removePendingTask(final TaskId taskId) {
         final Task task = tasksForLocalState.remove(taskId);
         if (task != null) {
             lockedTasksToOwner.replace(taskId, Thread.currentThread());
@@ -285,33 +285,33 @@ public class StateDirectory implements AutoCloseable {
         return task;
     }
 
-    public void closeInitialTasksIfLastAssginedThread() {
-        if (hasInitialTasks() && threadsWithAssignment.incrementAndGet() >= numStreamThreads.get()) {
-            // we need to be careful here, because other StreamThreads may still be assigning tasks (via assignInitialTask)
+    public void closePendingTasksIfLastAssginedThread() {
+        if (hasPendingTasks() && threadsWithAssignment.incrementAndGet() >= numStreamThreads.get()) {
+            // we need to be careful here, because other StreamThreads may still be assigning tasks (via removePendingTask)
             // so we first "drain" our Map of all remaining Tasks, and then close all the Tasks we successfully claimed from the Map
-            final Set<Task> tasksToClose = drainInitialTasks();
+            final Set<Task> tasksToClose = drainPendingTasks();
             for (final Task task : tasksToClose) {
                 task.closeClean();
             }
         }
     }
 
-    private void closeRemainingInitialTasks() {
-        closeRemainingInitialTasks(t -> true);
+    private void closePendingTasks() {
+        closePendingTasks(t -> true);
     }
 
-    private void closeRemainingInitialTasks(final Predicate<Task> predicate) {
-        final Set<Task> drainedTasks = drainInitialTasks(predicate);
+    private void closePendingTasks(final Predicate<Task> predicate) {
+        final Set<Task> drainedTasks = drainPendingTasks(predicate);
         for (final Task task : drainedTasks) {
             task.closeClean();
         }
     }
 
-    private Set<Task> drainInitialTasks() {
-        return drainInitialTasks(t -> true);
+    private Set<Task> drainPendingTasks() {
+        return drainPendingTasks(t -> true);
     }
 
-    private Set<Task> drainInitialTasks(final Predicate<Task> predicate) {
+    private Set<Task> drainPendingTasks(final Predicate<Task> predicate) {
         final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
         for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
             if (predicate.test(entry.getValue()) && tasksForLocalState.remove(entry.getKey()) != null) {
@@ -527,7 +527,7 @@ public class StateDirectory implements AutoCloseable {
     @Override
     public void close() {
         if (hasPersistentStores) {
-            closeRemainingInitialTasks();
+            closePendingTasks();
             threadsWithAssignment.set(0);
             try {
                 stateDirLock.release();
@@ -611,7 +611,7 @@ public class StateDirectory implements AutoCloseable {
                         if (now - cleanupDelayMs > lastModifiedMs) {
                             final Task task = tasksForLocalState.remove(id);
                             if (task != null) {
-                                // close the initial Task, if one still exists
+                                // close the pending Task, if one still exists
                                 task.closeClean();
                             }
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
@@ -651,7 +651,7 @@ public class StateDirectory implements AutoCloseable {
         );
         if (namedTopologyDirs != null) {
             for (final File namedTopologyDir : namedTopologyDirs) {
-                closeRemainingInitialTasks(task -> task.id().topologyName().equals(parseNamedTopologyFromDirectory(namedTopologyDir.getName())));
+                closePendingTasks(task -> task.id().topologyName().equals(parseNamedTopologyFromDirectory(namedTopologyDir.getName())));
                 final File[] contents = namedTopologyDir.listFiles();
                 if (contents != null && contents.length == 0) {
                     try {
@@ -689,7 +689,7 @@ public class StateDirectory implements AutoCloseable {
             log.debug("Tried to clear out the local state for NamedTopology {} but none was found", topologyName);
         }
         try {
-            closeRemainingInitialTasks(task -> task.id().topologyName().equals(topologyName));
+            closePendingTasks(task -> task.id().topologyName().equals(topologyName));
             Utils.delete(namedTopologyDir);
         } catch (final IOException e) {
             log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);
@@ -703,7 +703,7 @@ public class StateDirectory implements AutoCloseable {
             log.warn("Found some still-locked task directories when user requested to cleaning up the state, "
                 + "since Streams is not running any more these will be ignored to complete the cleanup");
         }
-        closeRemainingInitialTasks();
+        closePendingTasks();
         threadsWithAssignment.set(0);
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final TaskDirectory taskDir : listAllTaskDirectories()) {
