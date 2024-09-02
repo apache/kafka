@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
@@ -87,7 +88,7 @@ public class ClassicGroupTest {
     private final GroupCoordinatorMetricsShard metrics = new GroupCoordinatorMetricsShard(
         new SnapshotRegistry(logContext),
         Collections.emptyMap(),
-        new TopicPartition("__consumer_offsets", 0)
+        new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
     );
 
     private ClassicGroup group = null;

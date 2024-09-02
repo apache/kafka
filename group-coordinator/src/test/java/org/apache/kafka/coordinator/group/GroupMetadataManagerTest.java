@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -3677,7 +3678,7 @@ public class GroupMetadataManagerTest {
             new GroupCoordinatorMetricsShard(
                 context.snapshotRegistry,
                 Collections.emptyMap(),
-                new TopicPartition("__consumer_offsets", 0)
+                new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
             ),
             1,
             Optional.of("consumer"),
