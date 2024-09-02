@@ -67,6 +67,13 @@ public class GroupConfigManager implements AutoCloseable {
         return Optional.ofNullable(configMap.get(groupId));
     }
 
+    public Optional<Integer> getShareGroupRecordLockDurationMs(String groupId) {
+        if (!groupConfig(groupId).isPresent()) {
+            return Optional.empty();
+        }
+        return Optional.of(configMap.get(groupId).recordLockDurationMs());
+    }
+
     /**
      * Validate the given properties.
      *

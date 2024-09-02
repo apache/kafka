@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.group.share.NoOpShareStatePersister;
 import org.apache.kafka.server.group.share.PartitionFactory;
 import org.apache.kafka.server.group.share.Persister;
@@ -1181,7 +1182,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringSingleRecord() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 3, 0, memoryRecords(1),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
@@ -1202,7 +1203,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringMultipleRecords() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
                 OptionalInt.empty(), false));
@@ -1223,7 +1224,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringMultipleRecordsWithOverlapAndNewBatch() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 0),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1255,7 +1256,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringSameBatchAgain() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5, 10),
                         Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1349,7 +1350,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnAcknowledgingMultipleRecordBatchWithGapOffsets() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(5, 10);
@@ -1403,7 +1404,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockForAcquiringSubsetBatchAgain() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(8, 10),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1469,7 +1470,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnAcknowledgingMultipleSubsetRecordBatchWithGapOffsets() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -1567,7 +1568,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutCauseMaxDeliveryCountExceed() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
                 .build();
 
@@ -1619,7 +1620,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutCauseSPSOMoveForward() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
                 .build();
 
@@ -1695,7 +1696,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutCauseSPSOMoveForwardAndClearCachedState() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records
                 .build();
 
@@ -1735,7 +1736,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeAfterAcquisitionLockTimeout() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1772,7 +1773,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockAfterDifferentAcknowledges() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -1830,7 +1831,7 @@ public class SharePartitionTest {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister)
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns false.
@@ -1862,7 +1863,7 @@ public class SharePartitionTest {
         Persister persister = Mockito.mock(Persister.class);
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister)
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
                 .build();
 
         // Mock persister writeState method so that sharePartition.isWriteShareGroupStateSuccessful() returns true for acknowledge to pass.
@@ -2507,7 +2508,7 @@ public class SharePartitionTest {
 
     @Test
     public void testAcquisitionLockOnReleasingAcknowledgedMultipleSubsetRecordBatchWithGapOffsets() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
         MemoryRecords records1 = memoryRecords(2, 5);
         // Untracked gap of 3 offsets from 7-9.
         MemoryRecordsBuilder recordsBuilder = memoryRecordsBuilder(2, 10);
@@ -3294,7 +3295,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutForBatchesPostStartOffsetMovement() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3377,7 +3378,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutForBatchesPostStartOffsetMovementToStartOfBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3407,7 +3408,7 @@ public class SharePartitionTest {
     @Test
     public void testAcquisitionLockTimeoutForBatchesPostStartOffsetMovementToMiddleOfBatch() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 5),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3562,7 +3563,7 @@ public class SharePartitionTest {
     @Test
     public void testLsoMovementThenAcquisitionLockTimeoutThenAcknowledge() throws InterruptedException {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-                .withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+                .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(5, 2),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -3612,7 +3613,7 @@ public class SharePartitionTest {
 
     @Test
     public void testLsoMovementThenAcquisitionLockTimeoutThenAcknowledgeBatchLastOffsetAheadOfStartOffsetBatch() throws InterruptedException {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS).build();
 
         sharePartition.acquire(MEMBER_ID, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(2, 1),
                 Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -4730,9 +4731,10 @@ public class SharePartitionTest {
 
     private static class SharePartitionBuilder {
 
-        private int acquisitionLockTimeoutMs = 30000;
+        private int defaultAcquisitionLockTimeoutMs = 30000;
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
+        private GroupConfigManager groupConfigManager = new GroupConfigManager(new HashMap<>());
         private Persister persister = NoOpShareStatePersister.getInstance();
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
@@ -4745,8 +4747,13 @@ public class SharePartitionTest {
             return this;
         }
 
-        private SharePartitionBuilder withAcquisitionLockTimeoutMs(int acquisitionLockTimeoutMs) {
-            this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
+        private SharePartitionBuilder withDefaultAcquisitionLockTimeoutMs(int defaultAcquisitionLockTimeoutMs) {
+            this.defaultAcquisitionLockTimeoutMs = defaultAcquisitionLockTimeoutMs;
+            return this;
+        }
+        
+        private SharePartitionBuilder withGroupConfigManager(GroupConfigManager groupConfigManager) {
+            this.groupConfigManager = groupConfigManager;
             return this;
         }
 
@@ -4760,8 +4767,7 @@ public class SharePartitionTest {
         }
 
         public SharePartition build() {
-            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount,
-                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister);
+            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount, mockTimer, MOCK_TIME, persister, defaultAcquisitionLockTimeoutMs, groupConfigManager);
         }
     }
 }

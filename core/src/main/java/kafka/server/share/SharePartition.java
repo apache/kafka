@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.group.share.GroupTopicPartitionData;
 import org.apache.kafka.server.group.share.PartitionAllData;
 import org.apache.kafka.server.group.share.PartitionErrorData;
@@ -194,10 +195,15 @@ public class SharePartition {
     private final int maxDeliveryCount;
 
     /**
+     * The group config manager is used to retrieve the values for dynamic group configurations
+     */
+    private final GroupConfigManager groupConfigManager;
+
+    /**
      * The record lock duration is used to limit the duration for which a consumer can acquire a record.
      * Once this time period is elapsed, the record will be made available or archived depending on the delivery count.
      */
-    private final int recordLockDurationMs;
+    private final int defaultRecordLockDurationMs;
 
     /**
      * Timer is used to implement acquisition lock on records that guarantees the movement of records from
@@ -237,10 +243,11 @@ public class SharePartition {
         TopicIdPartition topicIdPartition,
         int maxInFlightMessages,
         int maxDeliveryCount,
-        int recordLockDurationMs,
         Timer timer,
         Time time,
-        Persister persister
+        Persister persister,
+        int defaultRecordLockDurationMs,
+        GroupConfigManager groupConfigManager
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -250,10 +257,11 @@ public class SharePartition {
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = new AtomicBoolean(false);
         this.fetchLock = new AtomicBoolean(false);
-        this.recordLockDurationMs = recordLockDurationMs;
         this.timer = timer;
         this.time = time;
         this.persister = persister;
+        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
+        this.groupConfigManager = groupConfigManager;
         // Initialize the partition.
         initialize();
     }
@@ -1594,7 +1602,8 @@ public class SharePartition {
     }
 
     private AcquisitionLockTimerTask scheduleAcquisitionLockTimeout(String memberId, long firstOffset, long lastOffset) {
-        return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
+        return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset,
+                groupConfigManager.getShareGroupRecordLockDurationMs(groupId).orElse(defaultRecordLockDurationMs));
     }
 
     /**

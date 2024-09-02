@@ -119,6 +119,8 @@ class BrokerServer(
 
   @volatile var groupCoordinator: GroupCoordinator = _
 
+  var groupConfigManager: GroupConfigManager = _
+
   var transactionCoordinator: TransactionCoordinator = _
 
   var clientToControllerChannelManager: NodeToControllerChannelManager = _
@@ -412,11 +414,12 @@ class BrokerServer(
         replicaManager,
         time,
         shareFetchSessionCache,
-        config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         persister,
-        new Metrics()
+        new Metrics(),
+        groupConfigManager,
+        config.groupCoordinatorConfig.shareGroupRecordLockDurationMs,
       )
 
       // Create the request processor objects.
@@ -605,7 +608,7 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
-      val groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap())
+      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap())
       new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)

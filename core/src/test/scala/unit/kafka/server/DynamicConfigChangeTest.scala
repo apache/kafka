@@ -604,6 +604,33 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft+kip848"))
+  def testDynamicShareGroupConfigChange(quorum: String): Unit = {
+    val newRecordLockDurationMs = 50000
+    val shareGroupId = "group-foo"
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.GROUP, shareGroupId)
+      val op = new AlterConfigOp(
+        new ConfigEntry(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, newRecordLockDurationMs.toString),
+        OpType.SET
+      )
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+    } finally {
+      admin.close()
+    }
+
+    TestUtils.retry(10000) {
+      brokers.head.groupCoordinator.groupMetadataTopicConfigs()
+      val configOpt = brokerServers.head.groupCoordinator.groupConfig(shareGroupId)
+      assertTrue(configOpt.isPresent)
+    }
+
+    val groupConfig = brokerServers.head.groupCoordinator.groupConfig(shareGroupId).get()
+    assertEquals(newRecordLockDurationMs, groupConfig.recordLockDurationMs)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft+kip848"))
   def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
     val admin = createAdminClient()
     try {

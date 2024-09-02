@@ -37,6 +37,8 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
+            } else if (GroupConfig.SHARE_RECORD_LOCK_DURATION_MS.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-1");
             }
@@ -54,22 +56,29 @@ public class GroupConfigTest {
     @Test
     public void testInvalidProps() {
         // Check for invalid sessionTimeoutMs, < MIN
-        doTestInvalidProps(1, 5000);
+        doTestInvalidProps(1, 5000, 30000);
 
         // Check for invalid sessionTimeoutMs, > MAX
-        doTestInvalidProps(70000, 5000);
+        doTestInvalidProps(70000, 5000, 30000);
 
         // Check for invalid heartbeatIntervalMs, < MIN
-        doTestInvalidProps(50000, 1);
+        doTestInvalidProps(50000, 1, 30000);
 
         // Check for invalid heartbeatIntervalMs, > MAX
-        doTestInvalidProps(50000, 70000);
+        doTestInvalidProps(50000, 70000, 30000);
+
+        // Check for invalid recordLockDurationMs, <MIN
+        doTestInvalidProps(50000, 70000, 1000);
+
+        // Check for invalid recordLockDurationMs, >MAX
+        doTestInvalidProps(50000, 70000, 100000);
     }
 
-    private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs) {
+    private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs, int  recordLockDurationMs) {
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
+        props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, recordLockDurationMs);
         assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig()));
     }
 
@@ -78,6 +87,7 @@ public class GroupConfigTest {
         Map<String, String> defaultValue = new HashMap<>();
         defaultValue.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
+        defaultValue.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, "30000");
 
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
@@ -85,6 +95,7 @@ public class GroupConfigTest {
 
         assertEquals(10, config.getInt(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
         assertEquals(20, config.getInt(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
+        assertEquals(30000, config.getInt(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS));
     }
 
     @Test
