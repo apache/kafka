@@ -18,6 +18,7 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -120,8 +121,16 @@ public interface ErrorHandlerContext {
      * to guarantee deterministic results.
      *
      * <p> If it is triggered while processing a record generated not from the source processor (for example,
-     * if this method is invoked from the punctuate call), timestamp is defined as the current
-     * task's stream time, which is defined as the largest timestamp of any record processed by the task.
+     * if this method is invoked from the punctuate call):
+     * <ul>
+     *   <li>In case of {@link PunctuationType#STREAM_TIME} timestamp is defined as the current task's stream time,
+     *   which is defined as the largest timestamp of any record processed by the task
+     *   <li>In case of {@link PunctuationType#WALL_CLOCK_TIME} timestamp is defined the current system time
+     * </ul>
+     *
+     * <p> If it is triggered from a deserialization failure, timestamp is defined as the timestamp of the
+     * current rawRecord
+     * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord}
      *
      * @return the timestamp
      */
