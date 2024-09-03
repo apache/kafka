@@ -1048,7 +1048,12 @@ public class RecordAccumulatorTest {
 
         byte[] value = new byte[1024];
         final AtomicInteger acked = new AtomicInteger(0);
-        Callback cb = (metadata, exception) -> acked.incrementAndGet();
+        Callback cb = new Callback() {
+            @Override
+            public void onCompletion(RecordMetadata recordMetadata, Exception exception) {
+                acked.incrementAndGet();
+            }
+        };
         // Append two messages so the batch is too big.
         Future<RecordMetadata> future1 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
         Future<RecordMetadata> future2 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);

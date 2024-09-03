@@ -2121,22 +2121,25 @@ public class KafkaProducerTest {
 
             // Here's the important piece of the test. Let's make sure that the RecordMetadata we get
             // is non-null and adheres to the onCompletion contract.
-            Callback callBack = (recordMetadata, exception) -> {
-                assertNotNull(exception);
-                assertNotNull(recordMetadata);
+            Callback callBack = new Callback() {
+                @Override
+                public void onCompletion(RecordMetadata recordMetadata, Exception exception, Headers headers) {
+                    assertNotNull(exception);
+                    assertNotNull(recordMetadata);
 
-                assertNotNull(recordMetadata.topic(), "Topic name should be valid even on send failure");
-                assertEquals(invalidTopicName, recordMetadata.topic());
+                    assertNotNull(recordMetadata.topic(), "Topic name should be valid even on send failure");
+                    assertEquals(invalidTopicName, recordMetadata.topic());
 
-                assertFalse(recordMetadata.hasOffset());
-                assertEquals(ProduceResponse.INVALID_OFFSET, recordMetadata.offset());
+                    assertFalse(recordMetadata.hasOffset());
+                    assertEquals(ProduceResponse.INVALID_OFFSET, recordMetadata.offset());
 
-                assertFalse(recordMetadata.hasTimestamp());
-                assertEquals(RecordBatch.NO_TIMESTAMP, recordMetadata.timestamp());
+                    assertFalse(recordMetadata.hasTimestamp());
+                    assertEquals(RecordBatch.NO_TIMESTAMP, recordMetadata.timestamp());
 
-                assertEquals(-1, recordMetadata.serializedKeySize());
-                assertEquals(-1, recordMetadata.serializedValueSize());
-                assertEquals(-1, recordMetadata.partition());
+                    assertEquals(-1, recordMetadata.serializedKeySize());
+                    assertEquals(-1, recordMetadata.serializedValueSize());
+                    assertEquals(-1, recordMetadata.partition());
+                }
             };
 
             producer.send(record, callBack);

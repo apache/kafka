@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.header.Headers;
+
 /**
  * A callback interface that the user can implement to allow code to execute when the request is complete. This callback
  * will generally execute in the background I/O thread so it should be fast.
@@ -54,5 +56,20 @@ public interface Callback {
      *                      <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException UnknownTopicOrPartitionException}
      *                  </ul>
      */
-    void onCompletion(RecordMetadata metadata, Exception exception);
+    default void onCompletion(RecordMetadata metadata, Exception exception) {};
+
+    /**
+     * A callback method the user can implement to provide asynchronous handling of request completion. This method will
+     * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
+     * metadata will contain the special -1 value for all fields. If topicPartition cannot be
+     * chosen, a -1 value will be assigned.
+     *
+     * @param metadata The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
+     *                 with -1 value for all fields will be returned if an error occurred.
+     * @param exception The exception thrown during processing of this record. Null if no error occurred.
+     * @param headers The headers for the record that was sent.
+     */
+    default void onCompletion(RecordMetadata metadata, Exception exception, Headers headers) {
+        onCompletion(metadata, exception);
+    };
 }

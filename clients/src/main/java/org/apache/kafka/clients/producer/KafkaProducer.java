@@ -1573,7 +1573,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             this.interceptors.onAcknowledgement(metadata, exception, headers);
             if (this.userCallback != null)
-                this.userCallback.onCompletion(metadata, exception);
+                this.userCallback.onCompletion(metadata, exception, headers);
         }
 
         @Override
