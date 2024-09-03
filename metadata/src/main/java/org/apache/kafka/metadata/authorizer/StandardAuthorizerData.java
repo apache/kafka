@@ -390,14 +390,15 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
             filter = filter.and(ace -> host.equals(ace.host()) || ace.host().equals(WILDCARD));
         }
 
-        final Predicate<AccessControlEntry> f = filter;
-        return ace -> {
-            boolean result = f.test(ace);
-
-            System.out.format("p:%s h:%s o:%s -> %s -> %s%n", principal, host, operation, ace, result);
-            return result;
-        };
-        //return filter;
+        if (log.isDebugEnabled()) {
+            final Predicate<AccessControlEntry> f = filter;
+            filter = ace -> {
+                boolean result = f.test(ace);
+                log.debug("p:{} h:{} o:{} -> {} -> {}", principal, host, operation, ace, result);
+                return result;
+            };
+        }
+        return filter;
     }
 
     @Override
@@ -421,18 +422,17 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
 
         aclFilter = aclFilter.and(binding -> aceFilter.test(binding.entry()));
 
-        final Predicate<AclBinding> inner = aclFilter;
-        aclFilter = new Predicate<AclBinding>() {
-            @Override
-            public boolean test(AclBinding aclBinding) {
-                boolean result = inner.test(aclBinding);
-                System.out.format("%s -> %s%n", aclBinding, result);
-
-                return result;
-            }
-        };
-
-
+        if (log.isDebugEnabled()) {
+            final Predicate<AclBinding> inner = aclFilter;
+            aclFilter = new Predicate<AclBinding>() {
+                @Override
+                public boolean test(AclBinding aclBinding) {
+                    boolean result = inner.test(aclBinding);
+                    log.debug("authorizeByResourceType: {} -> {}}", aclBinding, result);
+                    return result;
+                }
+            };
+        }
 
         EnumMap<PatternType, NavigableSet<String>> denyPatterns =
                 new EnumMap<PatternType, NavigableSet<String>>(PatternType.class) {{
