@@ -19,8 +19,6 @@ package kafka.log.remote;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
-import kafka.log.remote.quota.RLMQuotaManager;
-import kafka.log.remote.quota.RLMQuotaManagerConfig;
 import kafka.server.KafkaConfig;
 import kafka.server.StopPartition;
 
@@ -44,6 +42,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
+import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LogSegmentData;
 import org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager;

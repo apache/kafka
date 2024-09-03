@@ -16,9 +16,8 @@
  */
 package kafka.log.remote;
 
-import kafka.log.remote.quota.RLMQuotaManager;
-
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
