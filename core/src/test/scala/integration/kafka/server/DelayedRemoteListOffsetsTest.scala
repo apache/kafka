@@ -79,11 +79,19 @@ class DelayedRemoteListOffsetsTest {
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, metadata, responseCallback)
     val listOffsetsRequestKeys = metadata.statusByPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+    assertEquals(0, DelayedRemoteListOffsetsMetrics.aggregateExpirationMeter.count())
+    assertEquals(0, DelayedRemoteListOffsetsMetrics.partitionExpirationMeters.size)
     purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys)
 
     Thread.sleep(100)
+    assertEquals(3, listOffsetsRequestKeys.size)
     assertEquals(listOffsetsRequestKeys.size, cancelledCount)
     assertEquals(listOffsetsRequestKeys.size, numResponse)
+    assertEquals(listOffsetsRequestKeys.size, DelayedRemoteListOffsetsMetrics.aggregateExpirationMeter.count())
+    listOffsetsRequestKeys.foreach(key => {
+      val tp = new TopicPartition(key.topic, key.partition)
+      assertEquals(1, DelayedRemoteListOffsetsMetrics.partitionExpirationMeters.get(tp).count())
+    })
   }
 
   @Test

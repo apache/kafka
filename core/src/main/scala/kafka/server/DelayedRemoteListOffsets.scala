@@ -16,16 +16,20 @@
  */
 package kafka.server
 
+import com.yammer.metrics.core.Meter
 import kafka.log.AsyncOffsetReadFutureHolder
 import kafka.utils.Implicits._
+import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.requests.ListOffsetsResponse
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
-import scala.collection.mutable
+import java.util.concurrent.TimeUnit
+import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
 
 case class ListOffsetsPartitionStatus(var responseOpt: Option[ListOffsetsPartitionResponse] = None,
@@ -70,8 +74,7 @@ class DelayedRemoteListOffsets(delayMs: Long,
       if (!status.completed) {
         debug(s"Expiring list offset request for partition $topicPartition with status $status")
         status.futureHolderOpt.foreach(futureHolder => futureHolder.jobFuture.cancel(true))
-        // TODO: DelayedRemoteListOffsetsMetrics will be added once the KIP gets accepted
-        // DelayedRemoteListOffsetsMetrics.recordExpiration(topicPartition)
+        DelayedRemoteListOffsetsMetrics.recordExpiration(topicPartition)
       }
     }
   }
@@ -151,5 +154,21 @@ class DelayedRemoteListOffsets(delayMs: Long,
       .setErrorCode(e.code)
       .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
       .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
+  }
+}
+
+object DelayedRemoteListOffsetsMetrics {
+  private val metricsGroup = new KafkaMetricsGroup(DelayedRemoteListOffsetsMetrics.getClass)
+  private[server] val aggregateExpirationMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  private val partitionExpirationMeterFactory = (key: TopicPartition) =>
+    metricsGroup.newMeter("ExpiresPerSec",
+      "requests",
+      TimeUnit.SECONDS,
+      Map("topic" -> key.topic, "partition" -> key.partition.toString).asJava)
+  private[server] val partitionExpirationMeters = new Pool[TopicPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
+
+  def recordExpiration(partition: TopicPartition): Unit = {
+    aggregateExpirationMeter.mark()
+    partitionExpirationMeters.getAndMaybePut(partition).mark()
   }
 }
