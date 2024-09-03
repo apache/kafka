@@ -22,7 +22,6 @@ import kafka.log.UnifiedLog;
 import kafka.log.remote.quota.RLMQuotaManager;
 import kafka.log.remote.quota.RLMQuotaManagerConfig;
 import kafka.log.remote.quota.RLMQuotaMetrics;
-import kafka.server.QuotaType;
 import kafka.server.StopPartition;
 
 import org.apache.kafka.common.KafkaException;
@@ -64,6 +63,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AbortedTxn;
@@ -291,12 +291,12 @@ public class RemoteLogManager implements Closeable {
     }
 
     RLMQuotaManager createRLMCopyQuotaManager() {
-        return new RLMQuotaManager(copyQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLMCopy$.MODULE$,
+        return new RLMQuotaManager(copyQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLM_COPY,
           "Tracking copy byte-rate for Remote Log Manager", time);
     }
 
     RLMQuotaManager createRLMFetchQuotaManager() {
-        return new RLMQuotaManager(fetchQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLMFetch$.MODULE$,
+        return new RLMQuotaManager(fetchQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLM_FETCH,
           "Tracking fetch byte-rate for Remote Log Manager", time);
     }
 

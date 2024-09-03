@@ -47,6 +47,7 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs}
+import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -229,7 +230,7 @@ class RequestQuotaTest extends BaseRequestTest {
   def session(user: String): Session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), null)
 
   private def throttleTimeMetricValue(clientId: String): Double = {
-    throttleTimeMetricValueForQuotaType(clientId, QuotaType.Request)
+    throttleTimeMetricValueForQuotaType(clientId, QuotaType.REQUEST)
   }
 
   private def throttleTimeMetricValueForQuotaType(clientId: String, quotaType: QuotaType): Double = {
@@ -241,7 +242,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def requestTimeMetricValue(clientId: String): Double = {
-    val metricName = leaderNode.metrics.metricName("request-time", QuotaType.Request.toString,
+    val metricName = leaderNode.metrics.metricName("request-time", QuotaType.REQUEST.toString,
       "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).quotaSensor
@@ -249,7 +250,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def exemptRequestMetricValue: Double = {
-    val metricName = leaderNode.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
+    val metricName = leaderNode.metrics.metricName("exempt-request-time", QuotaType.REQUEST.toString, "")
     metricValue(leaderNode.metrics.metrics.get(metricName), leaderNode.quotaManagers.request.exemptSensor)
   }
 
@@ -781,8 +782,8 @@ class RequestQuotaTest extends BaseRequestTest {
     override def toString: String = {
       val requestTime = requestTimeMetricValue(clientId)
       val throttleTime = throttleTimeMetricValue(clientId)
-      val produceThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.Produce)
-      val consumeThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.Fetch)
+      val produceThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.PRODUCE)
+      val consumeThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.FETCH)
       s"Client $clientId apiKey $apiKey requests $correlationId requestTime $requestTime " +
       s"throttleTime $throttleTime produceThrottleTime $produceThrottleTime consumeThrottleTime $consumeThrottleTime"
     }
@@ -826,9 +827,9 @@ class RequestQuotaTest extends BaseRequestTest {
     val throttled = smallQuotaProducerClient.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(throttled, s"Response not throttled: $smallQuotaProducerClient")
-    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Produce) > 0,
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.PRODUCE) > 0,
       s"Throttle time metrics for produce quota not updated: $smallQuotaProducerClient")
-    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request).isNaN,
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.REQUEST).isNaN,
       s"Throttle time metrics for request quota updated: $smallQuotaProducerClient")
   }
 
@@ -839,9 +840,9 @@ class RequestQuotaTest extends BaseRequestTest {
     val throttled = smallQuotaConsumerClient.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(throttled, s"Response not throttled: $smallQuotaConsumerClientId")
-    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Fetch) > 0,
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.FETCH) > 0,
       s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClient")
-    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request).isNaN,
+    assertTrue(throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.REQUEST).isNaN,
       s"Throttle time metrics for request quota updated: $smallQuotaConsumerClient")
   }
 

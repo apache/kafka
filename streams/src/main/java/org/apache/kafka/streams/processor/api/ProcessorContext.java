@@ -59,7 +59,7 @@ public interface ProcessorContext<KForward, VForward> extends ProcessingContext 
      * of causality and could lead to undefined behavior.
      * <p>
      * A safe usage would look like this:
-     * <code>
+     * <pre>{@code
      *     process(Record inputRecord) {
      *         // makes a copy of the headers
      *         Record toForward = inputRecord.withHeaders(inputRecord.headers());
@@ -76,7 +76,7 @@ public interface ProcessorContext<KForward, VForward> extends ProcessingContext 
      *         toForward.headers().add(...);
      *         context.forward(toForward);
      *     }
-     * </code>
+     * }</pre>
      * @param record The record to forward to all children
      */
     <K extends KForward, V extends VForward> void forward(Record<K, V> record);

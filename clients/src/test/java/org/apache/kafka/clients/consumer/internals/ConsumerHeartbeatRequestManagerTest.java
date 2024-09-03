@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -378,6 +379,27 @@ public class ConsumerHeartbeatRequestManagerTest {
         time.sleep(1);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
+    }
+
+    @Test
+    public void testDisconnect() {
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        // Mimic disconnect
+        result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), DisconnectException.INSTANCE);
+        verify(membershipManager).onHeartbeatFailure(true);
+        // Ensure that the coordinatorManager rediscovers the coordinator
+        verify(coordinatorRequestManager).handleCoordinatorDisconnect(any(), anyLong());
+        verify(backgroundEventHandler, never()).add(any());
+
+        time.sleep(DEFAULT_RETRY_BACKOFF_MS - 1);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No request should be generated before the backoff expires");
+
+        time.sleep(1);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size(), "A new request should be generated after the backoff expires");
     }
 
     @Test
