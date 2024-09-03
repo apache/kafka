@@ -417,7 +417,6 @@ public class GroupMetadataManagerTest {
                 1,
                 new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap())
             )
-            .withCurrentActiveTaskEpoch((a, b) -> 1)
             .withOwnedActiveTasks(Collections.emptyList())
             .withOwnedStandbyTasks(Collections.emptyList())
             .withOwnedWarmupTasks(Collections.emptyList())
@@ -479,7 +478,6 @@ public class GroupMetadataManagerTest {
                 1,
                 new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap())
             )
-            .withCurrentActiveTaskEpoch((a, b) -> 1)
             .withOwnedActiveTasks(Collections.emptyList())
             .withOwnedStandbyTasks(Collections.emptyList())
             .withOwnedWarmupTasks(Collections.emptyList())
@@ -550,7 +548,7 @@ public class GroupMetadataManagerTest {
             CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord(
                 groupId,
                 heartbeatResult.response().memberId(),
-                TaskAssignmentTestUtil.mkAssignment(TaskAssignmentTestUtil.mkTaskAssignment(subtopologyId, 0, 1, 2)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(TaskAssignmentTestUtil.mkTasks(subtopologyId, 0, 1, 2)),
                 Collections.emptyMap(),
                 Collections.emptyMap()
             )
@@ -9291,7 +9289,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(streamsGroupIds.get(1))
                 .setMembers(Collections.singletonList(
                     memberBuilder.build().asStreamsGroupDescribeMember(
-                        new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap())
+                        TaskAssignmentTestUtil.mkAssignment(Collections.emptyMap())
                     )
                 ))
                 .setGroupState(StreamsGroup.StreamsGroupState.INITIALIZING.toString())
@@ -9361,8 +9359,8 @@ public class GroupMetadataManagerTest {
         describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(streamsGroupId)
             .setMembers(Arrays.asList(
-                memberBuilder1.build().asStreamsGroupDescribeMember(new org.apache.kafka.coordinator.group.streams.Assignment(Collections.emptyMap())),
-                memberBuilder2.build().asStreamsGroupDescribeMember(new org.apache.kafka.coordinator.group.streams.Assignment(assignmentMap, assignmentMap, assignmentMap))
+                memberBuilder1.build().asStreamsGroupDescribeMember(TaskAssignmentTestUtil.mkAssignment(Collections.emptyMap())),
+                memberBuilder2.build().asStreamsGroupDescribeMember(TaskAssignmentTestUtil.mkAssignment(assignmentMap, assignmentMap, assignmentMap))
             ))
             .setGroupState(StreamsGroup.StreamsGroupState.INITIALIZING.toString())
             .setGroupEpoch(epoch + 2);

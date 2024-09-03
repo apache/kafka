@@ -40,13 +40,6 @@ public class Assignment {
     private final Map<String, Set<Integer>> standbyTasks;
     private final Map<String, Set<Integer>> warmupTasks;
 
-    // TODO: Tests using this constructor probably should be extended to cover standby tasks
-    public Assignment(final Map<String, Set<Integer>> activeTasks) {
-        this.activeTasks = Collections.unmodifiableMap(Objects.requireNonNull(activeTasks));
-        this.standbyTasks = Collections.emptyMap();
-        this.warmupTasks = Collections.emptyMap();
-    }
-
     public Assignment(final Map<String, Set<Integer>> activeTasks,
                       final Map<String, Set<Integer>> standbyTasks,
                       final Map<String, Set<Integer>> warmupTasks) {

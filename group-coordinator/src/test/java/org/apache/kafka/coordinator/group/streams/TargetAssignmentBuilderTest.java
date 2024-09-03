@@ -44,7 +44,8 @@ import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecor
 import static org.apache.kafka.coordinator.group.streams.CoordinatorStreamsRecordHelpers.newStreamsGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTaskAssignment;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -63,7 +64,7 @@ public class TargetAssignmentBuilderTest {
         private final Map<String, StreamsGroupMember> members = new HashMap<>();
         private final Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata = new HashMap<>();
         private final Map<String, StreamsGroupMember> updatedMembers = new HashMap<>();
-        private final Map<String, org.apache.kafka.coordinator.group.streams.Assignment> targetAssignment = new HashMap<>();
+        private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
         private final Map<String, String> staticMembers = new HashMap<>();
         private MetadataImageBuilder topicsImageBuilder = new MetadataImageBuilder();
@@ -98,7 +99,7 @@ public class TargetAssignmentBuilderTest {
                 staticMembers.put(instanceId, memberId);
             }
             members.put(memberId, memberBuilder.build());
-            targetAssignment.put(memberId, new org.apache.kafka.coordinator.group.streams.Assignment(targetTasks));
+            targetAssignment.put(memberId, mkAssignment(targetTasks));
         }
 
         public String addSubtopologyWithSingleSourceTopic(
@@ -175,7 +176,7 @@ public class TargetAssignmentBuilderTest {
             members.forEach((memberId, member) ->
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                         member,
-                        targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.Assignment.EMPTY)
+                        targetAssignment.getOrDefault(memberId, Assignment.EMPTY)
                     )
                 ));
 
@@ -185,15 +186,15 @@ public class TargetAssignmentBuilderTest {
                 if (updatedMemberOrNull == null) {
                     memberSpecs.remove(memberId);
                 } else {
-                    org.apache.kafka.coordinator.group.streams.Assignment assignment = targetAssignment.getOrDefault(memberId,
-                        org.apache.kafka.coordinator.group.streams.Assignment.EMPTY);
+                    Assignment assignment = targetAssignment.getOrDefault(memberId,
+                        Assignment.EMPTY);
 
                     // A new static member joins and needs to replace an existing departed one.
                     if (updatedMemberOrNull.instanceId() != null) {
                         String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
                         if (previousMemberId != null && !previousMemberId.equals(memberId)) {
                             assignment = targetAssignment.getOrDefault(previousMemberId,
-                                org.apache.kafka.coordinator.group.streams.Assignment.EMPTY);
+                                Assignment.EMPTY);
                         }
                     }
 
@@ -268,10 +269,10 @@ public class TargetAssignmentBuilderTest {
             .setClientTags(clientTags)
             .build();
 
-        org.apache.kafka.coordinator.group.streams.Assignment assignment = new org.apache.kafka.coordinator.group.streams.Assignment(
-            mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-                mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        Assignment assignment = mkAssignment(
+            mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 1, 2, 3),
+                mkTasks(barSubtopologyId, 1, 2, 3)
             ));
 
         AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
@@ -316,24 +317,24 @@ public class TargetAssignmentBuilderTest {
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6, Collections.emptyMap());
         String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        context.addGroupMember("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         ));
 
-        context.addGroupMember("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        context.addGroupMember("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         ));
 
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        context.prepareMemberAssignment("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         ));
 
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        context.prepareMemberAssignment("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         ));
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
@@ -343,14 +344,14 @@ public class TargetAssignmentBuilderTest {
             20
         )), result.records());
 
-        Map<String, org.apache.kafka.coordinator.group.streams.Assignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         )));
-        expectedAssignment.put("member-2", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        expectedAssignment.put("member-2", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
@@ -366,24 +367,24 @@ public class TargetAssignmentBuilderTest {
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6, Collections.emptyMap());
         String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        context.addGroupMember("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         ));
 
-        context.addGroupMember("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        context.addGroupMember("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         ));
 
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        context.prepareMemberAssignment("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         ));
 
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        context.prepareMemberAssignment("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         ));
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
@@ -391,13 +392,13 @@ public class TargetAssignmentBuilderTest {
         assertEquals(3, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-                mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 4, 5, 6),
+                mkTasks(barSubtopologyId, 4, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-                mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 1, 2, 3),
+                mkTasks(barSubtopologyId, 1, 2, 3)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
@@ -406,14 +407,14 @@ public class TargetAssignmentBuilderTest {
             20
         ), result.records().get(2));
 
-        Map<String, org.apache.kafka.coordinator.group.streams.Assignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-2", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-2", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         )));
-        expectedAssignment.put("member-1", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        expectedAssignment.put("member-1", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
@@ -429,31 +430,31 @@ public class TargetAssignmentBuilderTest {
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6, Collections.emptyMap());
         String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        context.addGroupMember("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         ));
 
-        context.addGroupMember("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        context.addGroupMember("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         ));
 
         context.updateMemberSubscription("member-3");
 
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        context.prepareMemberAssignment("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         ));
 
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        context.prepareMemberAssignment("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         ));
 
-        context.prepareMemberAssignment("member-3", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        context.prepareMemberAssignment("member-3", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         ));
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
@@ -461,17 +462,17 @@ public class TargetAssignmentBuilderTest {
         assertEquals(4, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 1, 2),
-                mkTaskAssignment(barSubtopologyId, 1, 2)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 1, 2),
+                mkTasks(barSubtopologyId, 1, 2)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 3, 4),
-                mkTaskAssignment(barSubtopologyId, 3, 4)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 3, 4),
+                mkTasks(barSubtopologyId, 3, 4)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 5, 6),
-                mkTaskAssignment(barSubtopologyId, 5, 6)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 5, 6),
+                mkTasks(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 3));
 
@@ -480,18 +481,18 @@ public class TargetAssignmentBuilderTest {
             20
         ), result.records().get(3));
 
-        Map<String, org.apache.kafka.coordinator.group.streams.Assignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        expectedAssignment.put("member-2", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         )));
-        expectedAssignment.put("member-3", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        expectedAssignment.put("member-3", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
@@ -507,18 +508,18 @@ public class TargetAssignmentBuilderTest {
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6, Collections.emptyMap());
         String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        context.addGroupMember("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        context.addGroupMember("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", mkAssignment(
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        context.addGroupMember("member-3", mkTasksPerSubtopology(
+            mkTasks(barSubtopologyId, 5, 6)
         ));
 
         context.updateMemberSubscription(
@@ -527,19 +528,19 @@ public class TargetAssignmentBuilderTest {
             Optional.of("rack-0")
         );
 
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        context.prepareMemberAssignment("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         ));
 
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        context.prepareMemberAssignment("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         ));
 
-        context.prepareMemberAssignment("member-3", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        context.prepareMemberAssignment("member-3", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         ));
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
@@ -547,17 +548,17 @@ public class TargetAssignmentBuilderTest {
         assertEquals(4, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 1, 2),
-                mkTaskAssignment(barSubtopologyId, 1, 2)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 1, 2),
+                mkTasks(barSubtopologyId, 1, 2)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 3, 4),
-                mkTaskAssignment(barSubtopologyId, 3, 4)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 3, 4),
+                mkTasks(barSubtopologyId, 3, 4)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 5, 6),
-                mkTaskAssignment(barSubtopologyId, 5, 6)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 5, 6),
+                mkTasks(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 3));
 
@@ -566,18 +567,18 @@ public class TargetAssignmentBuilderTest {
             20
         ), result.records().get(3));
 
-        Map<String, org.apache.kafka.coordinator.group.streams.Assignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        expectedAssignment.put("member-2", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         )));
-        expectedAssignment.put("member-3", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        expectedAssignment.put("member-3", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
@@ -593,34 +594,34 @@ public class TargetAssignmentBuilderTest {
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6, mkMapOfPartitionRacks(6));
         String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6, mkMapOfPartitionRacks(6));
 
-        context.addGroupMember("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        context.addGroupMember("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        context.addGroupMember("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        context.addGroupMember("member-3", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         ));
 
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        context.prepareMemberAssignment("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         ));
 
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4, 5),
-            mkTaskAssignment(barSubtopologyId, 3, 4, 5)
+        context.prepareMemberAssignment("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4, 5),
+            mkTasks(barSubtopologyId, 3, 4, 5)
         ));
 
-        context.prepareMemberAssignment("member-3", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 6),
-            mkTaskAssignment(barSubtopologyId, 6)
+        context.prepareMemberAssignment("member-3", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 6),
+            mkTasks(barSubtopologyId, 6)
         ));
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
@@ -629,13 +630,13 @@ public class TargetAssignmentBuilderTest {
 
         // Member 1 has no record because its assignment did not change.
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 3, 4, 5),
-                mkTaskAssignment(barSubtopologyId, 3, 4, 5)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 3, 4, 5),
+                mkTasks(barSubtopologyId, 3, 4, 5)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 6),
-                mkTaskAssignment(barSubtopologyId, 6)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-3", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 6),
+                mkTasks(barSubtopologyId, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
@@ -644,18 +645,18 @@ public class TargetAssignmentBuilderTest {
             20
         ), result.records().get(2));
 
-        Map<String, org.apache.kafka.coordinator.group.streams.Assignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4, 5),
-            mkTaskAssignment(barSubtopologyId, 3, 4, 5)
+        expectedAssignment.put("member-2", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4, 5),
+            mkTasks(barSubtopologyId, 3, 4, 5)
         )));
-        expectedAssignment.put("member-3", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 6),
-            mkTaskAssignment(barSubtopologyId, 6)
+        expectedAssignment.put("member-3", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 6),
+            mkTasks(barSubtopologyId, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
@@ -671,31 +672,31 @@ public class TargetAssignmentBuilderTest {
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6, Collections.emptyMap());
         String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        context.addGroupMember("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        context.addGroupMember("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        context.addGroupMember("member-3", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         ));
 
         context.removeMemberSubscription("member-3");
 
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        context.prepareMemberAssignment("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         ));
 
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        context.prepareMemberAssignment("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         ));
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
@@ -703,13 +704,13 @@ public class TargetAssignmentBuilderTest {
         assertEquals(3, result.records().size());
 
         assertUnorderedListEquals(Arrays.asList(
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-                mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-1", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 1, 2, 3),
+                mkTasks(barSubtopologyId, 1, 2, 3)
             ), Collections.emptyMap(), Collections.emptyMap()),
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-                mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-2", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 4, 5, 6),
+                mkTasks(barSubtopologyId, 4, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 2));
 
@@ -718,14 +719,14 @@ public class TargetAssignmentBuilderTest {
             20
         ), result.records().get(2));
 
-        Map<String, org.apache.kafka.coordinator.group.streams.Assignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2, 3),
-            mkTaskAssignment(barSubtopologyId, 1, 2, 3)
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2, 3),
+            mkTasks(barSubtopologyId, 1, 2, 3)
         )));
-        expectedAssignment.put("member-2", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 4, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 4, 5, 6)
+        expectedAssignment.put("member-2", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 4, 5, 6),
+            mkTasks(barSubtopologyId, 4, 5, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
@@ -741,19 +742,19 @@ public class TargetAssignmentBuilderTest {
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6, Collections.emptyMap());
         String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", "instance-member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        context.addGroupMember("member-1", "instance-member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", "instance-member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        context.addGroupMember("member-2", "instance-member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", "instance-member-3", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        context.addGroupMember("member-3", "instance-member-3", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         ));
 
         // Static member 3 leaves
@@ -763,19 +764,19 @@ public class TargetAssignmentBuilderTest {
         context.updateMemberSubscription("member-3-a", Optional.of("instance-member-3"),
             Optional.empty());
 
-        context.prepareMemberAssignment("member-1", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        context.prepareMemberAssignment("member-1", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         ));
 
-        context.prepareMemberAssignment("member-2", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        context.prepareMemberAssignment("member-2", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         ));
 
-        context.prepareMemberAssignment("member-3-a", mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        context.prepareMemberAssignment("member-3-a", mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         ));
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
@@ -783,9 +784,9 @@ public class TargetAssignmentBuilderTest {
         assertEquals(2, result.records().size());
 
         assertUnorderedListEquals(Collections.singletonList(
-            newStreamsGroupTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 5, 6),
-                mkTaskAssignment(barSubtopologyId, 5, 6)
+            newStreamsGroupTargetAssignmentRecord("my-group", "member-3-a", mkTasksPerSubtopology(
+                mkTasks(fooSubtopologyId, 5, 6),
+                mkTasks(barSubtopologyId, 5, 6)
             ), Collections.emptyMap(), Collections.emptyMap())
         ), result.records().subList(0, 1));
 
@@ -794,19 +795,19 @@ public class TargetAssignmentBuilderTest {
             20
         ), result.records().get(1));
 
-        Map<String, org.apache.kafka.coordinator.group.streams.Assignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 1, 2),
-            mkTaskAssignment(barSubtopologyId, 1, 2)
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 1, 2),
+            mkTasks(barSubtopologyId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new org.apache.kafka.coordinator.group.streams.Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 3, 4),
-            mkTaskAssignment(barSubtopologyId, 3, 4)
+        expectedAssignment.put("member-2", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 3, 4),
+            mkTasks(barSubtopologyId, 3, 4)
         )));
 
-        expectedAssignment.put("member-3-a", new Assignment(mkAssignment(
-            mkTaskAssignment(fooSubtopologyId, 5, 6),
-            mkTaskAssignment(barSubtopologyId, 5, 6)
+        expectedAssignment.put("member-3-a", mkAssignment(mkTasksPerSubtopology(
+            mkTasks(fooSubtopologyId, 5, 6),
+            mkTasks(barSubtopologyId, 5, 6)
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());

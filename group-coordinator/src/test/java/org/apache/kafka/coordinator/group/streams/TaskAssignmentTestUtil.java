@@ -17,22 +17,57 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.taskassignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.taskassignor.GroupAssignment;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.Objects;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TaskAssignmentTestUtil {
 
-    public static Map.Entry<String, Set<Integer>> mkTaskAssignment(
+    public enum TaskRole {
+        ACTIVE,
+        STANDBY,
+        WARMUP
+    }
+    public static Assignment mkAssignment(final Map<String, Set<Integer>> activeTasks,
+                                          final Map<String, Set<Integer>> standbyTasks,
+                                          final Map<String, Set<Integer>> warmupTasks) {
+        return new Assignment(
+            Collections.unmodifiableMap(Objects.requireNonNull(activeTasks)),
+            Collections.unmodifiableMap(Objects.requireNonNull(standbyTasks)),
+            Collections.unmodifiableMap(Objects.requireNonNull(warmupTasks))
+        );
+    }
+
+    // TODO: Tests using this util probably should be extended to cover standby tasks
+    public static Assignment mkAssignment(final Map<String, Set<Integer>> activeTasks) {
+        return new Assignment(
+            Collections.unmodifiableMap(Objects.requireNonNull(activeTasks)),
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+    }
+
+    @SafeVarargs
+    public static Assignment mkAssignment(TaskRole taskRole, Map.Entry<String, Set<Integer>>... entries) {
+        switch (taskRole) {
+            case ACTIVE:
+                return new Assignment(mkTasksPerSubtopology(entries), new HashMap<>(), new HashMap<>());
+            case STANDBY:
+                return new Assignment(new HashMap<>(), mkTasksPerSubtopology(entries), new HashMap<>());
+            case WARMUP:
+                return new Assignment(new HashMap<>(), new HashMap<>(), mkTasksPerSubtopology(entries));
+            default:
+                throw new IllegalArgumentException("Unknown task role: " + taskRole);
+        }
+    }
+
+    public static Map.Entry<String, Set<Integer>> mkTasks(
         String subtopologyId,
         Integer... tasks
     ) {
@@ -42,55 +77,13 @@ public class TaskAssignmentTestUtil {
         );
     }
 
-    public static Map.Entry<String, Set<Integer>> mkSortedTaskAssignment(
-        String subtopologyId,
-        Integer... tasks
-    ) {
-        return new AbstractMap.SimpleEntry<>(
-            subtopologyId,
-            new TreeSet<>(Arrays.asList(tasks))
-        );
-    }
-
     @SafeVarargs
-    public static Map<String, Set<Integer>> mkAssignment(Map.Entry<String, Set<Integer>>... entries) {
+    public static Map<String, Set<Integer>> mkTasksPerSubtopology(Map.Entry<String, Set<Integer>>... entries) {
         Map<String, Set<Integer>> assignment = new HashMap<>();
         for (Map.Entry<String, Set<Integer>> entry : entries) {
             assignment.put(entry.getKey(), entry.getValue());
         }
         return assignment;
-    }
-
-    @SafeVarargs
-    public static Map<String, Set<Integer>> mkSortedAssignment(Map.Entry<String, Set<Integer>>... entries) {
-        Map<String, Set<Integer>> assignment = new LinkedHashMap<>();
-        for (Map.Entry<String, Set<Integer>> entry : entries) {
-            assignment.put(entry.getKey(), entry.getValue());
-        }
-        return assignment;
-    }
-
-    @SafeVarargs
-    public static Map<String, Set<Integer>> mkStreamsAssignment(Map.Entry<String, Set<Integer>>... entries) {
-        Map<String, Set<Integer>> assignment = new HashMap<>();
-        for (Map.Entry<String, Set<Integer>> entry : entries) {
-            assignment.put(entry.getKey(), entry.getValue());
-        }
-        return assignment;
-    }
-
-    /**
-     * Verifies that the expected assignment is equal to the computed assignment for every member in the group.
-     */
-    public static void assertAssignment(
-        Map<String, Map<String, Set<Integer>>> expectedAssignment,
-        GroupAssignment computedGroupAssignment
-    ) {
-        assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
-        computedGroupAssignment.members().forEach((memberId, memberAssignment) -> {
-            Map<String, Set<Integer>> computedAssignmentForMember = memberAssignment.activeTasks();
-            assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
-        });
     }
 
     /**

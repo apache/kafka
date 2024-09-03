@@ -33,7 +33,11 @@
     { "name": "WarmupTasks", "versions": "0+", "type": "[]TaskIds",
       "about": "Currently assigned warm-up tasks for this streams client." },
     { "name": "ActiveTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
-      "about": "The active tasks that must be revoked by this member." }
+      "about": "The active tasks that must be revoked by this member." },
+    { "name": "StandbyTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
+      "about": "The standby tasks that must be revoked by this member." },
+    { "name": "WarmupTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
+      "about": "The warmup tasks that must be revoked by this member." }
   ],
   "commonStructs": [
     { "name": "TaskIds", "versions": "0+", "fields": [

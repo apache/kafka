@@ -571,6 +571,9 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
                 case EMPTY:
                     incrementNumStreamsGroups(StreamsGroupState.EMPTY);
                     break;
+                case INITIALIZING:
+                    incrementNumStreamsGroups(StreamsGroupState.INITIALIZING);
+                    break;
                 case ASSIGNING:
                     incrementNumStreamsGroups(StreamsGroupState.ASSIGNING);
                     break;
@@ -589,6 +592,9 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             switch (oldState) {
                 case EMPTY:
                     decrementNumStreamsGroups(StreamsGroupState.EMPTY);
+                    break;
+                case INITIALIZING:
+                    decrementNumStreamsGroups(StreamsGroupState.INITIALIZING);
                     break;
                 case ASSIGNING:
                     decrementNumStreamsGroups(StreamsGroupState.ASSIGNING);

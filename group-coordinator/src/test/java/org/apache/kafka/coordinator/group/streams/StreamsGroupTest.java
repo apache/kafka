@@ -40,8 +40,8 @@ import java.util.OptionalLong;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTaskAssignment;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
+import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -153,7 +153,7 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testUpdatingMemberUpdatesPartitionEpoch() {
+    public void testUpdatingMemberUpdatesProcessId() {
         String fooSubtopology = "foo-sub";
         String barSubtopology = "bar-sub";
         String zarSubtopology = "zar-sub";
@@ -162,87 +162,108 @@ public class StreamsGroupTest {
         StreamsGroupMember member;
 
         member = new StreamsGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkAssignment(
-                mkTaskAssignment(fooSubtopology, 1, 2, 3)))
-            .setActiveTasksPendingRevocation(mkAssignment(
-                mkTaskAssignment(barSubtopology, 4, 5, 6)))
+            .setProcessId("process")
+            .setAssignedActiveTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 1)))
+            .setAssignedStandbyTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)))
+            .setAssignedWarmupTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 3)))
+            .setActiveTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 4)))
+            .setStandbyTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 5)))
+            .setWarmupTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 6)))
             .build();
 
         streamsGroup.updateMember(member);
 
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 1));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 2));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 3));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(barSubtopology, 4));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(barSubtopology, 5));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(barSubtopology, 6));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 7));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 8));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 9));
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
+        assertEquals(Collections.singleton("process"),
+            streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
+        assertEquals(Collections.singleton("process"),
+            streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
+        assertEquals(Collections.singleton("process"),
+            streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
+        assertEquals(Collections.singleton("process"),
+            streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
+        assertEquals(Collections.emptySet(),
+            streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Collections.emptySet(),
+            streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
 
         member = new StreamsGroupMember.Builder(member)
-            .setMemberEpoch(11)
-            .setAssignedActiveTasks(mkAssignment(
-                mkTaskAssignment(barSubtopology, 1, 2, 3)))
-            .setActiveTasksPendingRevocation(mkAssignment(
-                mkTaskAssignment(zarSubtopology, 4, 5, 6)))
+            .setProcessId("process1")
+            .setAssignedActiveTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 1)))
+            .setAssignedStandbyTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)))
+            .setAssignedWarmupTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 3)))
+            .setActiveTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 4)))
+            .setStandbyTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 5)))
+            .setWarmupTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 6)))
             .build();
 
         streamsGroup.updateMember(member);
 
-        assertEquals(11, streamsGroup.currentActiveTaskEpoch(barSubtopology, 1));
-        assertEquals(11, streamsGroup.currentActiveTaskEpoch(barSubtopology, 2));
-        assertEquals(11, streamsGroup.currentActiveTaskEpoch(barSubtopology, 3));
-        assertEquals(11, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 4));
-        assertEquals(11, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 5));
-        assertEquals(11, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 6));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(barSubtopology, 7));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(barSubtopology, 8));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(barSubtopology, 9));
+        assertEquals("process1", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
+        assertEquals(Collections.singleton("process1"),
+            streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
+        assertEquals(Collections.singleton("process1"),
+            streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
+        assertEquals("process1", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
+        assertEquals(Collections.singleton("process1"),
+            streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
+        assertEquals(Collections.singleton("process1"),
+            streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
+        assertEquals(Collections.emptySet(),
+            streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Collections.emptySet(),
+            streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
     }
 
     @Test
-    public void testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsReassignedBeforeBeingRevoked() {
+    public void testUpdatingMemberUpdatesTaskProcessIdWhenPartitionIsReassignedBeforeBeingRevoked() {
         String fooSubtopologyId = "foo-sub";
 
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         StreamsGroupMember member;
 
         member = new StreamsGroupMember.Builder("member")
-            .setMemberEpoch(10)
+            .setProcessId("process")
             .setAssignedActiveTasks(emptyMap())
             .setAssignedStandbyTasks(emptyMap())
             .setAssignedWarmupTasks(emptyMap())
-            .setActiveTasksPendingRevocation(mkAssignment(
-                mkTaskAssignment(fooSubtopologyId, 1)))
+            .setActiveTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)))
+            .setStandbyTasksPendingRevocation(
+                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)))
+            .setWarmupTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3)))
             .build();
 
         streamsGroup.updateMember(member);
 
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(fooSubtopologyId, 1));
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
 
         member = new StreamsGroupMember.Builder(member)
-            .setMemberEpoch(11)
-            .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
-            .setAssignedStandbyTasks(emptyMap())
-            .setAssignedWarmupTasks(emptyMap())
+            .setProcessId("process1")
+            .setAssignedActiveTasks(
+                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)))
+            .setAssignedStandbyTasks(
+                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)))
+            .setAssignedWarmupTasks(
+                mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3)))
             .setActiveTasksPendingRevocation(emptyMap())
             .build();
 
         streamsGroup.updateMember(member);
 
-        assertEquals(11, streamsGroup.currentActiveTaskEpoch(fooSubtopologyId, 1));
+        assertEquals("process1", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
     }
 
     @Test
-    public void testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsNotReleased() {
+    public void testUpdatingMemberUpdatesTaskProcessIdWhenPartitionIsNotReleased() {
         String fooSubtopologyId = "foo-sub";
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
         StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
-            .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
+            .setProcessId("process")
+            .setAssignedActiveTasks(mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)))
             .setAssignedStandbyTasks(emptyMap())
             .setAssignedWarmupTasks(emptyMap())
             .build();
@@ -250,8 +271,8 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(m1);
 
         StreamsGroupMember m2 = new StreamsGroupMember.Builder("m2")
-            .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
+            .setProcessId("process")
+            .setAssignedActiveTasks(mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)))
             .setAssignedStandbyTasks(emptyMap())
             .setAssignedWarmupTasks(emptyMap())
             .build();
@@ -262,54 +283,54 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testRemoveTaskEpochs() {
+    public void testRemoveActiveTaskProcessIds() {
         String fooSubtopologyId = "foo-sub";
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
         // Removing should fail because there is no epoch set.
-        assertThrows(IllegalStateException.class, () -> streamsGroup.removeActiveTaskEpochs(
-            mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
-            10
+        assertThrows(IllegalStateException.class, () -> streamsGroup.removeActiveTaskProcessIds(
+            mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+            "process"
         ));
 
         StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
-            .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)))
+            .setProcessId("process")
+            .setAssignedActiveTasks(mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)))
             .build();
 
         streamsGroup.updateMember(m1);
 
         // Removing should fail because the expected epoch is incorrect.
-        assertThrows(IllegalStateException.class, () -> streamsGroup.removeActiveTaskEpochs(
-            mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
-            11
+        assertThrows(IllegalStateException.class, () -> streamsGroup.removeActiveTaskProcessIds(
+            mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+            "process1"
         ));
     }
 
     @Test
-    public void testAddPartitionEpochs() {
+    public void testAddTaskProcessIds() {
         String fooSubtopologyId = "foo-sub";
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
-        streamsGroup.addTaskEpochs(
-            mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
-            emptyMap(),
-            emptyMap(),
-            10
+        streamsGroup.addTaskProcessId(
+            mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+            mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
+            mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3)),
+            "process"
         );
 
         // Changing the epoch should fail because the owner of the partition
         // should remove it first.
-        assertThrows(IllegalStateException.class, () -> streamsGroup.addTaskEpochs(
-            mkAssignment(mkTaskAssignment(fooSubtopologyId, 1)),
-            emptyMap(),
-            emptyMap(),
-            11
+        assertThrows(IllegalStateException.class, () -> streamsGroup.addTaskProcessId(
+            mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
+            mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
+            mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3)),
+            "process"
         ));
     }
 
     @Test
-    public void testDeletingMemberRemovesPartitionEpoch() {
+    public void testDeletingMemberRemovesProcessId() {
         String fooSubtopology = "foo-sub";
         String barSubtopology = "bar-sub";
         String zarSubtopology = "zar-sub";
@@ -318,40 +339,42 @@ public class StreamsGroupTest {
         StreamsGroupMember member;
 
         member = new StreamsGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setAssignedActiveTasks(mkAssignment(
-                mkTaskAssignment(fooSubtopology, 1, 2, 3)))
-            .setActiveTasksPendingRevocation(mkAssignment(
-                mkTaskAssignment(barSubtopology, 4, 5, 6)))
+            .setProcessId("process")
+            .setAssignedActiveTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 1)))
+            .setAssignedStandbyTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 2)))
+            .setAssignedWarmupTasks(mkTasksPerSubtopology(mkTasks(fooSubtopology, 3)))
+            .setActiveTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 4)))
+            .setStandbyTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 5)))
+            .setWarmupTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(barSubtopology, 6)))
             .build();
 
         streamsGroup.updateMember(member);
 
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 1));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 2));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 3));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(barSubtopology, 4));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(barSubtopology, 5));
-        assertEquals(10, streamsGroup.currentActiveTaskEpoch(barSubtopology, 6));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 7));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 8));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 9));
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
+        assertEquals(Collections.singleton("process"), streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
+        assertEquals(Collections.singleton("process"), streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
+        assertEquals("process", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
+        assertEquals(Collections.singleton("process"), streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
+        assertEquals(Collections.singleton("process"), streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
+        assertEquals(Collections.emptySet(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Collections.emptySet(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
 
         streamsGroup.removeMember(member.memberId());
 
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(barSubtopology, 1));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(barSubtopology, 2));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(barSubtopology, 3));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 4));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 5));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(zarSubtopology, 6));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 7));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 8));
-        assertEquals(-1, streamsGroup.currentActiveTaskEpoch(fooSubtopology, 9));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 1));
+        assertEquals(Collections.emptySet(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 2));
+        assertEquals(Collections.emptySet(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 3));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 3));
+        assertEquals(Collections.emptySet(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 4));
+        assertEquals(Collections.emptySet(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 5));
+        assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
+        assertEquals(Collections.emptySet(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Collections.emptySet(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
     }
 
     @Test
-    public void testWaitingOnUnreleasedTask() {
+    public void testWaitingOnUnreleasedActiveTask() {
         String fooSubtopology = "foo-sub";
         String barSubtopology = "bar-sub";
         String zarSubtopology = "zar-sub";
@@ -361,9 +384,9 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         streamsGroup.updateTargetAssignment(memberId1,
             new Assignment(
-                mkAssignment(
-                    mkTaskAssignment(fooSubtopology, 1, 2, 3),
-                    mkTaskAssignment(zarSubtopology, 7, 8, 9)
+                mkTasksPerSubtopology(
+                    mkTasks(fooSubtopology, 1, 2, 3),
+                    mkTasks(zarSubtopology, 7, 8, 9)
                 ),
                 emptyMap(),
                 emptyMap())
@@ -371,12 +394,13 @@ public class StreamsGroupTest {
 
         StreamsGroupMember member1 = new StreamsGroupMember.Builder(memberId1)
             .setMemberEpoch(10)
+            .setProcessId("process")
             .setState(MemberState.UNRELEASED_TASKS)
-            .setAssignedActiveTasks(mkAssignment(
-                mkTaskAssignment(fooSubtopology, 1, 2, 3)
+            .setAssignedActiveTasks(mkTasksPerSubtopology(
+                mkTasks(fooSubtopology, 1, 2, 3)
             ))
-            .setActiveTasksPendingRevocation(mkAssignment(
-                mkTaskAssignment(barSubtopology, 4, 5, 6)
+            .setActiveTasksPendingRevocation(mkTasksPerSubtopology(
+                mkTasks(barSubtopology, 4, 5, 6)
             ))
             .build();
         streamsGroup.updateMember(member1);
@@ -385,8 +409,8 @@ public class StreamsGroupTest {
 
         StreamsGroupMember member2 = new StreamsGroupMember.Builder(memberId2)
             .setMemberEpoch(10)
-            .setActiveTasksPendingRevocation(mkAssignment(
-                mkTaskAssignment(zarSubtopology, 7)))
+            .setProcessId("process")
+            .setActiveTasksPendingRevocation(mkTasksPerSubtopology(mkTasks(zarSubtopology, 7)))
             .build();
         streamsGroup.updateMember(member2);
 
@@ -482,7 +506,7 @@ public class StreamsGroupTest {
 
         // Initial assignment for member1
         Assignment initialAssignment = new Assignment(
-            mkAssignment(mkTaskAssignment(subtopologyId, 0)),
+            mkTasksPerSubtopology(mkTasks(subtopologyId, 0)),
             emptyMap(),
             emptyMap()
         );
@@ -498,7 +522,7 @@ public class StreamsGroupTest {
 
         // New assignment for member1
         Assignment newAssignment = new Assignment(
-            mkAssignment(mkTaskAssignment(subtopologyId, 1)),
+            mkTasksPerSubtopology(mkTasks(subtopologyId, 1)),
             emptyMap(),
             emptyMap()
         );
@@ -514,7 +538,7 @@ public class StreamsGroupTest {
 
         // New assignment for member2 to add partition 1
         Assignment newAssignment2 = new Assignment(
-            mkAssignment(mkTaskAssignment(subtopologyId, 1)),
+            mkTasksPerSubtopology(mkTasks(subtopologyId, 1)),
             emptyMap(),
             emptyMap()
         );
@@ -530,7 +554,7 @@ public class StreamsGroupTest {
 
         // New assignment for member1 to revoke partition 1 and assign partition 0
         Assignment newAssignment1 = new Assignment(
-            mkAssignment(mkTaskAssignment(subtopologyId, 0)),
+            mkTasksPerSubtopology(mkTasks(subtopologyId, 0)),
             emptyMap(),
             emptyMap()
         );
