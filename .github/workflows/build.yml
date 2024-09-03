@@ -102,7 +102,7 @@ jobs:
         # --continue:     Keep running even if a test fails
         timeout-minutes: 180  # 3 hours
         run: |
-          ./gradlew --info --build-cache --scan --continue \
+          ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
