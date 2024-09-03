@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import java.util.PriorityQueue;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -629,6 +630,19 @@ public class NetworkClientTest {
         clusterClient.ready(node, time.milliseconds());
         assertFalse(clusterClient.isReady(node, time.milliseconds()));
         assertNotEquals(node, clusterClient.leastLoadedNode(time.milliseconds()));
+    }
+
+    @Test
+    public void noLeastLoadedNode() {
+        NetworkClient nc = new NetworkClient(selector, clusterMetadataUpdater, "mock-cluster-md", Integer.MAX_VALUE,
+            0, 0, 64 * 1024, 64 * 1024,
+            defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
+            LeastLoadedNodeAlgorithm.VANILLA, new ArrayList<>());
+        nc.ready(node, time.milliseconds());
+        assertFalse(client.isReady(node, time.milliseconds()));
+        assertThrows(ConfigException.class, () -> nc.leastLoadedNode(time.milliseconds()));
+
+        assertEquals(null, nc.leastLoadedNode(time.milliseconds()));
     }
 
     @Test
