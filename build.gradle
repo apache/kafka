@@ -605,10 +605,6 @@ subprojects {
       }
     }
 
-    finalizedBy("copyJUnitXmlFiles")
-  }
-
-  tasks.register("copyJUnitXmlFiles") {
     doLast {
       def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
       println "Copy JUnit XML for ${project.name} to $dest"
