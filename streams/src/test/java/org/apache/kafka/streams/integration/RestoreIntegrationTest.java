@@ -554,12 +554,12 @@ public class RestoreIntegrationTest {
         final Map<String, Object> kafkaStreams1Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
         final Map<String, Object> kafkaStreams2Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -602,9 +602,12 @@ public class RestoreIntegrationTest {
                              90_000,
                              () -> "kafkaStreams2 never transitioned to a RUNNING state.");
 
+            assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationSuspends());
+
+            assertTrue(kafkaStreams2StateRestoreListener.awaitUntilRestorationStarts());
+
             assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationEnds());
             assertTrue(kafkaStreams2StateRestoreListener.awaitUntilRestorationEnds());
-            assertTrue(kafkaStreams1StateRestoreListener.suspendedCounter.get() > 0);
         }
     }
 
@@ -648,8 +651,8 @@ public class RestoreIntegrationTest {
 
         private final CountDownLatch onRestoreStartLatch = new CountDownLatch(1);
         private final CountDownLatch onRestoreEndLatch = new CountDownLatch(1);
+        private final CountDownLatch onRestoreSuspendedLatch = new CountDownLatch(1);
         private final CountDownLatch onBatchRestoredLatch = new CountDownLatch(1);
-        private final AtomicInteger suspendedCounter = new AtomicInteger(0);
 
         TestStateRestoreListener(final String instanceName, final Duration onBatchRestoredSleepDuration) {
             this.onBatchRestoredSleepDuration = onBatchRestoredSleepDuration;
@@ -658,6 +661,10 @@ public class RestoreIntegrationTest {
 
         boolean awaitUntilRestorationStarts() throws InterruptedException {
             return awaitLatchWithTimeout(onRestoreStartLatch);
+        }
+
+        boolean awaitUntilRestorationSuspends() throws InterruptedException {
+            return awaitLatchWithTimeout(onRestoreSuspendedLatch);
         }
 
         boolean awaitUntilRestorationEnds() throws InterruptedException {
@@ -703,8 +710,8 @@ public class RestoreIntegrationTest {
                                        final String storeName,
                                        final long totalRestored) {
             log.info("[{}] called onRestoreSuspended. topicPartition={}, storeName={}, totalRestored={}",
-                    instanceName, topicPartition, storeName, totalRestored);
-            suspendedCounter.incrementAndGet();
+                     instanceName, topicPartition, storeName, totalRestored);
+            onRestoreSuspendedLatch.countDown();
         }
 
         private static boolean awaitLatchWithTimeout(final CountDownLatch latch) throws InterruptedException {
