@@ -481,9 +481,6 @@ public class TaskManager {
         final Map<Task, Set<TopicPartition>> pendingStandbyTasksToRecycle = assignPendingTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
         final Map<Task, Set<TopicPartition>> pendingStandbyTasksToUse = assignPendingTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
 
-        // if this was the last local thread to receive its assignment, close all the remaining Tasks, as they are not needed
-        stateDirectory.closePendingTasksIfLastAssginedThread();
-
         // recycle the pending standbys to active
         tasks.addStandbyTasks(pendingStandbyTasksToRecycle.keySet());
 
@@ -561,9 +558,6 @@ public class TaskManager {
                                         final Map<TaskId, RuntimeException> failedTasks) {
         final Map<Task, Set<TopicPartition>> pendingStandbyTasksToRecycle = assignPendingTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
         final Map<Task, Set<TopicPartition>> pendingStandbyTasksToUse = assignPendingTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-
-        // if this was the last local thread to receive its assignment, close all the remaining Tasks, as they are not needed
-        stateDirectory.closePendingTasksIfLastAssginedThread();
 
         // recycle the pending standbys to active, and remove them from the set of actives that need to be created
         if (!pendingStandbyTasksToRecycle.isEmpty()) {

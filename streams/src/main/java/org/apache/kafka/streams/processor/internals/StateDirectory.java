@@ -285,42 +285,27 @@ public class StateDirectory implements AutoCloseable {
         return task;
     }
 
-    public void closePendingTasksIfLastAssginedThread() {
-        if (hasPendingTasks() && threadsWithAssignment.incrementAndGet() >= numStreamThreads.get()) {
-            // we need to be careful here, because other StreamThreads may still be assigning tasks (via removePendingTask)
-            // so we first "drain" our Map of all remaining Tasks, and then close all the Tasks we successfully claimed from the Map
-            final Set<Task> tasksToClose = drainPendingTasks();
-            for (final Task task : tasksToClose) {
-                task.closeClean();
-            }
-        }
-    }
-
-    private void closePendingTasks() {
+    public void closePendingTasks() {
         closePendingTasks(t -> true);
     }
 
     private void closePendingTasks(final Predicate<Task> predicate) {
-        final Set<Task> drainedTasks = drainPendingTasks(predicate);
-        for (final Task task : drainedTasks) {
-            task.closeClean();
-        }
-    }
+        if (!tasksForLocalState.isEmpty()) {
+            // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
+            final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
+            for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
+                if (predicate.test(entry.getValue()) && tasksForLocalState.remove(entry.getKey()) != null) {
+                    // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
+                    // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
+                    drainedTasks.add(entry.getValue());
+                }
+            }
 
-    private Set<Task> drainPendingTasks() {
-        return drainPendingTasks(t -> true);
-    }
-
-    private Set<Task> drainPendingTasks(final Predicate<Task> predicate) {
-        final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
-        for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
-            if (predicate.test(entry.getValue()) && tasksForLocalState.remove(entry.getKey()) != null) {
-                // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
-                // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
-                drainedTasks.add(entry.getValue());
+            // now that we have exclusive ownership of the drained tasks, close them
+            for (final Task task : drainedTasks) {
+                task.closeClean();
             }
         }
-        return drainedTasks;
     }
 
     public UUID initializeProcessId() {
