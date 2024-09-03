@@ -122,7 +122,10 @@ public class ReplicationConfigs {
     public static final String UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DOC = "The frequency with which the controller checks if it should perform an unclean leader election for leaderless partitions.";
 
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
-    public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss";
+    public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss" +
+            "<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election " +
+            "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+            "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String INTER_BROKER_PROTOCOL_VERSION_CONFIG = "inter.broker.protocol.version";
     public static final String INTER_BROKER_PROTOCOL_VERSION_DEFAULT = MetadataVersion.latestProduction().version();
