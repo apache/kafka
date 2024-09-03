@@ -50,6 +50,7 @@ import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -336,14 +337,15 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         // topicId -> {partitionId -> responseFuture}
         return combinedFuture.thenApply(v -> {
-            List<WriteShareGroupStateResponseData.WriteStateResult> writeStateResults = new LinkedList<>();
+            long endTime = time.hiResClockMs(); // all futures complete
+            List<WriteShareGroupStateResponseData.WriteStateResult> writeStateResults = new ArrayList<>(futureMap.size());
             futureMap.forEach(
                 (topicId, topicEntry) -> {
-                    List<WriteShareGroupStateResponseData.PartitionResult> partitionResults = new LinkedList<>();
+                    List<WriteShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>(topicEntry.size());
                     topicEntry.forEach(
                         // map of partition id -> responses from api
                         (partitionId, responseFut) -> {
-                            long timeTaken = time.hiResClockMs() - startTime;
+                            long timeTaken = endTime  - startTime;
                             // This is the future returned by runtime.scheduleWriteOperation which returns when the
                             // operation has completed including error information. When this line executes, the future
                             // should be complete as we used CompletableFuture::allOf to get a combined future from
@@ -436,8 +438,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     ),
                     log
                 ));
-                futureMap.computeIfAbsent(topicId, k -> new HashMap<>());
-                futureMap.get(topicId).put(partitionData.partition(), future);
+                futureMap.computeIfAbsent(topicId, k -> new HashMap<>())
+                    .put(partitionData.partition(), future);
             });
         });
 

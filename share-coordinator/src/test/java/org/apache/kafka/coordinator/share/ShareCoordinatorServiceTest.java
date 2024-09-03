@@ -183,7 +183,7 @@ class ShareCoordinatorServiceTest {
                 .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)))));
         assertEquals(expectedResult, result);
-        verify(time, times(3)).hiResClockMs();
+        verify(time, times(2)).hiResClockMs();
         Set<MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
             metrics.metricName("write-latency-avg", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-latency-max", ShareCoordinatorMetrics.METRICS_GROUP),
