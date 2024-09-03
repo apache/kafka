@@ -502,12 +502,10 @@ subprojects {
     }
 
     // Disable reports in some cases
-    reports {
+    /*reports {
       junitXml.required = !userDisableJUnitReports
       html.required = !userDisableJUnitReports
-    }
-
-    outputs.cacheIf { true }
+    }*/
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -589,6 +587,30 @@ subprojects {
     cleanTest {
       delete t.reports.junitXml.outputLocation
       delete t.reports.html.outputLocation
+    }
+
+    afterSuite { desc, result ->
+      if (!desc.parent) {
+        // Only summarize results for whole modules
+        String summary = "${t.project.name}:${t.name} results: ${result.resultType} " +
+                "(" +
+                "${result.testCount} tests, " +
+                "${result.successfulTestCount} successes, " +
+                "${result.failedTestCount} failures, " +
+                "${result.skippedTestCount} skipped" +
+                ") " +
+                "\n" +
+                "Report file: ${t.reports.junitXml.entryPoint}"
+        println summary
+      }
+    }
+
+    doLast {
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${t.project.name}").get().asFile
+      println "Copy XML to $dest"
+      ant.copy(todir: "$dest") {
+        ant.fileset(dir: "${t.reports.junitXml.entryPoint}")
+      }
     }
   }
 
