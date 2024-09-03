@@ -614,6 +614,8 @@ public class MirrorSourceConnector extends SourceConnector {
                                 + sourceAndTarget.target() + "' is not compatible with " +
                                 "IncrementalAlterConfigs " +
                                 "API", e));
+                    }else{
+                        log.warn("Could not alter configuration of topic {}.", k.name(), e);
                     }
                 }));
             return null;
