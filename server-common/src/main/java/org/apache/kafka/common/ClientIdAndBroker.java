@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import java.util.Objects;
-
 /**
  * Convenience case class since (clientId, brokerInfo) pairs are used to create
  * SyncProducer Request Stats and SimpleConsumer Request and Response Stats.
@@ -36,18 +34,5 @@ public class ClientIdAndBroker {
     @Override
     public String toString() {
         return String.format("%s-%s-%d", clientId, brokerHost, brokerPort);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ClientIdAndBroker that = (ClientIdAndBroker) o;
-        return brokerPort == that.brokerPort && Objects.equals(clientId, that.clientId) && Objects.equals(brokerHost, that.brokerHost);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(clientId, brokerHost, brokerPort);
     }
 }
