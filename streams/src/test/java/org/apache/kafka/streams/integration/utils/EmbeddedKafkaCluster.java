@@ -37,6 +37,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
@@ -281,8 +282,11 @@ public class EmbeddedKafkaCluster {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
             TestUtils.waitForCondition(() -> adminClient.listTopics().names().get().contains(topic),
                     "Wait for topic " + topic + " to get created.");
+        } catch (final TopicExistsException ignored) {
         } catch (final InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
+            if (!(e.getCause() instanceof TopicExistsException)) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
