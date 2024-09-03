@@ -88,8 +88,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final AbstractPartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final Map<TopicPartition, Optional<Integer>> consumedLeaderEpochs;
-    private Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata;
+    private Map<TopicPartition, OffsetAndMetadata> nextOffsetsAndMetadataToBeConsumed;
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
@@ -190,7 +189,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
-        consumedLeaderEpochs = new HashMap<>();
         resetOffsetsForPartitions = new HashSet<>();
         partitionsToResume = new HashSet<>();
 
@@ -281,8 +279,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    public void setConsumedOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata) {
-        this.consumedOffsetsAndMetadata = consumedOffsetsAndMetadata;
+    public void setNextOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> nextOffsetsAndMetadataToBeConsumed) {
+        this.nextOffsetsAndMetadataToBeConsumed = nextOffsetsAndMetadataToBeConsumed;
     }
 
     public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
@@ -470,14 +468,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     private OffsetAndMetadata findOffsetAndMetadata(final TopicPartition partition) {
-        Long offset = partitionGroup.headRecordOffset(partition);
+        final Long offset = partitionGroup.headRecordOffset(partition);
         Optional<Integer> leaderEpoch = partitionGroup.headRecordLeaderEpoch(partition);
         final long partitionTime = partitionGroup.partitionTimestamp(partition);
         if (offset == null) {
-            if (consumedOffsetsAndMetadata.containsKey(partition)) {
-                leaderEpoch = consumedOffsetsAndMetadata.get(partition).leaderEpoch();
-            }
-            else {
+            if (nextOffsetsAndMetadataToBeConsumed.containsKey(partition)) {
+                leaderEpoch = nextOffsetsAndMetadataToBeConsumed.get(partition).leaderEpoch();
+            } else {
                 leaderEpoch = Optional.empty();
             }
         }
@@ -784,7 +781,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
-            consumedLeaderEpochs.put(partition, record.leaderEpoch());
             commitNeeded = true;
 
             // after processing this record, if its partition queue's buffered size has been

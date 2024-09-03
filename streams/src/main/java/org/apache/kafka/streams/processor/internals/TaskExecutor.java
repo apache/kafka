@@ -96,7 +96,6 @@ public class TaskExecutor {
         try {
             while (processed < maxNumRecords && task.process(now)) {
                 task.clearTaskTimeout();
-                task.setConsumedOffsetsAndMetadata(taskManager.offsetAndMetadataPerTask().get(task));
                 processed++;
             }
             // TODO: enable regardless of whether using named topologies
@@ -141,14 +140,13 @@ public class TaskExecutor {
      */
     int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<Task> tasksToCommit,
                                                     final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
-
-        final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetAndMetadataPerTask = taskManager.offsetAndMetadataPerTask();
         int committed = 0;
         for (final Task task : tasksToCommit) {
             // we need to call commitNeeded first since we need to update committable offsets
             if (task.commitNeeded()) {
-                if (offsetAndMetadataPerTask.containsKey(task)) {
-                    consumedOffsetsAndMetadata.put(task, offsetAndMetadataPerTask.get(task));
+                final Map<TopicPartition, OffsetAndMetadata> offsetAndMetadata = task.prepareCommit();
+                if (!offsetAndMetadata.isEmpty()) {
+                    consumedOffsetsAndMetadata.put(task, offsetAndMetadata);
                 }
             }
         }
