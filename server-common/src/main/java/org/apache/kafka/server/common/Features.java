@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.common;
 
+import org.apache.kafka.common.feature.SupportedVersionRange;
+
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -41,7 +43,8 @@ public enum Features {
      */
     TEST_VERSION("test.feature.version", TestFeatureVersion.values()),
     KRAFT_VERSION("kraft.version", KRaftVersion.values()),
-    TRANSACTION_VERSION("transaction.version", TransactionVersion.values());
+    TRANSACTION_VERSION("transaction.version", TransactionVersion.values()),
+    GROUP_VERSION("group.version", GroupVersion.values());
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;
@@ -84,6 +87,13 @@ public enum Features {
 
     public short latestTesting() {
         return featureVersions[featureVersions.length - 1].featureLevel();
+    }
+
+    public SupportedVersionRange supportedVersionRange() {
+        return new SupportedVersionRange(
+            minimumProduction(),
+            latestTesting()
+        );
     }
 
     /**

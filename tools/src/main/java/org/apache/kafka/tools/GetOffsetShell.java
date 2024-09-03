@@ -101,18 +101,13 @@ public class GetOffsetShell {
         private final OptionSpec<String> partitionsOpt;
         private final OptionSpec<String> timeOpt;
         private final OptionSpec<String> commandConfigOpt;
-        private final OptionSpec<String> effectiveBrokerListOpt;
+        private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpecBuilder excludeInternalTopicsOpt;
 
         public GetOffsetShellOptions(String[] args) throws TerseException {
             super(args);
 
-            OptionSpec<String> brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
-                    .withRequiredArg()
-                    .describedAs("HOST1:PORT1,...,HOST3:PORT3")
-                    .ofType(String.class);
-            OptionSpec<String> bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
-                    .requiredUnless("broker-list")
+            bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
                     .withRequiredArg()
                     .describedAs("HOST1:PORT1,...,HOST3:PORT3")
                     .ofType(String.class);
@@ -132,7 +127,7 @@ public class GetOffsetShell {
                     .ofType(String.class);
             timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
                     .withRequiredArg()
-                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp")
+                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered")
                     .ofType(String.class)
                     .defaultsTo("latest");
             commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
@@ -151,17 +146,11 @@ public class GetOffsetShell {
                 throw new TerseException(e.getMessage());
             }
 
-            if (options.has(bootstrapServerOpt)) {
-                effectiveBrokerListOpt = bootstrapServerOpt;
-            } else {
-                effectiveBrokerListOpt = brokerListOpt;
-            }
-
             CommandLineUtils.maybePrintHelpOrVersion(this, USAGE_TEXT);
 
-            CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt);
+            CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
-            String brokerList = options.valueOf(effectiveBrokerListOpt);
+            String brokerList = options.valueOf(bootstrapServerOpt);
 
             try {
                 ToolsUtils.validateBootstrapServer(brokerList);
@@ -207,7 +196,7 @@ public class GetOffsetShell {
         }
 
         public String effectiveBrokerListOpt() {
-            return options.valueOf(effectiveBrokerListOpt);
+            return options.valueOf(bootstrapServerOpt);
         }
 
         public boolean hasExcludeInternalTopicsOpt() {
@@ -275,7 +264,8 @@ public class GetOffsetShell {
         }
     }
 
-    private OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) throws TerseException {
+    // visible for tseting
+    static OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) throws TerseException {
         switch (listOffsetsTimestamp) {
             case "earliest":
                 return OffsetSpec.earliest();
@@ -283,6 +273,10 @@ public class GetOffsetShell {
                 return OffsetSpec.latest();
             case "max-timestamp":
                 return OffsetSpec.maxTimestamp();
+            case "earliest-local":
+                return OffsetSpec.earliestLocal();
+            case "latest-tiered":
+                return OffsetSpec.latestTiered();
             default:
                 long timestamp;
 
@@ -290,7 +284,7 @@ public class GetOffsetShell {
                     timestamp = Long.parseLong(listOffsetsTimestamp);
                 } catch (NumberFormatException e) {
                     throw new TerseException("Malformed time argument " + listOffsetsTimestamp + ". " +
-                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp, or a specified long format timestamp");
+                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered, or a specified long format timestamp");
                 }
 
                 if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
@@ -299,6 +293,10 @@ public class GetOffsetShell {
                     return OffsetSpec.latest();
                 } else if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                     return OffsetSpec.maxTimestamp();
+                } else if (timestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
+                    return OffsetSpec.earliestLocal();
+                } else if (timestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
+                    return OffsetSpec.latestTiered();
                 } else {
                     return OffsetSpec.forTimestamp(timestamp);
                 }

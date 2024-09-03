@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.reflections.util.ClasspathHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -32,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -382,8 +384,8 @@ public class PluginUtils {
 
     public static PluginSource classpathPluginSource(ClassLoader classLoader) {
         List<URL> parentUrls = new ArrayList<>();
-        parentUrls.addAll(ClasspathHelper.forJavaClassPath());
-        parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader));
+        parentUrls.addAll(forJavaClassPath());
+        parentUrls.addAll(forClassLoader(classLoader));
         return new PluginSource(null, PluginSource.Type.CLASSPATH, classLoader, parentUrls.toArray(new URL[0]));
     }
 
@@ -453,4 +455,40 @@ public class PluginUtils {
         }
     }
 
+    private static Collection<URL> forJavaClassPath() {
+        Collection<URL> urls = new ArrayList<>();
+        String javaClassPath = System.getProperty("java.class.path");
+        if (javaClassPath != null) {
+            for (String path : javaClassPath.split(File.pathSeparator)) {
+                try {
+                    urls.add(new File(path).toURI().toURL());
+                } catch (Exception e) {
+                    log.debug("Could not get URL", e);
+                }
+            }
+        }
+        return distinctUrls(urls);
+    }
+    
+    private static Collection<URL> forClassLoader(ClassLoader classLoader) {
+        final Collection<URL> result = new ArrayList<>();
+        while (classLoader != null) {
+            if (classLoader instanceof URLClassLoader) {
+                URL[] urls = ((URLClassLoader) classLoader).getURLs();
+                if (urls != null) {
+                    result.addAll(new HashSet<>(Arrays.asList(urls)));
+                }
+            }
+            classLoader = classLoader.getParent();
+        }
+        return distinctUrls(result);
+    }
+    
+    private static Collection<URL> distinctUrls(Collection<URL> urls) {
+        Map<String, URL> distinct = new HashMap<>(urls.size());
+        for (URL url : urls) {
+            distinct.put(url.toExternalForm(), url);
+        }
+        return distinct.values();
+    }
 }

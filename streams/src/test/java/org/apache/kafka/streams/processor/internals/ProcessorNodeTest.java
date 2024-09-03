@@ -60,6 +60,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -100,7 +101,7 @@ public class ProcessorNodeTest {
             new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
 
         final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
-        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL, internalProcessorContext));
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL, internalProcessorContext, false));
 
         final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
             () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
@@ -116,7 +117,7 @@ public class ProcessorNodeTest {
             new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
 
         final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
-        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext));
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext, false));
 
         assertDoesNotThrow(() -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
     }
@@ -144,6 +145,21 @@ public class ProcessorNodeTest {
         assertEquals(ignoredExceptionCause, runtimeException.getCause().getClass());
         assertEquals(ignoredExceptionCauseMessage, runtimeException.getCause().getMessage());
         verify(processingExceptionHandler, never()).handle(any(), any(), any());
+    }
+
+    @Test
+    public void shouldThrowFailedProcessingExceptionWhenProcessingExceptionHandlerThrowsAnException() {
+        final ProcessorNode<Object, Object, Object, Object> node =
+                new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+
+        final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
+        node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE, internalProcessorContext, true));
+
+        final FailedProcessingException failedProcessingException = assertThrows(FailedProcessingException.class,
+            () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
+
+        assertInstanceOf(RuntimeException.class, failedProcessingException.getCause());
+        assertEquals("KABOOM!", failedProcessingException.getCause().getMessage());
     }
 
     private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
@@ -323,10 +339,14 @@ public class ProcessorNodeTest {
         private final ProcessingExceptionHandler.ProcessingHandlerResponse response;
         private final InternalProcessorContext<Object, Object> internalProcessorContext;
 
+        private final boolean shouldThrowException;
+
         public ProcessingExceptionHandlerMock(final ProcessingExceptionHandler.ProcessingHandlerResponse response,
-                                              final InternalProcessorContext<Object, Object> internalProcessorContext) {
+                                              final InternalProcessorContext<Object, Object> internalProcessorContext,
+                                              final boolean shouldThrowException) {
             this.response = response;
             this.internalProcessorContext = internalProcessorContext;
+            this.shouldThrowException = shouldThrowException;
         }
 
         @Override
@@ -338,9 +358,12 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.taskId(), context.taskId());
             assertEquals(KEY, record.key());
             assertEquals(VALUE, record.value());
-            assertTrue(exception instanceof RuntimeException);
+            assertInstanceOf(RuntimeException.class, exception);
             assertEquals("Processing exception should be caught and handled by the processing exception handler.", exception.getMessage());
 
+            if (shouldThrowException) {
+                throw new RuntimeException("KABOOM!");
+            }
             return response;
         }
 

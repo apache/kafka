@@ -19,7 +19,6 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.raft.internals.ReplicaKey;
 
 import org.slf4j.Logger;
 
@@ -39,9 +38,11 @@ import java.util.Set;
  * either through random Fetch requests to the bootstrap servers or through BeginQuorumEpoch
  * request from the leader.
  */
+
 public class UnattachedState implements EpochState {
     private final int epoch;
     private final OptionalInt leaderId;
+    private final Optional<ReplicaKey> votedKey;
     private final Set<Integer> voters;
     private final long electionTimeoutMs;
     private final Timer electionTimer;
@@ -52,6 +53,7 @@ public class UnattachedState implements EpochState {
         Time time,
         int epoch,
         OptionalInt leaderId,
+        Optional<ReplicaKey> votedKey,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         long electionTimeoutMs,
@@ -59,6 +61,7 @@ public class UnattachedState implements EpochState {
     ) {
         this.epoch = epoch;
         this.leaderId = leaderId;
+        this.votedKey = votedKey;
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -68,7 +71,9 @@ public class UnattachedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        if (leaderId.isPresent()) {
+        if (votedKey.isPresent()) {
+            return ElectionState.withVotedCandidate(epoch, votedKey().get(), voters);
+        } else if (leaderId.isPresent()) {
             return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), voters);
         } else {
             return ElectionState.withUnknownLeader(epoch, voters);
@@ -88,6 +93,10 @@ public class UnattachedState implements EpochState {
     @Override
     public String name() {
         return "Unattached";
+    }
+
+    public Optional<ReplicaKey> votedKey() {
+        return votedKey;
     }
 
     public long electionTimeoutMs() {
@@ -111,8 +120,21 @@ public class UnattachedState implements EpochState {
 
     @Override
     public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
-        if (leaderId.isPresent()) {
-            // If the leader id known it should behave similar to the follower state
+        if (votedKey.isPresent()) {
+            ReplicaKey votedReplicaKey = votedKey.get();
+            if (votedReplicaKey.id() == candidateKey.id()) {
+                return !votedReplicaKey.directoryId().isPresent() || votedReplicaKey.directoryId().equals(candidateKey.directoryId());
+            }
+            log.debug(
+                "Rejecting vote request from candidate ({}), already have voted for another " +
+                    "candidate ({}) in epoch {}",
+                candidateKey,
+                votedKey,
+                epoch
+            );
+            return false;
+        } else if (leaderId.isPresent()) {
+            // If the leader id is known it should behave similar to the follower state
             log.debug(
                 "Rejecting vote request from candidate ({}) since we already have a leader {} in epoch {}",
                 candidateKey,
@@ -134,8 +156,10 @@ public class UnattachedState implements EpochState {
     public String toString() {
         return "Unattached(" +
             "epoch=" + epoch +
+            ", votedKey=" + votedKey.map(ReplicaKey::toString).orElse("null") +
             ", voters=" + voters +
             ", electionTimeoutMs=" + electionTimeoutMs +
+            ", highWatermark=" + highWatermark +
             ')';
     }
 

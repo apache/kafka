@@ -114,6 +114,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                             " print.timestamp=true|false\n" +
                             " print.key=true|false\n" +
                             " print.offset=true|false\n" +
+                            " print.epoch=true|false\n" +
                             " print.partition=true|false\n" +
                             " print.headers=true|false\n" +
                             " print.value=true|false\n" +
@@ -367,6 +368,14 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             case "kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter":
                 System.err.println("WARNING: kafka.coordinator.transaction.TransactionLog$TransactionLogMessageFormatter is deprecated and will be removed in the next major release. " +
                         "Please use org.apache.kafka.tools.consumer.TransactionLogMessageFormatter instead");
+                return className;
+            case "kafka.coordinator.group.GroupMetadataManager$OffsetsMessageFormatter":
+                System.err.println("WARNING: kafka.coordinator.group.GroupMetadataManager$OffsetsMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.OffsetsMessageFormatter instead");
+                return className;
+            case "kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter":
+                System.err.println("WARNING: kafka.coordinator.group.GroupMetadataManager$GroupMetadataMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter instead");
                 return className;
             default:
                 return className;

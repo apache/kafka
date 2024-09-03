@@ -99,7 +99,7 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
 
             @Override
             public void process(final Record<K, SubscriptionResponseWrapper<VO>> record) {
-                if (record.value().getVersion() != SubscriptionResponseWrapper.CURRENT_VERSION) {
+                if (record.value().version() != SubscriptionResponseWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionResponseWrapper. Need to ensure that there is
                     //compatibility with previous versions to enable rolling upgrades. Must develop a strategy for
                     //upgrading from older SubscriptionWrapper versions to newer versions.
@@ -111,16 +111,16 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
                     null :
                     Murmur3.hash128(runtimeValueSerializer.serialize(valueHashSerdePseudoTopic, currentValueWithTimestamp.value()));
 
-                final long[] messageHash = record.value().getOriginalValueHash();
+                final long[] messageHash = record.value().originalValueHash();
 
                 //If this value doesn't match the current value from the original table, it is stale and should be discarded.
                 if (java.util.Arrays.equals(messageHash, currentHash)) {
                     final VR result;
 
-                    if (record.value().getForeignValue() == null && (!leftJoin || currentValueWithTimestamp == null)) {
+                    if (record.value().foreignValue() == null && (!leftJoin || currentValueWithTimestamp == null)) {
                         result = null; //Emit tombstone
                     } else {
-                        result = joiner.apply(currentValueWithTimestamp == null ? null : currentValueWithTimestamp.value(), record.value().getForeignValue());
+                        result = joiner.apply(currentValueWithTimestamp == null ? null : currentValueWithTimestamp.value(), record.value().foreignValue());
                     }
                     context().forward(record.withValue(result));
                 } else {

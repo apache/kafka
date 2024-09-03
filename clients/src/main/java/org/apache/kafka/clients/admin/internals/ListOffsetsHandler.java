@@ -93,9 +93,20 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.MAX_TIMESTAMP);
 
-        return ListOffsetsRequest.Builder
-            .forConsumer(true, options.isolationLevel(), supportsMaxTimestamp)
-            .setTargetTimes(new ArrayList<>(topicsByName.values()));
+        boolean requireEarliestLocalTimestamp = keys
+                .stream()
+                .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+
+        boolean requireTieredStorageTimestamp = keys
+            .stream()
+            .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+
+        return ListOffsetsRequest.Builder.forConsumer(true,
+                        options.isolationLevel(),
+                        supportsMaxTimestamp,
+                        requireEarliestLocalTimestamp,
+                        requireTieredStorageTimestamp)
+                .setTargetTimes(new ArrayList<>(topicsByName.values()));
     }
 
     @Override
