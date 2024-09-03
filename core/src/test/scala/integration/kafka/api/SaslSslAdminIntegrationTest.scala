@@ -23,7 +23,7 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation.{ALL, ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE, IDEMPOTENT_WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, TopicConfig}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, DelegationTokenExpiredException, DelegationTokenNotFoundException, InvalidRequestException, TimeoutException, TopicAuthorizationException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, DelegationTokenExpiredException, DelegationTokenNotFoundException, InvalidRequestException, InvalidTimestampException, TimeoutException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
@@ -55,7 +55,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME)
   var superUserAdmin: Admin = _
   val secretKey = "secretKey"
-  val maxLifeTime = 5000
+  val maxLifeTime = Long.MaxValue
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 
@@ -417,14 +417,14 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testCreateDelegationTokenWithLargeTimeout(quorum: String): Unit = {
+  def testCreateDelegationTokenWithSmallerTimeout(quorum: String): Unit = {
     client = createAdminClient
-    val timeout = Long.MaxValue
+    val timeout = 5000
 
     val options = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
     val tokenInfo = client.createDelegationToken(options).delegationToken.get.tokenInfo
 
-    assertEquals(maxLifeTime, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
+    assertEquals(timeout, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
     assertTrue(tokenInfo.maxTimestamp >= tokenInfo.expiryTimestamp)
   }
 
@@ -432,13 +432,13 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   @ValueSource(strings = Array("zk", "kraft"))
   def testExpiredTimeStampLargerThanMaxLifeStamp(quorum: String): Unit = {
     client = createAdminClient
-    val timeout = -1
+    val timeout = 5000
 
     val createOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(timeout)
     val token = client.createDelegationToken(createOptions).delegationToken.get
     val tokenInfo = token.tokenInfo
 
-    assertEquals(maxLifeTime, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
+    assertEquals(timeout, tokenInfo.maxTimestamp - tokenInfo.issueTimestamp)
     assertTrue(tokenInfo.maxTimestamp >= tokenInfo.expiryTimestamp)
 
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens.size == 1),
@@ -642,7 +642,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   @ValueSource(strings = Array("zk", "kraft"))
   def testExpireDelegationToken(quorum: String): Unit = {
     client = createAdminClient
-    val createDelegationTokenOptions = new CreateDelegationTokenOptions()
+    val createDelegationTokenOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(5000)
 
     // Test expiration for non-exists token
     TestUtils.assertFutureExceptionTypeEquals(
@@ -669,6 +669,29 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Test shortening the expiryTimestamp
     val token3 = client.createDelegationToken(createDelegationTokenOptions).delegationToken().get()
     TestUtils.retry(1000) { assertTrue(expireTokenOrFailWithAssert(token3, 200) < token3.tokenInfo().expiryTimestamp()) }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateTokenWithOverflowTimestamp(quorum: String): Unit = {
+    client = createAdminClient
+    TestUtils.assertFutureExceptionTypeEquals(
+      client.createDelegationToken(new CreateDelegationTokenOptions().maxlifeTimeMs(Long.MaxValue)).delegationToken(),
+      classOf[InvalidTimestampException]
+    )
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testExpireTokenWithOverflowTimestamp(quorum: String): Unit = {
+    client = createAdminClient
+    val token = client.createDelegationToken(new CreateDelegationTokenOptions().maxlifeTimeMs(5000)).delegationToken().get()
+    TestUtils.retry(1000) {
+      TestUtils.assertFutureExceptionTypeEquals(
+        client.expireDelegationToken(token.hmac(), new ExpireDelegationTokenOptions().expiryTimePeriodMs(Long.MaxValue)).expiryTimestamp(),
+        classOf[InvalidTimestampException]
+      )
+    }
   }
 
   private def expireTokenOrFailWithAssert(token: DelegationToken, expiryTimePeriodMs: Long): Long  = {
