@@ -40,7 +40,7 @@ public class ListConsumerGroupOffsetsResult {
 
     final Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures;
 
-    public ListConsumerGroupOffsetsResult(final Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
+    ListConsumerGroupOffsetsResult(final Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
         this.futures = futures.entrySet().stream()
                 .collect(Collectors.toMap(e -> e.getKey().idValue, Entry::getValue));
     }

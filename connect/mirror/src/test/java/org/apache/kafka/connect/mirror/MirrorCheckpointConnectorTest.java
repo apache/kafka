@@ -48,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 
 
@@ -159,10 +160,10 @@ public class MirrorCheckpointConnectorTest {
         Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = new HashMap<>();
         futures.put(CoordinatorKey.byGroupId("g1"), KafkaFuture.completedFuture(offsets));
         futures.put(CoordinatorKey.byGroupId("g2"), KafkaFuture.completedFuture(offsets));
-        ListConsumerGroupOffsetsResult offsetsResult = new ListConsumerGroupOffsetsResult(futures);
-        offsetsResult = spy(offsetsResult);
+        ListConsumerGroupOffsetsResult offsetsResult = mock(ListConsumerGroupOffsetsResult.class);
         doReturn(offsetsResult).when(connector).listConsumerGroupOffsets(anyList());
         doReturn(futures.get(CoordinatorKey.byGroupId("g1"))).when(offsetsResult).partitionsToOffsetAndMetadata("g1");
+        doReturn(futures.get(CoordinatorKey.byGroupId("g2"))).when(offsetsResult).partitionsToOffsetAndMetadata("g2");
         Set<String> groupFound = connector.findConsumerGroups();
 
         Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
@@ -206,8 +207,7 @@ public class MirrorCheckpointConnectorTest {
         futures.put(CoordinatorKey.byGroupId("g1"), KafkaFuture.completedFuture(offsetsForGroup1));
         futures.put(CoordinatorKey.byGroupId("g2"), KafkaFuture.completedFuture(offsetsForGroup2));
         futures.put(CoordinatorKey.byGroupId("g3"), KafkaFuture.completedFuture(offsetsForGroup3));
-        ListConsumerGroupOffsetsResult offsetsResult = new ListConsumerGroupOffsetsResult(futures);
-        offsetsResult = spy(offsetsResult);
+        ListConsumerGroupOffsetsResult offsetsResult = mock(ListConsumerGroupOffsetsResult.class);
         doReturn(offsetsResult).when(connector).listConsumerGroupOffsets(Arrays.asList("g1", "g2", "g3"));
         doReturn(futures.get(CoordinatorKey.byGroupId("g1"))).when(offsetsResult).partitionsToOffsetAndMetadata("g1");
         doReturn(futures.get(CoordinatorKey.byGroupId("g2"))).when(offsetsResult).partitionsToOffsetAndMetadata("g2");

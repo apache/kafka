@@ -266,8 +266,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     ListConsumerGroupOffsetsResult listConsumerGroupOffsets(List<String> groups)
             throws InterruptedException, ExecutionException {
+        ListConsumerGroupOffsetsSpec groupOffsetsSpec = new ListConsumerGroupOffsetsSpec();
         Map<String, ListConsumerGroupOffsetsSpec> groupSpecs = groups.stream()
-                .collect(Collectors.toMap(group -> group, group -> new ListConsumerGroupOffsetsSpec()));
+                .collect(Collectors.toMap(group -> group, group -> groupOffsetsSpec));
         return adminCall(
                 () -> sourceAdminClient.listConsumerGroupOffsets(groupSpecs),
                 () -> String.format("list offsets for consumer groups %s on %s cluster", groups, config.sourceClusterAlias())
