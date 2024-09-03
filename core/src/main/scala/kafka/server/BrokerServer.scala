@@ -247,7 +247,7 @@ class BrokerServer(
         retryTimeoutMs = 60000
       )
       clientToControllerChannelManager.start()
-      forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
+      forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
       clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
       val apiVersionManager = ApiVersionManager(
@@ -744,6 +744,9 @@ class BrokerServer(
 
       if (alterPartitionManager != null)
         CoreUtils.swallow(alterPartitionManager.shutdown(), this)
+
+      if (forwardingManager != null)
+        CoreUtils.swallow(forwardingManager.close(), this)
 
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)

@@ -44,15 +44,15 @@ object TransactionCoordinator {
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
 
-    val txnConfig = TransactionConfig(config.transactionalIdExpirationMs,
-      config.transactionMaxTimeoutMs,
-      config.transactionTopicPartitions,
-      config.transactionTopicReplicationFactor,
-      config.transactionTopicSegmentBytes,
-      config.transactionsLoadBufferSize,
-      config.transactionTopicMinISR,
-      config.transactionAbortTimedOutTransactionCleanupIntervalMs,
-      config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
+    val txnConfig = TransactionConfig(config.transactionStateManagerConfig.transactionalIdExpirationMs,
+      config.transactionStateManagerConfig.transactionMaxTimeoutMs,
+      config.transactionLogConfig.transactionTopicPartitions,
+      config.transactionLogConfig.transactionTopicReplicationFactor,
+      config.transactionLogConfig.transactionTopicSegmentBytes,
+      config.transactionLogConfig.transactionsLoadBufferSize,
+      config.transactionLogConfig.transactionTopicMinISR,
+      config.transactionStateManagerConfig.transactionAbortTimedOutTransactionCleanupIntervalMs,
+      config.transactionStateManagerConfig.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
       config.requestTimeoutMs)
 
     val txnStateManager = new TransactionStateManager(config.brokerId, scheduler, replicaManager, metadataCache, txnConfig,

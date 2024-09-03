@@ -158,7 +158,6 @@ import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
-import static org.apache.kafka.controller.ConfigurationControlManagerTest.SCHEMA;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
@@ -191,9 +190,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
@@ -235,9 +231,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
@@ -282,9 +275,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
@@ -374,12 +364,9 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
 
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV0, "test-provided bootstrap ELR enabled")).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -393,7 +380,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_4_0_IV0)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_4_0_IV1)).
                         setIncarnationId(Uuid.randomUuid()).
                         setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                         setListeners(listeners));
@@ -461,7 +448,7 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData().
                     setBrokerId(brokerToUncleanShutdown).
                     setClusterId(active.clusterId()).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_4_0_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_4_0_IV1)).
                     setIncarnationId(Uuid.randomUuid()).
                     setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                     setListeners(listeners)).get();
@@ -474,7 +461,7 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData().
                     setBrokerId(lastKnownElr[0]).
                     setClusterId(active.clusterId()).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_4_0_IV0)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_4_0_IV1)).
                     setIncarnationId(Uuid.randomUuid()).
                     setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                     setListeners(listeners)).get();
@@ -509,9 +496,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setLeaderImbalanceCheckIntervalNs(OptionalLong.of(leaderImbalanceCheckIntervalNs)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
@@ -651,7 +635,6 @@ public class QuorumControllerTest {
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder -> {
-                    controllerBuilder.setConfigSchema(SCHEMA);
                     controllerBuilder.setMaxIdleIntervalNs(OptionalLong.of(maxIdleIntervalNs));
                 }).
                 build()
@@ -697,8 +680,6 @@ public class QuorumControllerTest {
                 setLastKRaftVersion(KRaftVersion.fromFeatureLevel(finalizedKraftVersion)).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
@@ -750,9 +731,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -832,9 +810,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
@@ -1042,9 +1017,6 @@ public class QuorumControllerTest {
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
@@ -1107,9 +1079,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
@@ -1149,9 +1118,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 build()
         ) {
             QuorumController active = controlEnv.activeController();
@@ -1320,9 +1286,6 @@ public class QuorumControllerTest {
                     initialSnapshot.tempDir.toPath(), new OffsetAndEpoch(0, 0))).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setBootstrapMetadata(COMPLEX_BOOTSTRAP).
                 build()
         ) {
@@ -1345,9 +1308,6 @@ public class QuorumControllerTest {
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setConfigSchema(SCHEMA)
-                ).
                 setBootstrapMetadata(COMPLEX_BOOTSTRAP).
                 build()
         ) {

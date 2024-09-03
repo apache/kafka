@@ -365,7 +365,7 @@ class KafkaServer(
         /* start forwarding manager */
         var autoTopicCreationChannel = Option.empty[NodeToControllerChannelManager]
         if (enableForwarding) {
-          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
+          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager, metrics))
           autoTopicCreationChannel = Some(clientToControllerChannelManager)
         }
 
@@ -525,7 +525,7 @@ class KafkaServer(
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(1, true, "transaction-log-manager-"),
           () => producerIdManager, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup(
-          () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
+          () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogConfig.transactionTopicPartitions))
 
         /* start auto topic creation manager */
         this.autoTopicCreationManager = AutoTopicCreationManager(
@@ -1035,6 +1035,9 @@ class KafkaServer(
 
         if (alterPartitionManager != null)
           CoreUtils.swallow(alterPartitionManager.shutdown(), this)
+
+        if (forwardingManager.isDefined)
+          CoreUtils.swallow(forwardingManager.get.close(), this)
 
         if (clientToControllerChannelManager != null)
           CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
