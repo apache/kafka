@@ -19,6 +19,8 @@ package kafka.testkit;
 
 import kafka.server.ServerSocketFactory;
 
+import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -165,11 +167,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
                 socketsEntry.getKey(), Collections.emptySet());
             for (Entry<String, ServerSocketChannel> entry : socketsEntry.getValue().entrySet()) {
                 if (!usedListeners.contains(entry.getKey())) {
-                    try {
-                        entry.getValue().close();
-                    } catch (Exception e) {
-                        LOG.error("Error closing socket", e);
-                    }
+                    Utils.closeQuietly(entry.getValue(), "serverSocketChannel");
                 }
             }
         }

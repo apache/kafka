@@ -100,6 +100,13 @@ public class BootstrapMetadataTest {
     }
 
     @Test
+    public void testFeatureLevelForMetadataVersion() {
+        assertEquals((short) 11, BootstrapMetadata.
+            fromRecords(Arrays.asList(MV_10, MV_11), "src").
+                featureLevel(FEATURE_NAME));
+    }
+
+    @Test
     public void testCopyWithModifiedFeatureRecord() {
         assertEquals(BootstrapMetadata.fromRecords(Arrays.asList(MV_10, FOO_2), "src"),
             BootstrapMetadata.fromRecords(Arrays.asList(MV_10, FOO_1), "src").

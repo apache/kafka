@@ -409,7 +409,7 @@ public class Formatter {
             Map<String, DirectoryType> directoryTypes = new HashMap<>();
             for (String emptyLogDir : ensemble.emptyLogDirs()) {
                 DirectoryType directoryType = DirectoryType.calculate(emptyLogDir,
-                    metadataLogDirectory.orElseGet(() -> ""),
+                    metadataLogDirectory.orElse(""),
                     nodeId,
                     initialControllers);
                 directoryTypes.put(emptyLogDir, directoryType);
