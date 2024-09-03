@@ -962,6 +962,7 @@ private[group] class GroupCoordinator(
           case None =>
             if (generationId < 0) {
               // the group is not relying on Kafka for group management, so allow the commit
+              info(s"Creating simple consumer group $groupId via manual offset commit.")
               val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
               doCommitOffsets(group, memberId, groupInstanceId, generationId, offsetMetadata,
                 responseCallback, requestLocal)
