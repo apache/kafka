@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.query.Position;
@@ -65,14 +64,6 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
     @AfterEach
     public void tearDown() {
         verify(inner).init((StateStoreContext) context, store);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        store.init((ProcessorContext) context, store);
-
-        verify(inner).init((ProcessorContext) context, store);
     }
 
     @Test

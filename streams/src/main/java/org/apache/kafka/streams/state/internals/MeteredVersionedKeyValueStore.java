@@ -267,7 +267,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                             rawResult.getResult(),
                             iteratorDurationSensor,
                             time,
-                            StoreQueryUtils.getDeserializeValue(plainValueSerdes),
+                            StoreQueryUtils.deserializeValue(plainValueSerdes),
                             numOpenIterators,
                             openIterators
                         );
@@ -350,12 +350,6 @@ public class MeteredVersionedKeyValueStore<K, V>
     @Override
     public String name() {
         return internal.name();
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        internal.init(context, root);
     }
 
     @Override

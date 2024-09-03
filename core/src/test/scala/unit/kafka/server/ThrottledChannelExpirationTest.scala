@@ -23,7 +23,7 @@ import java.util.concurrent.DelayQueue
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
-import org.apache.kafka.server.quota.{ThrottleCallback, ThrottledChannel}
+import org.apache.kafka.server.quota.{QuotaType, ThrottleCallback, ThrottledChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -52,7 +52,7 @@ class ThrottledChannelExpirationTest {
 
   @Test
   def testCallbackInvocationAfterExpiration(): Unit = {
-    val clientMetrics = new ClientQuotaManager(new ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time, "")
+    val clientMetrics = new ClientQuotaManager(new ClientQuotaManagerConfig(), metrics, QuotaType.PRODUCE, time, "")
 
     val delayQueue = new DelayQueue[ThrottledChannel]()
     val reaper = new clientMetrics.ThrottledChannelReaper(delayQueue, "")
