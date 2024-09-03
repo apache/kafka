@@ -1053,7 +1053,7 @@ class ReplicaManager(val config: KafkaConfig,
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
-      !config.transactionPartitionVerificationEnable
+      !config.transactionLogConfig.transactionPartitionVerificationEnable
       || addPartitionsToTxnManager.isEmpty
     ) {
       callback((Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard]))

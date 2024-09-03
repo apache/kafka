@@ -240,8 +240,8 @@ class DefaultAutoTopicCreationManager(
       case TRANSACTION_STATE_TOPIC_NAME =>
         new CreatableTopic()
           .setName(topic)
-          .setNumPartitions(config.transactionTopicPartitions)
-          .setReplicationFactor(config.transactionTopicReplicationFactor)
+          .setNumPartitions(config.transactionLogConfig.transactionTopicPartitions)
+          .setReplicationFactor(config.transactionLogConfig.transactionTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(
             txnCoordinator.transactionTopicConfigs))
       case topicName =>

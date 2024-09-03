@@ -308,7 +308,7 @@ class BrokerMetadataPublisher(
     try {
       // Start the transaction coordinator.
       txnCoordinator.startup(() => metadataCache.numPartitions(
-        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
+        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogConfig.transactionTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
     }
