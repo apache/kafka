@@ -126,7 +126,7 @@ public class ApplicationEventProcessorTest {
                 Arguments.of(new PollEvent(100)),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
-                Arguments.of(new CheckPositionsAndMaybeUpdate(500)),
+                Arguments.of(new CheckAndUpdatePositions(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
                 Arguments.of(new AssignmentChangeEvent(12345, 12345, Collections.emptyList())));
     }

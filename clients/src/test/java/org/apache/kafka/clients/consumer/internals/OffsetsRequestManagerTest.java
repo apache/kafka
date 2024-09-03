@@ -106,7 +106,6 @@ public class OffsetsRequestManagerTest {
         LogContext logContext = new LogContext();
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
-        // time = new MockTime(0);
         apiVersions = mock(ApiVersions.class);
         requestManager = new OffsetsRequestManager(
                 subscriptionState,

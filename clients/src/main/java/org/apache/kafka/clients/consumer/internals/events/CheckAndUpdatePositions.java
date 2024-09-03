@@ -27,9 +27,9 @@ import org.apache.kafka.clients.consumer.internals.SubscriptionState;
  * The event completes with a boolean indicating if all assigned partitions have valid fetch positions
  * (based on {@link SubscriptionState#hasAllFetchPositions()}).
  */
-public class CheckPositionsAndMaybeUpdate extends CompletableApplicationEvent<Boolean> {
+public class CheckAndUpdatePositions extends CompletableApplicationEvent<Boolean> {
 
-    public CheckPositionsAndMaybeUpdate(long deadlineMs) {
-        super(Type.UPDATE_FETCH_POSITIONS, deadlineMs);
+    public CheckAndUpdatePositions(long deadlineMs) {
+        super(Type.CHECK_AND_UPDATE_POSITIONS, deadlineMs);
     }
 }
