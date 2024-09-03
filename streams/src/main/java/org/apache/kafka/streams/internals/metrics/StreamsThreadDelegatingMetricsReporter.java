@@ -42,7 +42,7 @@ public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
         this.consumer = Objects.requireNonNull(consumer);
         this.threadId = Objects.requireNonNull(threadId);
         this.stateUpdaterThreadId = Objects.requireNonNull(stateUpdaterThreadId);
-        LOG.info("Creating MetricsReporter for threadId {} and stateUpdaterId {}", threadId, stateUpdaterThreadId);
+        LOG.debug("Creating MetricsReporter for threadId {} and stateUpdaterId {}", threadId, stateUpdaterThreadId);
     }
 
     @Override
@@ -53,7 +53,7 @@ public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
     @Override
     public void metricChange(final KafkaMetric metric) {
         if (tagMatchStreamOrStateUpdaterThreadId(metric)) {
-            LOG.info("Registering metric {}", metric.metricName());
+            LOG.debug("Registering metric {}", metric.metricName());
             consumer.registerMetric(metric);
         }
     }
