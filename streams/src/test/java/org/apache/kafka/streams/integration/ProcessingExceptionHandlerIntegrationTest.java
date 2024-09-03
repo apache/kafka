@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ProcessingExceptionHandlerIntegrationTest {
     private final String threadId = Thread.currentThread().getName();
 
-    private final static Instant TIMESTAMP = Instant.now();
+    private static final Instant TIMESTAMP = Instant.now();
 
     @Test
     public void shouldFailWhenProcessingExceptionOccursIfExceptionHandlerReturnsFail() {
