@@ -57,6 +57,7 @@ public interface AuthorizerData {
      * The host or name string used in ACLs that match any host or name.
      */
     String WILDCARD = "*";
+
     /** The principal entry used in ACLs that match any principal. */
     String WILDCARD_PRINCIPAL = "User:*";
 

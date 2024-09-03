@@ -98,13 +98,36 @@ public abstract class AbstractAuthorizerDataTest {
     }
 
     protected void assertSameAcls(Iterable<StandardAcl> expected, Iterable<AclBinding> actual) {
+        // order of ACLs is not guaranteed so use a hashmap to get them in the same order
         Set<AclBinding> expectedSet = new HashSet<>();
         expected.forEach(acl -> expectedSet.add(acl.toBinding()));
 
         Set<AclBinding> actualSet = new HashSet<>();
         actual.forEach(actualSet::add);
 
-        assertArrayEquals(expectedSet.toArray(), actualSet.toArray());
+        List<String> errMsgs = new ArrayList<>();
+        if (expectedSet.size() != actualSet.size()) {
+            errMsgs.add(format("Wrong number of ACLs returned.  Expected:%s Actual:%s", expectedSet.size(), actualSet.size()));
+        } else {
+            Iterator<AclBinding> expectedIter = expectedSet.iterator();
+            Iterator<AclBinding> actualIter = actualSet.iterator();
+            for (int i = 0; i < expectedSet.size(); i++) {
+                AclBinding expectedElement = expectedIter.next();
+                AclBinding actualElement = actualIter.next();
+
+                if (!expectedElement.equals(actualElement)) {
+                    errMsgs.add(format("Expected: %s but got %s", expectedElement, actualElement));
+                }
+            }
+        }
+        if (!errMsgs.isEmpty()) {
+            errMsgs.add("EXPECTED SET");
+            expectedSet.forEach(e -> errMsgs.add(e.toString()));
+            errMsgs.add("ACTUAL SET");
+            actualSet.forEach(e -> errMsgs.add(e.toString()));
+            fail(format("ACLs do not match%n%s", String.join(System.lineSeparator(), errMsgs)));
+        }
+//        assertArrayEquals(expectedSet.toArray(), actualSet.toArray());
     }
 
     protected <T> void assertSameSet(Iterable<T> expected, Iterable<T> actual, String msg) {
@@ -162,7 +185,7 @@ public abstract class AbstractAuthorizerDataTest {
         data = getAuthorizerData().copyWithNewAcls(acls);
         assertSettings(data, INITIAL_SUPERUSERS, DENIED, acls.values(), INITIAL_MUTATOR);
 
-        // adding a new acl yeidls two results.
+        // adding a new acl yields two results.
         entry = iter.next();
         acls.put(entry.getKey(), entry.getValue());
         data = getAuthorizerData().copyWithNewAcls(acls);
@@ -170,9 +193,9 @@ public abstract class AbstractAuthorizerDataTest {
 
         // test that updating a populated AuthorizerData does not change things unexpectedly
         acls.clear();
-        StandardAclWithId aclWithId = AuthorizerTestUtils.withId(new StandardAcl(ResourceType.USER, "foo_", PREFIXED, "User:bob", WILDCARD, AclOperation.CREATE, ALLOW));
+        StandardAclWithId aclWithId = AuthorizerTestUtils.withId(new StandardAcl(ResourceType.USER, "foo_", PREFIXED, "User:alice", WILDCARD, AclOperation.CREATE, ALLOW));
         acls.put(aclWithId.id(), aclWithId.acl());
-        aclWithId = AuthorizerTestUtils.withId(new StandardAcl(ResourceType.TRANSACTIONAL_ID, "foo_", PREFIXED, "User:bob", WILDCARD, AclOperation.CREATE, ALLOW));
+        aclWithId = AuthorizerTestUtils.withId(new StandardAcl(ResourceType.TRANSACTIONAL_ID, "foo_", PREFIXED, "User:alice", WILDCARD, AclOperation.CREATE, ALLOW));
         acls.put(aclWithId.id(), aclWithId.acl());
         data = dataWithAllValuesSet().copyWithNewAcls(acls);
 
@@ -752,6 +775,22 @@ public abstract class AbstractAuthorizerDataTest {
             }
         }
 
+        /* wildcard host */
+        builder.clearAcls();
+        builder.addAcl(new StandardAcl(TOPIC, "topic", LITERAL, "User:alice", "*", READ, ALLOW));
+        principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice");
+        lst.add(getTest(ALLOWED, "Wildcard ACL host", builder, principal, "localhost", READ, TOPIC));
+
+        /* wildcard USER principal */
+        builder.clearAcls();
+        builder.addAcl(new StandardAcl(TOPIC, "topic", LITERAL, WILDCARD_PRINCIPAL, "localhost", READ, ALLOW));
+        principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice");
+        lst.add(getTest(ALLOWED, "Wildcard ACL USER principal", builder, principal, "localhost", READ, TOPIC));
+
+        builder.clearAcls();
+        builder.addAcl(new StandardAcl(TOPIC, "topic", LITERAL, WILDCARD, "localhost", READ, ALLOW));
+        principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice");
+        lst.add(getTest(ALLOWED, "Wildcard ACL principal", builder, principal, "localhost", READ, TOPIC));
         return lst;
     }
 }

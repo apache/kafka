@@ -378,20 +378,25 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         return aclCache.acls(filter::matches);
     }
 
-    private Predicate<AccessControlEntry> buildResourceTypeFilter(final String principal, final String host, final AclOperation operation) {
-        Predicate<AccessControlEntry> debug = ace -> {
-            System.out.println(ace);
-            return true;
-        };
+    private Predicate<AccessControlEntry> buildResourceTypeFilter(final KafkaPrincipal principal, final String host, final AclOperation operation) {
 
-        Predicate<AccessControlEntry> filter = debug.and(ace -> ace.operation() == operation || ace.operation() == ALL);
+        Predicate<AccessControlEntry> filter = ace -> ace.operation() == operation || ace.operation() == ALL;
 
         if (principal != null) {
-            filter = filter.and(ace -> principal.equals(ace.principal()));
+            filter = filter.and(ace -> principal.toString().equals(ace.principal()) || ace.principal().equals(principal.getPrincipalType() + ":*") || ace.principal().equals(WILDCARD));
         }
 
         if (host != null) {
-            filter = filter.and(ace -> host.equals(ace.host()));
+            filter = filter.and(ace -> host.equals(ace.host()) || ace.host().equals(WILDCARD));
+        }
+
+        if (log.isDebugEnabled()) {
+            final Predicate<AccessControlEntry> f = filter;
+            filter = ace -> {
+                boolean result = f.test(ace);
+                log.debug("p:{} h:{} o:{} -> {} -> {}", principal, host, operation, ace, result);
+                return result;
+            };
         }
         return filter;
     }
@@ -413,10 +418,21 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         Predicate<AclBinding> aclFilter = new AclBindingFilter(
                 resourceTypeFilter, AccessControlEntryFilter.ANY)::matches;
 
-        Predicate<AccessControlEntry> aceFilter = buildResourceTypeFilter(principal == null ? null : principal.toString(), hostAddr, operation);
+        Predicate<AccessControlEntry> aceFilter = buildResourceTypeFilter(principal, hostAddr, operation);
+
         aclFilter = aclFilter.and(binding -> aceFilter.test(binding.entry()));
 
-
+        if (log.isDebugEnabled()) {
+            final Predicate<AclBinding> inner = aclFilter;
+            aclFilter = new Predicate<AclBinding>() {
+                @Override
+                public boolean test(AclBinding aclBinding) {
+                    boolean result = inner.test(aclBinding);
+                    log.debug("authorizeByResourceType: {} -> {}}", aclBinding, result);
+                    return result;
+                }
+            };
+        }
 
         EnumMap<PatternType, NavigableSet<String>> denyPatterns =
                 new EnumMap<PatternType, NavigableSet<String>>(PatternType.class) {{
@@ -433,7 +449,6 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         boolean hasWildCardAllow = false;
 
         for (AclBinding binding : aclCache.acls(aclFilter)) {
-
             switch (binding.entry().permissionType()) {
                 case DENY:
                     switch (binding.pattern().patternType()) {
