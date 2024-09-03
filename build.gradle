@@ -605,11 +605,15 @@ subprojects {
       }
     }
 
+    finalizedBy("copyJUnitXmlFiles")
+  }
+
+  tasks.register("copyJUnitXmlFiles") {
     doLast {
-      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${t.project.name}").get().asFile
-      println "Copy XML to $dest"
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+      println "Copy JUnit XML for ${project.name} to $dest"
       ant.copy(todir: "$dest") {
-        ant.fileset(dir: "${t.reports.junitXml.entryPoint}")
+        ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
       }
     }
   }
