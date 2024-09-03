@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils._
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.metrics.RequestMetrics
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfigs
@@ -316,11 +317,11 @@ class SocketServerTest {
     val clientVersion = AppInfoParser.getVersion
 
     def deprecatedRequestsPerSec(requestVersion: Short): Option[Long] =
-      TestUtils.meterCountOpt(s"${RequestMetrics.DeprecatedRequestsPerSec},request=Produce,version=$requestVersion," +
+      TestUtils.meterCountOpt(s"${RequestMetrics.DEPRECATED_REQUESTS_PER_SEC},request=Produce,version=$requestVersion," +
         s"clientSoftwareName=$clientName,clientSoftwareVersion=$clientVersion")
 
     def requestsPerSec(requestVersion: Short): Option[Long] =
-      TestUtils.meterCountOpt(s"${RequestMetrics.RequestsPerSec},request=Produce,version=$requestVersion")
+      TestUtils.meterCountOpt(s"${RequestMetrics.REQUESTS_PER_SEC},request=Produce,version=$requestVersion")
 
     val plainSocket = connect()
     val address = plainSocket.getLocalAddress

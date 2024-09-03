@@ -54,6 +54,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
@@ -1853,7 +1854,7 @@ object TestUtils extends Logging {
   def buildEnvelopeRequest(
     request: AbstractRequest,
     principalSerde: KafkaPrincipalSerde,
-    requestChannelMetrics: RequestChannel.Metrics,
+    requestChannelMetrics: RequestChannelMetrics,
     startTimeNanos: Long,
     dequeueTimeNanos: Long = -1,
     fromPrivilegedListener: Boolean = true
