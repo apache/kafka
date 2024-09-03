@@ -59,7 +59,7 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEven
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
-import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositions;
+import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
@@ -1586,9 +1586,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private boolean updateFetchPositions(final Timer timer) {
         cachedSubscriptionHasAllFetchPositions = false;
         try {
-            CheckAndUpdatePositions checkAndUpdatePositions = new CheckAndUpdatePositions(calculateDeadlineMs(timer));
-            wakeupTrigger.setActiveTask(checkAndUpdatePositions.future());
-            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(checkAndUpdatePositions);
+            CheckAndUpdatePositionsEvent checkAndUpdatePositionsEvent = new CheckAndUpdatePositionsEvent(calculateDeadlineMs(timer));
+            wakeupTrigger.setActiveTask(checkAndUpdatePositionsEvent.future());
+            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(checkAndUpdatePositionsEvent);
         } catch (TimeoutException e) {
             return false;
         } finally {
