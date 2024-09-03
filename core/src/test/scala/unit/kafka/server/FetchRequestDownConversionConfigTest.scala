@@ -18,7 +18,6 @@ package kafka.server
 
 import java.util
 import java.util.{Optional, Properties}
-import kafka.network.RequestMetrics.{MessageConversionsTimeMs, TemporaryMemoryBytes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
@@ -27,6 +26,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.network.metrics.RequestMetrics
 import org.apache.kafka.server.config.ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
@@ -167,8 +167,8 @@ class FetchRequestDownConversionConfigTest extends BaseRequestTest {
 
   def testV1Fetch(isFollowerFetch: Boolean): Unit = {
     val fetchRequest = "request=Fetch"
-    val fetchTemporaryMemoryBytesMetricName = s"$TemporaryMemoryBytes,$fetchRequest"
-    val fetchMessageConversionsTimeMsMetricName = s"$MessageConversionsTimeMs,$fetchRequest"
+    val fetchTemporaryMemoryBytesMetricName = s"${RequestMetrics.TEMPORARY_MEMORY_BYTES},$fetchRequest"
+    val fetchMessageConversionsTimeMsMetricName = s"${RequestMetrics.MESSAGE_CONVERSIONS_TIME_MS},$fetchRequest"
     val initialFetchMessageConversionsPerSec = TestUtils.metersCount(BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC)
     val initialFetchMessageConversionsTimeMs = TestUtils.metersCount(fetchMessageConversionsTimeMsMetricName)
     val initialFetchTemporaryMemoryBytes = TestUtils.metersCount(fetchTemporaryMemoryBytesMetricName)

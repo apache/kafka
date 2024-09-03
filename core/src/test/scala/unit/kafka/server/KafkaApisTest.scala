@@ -21,7 +21,7 @@ import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.UnifiedLog
-import kafka.network.{RequestChannel, RequestMetrics}
+import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
 import kafka.server.share.SharePartitionManager
@@ -78,6 +78,7 @@ import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERV
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.ClientMetricsManager
@@ -113,7 +114,7 @@ import scala.jdk.CollectionConverters._
 
 class KafkaApisTest extends Logging {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
-  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+  private val requestChannelMetrics: RequestChannelMetrics = mock(classOf[RequestChannelMetrics])
   private val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
   private val groupCoordinator: GroupCoordinator = mock(classOf[GroupCoordinator])
   private val adminManager: ZkAdminManager = mock(classOf[ZkAdminManager])
@@ -2441,7 +2442,7 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.ADD_PARTITIONS_TO_TXN)
   def testHandleAddPartitionsToTxnAuthorizationFailedAndMetrics(version: Short): Unit = {
-    val requestMetrics = new RequestChannel.Metrics(Seq(ApiKeys.ADD_PARTITIONS_TO_TXN))
+    val requestMetrics = new RequestChannelMetrics(Collections.singleton(ApiKeys.ADD_PARTITIONS_TO_TXN))
     try {
       val topic = "topic"
 
@@ -2493,7 +2494,7 @@ class KafkaApisTest extends Logging {
       val expectedError = if (version < 4) Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED else Errors.CLUSTER_AUTHORIZATION_FAILED
       assertEquals(expectedError, error)
 
-      val metricName = if (version < 4) ApiKeys.ADD_PARTITIONS_TO_TXN.name else RequestMetrics.verifyPartitionsInTxnMetricName
+      val metricName = if (version < 4) ApiKeys.ADD_PARTITIONS_TO_TXN.name else RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME
       assertEquals(8, TestUtils.metersCount(metricName))
     } finally {
       requestMetrics.close()
@@ -10213,7 +10214,7 @@ class KafkaApisTest extends Logging {
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None,
-                           requestMetrics: RequestChannel.Metrics = requestChannelMetrics): RequestChannel.Request = {
+                           requestMetrics: RequestChannelMetrics = requestChannelMetrics): RequestChannel.Request = {
     val buffer = request.serializeWithHeader(
       requestHeader.getOrElse(new RequestHeader(request.apiKey, request.version, clientId, 0)))
 
