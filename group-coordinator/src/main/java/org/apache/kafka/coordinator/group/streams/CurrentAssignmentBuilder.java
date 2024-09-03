@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,6 +28,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.stream.Collectors;
 
 /**
  * The CurrentAssignmentBuilder class encapsulates the reconciliation engine of the streams group protocol. Given the current state of a
@@ -50,23 +53,35 @@ public class CurrentAssignmentBuilder {
     private Assignment targetAssignment;
 
     /**
-     * A function which returns the current epoch of a topic-partition or -1 if the topic-partition is not assigned. The current epoch is
-     * the epoch of the current owner.
+     * A function which returns the current process ID of an active task or null if the active task
+     * is not assigned. The current process ID is the process ID of the current owner.
      */
-    private BiFunction<String, Integer, Integer> currentTaskEpoch;
+    private BiFunction<String, Integer, String> currentActiveTaskProcessId;
 
     /**
-     * The active tasks owned by the streams. This is directly provided by the member in the StreamsGroupHeartbeat request.
+     * A function which returns the current process IDs of a standby task or null if the standby
+     * task is not assigned. The current process IDs are the process IDs of all current owners.
+     */
+    private BiFunction<String, Integer, Set<String>> currentStandbyTaskProcessIds;
+
+    /**
+     * A function which returns the current process IDs of a warmup task or null if the warmup task
+     * is not assigned. The current process IDs are the process IDs of all current owners.
+     */
+    private BiFunction<String, Integer, Set<String>> currentWarmupTaskProcessIds;
+
+    /**
+     * The active tasks owned by the member. This is directly provided by the member in the StreamsGroupHeartbeat request.
      */
     private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks;
 
     /**
-     * The standby tasks owned by the streams. This is directly provided by the member in the StreamsGroupHeartbeat request.
+     * The standby tasks owned by the member. This is directly provided by the member in the StreamsGroupHeartbeat request.
      */
     private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks;
 
     /**
-     * The warmup tasks owned by the streams. This is directly provided by the member in the StreamsGroupHeartbeat request.
+     * The warmup tasks owned by the member. This is directly provided by the member in the StreamsGroupHeartbeat request.
      */
     private List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks;
 
@@ -96,16 +111,77 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Sets a BiFunction which allows to retrieve the current epoch of a partition. This is used by the state machine to determine if a
-     * partition is free or still used by another member.
+     * Sets a BiFunction which allows to retrieve the current process ID of an active task. This is
+     * used by the state machine to determine if an active task is free or still used by another
+     * member, and if there is still a task on a specific process that is not yet revoked.
      *
-     * @param currentTaskEpoch A BiFunction which gets the epoch of a topic id / tasks id pair.
+     * @param currentActiveTaskProcessId A BiFunction which gets the memberId of a subtopology id /
+     *                                   partition id pair.
      * @return This object.
      */
-    public CurrentAssignmentBuilder withCurrentActiveTaskEpoch(
-        BiFunction<String, Integer, Integer> currentTaskEpoch
+    public CurrentAssignmentBuilder withCurrentActiveTaskProcessId(
+        BiFunction<String, Integer, String> currentActiveTaskProcessId
     ) {
-        this.currentTaskEpoch = Objects.requireNonNull(currentTaskEpoch);
+        this.currentActiveTaskProcessId = Objects.requireNonNull(currentActiveTaskProcessId);
+        return this;
+    }
+
+    /**
+     * Sets a BiFunction which allows to retrieve the current process IDs of a standby task. This is
+     * used by the state machine to determine if there is still a task on a specific process that is
+     * not yet revoked.
+     *
+     * @param currentStandbyTaskProcessIds A BiFunction which gets the memberIds of a subtopology
+     *                                     ids / partition ids pair.
+     * @return This object.
+     */
+    public CurrentAssignmentBuilder withCurrentStandbyTaskProcessIds(
+        BiFunction<String, Integer, Set<String>> currentStandbyTaskProcessIds
+    ) {
+        this.currentStandbyTaskProcessIds = Objects.requireNonNull(currentStandbyTaskProcessIds);
+        return this;
+    }
+
+    /**
+     * Sets a BiFunction which allows to retrieve the current process IDs of a warmup task. This is
+     * used by the state machine to determine if there is still a task on a specific process that is
+     * not yet revoked.
+     *
+     * @param currentWarmupTaskProcessIds A BiFunction which gets the memberIds of a subtopology ids
+     *                                    / partition ids pair.
+     * @return This object.
+     */
+    public CurrentAssignmentBuilder withCurrentWarmupTaskProcessIds(
+        BiFunction<String, Integer, Set<String>> currentWarmupTaskProcessIds
+    ) {
+        this.currentWarmupTaskProcessIds = Objects.requireNonNull(currentWarmupTaskProcessIds);
+        return this;
+    }
+
+    protected CurrentAssignmentBuilder withOwnedAssignment(
+        Assignment ownedAssignment
+    ) {
+        if (ownedAssignment == null) {
+            this.ownedActiveTasks = null;
+            this.ownedStandbyTasks = null;
+            this.ownedWarmupTasks = null;
+        } else {
+            this.ownedActiveTasks = ownedAssignment.activeTasks().entrySet().stream()
+                .map(activeTaskIds -> new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopology(activeTaskIds.getKey())
+                    .setPartitions(new ArrayList<>(activeTaskIds.getValue())))
+                .collect(Collectors.toList());
+            this.ownedStandbyTasks = ownedAssignment.standbyTasks().entrySet().stream()
+                .map(standbyTaskIds -> new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopology(standbyTaskIds.getKey())
+                    .setPartitions(new ArrayList<>(standbyTaskIds.getValue())))
+                .collect(Collectors.toList());
+            this.ownedWarmupTasks = ownedAssignment.warmupTasks().entrySet().stream()
+                .map(warmupTaskIds -> new StreamsGroupHeartbeatRequestData.TaskIds()
+                    .setSubtopology(warmupTaskIds.getKey())
+                    .setPartitions(new ArrayList<>(warmupTaskIds.getValue())))
+                .collect(Collectors.toList());
+        }
         return this;
     }
 
@@ -182,7 +258,12 @@ public class CurrentAssignmentBuilder {
 
                 // If the member provides its owned tasks. We verify if it still
                 // owns any of the revoked tasks. If it does, we cannot progress.
-                if (ownsRevokedActiveTasks(member.activeTasksPendingRevocation())) {
+                if (
+                    ownRevokedTasks(member.activeTasksPendingRevocation(), ownedActiveTasks)
+                        || ownRevokedTasks(member.standbyTasksPendingRevocation(),
+                        ownedStandbyTasks)
+                        || ownRevokedTasks(member.warmupTasksPendingRevocation(), ownedWarmupTasks)
+                ) {
                     return member;
                 }
 
@@ -212,9 +293,12 @@ public class CurrentAssignmentBuilder {
                 // future and the group coordinator is downgraded. In this case, the
                 // best option is to fence the member to force it to rejoin the group
                 // without any tasks and to reconcile it again from scratch.
-                if (ownedActiveTasks == null || !ownedActiveTasks.isEmpty()) {
-                    throw new FencedMemberEpochException("The streams group member is in a unknown state. "
-                        + "The member must abandon all its tasks and rejoin.");
+                if ((ownedActiveTasks == null || !ownedActiveTasks.isEmpty())
+                    || (ownedStandbyTasks == null || !ownedStandbyTasks.isEmpty())
+                    || (ownedWarmupTasks == null || !ownedWarmupTasks.isEmpty())) {
+                    throw new FencedMemberEpochException(
+                        "The streams group member is in a unknown state. "
+                            + "The member must abandon all its tasks and rejoin.");
                 }
 
                 return computeNextAssignment(
@@ -229,23 +313,25 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
-     * Decides whether the current ownedActiveTasks contains any partition that is pending revocation.
+     * Decides whether the given owned tasks contains any partition that is pending revocation.
      *
      * @param assignment The assignment that has the tasks pending revocation.
+     * @param ownedTasks The set of tasks from the response.
      * @return A boolean based on the condition mentioned above.
      */
-    private boolean ownsRevokedActiveTasks(
-        Map<String, Set<Integer>> assignment
+    private static boolean ownRevokedTasks(
+        Map<String, Set<Integer>> assignment,
+        List<StreamsGroupHeartbeatRequestData.TaskIds> ownedTasks
     ) {
-        if (ownedActiveTasks == null) {
+        if (ownedTasks == null) {
             return true;
         }
 
-        for (StreamsGroupHeartbeatRequestData.TaskIds activeTasks : ownedActiveTasks) {
+        for (StreamsGroupHeartbeatRequestData.TaskIds owned : ownedTasks) {
             Set<Integer> tasksPendingRevocation =
-                assignment.getOrDefault(activeTasks.subtopology(), Collections.emptySet());
+                assignment.getOrDefault(owned.subtopology(), Collections.emptySet());
 
-            for (Integer partitionId : activeTasks.partitions()) {
+            for (Integer partitionId : owned.partitions()) {
                 if (tasksPendingRevocation.contains(partitionId)) {
                     return true;
                 }
@@ -256,10 +342,75 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
+     * Takes the current currentAssignment and the targetAssignment, and generates three
+     * collections:
+     *
+     * - the resultAssignedTasks: the tasks that are assigned in both the current and target
+     * assignments.
+     * - the resultTasksPendingRevocation: the tasks that are assigned in the current
+     * assignment but not in the target assignment.
+     * - the resultTasksPendingAssignment: the tasks that are assigned in the target assignment but
+     * not in the current assignment, and can be assigned currently (i.e., they are not owned by
+     * another member, as defined by the `isUnreleasedTask` predicate).
+     */
+    private boolean computeAssignmentDifference(
+        Map<String, Set<Integer>> currentAssignment,
+        Map<String, Set<Integer>> targetAssignment,
+        Map<String, Set<Integer>> resultAssignedTasks,
+        Map<String, Set<Integer>> resultTasksPendingRevocation,
+        Map<String, Set<Integer>> resultTasksPendingAssignment,
+        BiPredicate<String, Integer> isUnreleasedTask
+    ) {
+        boolean hasUnreleasedTasks = false;
+
+        Set<String> allSubtopologyIds = new HashSet<>(targetAssignment.keySet());
+        allSubtopologyIds.addAll(currentAssignment.keySet());
+
+        for (String subtopologyId : allSubtopologyIds) {
+            Set<Integer> currentPartitions = currentAssignment.getOrDefault(subtopologyId, Collections.emptySet());
+            Set<Integer> targetPartitions = targetAssignment.getOrDefault(subtopologyId, Collections.emptySet());
+
+            // Result Assigned Partitions = Current Partitions ∩ Target Partitions
+            // i.e. we remove all partitions from the current assignment that are not in the target
+            //         assignment
+            Set<Integer> resultAssignedPartitions = new HashSet<>(currentPartitions);
+            resultAssignedPartitions.retainAll(targetPartitions);
+
+            // Result Partitions Pending Revocation = Current Partitions - Result Assigned Partitions
+            // i.e. we will ask the member to revoke all partitions in its current assignment that
+            //      are not in the target assignment
+            Set<Integer> resultPartitionsPendingRevocation = new HashSet<>(currentPartitions);
+            resultPartitionsPendingRevocation.removeAll(resultAssignedPartitions);
+
+            // Result Partitions Pending Assignment = Target Partitions - Result Assigned Partitions - Unreleased Partitions
+            // i.e. we will ask the member to assign all partitions in its target assignment,
+            //      except those that are already assigned, and those that are unrelead
+            Set<Integer> resultPartitionsPendingAssignment = new HashSet<>(targetPartitions);
+            resultPartitionsPendingAssignment.removeAll(resultAssignedPartitions);
+            hasUnreleasedTasks = resultPartitionsPendingAssignment.removeIf(partitionId ->
+                isUnreleasedTask.test(subtopologyId, partitionId)
+            ) || hasUnreleasedTasks;
+
+            if (!resultAssignedPartitions.isEmpty()) {
+                resultAssignedTasks.put(subtopologyId, resultAssignedPartitions);
+            }
+
+            if (!resultPartitionsPendingRevocation.isEmpty()) {
+                resultTasksPendingRevocation.put(subtopologyId, resultPartitionsPendingRevocation);
+            }
+
+            if (!resultPartitionsPendingAssignment.isEmpty()) {
+                resultTasksPendingAssignment.put(subtopologyId, resultPartitionsPendingAssignment);
+            }
+        }
+        return hasUnreleasedTasks;
+    }
+
+    /**
      * Computes the next assignment.
      *
-     * @param memberEpoch                The epoch of the member to use. This may be different from the epoch in
-     *                                   {@link CurrentAssignmentBuilder#member}.
+     * @param memberEpoch                The epoch of the member to use. This may be different from
+     *                                   the epoch in {@link CurrentAssignmentBuilder#member}.
      * @param memberAssignedActiveTasks  The assigned active tasks of the member to use.
      * @param memberAssignedStandbyTasks The assigned standby tasks of the member to use.
      * @param memberAssignedWarmupTasks  The assigned warmup tasks of the member to use.
@@ -271,92 +422,150 @@ public class CurrentAssignmentBuilder {
         Map<String, Set<Integer>> memberAssignedStandbyTasks,
         Map<String, Set<Integer>> memberAssignedWarmupTasks
     ) {
-        boolean hasUnreleasedTasks = false;
-        Map<String, Set<Integer>> newAssignedTasks = new HashMap<>();
-        Map<String, Set<Integer>> newTasksPendingRevocation = new HashMap<>();
-        Map<String, Set<Integer>> newTasksPendingAssignment = new HashMap<>();
+        Map<String, Set<Integer>> newActiveAssignedTasks = new HashMap<>();
+        Map<String, Set<Integer>> newActiveTasksPendingRevocation = new HashMap<>();
+        Map<String, Set<Integer>> newActiveTasksPendingAssignment = new HashMap<>();
+        Map<String, Set<Integer>> newStandbyAssignedTasks = new HashMap<>();
+        Map<String, Set<Integer>> newStandbyTasksPendingRevocation = new HashMap<>();
+        Map<String, Set<Integer>> newStandbyTasksPendingAssignment = new HashMap<>();
+        Map<String, Set<Integer>> newWarmupAssignedTasks = new HashMap<>();
+        Map<String, Set<Integer>> newWarmupTasksPendingRevocation = new HashMap<>();
+        Map<String, Set<Integer>> newWarmupTasksPendingAssignment = new HashMap<>();
 
-        Set<String> allSubtopologyIds = new HashSet<>(targetAssignment.activeTasks().keySet());
-        allSubtopologyIds.addAll(memberAssignedActiveTasks.keySet());
+        boolean hasUnreleasedTasks = computeAssignmentDifference(
+            memberAssignedActiveTasks,
+            targetAssignment.activeTasks(),
+            newActiveAssignedTasks,
+            newActiveTasksPendingRevocation,
+            newActiveTasksPendingAssignment,
+            (subtopologyId, partitionId) ->
+                currentActiveTaskProcessId.apply(subtopologyId, partitionId) != null ||
+                    currentStandbyTaskProcessIds.apply(subtopologyId, partitionId)
+                        .contains(member.processId()) ||
+                    currentWarmupTaskProcessIds.apply(subtopologyId, partitionId)
+                        .contains(member.processId())
+        );
 
-        for (String subtopologyId : allSubtopologyIds) {
-            Set<Integer> target = targetAssignment.activeTasks()
-                .getOrDefault(subtopologyId, Collections.emptySet());
-            Set<Integer> currentAssignedTasks = memberAssignedActiveTasks
-                .getOrDefault(subtopologyId, Collections.emptySet());
+        hasUnreleasedTasks = computeAssignmentDifference(
+            memberAssignedStandbyTasks,
+            targetAssignment.standbyTasks(),
+            newStandbyAssignedTasks,
+            newStandbyTasksPendingRevocation,
+            newStandbyTasksPendingAssignment,
+            (subtopologyId, partitionId) ->
+                Objects.equals(currentActiveTaskProcessId.apply(subtopologyId, partitionId),
+                    member.processId()) ||
+                    currentStandbyTaskProcessIds.apply(subtopologyId, partitionId)
+                        .contains(member.processId()) ||
+                    currentWarmupTaskProcessIds.apply(subtopologyId, partitionId)
+                        .contains(member.processId())
+        ) || hasUnreleasedTasks;
 
-            // New Assigned Tasks = Previous Assigned Tasks ∩ Target
-            Set<Integer> assignedTasks = new HashSet<>(currentAssignedTasks);
-            assignedTasks.retainAll(target);
+        hasUnreleasedTasks = computeAssignmentDifference(
+            memberAssignedWarmupTasks,
+            targetAssignment.warmupTasks(),
+            newWarmupAssignedTasks,
+            newWarmupTasksPendingRevocation,
+            newWarmupTasksPendingAssignment,
+            (subtopologyId, partitionId) ->
+                Objects.equals(currentActiveTaskProcessId.apply(subtopologyId, partitionId),
+                    member.processId()) ||
+                    currentStandbyTaskProcessIds.apply(subtopologyId, partitionId)
+                        .contains(member.processId()) ||
+                    currentWarmupTaskProcessIds.apply(subtopologyId, partitionId)
+                        .contains(member.processId())
+        ) || hasUnreleasedTasks;
 
-            // Tasks Pending Revocation = Previous Assigned Tasks - New Assigned Tasks
-            Set<Integer> tasksPendingRevocation = new HashSet<>(currentAssignedTasks);
-            tasksPendingRevocation.removeAll(assignedTasks);
+        return buildNewMember(memberEpoch, newActiveTasksPendingRevocation,
+            newStandbyTasksPendingRevocation, newWarmupTasksPendingRevocation,
+            newActiveAssignedTasks,
+            newStandbyAssignedTasks, newWarmupAssignedTasks, newActiveTasksPendingAssignment,
+            newStandbyTasksPendingAssignment, newWarmupTasksPendingAssignment, hasUnreleasedTasks);
+    }
 
-            // Tasks Pending Assignment = Target - New Assigned Tasks - Unreleased Tasks
-            Set<Integer> tasksPendingAssignment = new HashSet<>(target);
-            tasksPendingAssignment.removeAll(assignedTasks);
-            hasUnreleasedTasks = tasksPendingAssignment.removeIf(partitionId ->
-                currentTaskEpoch.apply(subtopologyId, partitionId) != -1
-            ) || hasUnreleasedTasks;
+    private StreamsGroupMember buildNewMember(
+        final int memberEpoch,
+        final Map<String, Set<Integer>> newActiveTasksPendingRevocation,
+        final Map<String, Set<Integer>> newStandbyTasksPendingRevocation,
+        final Map<String, Set<Integer>> newWarmupTasksPendingRevocation,
+        final Map<String, Set<Integer>> newActiveAssignedTasks,
+        final Map<String, Set<Integer>> newStandbyAssignedTasks,
+        final Map<String, Set<Integer>> newWarmupAssignedTasks,
+        final Map<String, Set<Integer>> newActiveTasksPendingAssignment,
+        final Map<String, Set<Integer>> newStandbyTasksPendingAssignment,
+        final Map<String, Set<Integer>> newWarmupTasksPendingAssignment,
+        final boolean hasUnreleasedTasks) {
 
-            if (!assignedTasks.isEmpty()) {
-                newAssignedTasks.put(subtopologyId, assignedTasks);
-            }
+        final boolean hasTasksToBeRevoked =
+            (!newActiveTasksPendingRevocation.isEmpty() && ownRevokedTasks(
+                newActiveTasksPendingRevocation, ownedActiveTasks)) ||
+                (!newStandbyTasksPendingRevocation.isEmpty() && ownRevokedTasks(
+                    newStandbyTasksPendingRevocation, ownedStandbyTasks)) ||
+                (!newWarmupTasksPendingRevocation.isEmpty() && ownRevokedTasks(
+                    newWarmupTasksPendingRevocation, ownedWarmupTasks));
 
-            if (!tasksPendingRevocation.isEmpty()) {
-                newTasksPendingRevocation.put(subtopologyId, tasksPendingRevocation);
-            }
-
-            if (!tasksPendingAssignment.isEmpty()) {
-                newTasksPendingAssignment.put(subtopologyId, tasksPendingAssignment);
-            }
-        }
-
-        if (!newTasksPendingRevocation.isEmpty() && ownsRevokedActiveTasks(newTasksPendingRevocation)) {
+        if (hasTasksToBeRevoked) {
             // If there are tasks to be revoked, the member remains in its current
             // epoch and requests the revocation of those tasks. It transitions to
             // the UNREVOKED_TASKS state to wait until the client acknowledges the
             // revocation of the tasks.
             return new StreamsGroupMember.Builder(member)
-                .setState(org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS)
+                .setState(MemberState.UNREVOKED_TASKS)
                 .updateMemberEpoch(memberEpoch)
-                .setAssignedActiveTasks(newAssignedTasks)
-                .setActiveTasksPendingRevocation(newTasksPendingRevocation)
-                .setAssignedStandbyTasks(memberAssignedStandbyTasks)
-                .setAssignedWarmupTasks(memberAssignedWarmupTasks)
+                .setAssignedActiveTasks(newActiveAssignedTasks)
+                .setAssignedStandbyTasks(newStandbyAssignedTasks)
+                .setAssignedWarmupTasks(newWarmupAssignedTasks)
+                .setActiveTasksPendingRevocation(newActiveTasksPendingRevocation)
+                .setStandbyTasksPendingRevocation(newStandbyTasksPendingRevocation)
+                .setWarmupTasksPendingRevocation(newWarmupTasksPendingRevocation)
                 .build();
-        } else if (!newTasksPendingAssignment.isEmpty()) {
+        } else if (
+            !newActiveTasksPendingAssignment.isEmpty() ||
+                !newStandbyTasksPendingAssignment.isEmpty() ||
+                !newWarmupTasksPendingAssignment.isEmpty()
+        ) {
             // If there are tasks to be assigned, the member transitions to the
             // target epoch and requests the assignment of those tasks. Note that
             // the tasks are directly added to the assigned tasks set. The
             // member transitions to the STABLE state or to the UNRELEASED_TASKS
             // state depending on whether there are unreleased tasks or not.
-            newTasksPendingAssignment.forEach((subtopologyId, tasks) -> newAssignedTasks
+            newActiveTasksPendingAssignment.forEach((subtopologyId, tasks) -> newActiveAssignedTasks
                 .computeIfAbsent(subtopologyId, __ -> new HashSet<>())
                 .addAll(tasks));
-            org.apache.kafka.coordinator.group.streams.MemberState newState =
-                hasUnreleasedTasks ? org.apache.kafka.coordinator.group.streams.MemberState.UNRELEASED_TASKS
-                    : org.apache.kafka.coordinator.group.streams.MemberState.STABLE;
+            newStandbyTasksPendingAssignment.forEach(
+                (subtopologyId, tasks) -> newStandbyAssignedTasks
+                    .computeIfAbsent(subtopologyId, __ -> new HashSet<>())
+                    .addAll(tasks));
+            newWarmupTasksPendingAssignment.forEach((subtopologyId, tasks) -> newWarmupAssignedTasks
+                .computeIfAbsent(subtopologyId, __ -> new HashSet<>())
+                .addAll(tasks));
+            MemberState newState =
+                hasUnreleasedTasks
+                    ? MemberState.UNRELEASED_TASKS
+                    : MemberState.STABLE;
             return new StreamsGroupMember.Builder(member)
                 .setState(newState)
                 .updateMemberEpoch(targetAssignmentEpoch)
-                .setAssignedActiveTasks(newAssignedTasks)
+                .setAssignedActiveTasks(newActiveAssignedTasks)
+                .setAssignedStandbyTasks(newStandbyAssignedTasks)
+                .setAssignedWarmupTasks(newWarmupAssignedTasks)
                 .setActiveTasksPendingRevocation(Collections.emptyMap())
-                .setAssignedStandbyTasks(memberAssignedStandbyTasks)
-                .setAssignedWarmupTasks(memberAssignedWarmupTasks)
+                .setStandbyTasksPendingRevocation(Collections.emptyMap())
+                .setWarmupTasksPendingRevocation(Collections.emptyMap())
                 .build();
         } else if (hasUnreleasedTasks) {
             // If there are no tasks to be revoked nor to be assigned but some
             // tasks are not available yet, the member transitions to the target
             // epoch, to the UNRELEASED_TASKS state and waits.
             return new StreamsGroupMember.Builder(member)
-                .setState(org.apache.kafka.coordinator.group.streams.MemberState.UNRELEASED_TASKS)
+                .setState(MemberState.UNRELEASED_TASKS)
                 .updateMemberEpoch(targetAssignmentEpoch)
-                .setAssignedActiveTasks(newAssignedTasks)
+                .setAssignedActiveTasks(newActiveAssignedTasks)
+                .setAssignedStandbyTasks(newStandbyAssignedTasks)
+                .setAssignedWarmupTasks(newWarmupAssignedTasks)
                 .setActiveTasksPendingRevocation(Collections.emptyMap())
-                .setAssignedStandbyTasks(memberAssignedStandbyTasks)
-                .setAssignedWarmupTasks(memberAssignedWarmupTasks)
+                .setStandbyTasksPendingRevocation(Collections.emptyMap())
+                .setWarmupTasksPendingRevocation(Collections.emptyMap())
                 .build();
         } else {
             // Otherwise, the member transitions to the target epoch and to the
@@ -364,10 +573,12 @@ public class CurrentAssignmentBuilder {
             return new StreamsGroupMember.Builder(member)
                 .setState(MemberState.STABLE)
                 .updateMemberEpoch(targetAssignmentEpoch)
-                .setAssignedActiveTasks(newAssignedTasks)
+                .setAssignedActiveTasks(newActiveAssignedTasks)
+                .setAssignedStandbyTasks(newStandbyAssignedTasks)
+                .setAssignedWarmupTasks(newWarmupAssignedTasks)
                 .setActiveTasksPendingRevocation(Collections.emptyMap())
-                .setAssignedStandbyTasks(memberAssignedStandbyTasks)
-                .setAssignedWarmupTasks(memberAssignedWarmupTasks)
+                .setStandbyTasksPendingRevocation(Collections.emptyMap())
+                .setWarmupTasksPendingRevocation(Collections.emptyMap())
                 .build();
         }
     }

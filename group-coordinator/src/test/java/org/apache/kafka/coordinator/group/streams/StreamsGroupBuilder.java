@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 
 public class StreamsGroupBuilder {
@@ -49,9 +48,8 @@ public class StreamsGroupBuilder {
         return this;
     }
 
-    public StreamsGroupBuilder withAssignment(String memberId,
-        Map<String, Set<Integer>> assignment) {
-        this.assignments.put(memberId, new Assignment(assignment));
+    public StreamsGroupBuilder withAssignment(String memberId, Assignment assignment) {
+        this.assignments.put(memberId, assignment);
         return this;
     }
 

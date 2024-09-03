@@ -61,6 +61,8 @@ public class StreamsGroupMember {
         private Map<String, Set<Integer>> assignedStandbyTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedWarmupTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> activeTasksPendingRevocation = Collections.emptyMap();
+        private Map<String, Set<Integer>> standbyTasksPendingRevocation = Collections.emptyMap();
+        private Map<String, Set<Integer>> warmupTasksPendingRevocation = Collections.emptyMap();
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -86,6 +88,8 @@ public class StreamsGroupMember {
             this.assignedStandbyTasks = member.assignedStandbyTasks;
             this.assignedWarmupTasks = member.assignedWarmupTasks;
             this.activeTasksPendingRevocation = member.activeTasksPendingRevocation;
+            this.standbyTasksPendingRevocation = member.standbyTasksPendingRevocation;
+            this.warmupTasksPendingRevocation = member.warmupTasksPendingRevocation;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -169,7 +173,7 @@ public class StreamsGroupMember {
             this.processId = processId.orElse(this.processId);
             return this;
         }
-        
+
         public Builder setUserEndpoint(StreamsGroupMemberMetadataValue.Endpoint userEndpoint) {
             this.userEndpoint = userEndpoint;
             return this;
@@ -190,6 +194,13 @@ public class StreamsGroupMember {
             return this;
         }
 
+        public Builder setAssignment(Assignment assignment) {
+            this.assignedActiveTasks = assignment.activeTasks();
+            this.assignedStandbyTasks = assignment.standbyTasks();
+            this.assignedWarmupTasks = assignment.warmupTasks();
+            return this;
+        }
+
         public Builder setAssignedActiveTasks(Map<String, Set<Integer>> assignedActiveTasks) {
             this.assignedActiveTasks = assignedActiveTasks;
             return this;
@@ -205,8 +216,28 @@ public class StreamsGroupMember {
             return this;
         }
 
-        public Builder setActiveTasksPendingRevocation(Map<String, Set<Integer>> activeTasksPendingRevocation) {
+        public Builder setAssignmentPendingRevocation(Assignment assignment) {
+            this.activeTasksPendingRevocation = assignment.activeTasks();
+            this.standbyTasksPendingRevocation = assignment.standbyTasks();
+            this.warmupTasksPendingRevocation = assignment.warmupTasks();
+            return this;
+        }
+
+        public Builder setActiveTasksPendingRevocation(
+            Map<String, Set<Integer>> activeTasksPendingRevocation) {
             this.activeTasksPendingRevocation = activeTasksPendingRevocation;
+            return this;
+        }
+
+        public Builder setStandbyTasksPendingRevocation(
+            Map<String, Set<Integer>> standbyTasksPendingRevocation) {
+            this.standbyTasksPendingRevocation = standbyTasksPendingRevocation;
+            return this;
+        }
+
+        public Builder setWarmupTasksPendingRevocation(
+            Map<String, Set<Integer>> warmupTasksPendingRevocation) {
+            this.warmupTasksPendingRevocation = warmupTasksPendingRevocation;
             return this;
         }
 
@@ -233,7 +264,12 @@ public class StreamsGroupMember {
             setAssignedActiveTasks(assignmentFromTaskIds(record.activeTasks()));
             setAssignedStandbyTasks(assignmentFromTaskIds(record.standbyTasks()));
             setAssignedWarmupTasks(assignmentFromTaskIds(record.warmupTasks()));
-            setActiveTasksPendingRevocation(assignmentFromTaskIds(record.activeTasksPendingRevocation()));
+            setActiveTasksPendingRevocation(
+                assignmentFromTaskIds(record.activeTasksPendingRevocation()));
+            setStandbyTasksPendingRevocation(
+                assignmentFromTaskIds(record.standbyTasksPendingRevocation()));
+            setWarmupTasksPendingRevocation(
+                assignmentFromTaskIds(record.warmupTasksPendingRevocation()));
             return this;
         }
 
@@ -263,7 +299,9 @@ public class StreamsGroupMember {
                 assignedActiveTasks,
                 assignedStandbyTasks,
                 assignedWarmupTasks,
-                activeTasksPendingRevocation
+                activeTasksPendingRevocation,
+                standbyTasksPendingRevocation,
+                warmupTasksPendingRevocation
             );
         }
     }
@@ -353,6 +391,16 @@ public class StreamsGroupMember {
      */
     private final Map<String, Set<Integer>> activeTasksPendingRevocation;
 
+    /**
+     * Standby tasks being revoked by this member.
+     */
+    private final Map<String, Set<Integer>> standbyTasksPendingRevocation;
+
+    /**
+     * Warmup tasks being revoked by this member.
+     */
+    private final Map<String, Set<Integer>> warmupTasksPendingRevocation;
+
     @SuppressWarnings("checkstyle:ParameterNumber")
     private StreamsGroupMember(
         String memberId,
@@ -371,7 +419,9 @@ public class StreamsGroupMember {
         Map<String, Set<Integer>> assignedActiveTasks,
         Map<String, Set<Integer>> assignedStandbyTasks,
         Map<String, Set<Integer>> assignedWarmupTasks,
-        Map<String, Set<Integer>> activeTasksPendingRevocation
+        Map<String, Set<Integer>> activeTasksPendingRevocation,
+        Map<String, Set<Integer>> standbyTasksPendingRevocation,
+        Map<String, Set<Integer>> warmupTasksPendingRevocation
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -390,6 +440,8 @@ public class StreamsGroupMember {
         this.assignedStandbyTasks = assignedStandbyTasks;
         this.assignedWarmupTasks = assignedWarmupTasks;
         this.activeTasksPendingRevocation = activeTasksPendingRevocation;
+        this.standbyTasksPendingRevocation = standbyTasksPendingRevocation;
+        this.warmupTasksPendingRevocation = warmupTasksPendingRevocation;
     }
 
     /**
@@ -519,6 +571,20 @@ public class StreamsGroupMember {
     }
 
     /**
+     * @return The set of standby tasks awaiting revocation from the member.
+     */
+    public Map<String, Set<Integer>> standbyTasksPendingRevocation() {
+        return standbyTasksPendingRevocation;
+    }
+
+    /**
+     * @return The set of warmup tasks awaiting revocation from the member.
+     */
+    public Map<String, Set<Integer>> warmupTasksPendingRevocation() {
+        return warmupTasksPendingRevocation;
+    }
+
+    /**
      * @param targetAssignment The target assignment of this member in the corresponding group.
      *
      * @return The StreamsGroupMember mapped as StreamsGroupDescribeResponseData.Member.
@@ -591,36 +657,41 @@ public class StreamsGroupMember {
             && Objects.equals(rackId, that.rackId)
             && Objects.equals(clientId, that.clientId)
             && Objects.equals(clientHost, that.clientHost)
-            && Objects.deepEquals(topologyId, that.topologyId)
+            && Objects.equals(topologyId, that.topologyId)
             && Objects.equals(processId, that.processId)
             && Objects.equals(userEndpoint, that.userEndpoint)
             && Objects.equals(clientTags, that.clientTags)
             && Objects.equals(assignedActiveTasks, that.assignedActiveTasks)
             && Objects.equals(assignedStandbyTasks, that.assignedStandbyTasks)
             && Objects.equals(assignedWarmupTasks, that.assignedWarmupTasks)
-            && Objects.equals(activeTasksPendingRevocation, that.activeTasksPendingRevocation);
+            && Objects.equals(activeTasksPendingRevocation, that.activeTasksPendingRevocation)
+            && Objects.equals(standbyTasksPendingRevocation, that.standbyTasksPendingRevocation)
+            && Objects.equals(warmupTasksPendingRevocation, that.warmupTasksPendingRevocation);
     }
 
     @Override
     public int hashCode() {
-        int result = memberId != null ? memberId.hashCode() : 0;
-        result = 31 * result + memberEpoch;
-        result = 31 * result + previousMemberEpoch;
-        result = 31 * result + Objects.hashCode(state);
-        result = 31 * result + Objects.hashCode(instanceId);
-        result = 31 * result + Objects.hashCode(rackId);
-        result = 31 * result + rebalanceTimeoutMs;
-        result = 31 * result + Objects.hashCode(clientId);
-        result = 31 * result + Objects.hashCode(clientHost);
-        result = 31 * result + Objects.hashCode(topologyId);
-        result = 31 * result + Objects.hashCode(processId);
-        result = 31 * result + Objects.hashCode(userEndpoint);
-        result = 31 * result + Objects.hashCode(clientTags);
-        result = 31 * result + Objects.hashCode(assignedActiveTasks);
-        result = 31 * result + Objects.hashCode(assignedStandbyTasks);
-        result = 31 * result + Objects.hashCode(assignedWarmupTasks);
-        result = 31 * result + Objects.hashCode(activeTasksPendingRevocation);
-        return result;
+        return Objects.hash(
+            memberId,
+            memberEpoch,
+            previousMemberEpoch,
+            state,
+            instanceId,
+            rackId,
+            rebalanceTimeoutMs,
+            clientId,
+            clientHost,
+            topologyId,
+            processId,
+            userEndpoint,
+            clientTags,
+            assignedActiveTasks,
+            assignedStandbyTasks,
+            assignedWarmupTasks,
+            activeTasksPendingRevocation,
+            standbyTasksPendingRevocation,
+            warmupTasksPendingRevocation
+        );
     }
 
     @Override
@@ -635,10 +706,16 @@ public class StreamsGroupMember {
             ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
             ", clientId='" + clientId + '\'' +
             ", clientHost='" + clientHost + '\'' +
+            ", topologyId='" + topologyId + '\'' +
+            ", processId='" + processId + '\'' +
+            ", userEndpoint=" + userEndpoint +
+            ", clientTags=" + clientTags +
             ", assignedActiveTasks=" + assignedActiveTasks +
             ", assignedStandbyTasks=" + assignedStandbyTasks +
             ", assignedWarmupTasks=" + assignedWarmupTasks +
             ", activeTasksPendingRevocation=" + activeTasksPendingRevocation +
+            ", standbyTasksPendingRevocation=" + standbyTasksPendingRevocation +
+            ", warmupTasksPendingRevocation=" + warmupTasksPendingRevocation +
             ')';
     }
 

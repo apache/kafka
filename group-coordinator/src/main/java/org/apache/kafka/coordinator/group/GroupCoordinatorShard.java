@@ -835,6 +835,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param record        The record to apply to the state machine.
      * @throws RuntimeException
      */
+    @SuppressWarnings("CyclomaticComplexity")
     @Override
     public void replay(
         long offset,

@@ -155,12 +155,12 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, TimelineHashMap<Integer, String>> invertedTargetWarmupTasksAssignment;
 
     /**
-     * The current partition epoch maps each topic-partitions to their current epoch where the epoch is the epoch of their owners. When a
-     * member revokes a partition, it removes its epochs from this map. When a member gets a partition, it adds its epochs to this map.
+     * The current task memberID maps each active/standby/warmup task to the member ID(s) their current owner. When a
+     * member revokes a partition, it removes its member ID from this map. When a member gets a partition, it adds its member ID to this map.
      */
-    private final TimelineHashMap<String, TimelineHashMap<Integer, Integer>> currentActiveTasksEpoch;
-    private final TimelineHashMap<String, TimelineHashMap<Integer, Integer>> currentStandbyTasksEpoch;
-    private final TimelineHashMap<String, TimelineHashMap<Integer, Integer>> currentWarmupTasksEpoch;
+    private final TimelineHashMap<String, TimelineHashMap<Integer, String>> currentActiveTaskProcessId;
+    private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentStandbyTaskProcessIds;
+    private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentWarmupTaskProcessIds;
 
     /**
      * The coordinator metrics.
@@ -198,9 +198,9 @@ public class StreamsGroup implements Group {
         this.invertedTargetActiveTasksAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.invertedTargetStandbyTasksAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.invertedTargetWarmupTasksAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.currentActiveTasksEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.currentStandbyTasksEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.currentWarmupTasksEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.currentActiveTaskProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.currentStandbyTaskProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.currentWarmupTaskProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
     }
@@ -361,7 +361,7 @@ public class StreamsGroup implements Group {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         StreamsGroupMember oldMember = members.put(newMember.memberId(), newMember);
-        maybeUpdateTaskEpoch(oldMember, newMember);
+        maybeUpdateTaskProcessId(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
     }
@@ -384,7 +384,7 @@ public class StreamsGroup implements Group {
      */
     public void removeMember(String memberId) {
         StreamsGroupMember oldMember = members.remove(memberId);
-        maybeRemoveTaskEpoch(oldMember);
+        maybeRemoveTaskProcessId(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
     }
@@ -603,20 +603,56 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Returns the current epoch of a partition or -1 if the partition does not have one.
+     * Returns the current processId of a task or null if the task does not have one.
      *
-     * @param topicId     The topic id.
-     * @param partitionId The partition id.
-     * @return The epoch or -1.
+     * @param subtopologyId     The topic id.
+     * @param taskId The task id.
+     * @return The processId or null.
      */
-    public int currentActiveTaskEpoch(
-        String topicId, int partitionId
+    public String currentActiveTaskProcessId(
+        String subtopologyId, int taskId
     ) {
-        Map<Integer, Integer> partitions = currentActiveTasksEpoch.get(topicId);
-        if (partitions == null) {
-            return -1;
+        Map<Integer, String> tasks = currentActiveTaskProcessId.get(subtopologyId);
+        if (tasks == null) {
+            return null;
         } else {
-            return partitions.getOrDefault(partitionId, -1);
+            return tasks.getOrDefault(taskId, null);
+        }
+    }
+
+    /**
+     * Returns the current member IDs of a task or empty set if the task does not have one.
+     *
+     * @param subtopologyId     The topic id.
+     * @param taskId The task id.
+     * @return The member IDs or empty set.
+     */
+    public Set<String> currentStandbyTaskProcessIds(
+        String subtopologyId, int taskId
+    ) {
+        Map<Integer, Set<String>> tasks = currentStandbyTaskProcessIds.get(subtopologyId);
+        if (tasks == null) {
+            return Collections.emptySet();
+        } else {
+            return tasks.getOrDefault(taskId, Collections.emptySet());
+        }
+    }
+
+    /**
+     * Returns the current member ID of a task or empty set if the task does not have one.
+     *
+     * @param subtopologyId     The topic id.
+     * @param taskId The task id.
+     * @return The member IDs or empty set.
+     */
+    public Set<String> currentWarmupTaskProcessIds(
+        String subtopologyId, int taskId
+    ) {
+        Map<Integer, Set<String>> tasks = currentWarmupTaskProcessIds.get(subtopologyId);
+        if (tasks == null) {
+            return Collections.emptySet();
+        } else {
+            return tasks.getOrDefault(taskId, Collections.emptySet());
         }
     }
 
@@ -904,88 +940,90 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Updates the tasks epochs based on the old and the new member.
+     * Updates the tasks process IDs based on the old and the new member.
      *
      * @param oldMember The old member.
      * @param newMember The new member.
      */
-    private void maybeUpdateTaskEpoch(
+    private void maybeUpdateTaskProcessId(
         StreamsGroupMember oldMember,
         StreamsGroupMember newMember
     ) {
-        maybeRemoveTaskEpoch(oldMember);
-        addTaskEpochs(
+        maybeRemoveTaskProcessId(oldMember);
+        addTaskProcessId(
             newMember.assignedActiveTasks(),
             newMember.assignedStandbyTasks(),
             newMember.assignedWarmupTasks(),
-            newMember.memberEpoch()
+            newMember.processId()
         );
-        addTaskEpochs(
+        addTaskProcessId(
             newMember.activeTasksPendingRevocation(),
-            emptyMap(),
-            emptyMap(),
-            newMember.memberEpoch()
+            newMember.standbyTasksPendingRevocation(),
+            newMember.warmupTasksPendingRevocation(),
+            newMember.processId()
         );
     }
 
     /**
-     * Removes the task epochs for the provided member.
+     * Removes the task process IDs for the provided member.
      *
      * @param oldMember The old member.
      */
-    private void maybeRemoveTaskEpoch(
+    private void maybeRemoveTaskProcessId(
         StreamsGroupMember oldMember
     ) {
         if (oldMember != null) {
-            removeActiveTaskEpochs(oldMember.assignedActiveTasks(), oldMember.memberEpoch());
-            removeStandbyTaskEpochs(oldMember.assignedStandbyTasks(), oldMember.memberEpoch());
-            removeWarmupTaskEpochs(oldMember.assignedWarmupTasks(), oldMember.memberEpoch());
-            removeActiveTaskEpochs(oldMember.activeTasksPendingRevocation(), oldMember.memberEpoch());
+            removeActiveTaskProcessIds(oldMember.assignedActiveTasks(), oldMember.processId());
+            removeStandbyTaskProcessIds(oldMember.assignedStandbyTasks(), oldMember.processId());
+            removeWarmupTaskProcessIds(oldMember.assignedWarmupTasks(), oldMember.processId());
+            removeActiveTaskProcessIds(oldMember.activeTasksPendingRevocation(), oldMember.processId());
+            removeStandbyTaskProcessIds(oldMember.standbyTasksPendingRevocation(), oldMember.processId());
+            removeWarmupTaskProcessIds(oldMember.warmupTasksPendingRevocation(), oldMember.processId());
         }
     }
 
-    void removeActiveTaskEpochs(
+    void removeActiveTaskProcessIds(
         Map<String, Set<Integer>> assignment,
-        int expectedEpoch
+        String processId
     ) {
-        removeTaskEpochs(assignment, currentActiveTasksEpoch, expectedEpoch);
+        removeTaskProcessIds(assignment, currentActiveTaskProcessId, processId);
     }
 
-    void removeStandbyTaskEpochs(
+    void removeStandbyTaskProcessIds(
         Map<String, Set<Integer>> assignment,
-        int expectedEpoch
+        String processId
     ) {
-        removeTaskEpochs(assignment, currentStandbyTasksEpoch, expectedEpoch);
+        removeTaskProcessIdsFromSet(assignment, currentStandbyTaskProcessIds, processId);
     }
 
-    void removeWarmupTaskEpochs(
+    void removeWarmupTaskProcessIds(
         Map<String, Set<Integer>> assignment,
-        int expectedEpoch
+        String processId
     ) {
-        removeTaskEpochs(assignment, currentWarmupTasksEpoch, expectedEpoch);
+        removeTaskProcessIdsFromSet(assignment, currentWarmupTaskProcessIds, processId);
     }
 
     /**
-     * Removes the task epochs based on the provided assignment.
+     * Removes the task process IDs based on the provided assignment.
      *
      * @param assignment    The assignment.
-     * @param expectedEpoch The expected epoch.
-     * @throws IllegalStateException if the epoch does not match the expected one. package-private for testing.
+     * @param expectedProcessId The expected processId.
+     * @throws IllegalStateException if the processId does not match the expected one. package-private for testing.
      */
-    private void removeTaskEpochs(
+    private void removeTaskProcessIds(
         Map<String, Set<Integer>> assignment,
-        TimelineHashMap<String, TimelineHashMap<Integer, Integer>> currentTasksEpoch,
-        int expectedEpoch
+        TimelineHashMap<String, TimelineHashMap<Integer, String>> currentTasksProcessId,
+        String expectedProcessId
     ) {
         assignment.forEach((subtopologyId, assignedPartitions) -> {
-            currentTasksEpoch.compute(subtopologyId, (__, partitionsOrNull) -> {
+            currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     assignedPartitions.forEach(partitionId -> {
-                        Integer prevValue = partitionsOrNull.remove(partitionId);
-                        if (prevValue != expectedEpoch) {
+                        String prevValue = partitionsOrNull.remove(partitionId);
+                        if (!Objects.equals(prevValue, expectedProcessId)) {
                             throw new IllegalStateException(
-                                String.format("Cannot remove the epoch %d from task %s_%s because the partition is " +
-                                    "still owned at a different epoch %d", expectedEpoch, subtopologyId, partitionId, prevValue));
+                                String.format("Cannot remove the processId %s from task %s_%s because the partition is " +
+                                    "still owned at a different processId %s", expectedProcessId, subtopologyId, partitionId, prevValue));
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -995,8 +1033,44 @@ public class StreamsGroup implements Group {
                     }
                 } else {
                     throw new IllegalStateException(
-                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
-                            expectedEpoch, subtopologyId));
+                        String.format("Cannot remove the processId %s from %s because it does not have any processId",
+                            expectedProcessId, subtopologyId));
+                }
+            });
+        });
+    }
+
+    /**
+     * Removes the task process IDs based on the provided assignment.
+     *
+     * @param assignment    The assignment.
+     * @param processIdToRemove The expected processId.
+     * @throws IllegalStateException if the processId does not match the expected one. package-private for testing.
+     */
+    private void removeTaskProcessIdsFromSet(
+        Map<String, Set<Integer>> assignment,
+        TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentTasksProcessId,
+        String processIdToRemove
+    ) {
+        assignment.forEach((subtopologyId, assignedPartitions) -> {
+            currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
+                if (partitionsOrNull != null) {
+                    assignedPartitions.forEach(partitionId -> {
+                        if (!partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
+                            throw new IllegalStateException(
+                                String.format("Cannot remove the processId %s from task %s_%s because the task is " +
+                                    "not owned by this process ID", processIdToRemove, subtopologyId, partitionId));
+                        }
+                    });
+                    if (partitionsOrNull.isEmpty()) {
+                        return null;
+                    } else {
+                        return partitionsOrNull;
+                    }
+                } else {
+                    throw new IllegalStateException(
+                        String.format("Cannot remove the processId %s from %s because it does not have any processId",
+                            processIdToRemove, subtopologyId));
                 }
             });
         });
@@ -1008,37 +1082,55 @@ public class StreamsGroup implements Group {
      * @param activeTasks  The assigned active tasks.
      * @param standbyTasks The assigned standby tasks.
      * @param warmupTasks  The assigned warmup tasks.
-     * @param epoch        The new epoch.
+     * @param processId    The process ID.
      * @throws IllegalStateException if the partition already has an epoch assigned. package-private for testing.
      */
-    void addTaskEpochs(
+    void addTaskProcessId(
         Map<String, Set<Integer>> activeTasks,
         Map<String, Set<Integer>> standbyTasks,
         Map<String, Set<Integer>> warmupTasks,
-        int epoch
+        String processId
     ) {
-        addTaskEpochs(activeTasks, epoch, currentActiveTasksEpoch);
-        addTaskEpochs(standbyTasks, epoch, currentStandbyTasksEpoch);
-        addTaskEpochs(warmupTasks, epoch, currentWarmupTasksEpoch);
+        addTaskProcessId(activeTasks, processId, currentActiveTaskProcessId);
+        addTaskProcessIdToSet(standbyTasks, processId, currentStandbyTaskProcessIds);
+        addTaskProcessIdToSet(warmupTasks, processId, currentWarmupTaskProcessIds);
     }
 
-    void addTaskEpochs(
+    private void addTaskProcessId(
         Map<String, Set<Integer>> tasks,
-        int epoch,
-        TimelineHashMap<String, TimelineHashMap<Integer, Integer>> currentTasksEpoch
+        String processId,
+        TimelineHashMap<String, TimelineHashMap<Integer, String>> currentTaskProcessId
     ) {
         tasks.forEach((subtopologyId, assignedTaskPartitions) -> {
-            currentTasksEpoch.compute(subtopologyId, (__, partitionsOrNull) -> {
+            currentTaskProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
                     partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedTaskPartitions.size());
                 }
                 for (Integer partitionId : assignedTaskPartitions) {
-                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
+                    String prevValue = partitionsOrNull.put(partitionId, processId);
                     if (prevValue != null) {
                         throw new IllegalStateException(
-                            String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
-                                "still owned at epoch %d", subtopologyId, partitionId, epoch, prevValue));
+                            String.format("Cannot set the process ID of %s-%s to %s because the partition is " +
+                                "still owned by process ID %s", subtopologyId, partitionId, processId, prevValue));
                     }
+                }
+                return partitionsOrNull;
+            });
+        });
+    }
+
+    private void addTaskProcessIdToSet(
+        Map<String, Set<Integer>> tasks,
+        String processId,
+        TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentTaskProcessId
+    ) {
+        tasks.forEach((subtopologyId, assignedTaskPartitions) -> {
+            currentTaskProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
+                if (partitionsOrNull == null) {
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedTaskPartitions.size());
+                }
+                for (Integer partitionId : assignedTaskPartitions) {
+                    partitionsOrNull.computeIfAbsent(partitionId, ___ -> new HashSet<>()).add(processId);
                 }
                 return partitionsOrNull;
             });
@@ -1122,13 +1214,14 @@ public class StreamsGroup implements Group {
      * @return A boolean indicating whether the member has partitions in the target assignment that hasn't been revoked by other members.
      */
     public boolean waitingOnUnreleasedActiveTasks(StreamsGroupMember member) {
+        // TODO: Duplicate this + Tests?
         if (member.state() == MemberState.UNRELEASED_TASKS) {
             for (Map.Entry<String, Set<Integer>> entry : targetAssignment().get(member.memberId()).activeTasks().entrySet()) {
                 String subtopologyId = entry.getKey();
                 Set<Integer> assignedActiveTasks = member.assignedActiveTasks().getOrDefault(subtopologyId, Collections.emptySet());
 
                 for (int partition : entry.getValue()) {
-                    if (!assignedActiveTasks.contains(partition) && currentActiveTaskEpoch(subtopologyId, partition) != -1) {
+                    if (!assignedActiveTasks.contains(partition) && currentActiveTaskProcessId(subtopologyId, partition) != null) {
                         return true;
                     }
                 }
