@@ -20,18 +20,16 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 
 /**
- * Event to update the position to fetch from. This will use the committed offsets if available.
- * If no committed offsets exist, it will use the partition offsets.
- *
+ * Event to check if all assigned partitions have fetch positions. If there are positions missing, it will fetch
+ * offsets and update positions when it gets them. This will first attempt to use the committed offsets if available. If
+ * no committed offsets available, it will use the partition offsets retrieved from the leader.
  * <p/>
- *
- * The event completes with a boolean value indicating if all assigned partitions already had
- * valid fetch positions (based on {@link SubscriptionState#hasAllFetchPositions()}).
+ * The event completes with a boolean indicating if all assigned partitions have valid fetch positions
+ * (based on {@link SubscriptionState#hasAllFetchPositions()}).
  */
-public class UpdateFetchPositionsEvent extends CompletableApplicationEvent<Boolean> {
+public class CheckPositionsAndMaybeUpdate extends CompletableApplicationEvent<Boolean> {
 
-    public UpdateFetchPositionsEvent(long deadlineMs) {
+    public CheckPositionsAndMaybeUpdate(long deadlineMs) {
         super(Type.UPDATE_FETCH_POSITIONS, deadlineMs);
     }
-
 }

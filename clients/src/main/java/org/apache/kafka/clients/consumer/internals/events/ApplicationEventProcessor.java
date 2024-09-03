@@ -100,7 +100,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 return;
 
             case UPDATE_FETCH_POSITIONS:
-                process((UpdateFetchPositionsEvent) event);
+                process((CheckPositionsAndMaybeUpdate) event);
                 return;
 
             case SUBSCRIPTION_CHANGE:
@@ -252,10 +252,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * Fetch committed offsets and use them to update positions in the subscription state. If no
-     * committed offsets available, fetch offsets from the leader.
+     * Check if all assigned partitions have fetch positions. If there are missing positions, fetch offsets and use
+     * them to update positions in the subscription state.
      */
-    private void process(final UpdateFetchPositionsEvent event) {
+    private void process(final CheckPositionsAndMaybeUpdate event) {
         CompletableFuture<Boolean> future = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }

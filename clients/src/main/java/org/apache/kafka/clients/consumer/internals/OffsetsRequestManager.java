@@ -215,66 +215,106 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                         result.fetchedOffsets));
     }
 
-    private boolean maybeCompleteWithPreviousKnownException(CompletableFuture<Boolean> result) {
-        Throwable exception = cachedUpdatePositionsException.getAndSet(null);
-        if (exception != null) {
-            // Return exception that may have been encountered on a previous attempt to update
-            // positions, after the triggering event had already expired.
-            result.completeExceptionally(exception);
+    /**
+     * Update fetch positions for assigned partitions that do not have a position. This will:
+     * <ul>
+     *     <li>check if all assigned partitions already have fetch positions and return right away if that's the case</li>
+     *     <li>trigger an async request to validate positions (detect log truncation)</li>
+     *     <li>fetch committed offsets if enabled, and use the response to update the positions</li>
+     *     <li>fetch partition offsets for partitions that may still require a position, and use the response to
+     *     update the positions</li>
+     * </ul>
+     *
+     * @param deadlineMs Time in milliseconds when the triggering application event expires. Any error received after
+     *                   this will be saved, and used to complete the result exceptionally on the next call to this
+     *                   function.
+     * @return Future that will complete with a boolean indicating if all assigned partitions have positions (based
+     * on {@link SubscriptionState#hasAllFetchPositions()}). It will complete immediately, with true, if all positions
+     * are already available. If some positions are missing, the future will complete once the offsets are retrieved and positions are updated.
+     */
+    public CompletableFuture<Boolean> updateFetchPositions(long deadlineMs) {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+
+        try {
+            if (maybeCompleteWithPreviousException(result)) {
+                return result;
+            }
+
+            validatePositionsIfNeeded();
+
+            if (subscriptionState.hasAllFetchPositions()) {
+                // All positions are already available
+                result.complete(true);
+                return result;
+            }
+
+            // Some positions are missing, so trigger requests to fetch offsets and update them.
+            updatePositionsWithOffsets(deadlineMs).whenComplete((__, error) -> {
+                if (error != null) {
+                    result.completeExceptionally(error);
+                } else {
+                    result.complete(subscriptionState.hasAllFetchPositions());
+                }
+            });
+
+        } catch (Exception e) {
+            result.completeExceptionally(maybeWrapAsKafkaException(e));
+        }
+        return result;
+    }
+
+    private boolean maybeCompleteWithPreviousException(CompletableFuture<Boolean> result) {
+        Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
+        if (cachedException != null) {
+            result.completeExceptionally(cachedException);
             return true;
         }
         return false;
     }
 
-    public CompletableFuture<Boolean> updateFetchPositions(long deadlineMs) {
-        CompletableFuture<Boolean> result = new CompletableFuture<>();
+    /**
+     * Generate requests to fetch offsets, and update positions once a response is received.
+     */
+    private CompletableFuture<Void> updatePositionsWithOffsets(long deadlineMs) {
+        CompletableFuture<Void> result = new CompletableFuture<>();
 
-        if (maybeCompleteWithPreviousKnownException(result)) {
-            return result;
+        cacheExceptionIfEventExpired(result, deadlineMs);
+
+        // Reset positions using committed offsets retrieved from the group coordinator, for any
+        // partitions which do not have a valid position and are not awaiting reset. This will
+        // trigger an OffsetFetch request and update positions with the offsets retrieved.
+        if (commitRequestManager != null) {
+            CompletableFuture<Void> initWithCommittedOffsetsResult = initWithCommittedOffsetsIfNeeded(deadlineMs);
+            initWithCommittedOffsetsResult.whenComplete((__, error) -> {
+                if (error == null) {
+                    initWithPartitionOffsetsIfNeeded(result);
+                } else {
+                    result.completeExceptionally(error);
+                }
+            });
+        } else {
+            initWithPartitionOffsetsIfNeeded(result);
         }
+        return result;
+    }
 
+    /**
+     * Save exception that may occur while updating fetch positions. Note that since the update fetch positions
+     * is triggered asynchronously, errors may be found when the triggering UpdateFetchPositionsEvent has already
+     * expired. In that case, the exception is saved in memory, to be thrown when processing the following
+     * UpdateFetchPositionsEvent.
+     *
+     * @param result     Update fetch positions future to get the exception from (if any)
+     * @param deadlineMs Deadline of the triggering application event, used to identify if the event has already
+     *                   expired when the error in the result future occurs.
+     */
+    private void cacheExceptionIfEventExpired(CompletableFuture<Void> result, long deadlineMs) {
         result.whenComplete((__, error) -> {
             boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
             if (error != null && updatePositionsExpired) {
-                // Update fetch positions operations are triggered asynchronously here in the
-                // background thread, so they may complete (with error)
-                // when the triggering UpdateFetchPositionsEvent has been already expired. Keep
-                // exception saved to be thrown on the next call to update positions.
                 cachedUpdatePositionsException.set(error);
             }
         });
-
-        try {
-            // Validate positions using the partition leader end offsets, to detect if any partition
-            // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
-            // request, retrieve the partition end offsets, and validate the current position
-            // against it. It will throw an exception if log truncation is detected.
-            validatePositionsIfNeeded();
-
-            if (subscriptionState.hasAllFetchPositions()) {
-                result.complete(true);
-                return result;
-            }
-
-            // Reset positions using committed offsets retrieved from the group coordinator, for any
-            // partitions which do not have a valid position and are not awaiting reset. This will
-            // trigger an OffsetFetch request and update positions with the offsets retrieved.
-            if (commitRequestManager != null) {
-                CompletableFuture<Void> initWithCommittedOffsetsResult = initWithCommittedOffsetsIfNeeded(deadlineMs);
-                initWithCommittedOffsetsResult.whenComplete((__, error) -> {
-                    if (error == null) {
-                        initWithPartitionOffsetsIfNeeded(result);
-                    } else {
-                        result.completeExceptionally(error);
-                    }
-                });
-            } else {
-                initWithPartitionOffsetsIfNeeded(result);
-            }
-        } catch (Exception e) {
-            result.completeExceptionally(maybeWrapAsKafkaException(e));
-        }
-        return result;
     }
 
     /**
@@ -284,7 +324,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * @param result Future that will complete when the reset operation completes.
      * @throws NoOffsetForPartitionException If no reset strategy is configured
      */
-    private void initWithPartitionOffsetsIfNeeded(CompletableFuture<Boolean> result) {
+    private void initWithPartitionOffsetsIfNeeded(CompletableFuture<Void> result) {
         try {
             // Mark partitions that need reset, using the configured reset strategy. If no
             // strategy is defined, this will raise a NoOffsetForPartitionException exception.
@@ -298,7 +338,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // offsets according to the strategy (ex. earliest, latest), and update the positions.
         resetPositionsIfNeeded().whenComplete((resetResult, error) -> {
             if (error == null) {
-                result.complete(false);
+                result.complete(null);
             } else {
                 result.completeExceptionally(error);
             }
@@ -355,6 +395,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         return result;
     }
 
+    /**
+     * Get the offsets, from the given collection, that belong to partitions that still require a position (partitions
+     * that are initializing). This is expected to be used to filter out offsets that were retrieved for partitions
+     * that do not need a position anymore.
+     *
+     * @param offsets Offsets per partition
+     * @return Subset of the offsets associated to partitions that are still initializing
+     */
     private Map<TopicPartition, OffsetAndMetadata> offsetsForInitializingPartitions(Map<TopicPartition, OffsetAndMetadata> offsets) {
         Set<TopicPartition> currentlyInitializingPartitions = subscriptionState.initializingPartitions();
         Map<TopicPartition, OffsetAndMetadata> result = new HashMap<>();
@@ -420,13 +468,12 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      *
      * <p/>
      *
-     * When a response is received, positions are validated and, if a log truncation is
-     * detected, a {@link LogTruncationException} will be saved in memory, to be thrown on the
+     * When a response is received, positions are validated and, if a log truncation is detected, a
+     * {@link LogTruncationException} will be saved in memory in cachedUpdatePositionsException, to be thrown on the
      * next call to this function.
      */
     void validatePositionsIfNeeded() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
-                offsetFetcherUtils.getPartitionsToValidate();
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = offsetFetcherUtils.getPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
             return;
         }
