@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -55,6 +54,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -75,7 +75,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final TimelineHashMap<SharePartitionKey, Integer> snapshotUpdateCount;
     private final TimelineHashMap<SharePartitionKey, Integer> stateEpochMap;
     private MetadataImage metadataImage;
-    private final int snapshotUpdateRecordsPerSnapshot;
 
     public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
@@ -180,11 +179,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         this.leaderEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
         this.snapshotUpdateCount = new TimelineHashMap<>(snapshotRegistry, 0);
         this.stateEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.snapshotUpdateRecordsPerSnapshot = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
     }
 
     @Override
     public void onLoaded(MetadataImage newImage) {
+        this.metadataImage = newImage;
         coordinatorMetrics.activateMetricsShard(metricsShard);
     }
 
@@ -225,7 +224,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         shareStateMap.put(mapKey, offsetRecord);
         // if number of share updates is exceeded, then reset it
         if (snapshotUpdateCount.containsKey(mapKey)) {
-            if (snapshotUpdateCount.get(mapKey) >= snapshotUpdateRecordsPerSnapshot) {
+            if (snapshotUpdateCount.get(mapKey) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
                 snapshotUpdateCount.put(mapKey, 0);
             }
         }
@@ -272,18 +271,15 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * the request data which covers only a single key i.e. group1:topic1:partition1. The implementation
      * below was done keeping this in mind.
      *
-     * @param context - RequestContext
      * @param request - WriteShareGroupStateRequestData for a single key
      * @return CoordinatorResult(records, response)
      */
     @SuppressWarnings("NPathComplexity")
     public CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> writeState(
-        RequestContext context,
         WriteShareGroupStateRequestData request
     ) {
         // records to write (with both key and value of snapshot type), response to caller
         // only one key will be there in the request by design
-
         metricsShard.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
         Optional<CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord>> error = maybeGetWriteStateError(request);
         if (error.isPresent()) {
@@ -302,26 +298,19 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             recordList = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
                 groupId, topicData.topicId(), partitionData.partition(), ShareGroupOffset.fromRequest(partitionData)
             ));
-        } else if (snapshotUpdateCount.getOrDefault(key, 0) >= snapshotUpdateRecordsPerSnapshot) {
-            // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
-            // we should be creating a share snapshot record.
-            List<PersisterOffsetsStateBatch> batchesToAdd;
-            if (partitionData.startOffset() == -1) {
-                batchesToAdd = combineStateBatches(
-                    shareStateMap.get(key).stateBatchAsSet(),
-                    partitionData.stateBatches().stream()
-                        .map(PersisterOffsetsStateBatch::from)
-                        .collect(Collectors.toCollection(LinkedHashSet::new)));
-            } else {
-                // start offset is being updated - we should only
-                // consider new updates to batches
-                batchesToAdd = partitionData.stateBatches().stream()
-                    .map(PersisterOffsetsStateBatch::from).collect(Collectors.toList());
-            }
-
+        } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
             int newLeaderEpoch = partitionData.leaderEpoch() == -1 ? shareStateMap.get(key).leaderEpoch() : partitionData.leaderEpoch();
             int newStateEpoch = partitionData.stateEpoch() == -1 ? shareStateMap.get(key).stateEpoch() : partitionData.stateEpoch();
             long newStartOffset = partitionData.startOffset() == -1 ? shareStateMap.get(key).startOffset() : partitionData.startOffset();
+
+            // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
+            // we should be creating a share snapshot record.
+            List<PersisterOffsetsStateBatch> batchesToAdd = combineStateBatches(
+                shareStateMap.get(key).stateBatchAsSet(),
+                partitionData.stateBatches().stream()
+                    .map(PersisterOffsetsStateBatch::from)
+                    .collect(Collectors.toCollection(LinkedHashSet::new)),
+                newStartOffset);
 
             recordList = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
                 groupId, topicData.topicId(), partitionData.partition(),
@@ -456,13 +445,20 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
         if (leaderEpochMap.containsKey(mapKey) && leaderEpochMap.get(mapKey) > partitionData.leaderEpoch()) {
+            log.error("Request leader epoch smaller than last recorded.");
             return Optional.of(getWriteErrorResponse(Errors.FENCED_LEADER_EPOCH, null, topicId, partitionId));
         }
         if (stateEpochMap.containsKey(mapKey) && stateEpochMap.get(mapKey) > partitionData.stateEpoch()) {
+            log.error("Request state epoch smaller than last recorded.");
             return Optional.of(getWriteErrorResponse(Errors.FENCED_STATE_EPOCH, null, topicId, partitionId));
         }
-        if (metadataImage != null && (metadataImage.topics().getTopic(topicId) == null ||
-            metadataImage.topics().getPartition(topicId, partitionId) == null)) {
+        if (metadataImage == null) {
+            log.error("Metadata image is null");
+            return Optional.of(getWriteErrorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
+        }
+        if (metadataImage.topics().getTopic(topicId) == null ||
+            metadataImage.topics().getPartition(topicId, partitionId) == null) {
+            log.error("Topic/TopicPartition not found in metadata image.");
             return Optional.of(getWriteErrorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
@@ -478,22 +474,31 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         int partitionId = partitionData.partition();
 
         if (topicId == null) {
+            log.error("Request topic id is null.");
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(
                 null, partitionId, Errors.INVALID_REQUEST, NULL_TOPIC_ID.getMessage()));
         }
 
         if (partitionId < 0) {
+            log.error("Request partition id is negative.");
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(
                 topicId, partitionId, Errors.INVALID_REQUEST, NEGATIVE_PARTITION_ID.getMessage()));
         }
 
         SharePartitionKey mapKey = SharePartitionKey.getInstance(groupId, topicId, partitionId);
         if (leaderEpochMap.containsKey(mapKey, offset) && leaderEpochMap.get(mapKey, offset) > partitionData.leaderEpoch()) {
+            log.error("Request leader epoch id is smaller than last recorded.");
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.FENCED_LEADER_EPOCH, Errors.FENCED_LEADER_EPOCH.message()));
         }
 
-        if (metadataImage != null && (metadataImage.topics().getTopic(topicId) == null ||
-            metadataImage.topics().getPartition(topicId, partitionId) == null)) {
+        if (metadataImage == null) {
+            log.error("Metadata image is null");
+            return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
+        }
+
+        if (metadataImage.topics().getTopic(topicId) == null ||
+            metadataImage.topics().getPartition(topicId, partitionId) == null) {
+            log.error("Topic/TopicPartition not found in metadata image.");
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         }
 
@@ -535,26 +540,44 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // snapshot epoch should be same as last share snapshot
         // state epoch is not present
         Set<PersisterOffsetsStateBatch> currentBatches = soFar.stateBatchAsSet();
-        currentBatches.removeIf(batch -> batch.firstOffset() < newData.startOffset());
+        long newStartOffset = newData.startOffset() == -1 ? soFar.startOffset() : newData.startOffset();
+        int newLeaderEpoch = newData.leaderEpoch() == -1 ? soFar.leaderEpoch() : newData.leaderEpoch();
 
         return new ShareGroupOffset.Builder()
             .setSnapshotEpoch(soFar.snapshotEpoch())
             .setStateEpoch(soFar.stateEpoch())
-            .setStartOffset(newData.startOffset() == -1 ? soFar.startOffset() : newData.startOffset())
-            .setLeaderEpoch(newData.leaderEpoch() == -1 ? soFar.leaderEpoch() : newData.leaderEpoch())
+            .setStartOffset(newStartOffset)
+            .setLeaderEpoch(newLeaderEpoch)
             .setStateBatches(combineStateBatches(currentBatches, newData.stateBatches().stream()
                 .map(PersisterOffsetsStateBatch::from)
-                .collect(Collectors.toCollection(LinkedHashSet::new))))
+                .collect(Collectors.toCollection(LinkedHashSet::new)), newStartOffset))
             .build();
     }
 
+    /**
+     * Util method which takes in 2 collections containing {@link PersisterOffsetsStateBatch}
+     * and the startOffset.
+     * It removes all batches from the 1st collection which have the same first and last offset
+     * as the batches in 2nd collection. It then creates a final list of batches which contains the
+     * former result and all the batches in the 2nd collection. In set notation (A - B) U B (we prefer batches in B
+     * which have same first and last offset in A).
+     * Finally, it removes any batches where the firstOffset is < startOffset, if the startOffset > -1.
+     * @param currentBatch - collection containing current soft state of batches
+     * @param newBatch - collection containing batches in incoming request
+     * @param startOffset - startOffset to consider when removing old batches.
+     * @return List containing combined batches
+     */
     private static List<PersisterOffsetsStateBatch> combineStateBatches(
-        Set<PersisterOffsetsStateBatch> currentBatch,
-        Set<PersisterOffsetsStateBatch> newBatch
+        Collection<PersisterOffsetsStateBatch> currentBatch,
+        Collection<PersisterOffsetsStateBatch> newBatch,
+        long startOffset
     ) {
         currentBatch.removeAll(newBatch);
         List<PersisterOffsetsStateBatch> batchesToAdd = new LinkedList<>(currentBatch);
         batchesToAdd.addAll(newBatch);
+        if (startOffset != -1) {
+            batchesToAdd.removeIf(batch -> batch.firstOffset() < startOffset);
+        }
         return batchesToAdd;
     }
 

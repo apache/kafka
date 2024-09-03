@@ -305,7 +305,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                             "write-share-group-state",
                             topicPartitionFor(SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition())),
                             Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
-                            coordinator -> coordinator.writeState(context, new WriteShareGroupStateRequestData()
+                            coordinator -> coordinator.writeState(new WriteShareGroupStateRequestData()
                                 .setGroupId(groupId)
                                 .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
                                     .setTopicId(topicData.topicId())
@@ -337,7 +337,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         // topicId -> {partitionId -> responseFuture}
         return combinedFuture.thenApply(v -> {
-            long endTime = time.hiResClockMs(); // all futures complete
             List<WriteShareGroupStateResponseData.WriteStateResult> writeStateResults = new ArrayList<>(futureMap.size());
             futureMap.forEach(
                 (topicId, topicEntry) -> {
@@ -345,19 +344,21 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     topicEntry.forEach(
                         // map of partition id -> responses from api
                         (partitionId, responseFut) -> {
-                            long timeTaken = endTime  - startTime;
                             // This is the future returned by runtime.scheduleWriteOperation which returns when the
                             // operation has completed including error information. When this line executes, the future
                             // should be complete as we used CompletableFuture::allOf to get a combined future from
                             // all futures in the map.
                             WriteShareGroupStateResponseData partitionData = responseFut.getNow(null);
-                            shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME, timeTaken);
                             partitionResults.addAll(partitionData.results().get(0).partitions());
                         }
                     );
                     writeStateResults.add(WriteShareGroupStateResponse.toResponseWriteStateResult(topicId, partitionResults));
                 }
             );
+
+            // time taken for write
+            shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME,
+                time.hiResClockMs() - startTime);
             return new WriteShareGroupStateResponseData()
                 .setResults(writeStateResults);
         });
