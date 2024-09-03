@@ -186,6 +186,10 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the remote fetch request";
     public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
+    public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP = "remote.list.offsets.request.timeout.ms";
+    public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC = "The maximum amount of time the server will wait for the remote list offsets request to complete.";
+    public static final long DEFAULT_REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS = 30000L;
+
     private final AbstractConfig config;
 
     public static ConfigDef configDef() {
@@ -353,7 +357,13 @@ public final class RemoteLogManagerConfig {
                         DEFAULT_REMOTE_FETCH_MAX_WAIT_MS,
                         atLeast(1),
                         MEDIUM,
-                        REMOTE_FETCH_MAX_WAIT_MS_DOC);
+                        REMOTE_FETCH_MAX_WAIT_MS_DOC)
+                .define(REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP,
+                        LONG,
+                        DEFAULT_REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS,
+                        atLeast(1),
+                        MEDIUM,
+                        REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC);
     }
     
     public RemoteLogManagerConfig(AbstractConfig config) {
@@ -483,6 +493,10 @@ public final class RemoteLogManagerConfig {
 
     public long logLocalRetentionMs() {
         return config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
+    }
+
+    public long remoteListOffsetsRequestTimeoutMs() {
+        return config.getLong(REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP);
     }
 
     public static void main(String[] args) {
