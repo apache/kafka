@@ -4133,8 +4133,8 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 membersToRemove.add(memberIdentity);
-                future.complete(membersToRemove);
             }
+            future.complete(membersToRemove);
         });
 
         return future;
