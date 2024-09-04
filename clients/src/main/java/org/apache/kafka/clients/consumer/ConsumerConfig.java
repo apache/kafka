@@ -678,7 +678,7 @@ public class ConsumerConfig extends AbstractConfig {
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
         checkGroupRemoteAssignor();
-        checkPartitionAssigmentStrategy();
+        checkPartitionAssignmentStrategy();
         return refinedConfigs;
     }
 
@@ -726,23 +726,24 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     private void checkGroupRemoteAssignor() {
-        if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CLASSIC.name()) && getString(GROUP_REMOTE_ASSIGNOR_CONFIG) != null && !getString(GROUP_REMOTE_ASSIGNOR_CONFIG).isEmpty()) {
+        if (isClassicProtocol() && getString(GROUP_REMOTE_ASSIGNOR_CONFIG) != null && !getString(GROUP_REMOTE_ASSIGNOR_CONFIG).isEmpty()) {
             throw new ConfigException(GROUP_REMOTE_ASSIGNOR_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CLASSIC.name());
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void checkPartitionAssigmentStrategy() {
-        List<Object> assignmentStrategies = (List<Object>) get(PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
-        if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CONSUMER.name())) {
-            if (PARTITION_ASSIGNOR_DEFAULT_VALUE.size() != assignmentStrategies.size() ||
-                    !PARTITION_ASSIGNOR_DEFAULT_VALUE.stream()
-                            .allMatch(clz -> assignmentStrategies.stream()
-                                    .anyMatch(obj -> clz.equals(obj) || clz.getName().equals(obj)))
-            ) {
-                throw new ConfigException(PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
-            }
+    private void checkPartitionAssignmentStrategy() {
+        Object config = originals().get(PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
+        if (isConsumerProtocol() && config != null && !Utils.isBlank(config.toString())) {
+            throw new ConfigException(PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
         }
+    }
+
+    private boolean isClassicProtocol() {
+        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CLASSIC.name());
+    }
+
+    private boolean isConsumerProtocol() {
+        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CONSUMER.name());
     }
 
     public ConsumerConfig(Properties props) {
