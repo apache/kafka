@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -55,5 +56,25 @@ public class ApiVersionsTest {
                 .setMinVersion((short) 0)
                 .setMaxVersion((short) 2))));
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
+    }
+
+    @Test
+    public void testFinalizedFeatures() {
+        ApiVersions apiVersions = new ApiVersions();
+        assertEquals(-1, apiVersions.getMaxFinalizedFeaturesEpoch());
+
+        apiVersions.update("2",
+            new NodeApiVersions(NodeApiVersions.create().allSupportedApiVersions().values(),
+                Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
+                    .setName("transaction.version")
+                    .setMaxVersion((short) 2)
+                    .setMinVersion((short) 0)),
+                false,
+                Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
+                    .setName("transaction.version")
+                    .setMaxVersionLevel((short) 2)
+                    .setMinVersionLevel((short) 2)),
+                0));
+        assertEquals(0, apiVersions.getMaxFinalizedFeaturesEpoch());
     }
 }

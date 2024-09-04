@@ -192,6 +192,8 @@ public class TransactionManager {
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
     private volatile boolean transactionStarted = false;
     private volatile boolean epochBumpRequired = false;
+    private volatile long latestFinalizedFeaturesEpoch = -1;
+    private volatile boolean isTransactionV2Enabled = false;
 
     private enum State {
         UNINITIALIZED,
@@ -434,16 +436,17 @@ public class TransactionManager {
 
     // Check all the finalized features from apiVersions to whether the transaction V2 is enabled.
     public synchronized boolean isTransactionV2Enabled() {
-        long latestFeatureEpoch = -1;
-        boolean isTransactionV2Enabled = false;
+        if (latestFinalizedFeaturesEpoch >= apiVersions.getMaxFinalizedFeaturesEpoch()) {
+            return isTransactionV2Enabled;
+        }
         List<String> nodes = apiVersions.getNodes();
         for (String node : nodes) {
             NodeApiVersions nodeApiVersions = apiVersions.get(node);
             if (nodeApiVersions != null) {
-                if (nodeApiVersions.finalizedFeaturesEpoch() > latestFeatureEpoch) {
+                if (nodeApiVersions.finalizedFeaturesEpoch() > latestFinalizedFeaturesEpoch) {
                     Short transactionVersion = nodeApiVersions.finalizedFeatures().get("transaction.version");
                     isTransactionV2Enabled = transactionVersion != null && transactionVersion >= 2;
-                    latestFeatureEpoch = nodeApiVersions.finalizedFeaturesEpoch();
+                    latestFinalizedFeaturesEpoch = nodeApiVersions.finalizedFeaturesEpoch();
                 }
             }
         }

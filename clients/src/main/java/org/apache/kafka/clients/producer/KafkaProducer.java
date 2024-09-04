@@ -295,7 +295,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null, null, null, Time.SYSTEM);
+                keySerializer, valueSerializer, null, null, null, new ApiVersions(), Time.SYSTEM);
     }
 
     /**
