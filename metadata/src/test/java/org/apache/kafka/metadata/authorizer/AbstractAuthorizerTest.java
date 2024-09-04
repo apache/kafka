@@ -392,7 +392,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         for (AclOperation op : AclOperation.values()) {
             for (ResourceType type : ResourceType.values()) {
                 boolean anyOrUnknown = op == AclOperation.ANY | op == AclOperation.UNKNOWN | type == ResourceType.ANY || type == ResourceType.UNKNOWN;
-                Supplier<String> name = () -> format("No ACLs, default 'false'', %s, %s", op, type);
+                Supplier<String> name = () -> format("No ACLs, default 'false', %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
                     assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
@@ -408,7 +408,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         for (AclOperation op : AclOperation.values()) {
             for (ResourceType type : ResourceType.values()) {
                 boolean anyOrUnknown = op == AclOperation.ANY | op == AclOperation.UNKNOWN | type == ResourceType.ANY || type == ResourceType.UNKNOWN;
-                Supplier<String> name = () -> format("No ACLs, default 'true'', %s, %s", op, type);
+                Supplier<String> name = () -> format("No ACLs, default 'true', %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
                     assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
@@ -432,7 +432,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
         for (AclOperation op : AclOperation.values()) {
             for (ResourceType type : ResourceType.values()) {
-                boolean anyOrUnknown = op == AclOperation.ANY | op == AclOperation.UNKNOWN | type == ResourceType.ANY || type == ResourceType.UNKNOWN;
+                boolean anyOrUnknown = op == AclOperation.ANY || op == AclOperation.UNKNOWN || type == ResourceType.ANY || type == ResourceType.UNKNOWN;
                 Supplier<String> name = () -> format("No ACLs, default not set, %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
@@ -449,7 +449,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         for (AclOperation op : AclOperation.values()) {
             for (ResourceType type : ResourceType.values()) {
                 boolean anyOrUnknown = op == AclOperation.ANY | op == AclOperation.UNKNOWN | type == ResourceType.ANY || type == ResourceType.UNKNOWN;
-                Supplier<String> name = () -> format("No ACLs, default 'false'', %s, %s", op, type);
+                Supplier<String> name = () -> format("No ACLs, default 'false', %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
                     assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);
@@ -465,7 +465,7 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         for (AclOperation op : AclOperation.values()) {
             for (ResourceType type : ResourceType.values()) {
                 boolean anyOrUnknown = op == AclOperation.ANY | op == AclOperation.UNKNOWN | type == ResourceType.ANY || type == ResourceType.UNKNOWN;
-                Supplier<String> name = () -> format("No ACLs, default 'true'', %s, %s", op, type);
+                Supplier<String> name = () -> format("No ACLs, default 'true', %s, %s", op, type);
                 if (anyOrUnknown) {
                     final T auth = authorizer;
                     assertThrows(IllegalArgumentException.class, () -> auth.authorizeByResourceType(requestContext, op, type), name);

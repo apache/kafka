@@ -704,7 +704,7 @@ public abstract class AbstractAuthorizerDataTest {
         final Builder dataBuilder = builder.clone();
         String dyntitle = format("%s: %s: %s, %s, %s, %s", result, title, principal, host, operation, resourceType);
         return DynamicTest.dynamicTest(dyntitle, () -> {
-            boolean anyOrUnknown = operation == AclOperation.ANY | operation == AclOperation.UNKNOWN | resourceType == ResourceType.ANY || resourceType == ResourceType.UNKNOWN;
+            boolean anyOrUnknown = operation == AclOperation.ANY || operation == AclOperation.UNKNOWN || resourceType == ResourceType.ANY || resourceType == ResourceType.UNKNOWN;
             if (anyOrUnknown) {
                 assertThrows(IllegalArgumentException.class, () -> dataBuilder.get().authorizeByResourceType(principal, host, operation, resourceType));
             } else {
