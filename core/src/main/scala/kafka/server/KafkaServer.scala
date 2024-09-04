@@ -64,6 +64,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
@@ -364,7 +365,7 @@ class KafkaServer(
         /* start forwarding manager */
         var autoTopicCreationChannel = Option.empty[NodeToControllerChannelManager]
         if (enableForwarding) {
-          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager))
+          this.forwardingManager = Some(ForwardingManager(clientToControllerChannelManager, metrics))
           autoTopicCreationChannel = Some(clientToControllerChannelManager)
         }
 
@@ -474,18 +475,19 @@ class KafkaServer(
               setSecurityProtocol(ep.securityProtocol.id))
           }
 
-          // Even though ZK brokers don't use "metadata.version" feature, we send our IBP here as part of the broker registration
+          val features = BrokerFeatures.createDefaultFeatureMap(BrokerFeatures.createDefault(config.unstableFeatureVersionsEnabled))
+
+          // Even though ZK brokers don't use "metadata.version" feature, we need to overwrite it with our IBP as part of registration
           // so the KRaft controller can verify that all brokers are on the same IBP before starting the migration.
-          val ibpAsFeature =
-           java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
-             VersionRange.of(config.interBrokerProtocolVersion.featureLevel(), config.interBrokerProtocolVersion.featureLevel()))
+          val featuresRemapped = features + (MetadataVersion.FEATURE_NAME ->
+            VersionRange.of(config.interBrokerProtocolVersion.featureLevel(), config.interBrokerProtocolVersion.featureLevel()))
 
           lifecycleManager.start(
             () => listener.highestOffset,
             brokerToQuorumChannelManager,
             clusterId,
             networkListeners,
-            ibpAsFeature,
+            featuresRemapped.asJava,
             OptionalLong.empty()
           )
           logger.debug("Start RaftManager")
@@ -523,7 +525,7 @@ class KafkaServer(
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(1, true, "transaction-log-manager-"),
           () => producerIdManager, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup(
-          () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
+          () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogConfig.transactionTopicPartitions))
 
         /* start auto topic creation manager */
         this.autoTopicCreationManager = AutoTopicCreationManager(
@@ -1031,6 +1033,9 @@ class KafkaServer(
 
         if (alterPartitionManager != null)
           CoreUtils.swallow(alterPartitionManager.shutdown(), this)
+
+        if (forwardingManager.isDefined)
+          CoreUtils.swallow(forwardingManager.get.close(), this)
 
         if (clientToControllerChannelManager != null)
           CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
