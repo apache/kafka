@@ -24,6 +24,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.server.authorizer.Action;
@@ -42,6 +43,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 
@@ -233,6 +235,14 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         if (data.superUsers().contains(requestContext.principal().toString())) {
             return AuthorizationResult.ALLOWED;
         }
+        if (data.defaultResult() == ALLOWED) {
+            // we only have to check if there is a literal prohibition on resource "*"
+            ResourcePattern pattern = new ResourcePattern(resourceType, "*", LITERAL);
+            Action action = new Action(operation, pattern, 1, false, false);
+
+            return authorize(requestContext, Collections.singletonList(action)).get(0);
+        }
+
         String host = requestContext.clientAddress().getHostAddress();
         return this.data.authorizeByResourceType(requestContext.principal(), host, operation, resourceType);
     }

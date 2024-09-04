@@ -394,7 +394,7 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
             final Predicate<AccessControlEntry> f = filter;
             filter = ace -> {
                 boolean result = f.test(ace);
-                log.debug("p:{} h:{} o:{} -> {} -> {}", principal, host, operation, ace, result);
+                log.debug("StdAuthzData typeFilter p:{} h:{} o:{} -> {} -> {}", principal, host, operation, ace, result);
                 return result;
             };
         }
@@ -428,7 +428,7 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
                 @Override
                 public boolean test(AclBinding aclBinding) {
                     boolean result = inner.test(aclBinding);
-                    log.debug("authorizeByResourceType: {} -> {}}", aclBinding, result);
+                    log.debug("StdAuthzData authorizeByResourceType: {} -> {}}", aclBinding, result);
                     return result;
                 }
             };
@@ -504,11 +504,13 @@ public class StandardAuthorizerData extends AbstractAuthorizerData {
         for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
             for (String allowStr : entry.getValue()) {
                 if (allowFilter.test(allowStr)) {
+                    log.debug("ACL found {}", allowStr);
                     return AuthorizationResult.ALLOWED;
                 }
             }
         }
 
+        log.debug("No ACL found -- returning {}", noAclRule.result());
         return noAclRule.result();
     }
 }

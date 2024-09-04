@@ -262,7 +262,8 @@ public interface AuthorizerData {
 
     /**
      * Check if the caller is authorized to perform the given ACL operation on at least one
-     * resource of the given type.
+     * resource of the given type.  This method is only called when the noMatchRule is DENIED so we only have
+     * to find any ALLOW.
      * <p>
      * The implementation should check to verify that there exists at least one ACL granting the operation that is not
      * blocked by a superseding DENY.
