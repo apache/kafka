@@ -252,7 +252,7 @@ if (repo != null) {
   rat.enabled = false
 }
 println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
-println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
+println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
 
@@ -568,6 +568,14 @@ subprojects {
     cleanTest {
       delete t.reports.junitXml.outputLocation
       delete t.reports.html.outputLocation
+    }
+
+    doLast {
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+      println "Copy JUnit XML for ${project.name} to $dest"
+      ant.copy(todir: "$dest") {
+        ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
+      }
     }
   }
 

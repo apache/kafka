@@ -243,6 +243,7 @@ public class QuorumControllerTest {
 
             testToImages(logEnv.allRecords());
         }
+
     }
 
     private void testDelayedConfigurationOperations(
