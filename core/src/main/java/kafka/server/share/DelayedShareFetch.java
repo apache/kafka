@@ -88,7 +88,7 @@ public class DelayedShareFetch extends DelayedOperation {
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData;
         // tryComplete did not invoke forceComplete, so we need to check if we have any partitions to fetch.
         if (topicPartitionDataFromTryComplete.isEmpty())
-            topicPartitionData = topicPartitionDataForAcquirablePartitions();
+            topicPartitionData = acquirablePartitions();
         // tryComplete invoked forceComplete, so we can use the data from tryComplete.
         else
             topicPartitionData = topicPartitionDataFromTryComplete;
@@ -157,7 +157,7 @@ public class DelayedShareFetch extends DelayedOperation {
             return false;
         }
 
-        topicPartitionDataFromTryComplete = topicPartitionDataForAcquirablePartitions();
+        topicPartitionDataFromTryComplete = acquirablePartitions();
 
         if (!topicPartitionDataFromTryComplete.isEmpty())
             return forceComplete();
@@ -171,7 +171,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * Prepare fetch request structure for partitions in the share fetch request for which we can acquire records.
      */
     // Visible for testing
-    Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataForAcquirablePartitions() {
+    Map<TopicIdPartition, FetchRequest.PartitionData> acquirablePartitions() {
         // Initialize the topic partitions for which the fetch should be attempted.
         Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
 

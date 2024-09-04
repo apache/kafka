@@ -238,6 +238,6 @@ public class DelayedShareFetchTest {
         delayedShareFetch.forceComplete();
         assertTrue(delayedShareFetch.isCompleted());
         // Verifying that forceComplete does not call topicPartitionDataForAcquirablePartitions method in DelayedShareFetch.
-        Mockito.verify(delayedShareFetch, times(0)).topicPartitionDataForAcquirablePartitions();
+        Mockito.verify(delayedShareFetch, times(0)).acquirablePartitions();
     }
 }
