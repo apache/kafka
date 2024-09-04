@@ -90,13 +90,13 @@ public class MockProducer<K, V> implements Producer<K, V> {
     /**
      * Create a mock producer
      *
-     * @param cluster         The cluster holding metadata for this producer
-     * @param autoComplete    If true automatically complete all requests successfully and execute the callback. Otherwise
-     *                        the user must call {@link #completeNext()} or {@link #errorNext(RuntimeException)} after
-     *                        {@link #send(ProducerRecord) send()} to complete the call and unblock the {@link
-     *                        java.util.concurrent.Future Future&lt;RecordMetadata&gt;} that is returned.
-     * @param partitioner     The partition strategy
-     * @param keySerializer   The serializer for key that implements {@link Serializer}.
+     * @param cluster The cluster holding metadata for this producer
+     * @param autoComplete If true automatically complete all requests successfully and execute the callback. Otherwise
+     *        the user must call {@link #completeNext()} or {@link #errorNext(RuntimeException)} after
+     *        {@link #send(ProducerRecord) send()} to complete the call and unblock the {@link
+     *        java.util.concurrent.Future Future&lt;RecordMetadata&gt;} that is returned.
+     * @param partitioner The partition strategy
+     * @param keySerializer The serializer for key that implements {@link Serializer}.
      * @param valueSerializer The serializer for value that implements {@link Serializer}.
      */
     public MockProducer(final Cluster cluster,
@@ -120,7 +120,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     /**
      * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
-     * <p>
+     *
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
      */
     @SuppressWarnings("deprecation")
@@ -132,7 +132,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     /**
      * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
-     * <p>
+     *
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(cluster, autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
      */
     @SuppressWarnings("deprecation")
@@ -145,7 +145,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     /**
      * Create a new mock producer with invented metadata the given autoComplete setting, partitioner and key\value serializers.
-     * <p>
+     *
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
      */
     public MockProducer(final boolean autoComplete,
@@ -157,7 +157,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     /**
      * Create a new mock producer with invented metadata.
-     * <p>
+     *
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), false, null, null, null)}
      */
     public MockProducer() {
@@ -226,7 +226,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             return;
         }
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets =
-                this.uncommittedConsumerGroupOffsets.computeIfAbsent(groupMetadata.groupId(), k -> new HashMap<>());
+            this.uncommittedConsumerGroupOffsets.computeIfAbsent(groupMetadata.groupId(), k -> new HashMap<>());
         uncommittedOffsets.putAll(offsets);
         this.sentOffsets = true;
     }
@@ -504,6 +504,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     *
      * Get the list of committed consumer group offsets since the last call to {@link #clear()}
      */
     public synchronized List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> consumerGroupOffsetsHistory() {
