@@ -59,7 +59,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -114,7 +113,6 @@ public class StateDirectory implements AutoCloseable {
 
     private final StreamsConfig config;
     private final ConcurrentMap<TaskId, Task> tasksForLocalState = new ConcurrentHashMap<>();
-    private final AtomicInteger threadsWithAssignment = new AtomicInteger(0);
 
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
@@ -506,7 +504,6 @@ public class StateDirectory implements AutoCloseable {
     public void close() {
         if (hasPersistentStores) {
             closePendingTasks();
-            threadsWithAssignment.set(0);
             try {
                 stateDirLock.release();
                 stateDirLockChannel.close();
@@ -682,7 +679,6 @@ public class StateDirectory implements AutoCloseable {
                 + "since Streams is not running any more these will be ignored to complete the cleanup");
         }
         closePendingTasks();
-        threadsWithAssignment.set(0);
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final TaskDirectory taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.file().getName();
