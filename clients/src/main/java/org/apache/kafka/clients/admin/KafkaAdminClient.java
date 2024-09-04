@@ -4114,27 +4114,30 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private List<MemberIdentity> getMembersFromGroup(String groupId, String reason) {
-        Collection<MemberDescription> members;
-        try {
-            members = describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).get().members();
-        } catch (Exception ex) {
-            throw new KafkaException("Encounter exception when trying to get members from group: " + groupId, ex);
-        }
+    private KafkaFutureImpl<List<MemberIdentity>> getMembersFromGroup(String groupId, String reason) {
+        KafkaFutureImpl<List<MemberIdentity>> future = new KafkaFutureImpl<>();
 
-        List<MemberIdentity> membersToRemove = new ArrayList<>();
-        for (final MemberDescription member : members) {
-            MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
-
-            if (member.groupInstanceId().isPresent()) {
-                memberIdentity.setGroupInstanceId(member.groupInstanceId().get());
-            } else {
-                memberIdentity.setMemberId(member.consumerId());
+        describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).whenComplete((res, ex) -> {
+            if (ex != null) {
+                future.completeExceptionally(ex);
             }
+            Collection<MemberDescription> members = res.members();
+            List<MemberIdentity> membersToRemove = new ArrayList<>();
+            for (final MemberDescription member : members) {
+                MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
 
-            membersToRemove.add(memberIdentity);
-        }
-        return membersToRemove;
+                if (member.groupInstanceId().isPresent()) {
+                    memberIdentity.setGroupInstanceId(member.groupInstanceId().get());
+                } else {
+                    memberIdentity.setMemberId(member.consumerId());
+                }
+
+                membersToRemove.add(memberIdentity);
+                future.complete(membersToRemove);
+            }
+        });
+
+        return future;
     }
 
     @Override
@@ -4143,19 +4146,25 @@ public class KafkaAdminClient extends AdminClient {
         String reason = options.reason() == null || options.reason().isEmpty() ?
             DEFAULT_LEAVE_GROUP_REASON : JoinGroupRequest.maybeTruncateReason(options.reason());
 
-        List<MemberIdentity> members;
-        if (options.removeAll()) {
-            members = getMembersFromGroup(groupId, reason);
-        } else {
-            members = options.members().stream()
-                .map(m -> m.toMemberIdentity().setReason(reason))
-                .collect(Collectors.toList());
+        final SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
+                RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
+        if (!options.removeAll()) {
+            List<MemberIdentity> members = options.members().stream()
+                    .map(m -> m.toMemberIdentity().setReason(reason))
+                    .collect(Collectors.toList());
+            RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
+            invokeDriver(handler, future, options.timeoutMs);
+            return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
         }
 
-        SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
-                RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
-        RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
-        invokeDriver(handler, future, options.timeoutMs);
+        getMembersFromGroup(groupId, reason).whenComplete((members, ex) -> {
+            if (ex != null) {
+                future.completeExceptionally(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), ex));
+            }
+            RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
+            invokeDriver(handler, future, options.timeoutMs);
+        });
+
         return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
     }
 
