@@ -26,7 +26,7 @@ import kafka.utils._
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.metrics.Quota
@@ -211,6 +211,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
         new ClientQuotaAlteration(entity, util.Arrays.asList(
           new Op(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null),
           new Op(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, null))))
+
+      // validate only
+      admin.alterClientQuotas(removals, new AlterClientQuotasOptions().validateOnly(true)).all().get()
+      assertEquals(Quota.upperBound(1000),
+        quotaManagers.produce.quota(user, clientId), s"User $user clientId $clientId must have same producer quota of 1000")
+      assertEquals(Quota.upperBound(2000),
+        quotaManagers.fetch.quota(user, clientId), s"User $user clientId $clientId must have same consumer quota of 2000")
+
       admin.alterClientQuotas(removals).all().get()
       TestUtils.retry(10000) {
         val producerQuota = quotaManagers.produce.quota(user, clientId)
