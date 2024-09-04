@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
@@ -47,7 +48,6 @@ import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
-import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
