@@ -158,7 +158,7 @@ public class StandbyTaskTest {
         ));
         baseDir = TestUtils.tempDirectory();
         config = createConfig(baseDir);
-        stateDirectory = new StateDirectory(config, new MockTime(), true, true, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        stateDirectory = new StateDirectory(config, new MockTime(), true, true);
     }
 
     @AfterEach

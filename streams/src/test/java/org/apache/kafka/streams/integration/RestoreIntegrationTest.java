@@ -257,8 +257,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
         setCommittedOffset(inputStream, offsetLimitDelta);
 
-        final StreamsConfig config = new StreamsConfig(props);
-        final StateDirectory stateDirectory = new StateDirectory(config, new MockTime(), true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
@@ -315,8 +314,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
         setCommittedOffset(inputStream, offsetLimitDelta);
 
-        final StreamsConfig config = new StreamsConfig(props);
-        final StateDirectory stateDirectory = new StateDirectory(config, new MockTime(), true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
@@ -368,8 +366,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(changelog, 0);
         createStateForRestoration(inputStream, 10000);
 
-        final StreamsConfig config = new StreamsConfig(props);
-        final StateDirectory stateDirectory = new StateDirectory(config, new MockTime(), true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));

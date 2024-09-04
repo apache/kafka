@@ -311,7 +311,7 @@ public class StreamThreadTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
 
-        stateDirectory = new StateDirectory(config, mockTime, true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
             new TopologyMetadata(internalTopologyBuilder, config),
             StreamsMetadataState.UNKNOWN_HOST,
@@ -724,7 +724,7 @@ public class StreamThreadTest {
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
-        stateDirectory = new StateDirectory(config, mockTime, true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
             new TopologyMetadata(internalTopologyBuilder, config),
             StreamsMetadataState.UNKNOWN_HOST,
@@ -788,7 +788,7 @@ public class StreamThreadTest {
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
-        stateDirectory = new StateDirectory(config, mockTime, true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
             new TopologyMetadata(internalTopologyBuilder, config),
             StreamsMetadataState.UNKNOWN_HOST,
@@ -1143,7 +1143,7 @@ public class StreamThreadTest {
             new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
-        stateDirectory = new StateDirectory(config, mockTime, true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
 
         final TaskManager taskManager = new TaskManager(
             new MockTime(),
@@ -1891,7 +1891,7 @@ public class StreamThreadTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
 
-        stateDirectory = new StateDirectory(config, mockTime, true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
             new TopologyMetadata(internalTopologyBuilder, config),
             StreamsMetadataState.UNKNOWN_HOST,
@@ -3613,7 +3613,7 @@ public class StreamThreadTest {
     }
 
     private void setupInternalTopologyWithoutState(final StreamsConfig config) {
-        stateDirectory = new StateDirectory(config, mockTime, true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalTopologyBuilder.addProcessor(
             "processor1",

@@ -282,8 +282,7 @@ public class StreamTaskTest {
     public void setup() {
         consumer.assign(asList(partition1, partition2));
         consumer.updateBeginningOffsets(mkMap(mkEntry(partition1, 0L), mkEntry(partition2, 0L)));
-        final StreamsConfig config = createConfig("100");
-        stateDirectory = new StateDirectory(config, new MockTime(), true, false, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        stateDirectory = new StateDirectory(createConfig("100"), new MockTime(), true, false);
         // Unless we initialise a lock on the state directory we cannot unlock it successfully during teardown
         stateDirectory.initializeProcessId();
     }

@@ -136,14 +136,13 @@ public class ProcessorStateManagerTest {
     public void setup() {
         baseDir = TestUtils.tempDirectory();
 
-        final StreamsConfig config = new StreamsConfig(new Properties() {
+        stateDirectory = new StateDirectory(new StreamsConfig(new Properties() {
             {
                 put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
                 put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
                 put(StreamsConfig.STATE_DIR_CONFIG, baseDir.getPath());
             }
-        });
-        stateDirectory = new StateDirectory(config, new MockTime(), true, true, () -> config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        }), new MockTime(), true, true);
         checkpointFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME);
         checkpoint = new OffsetCheckpoint(checkpointFile);
     }

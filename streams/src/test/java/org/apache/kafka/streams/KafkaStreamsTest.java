@@ -1899,7 +1899,7 @@ public class KafkaStreamsTest {
         try (MockedConstruction<StateDirectory> stateDirectoryMockedConstruction = mockConstruction(StateDirectory.class,
             (mock, context) -> {
                 when(mock.initializeProcessId()).thenReturn(UUID.randomUUID());
-                assertEquals(5, context.arguments().size());
+                assertEquals(4, context.arguments().size());
                 assertEquals(shouldFilesExist, context.arguments().get(2));
             })) {
 
