@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import kafka.server.RequestLocal;
-
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
@@ -41,6 +39,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult;
 import org.apache.kafka.test.TestUtils;
