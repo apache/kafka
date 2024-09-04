@@ -101,14 +101,14 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
     /**
      * @return the validTo timestamp of the latest record in the provided segment
      */
-    static long getNextTimestamp(final byte[] segmentValue) {
+    static long nextTimestamp(final byte[] segmentValue) {
         return ByteBuffer.wrap(segmentValue).getLong(0);
     }
 
     /**
      * @return the (validFrom) timestamp of the earliest record in the provided segment.
      */
-    static long getMinTimestamp(final byte[] segmentValue) {
+    static long minTimestamp(final byte[] segmentValue) {
         return ByteBuffer.wrap(segmentValue).getLong(TIMESTAMP_SIZE);
     }
 
@@ -271,9 +271,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         private PartiallyDeserializedSegmentValue(final byte[] segmentValue) {
             this.segmentValue = segmentValue;
             this.nextTimestamp =
-                RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(segmentValue);
+                RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(segmentValue);
             this.minTimestamp =
-                RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(segmentValue);
+                RocksDBVersionedStoreSegmentValueFormatter.minTimestamp(segmentValue);
             this.isDegenerate = nextTimestamp == minTimestamp;
             resetDeserHelpers();
         }
