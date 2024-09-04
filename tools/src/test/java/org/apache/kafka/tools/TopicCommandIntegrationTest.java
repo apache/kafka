@@ -846,6 +846,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
         // describe the topic and test if it's under-replicated
         String simpleDescribeOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
+        System.err.println("[Johnny] simpleDescribeOutput is: " + simpleDescribeOutput);
         String[] simpleDescribeOutputRows = simpleDescribeOutput.split(System.lineSeparator());
         assertTrue(simpleDescribeOutputRows[0].startsWith(String.format("Topic: %s", testTopicName)),
                 "Unexpected describe output: " + simpleDescribeOutputRows[0]);
