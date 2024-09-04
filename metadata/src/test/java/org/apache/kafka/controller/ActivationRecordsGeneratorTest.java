@@ -55,28 +55,14 @@ public class ActivationRecordsGeneratorTest {
         result = ActivationRecordsGenerator.recordsForEmptyLog(
             logMsg -> assertEquals("Performing controller activation. The metadata log appears to be empty. " +
                 "Appending 1 bootstrap record(s) at metadata.version 3.4-IV0 from bootstrap " +
-                "source 'test'. Setting the ZK migration state to NONE since this is a de-novo KRaft cluster.", logMsg),
+                "source 'test'.", logMsg),
             -1L,
             false,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "test"),
             MetadataVersion.IBP_3_4_IV0
         );
         assertTrue(result.isAtomic());
-        assertEquals(2, result.records().size());
-
-
-        result = ActivationRecordsGenerator.recordsForEmptyLog(
-            logMsg -> assertEquals("Performing controller activation. The metadata log appears to be empty. " +
-                "Appending 1 bootstrap record(s) at metadata.version 3.4-IV0 from bootstrap " +
-                "source 'test'. Putting the controller into pre-migration mode. No metadata updates will be allowed " +
-                "until the ZK metadata has been migrated.", logMsg),
-            -1L,
-            true,
-            BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "test"),
-            MetadataVersion.IBP_3_4_IV0
-        );
-        assertTrue(result.isAtomic());
-        assertEquals(2, result.records().size());
+        assertEquals(1, result.records().size());
 
         assertEquals(
             "The bootstrap metadata.version 3.3-IV2 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
@@ -87,6 +73,18 @@ public class ActivationRecordsGeneratorTest {
                     true,
                     BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV2, "test"),
                     MetadataVersion.IBP_3_3_IV2
+                )).getMessage()
+        );
+
+        assertEquals(
+            "The bootstrap metadata.version 3.4-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
+            assertThrows(RuntimeException.class, () ->
+                ActivationRecordsGenerator.recordsForEmptyLog(
+                    logMsg -> fail(),
+                    -1L,
+                    true,
+                    BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_4_IV0, "test"),
+                    MetadataVersion.IBP_3_4_IV0
                 )).getMessage()
         );
 
@@ -253,21 +251,21 @@ public class ActivationRecordsGeneratorTest {
                     true,
                     buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.empty()),
                     MetadataVersion.IBP_3_4_IV0
+                )).getMessage()
+        );
+
+        assertEquals(
+            "Should not have ZK migrations enabled on a cluster that was created in KRaft mode.",
+            assertThrows(RuntimeException.class, () ->
+                ActivationRecordsGenerator.recordsForNonEmptyLog(
+                    logMsg -> fail(),
+                    -1L,
+                    true,
+                    buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.empty()),
+                    MetadataVersion.IBP_3_6_IV1
                 )
             ).getMessage()
         );
-
-        result = ActivationRecordsGenerator.recordsForNonEmptyLog(
-            logMsg -> assertEquals("Performing controller activation. Loaded ZK migration state of " +
-                "PRE_MIGRATION. Activating pre-migration controller without empty log. There may be a partial " +
-                "migration.", logMsg),
-            -1L,
-            true,
-            buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.PRE_MIGRATION)),
-            MetadataVersion.IBP_3_4_IV0
-        );
-        assertTrue(result.isAtomic());
-        assertEquals(0, result.records().size());
 
         result = ActivationRecordsGenerator.recordsForNonEmptyLog(
             logMsg -> assertEquals("Performing controller activation. Loaded ZK migration state of " +
@@ -285,8 +283,8 @@ public class ActivationRecordsGeneratorTest {
                 "Staying in ZK migration mode since 'zookeeper.metadata.migration.enable' is still 'true'.", logMsg),
             -1L,
             true,
-            buildFeatureControl(MetadataVersion.IBP_3_4_IV0, Optional.of(ZkMigrationState.MIGRATION)),
-            MetadataVersion.IBP_3_4_IV0
+            buildFeatureControl(MetadataVersion.IBP_3_6_IV1, Optional.of(ZkMigrationState.MIGRATION)),
+            MetadataVersion.IBP_3_6_IV1
         );
         assertTrue(result.isAtomic());
         assertEquals(0, result.records().size());
