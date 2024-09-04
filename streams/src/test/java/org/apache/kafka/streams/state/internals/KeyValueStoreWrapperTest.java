@@ -161,14 +161,14 @@ public class KeyValueStoreWrapperTest {
     public void shouldGetTimestampedStore() {
         givenWrapperWithTimestampedStore();
 
-        assertThat(wrapper.getStore(), equalTo(timestampedStore));
+        assertThat(wrapper.store(), equalTo(timestampedStore));
     }
 
     @Test
     public void shouldGetVersionedStore() {
         givenWrapperWithVersionedStore();
 
-        assertThat(wrapper.getStore(), equalTo(versionedStore));
+        assertThat(wrapper.store(), equalTo(versionedStore));
     }
 
     @Test

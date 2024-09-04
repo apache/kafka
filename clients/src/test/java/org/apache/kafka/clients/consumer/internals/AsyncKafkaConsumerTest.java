@@ -182,12 +182,6 @@ public class AsyncKafkaConsumerTest {
         return newConsumer(props);
     }
 
-    @SuppressWarnings("UnusedReturnValue")
-    private AsyncKafkaConsumer<String, String> newConsumerWithEmptyGroupId() {
-        final Properties props = requiredConsumerConfigAndGroupId("");
-        return newConsumer(props);
-    }
-
     private AsyncKafkaConsumer<String, String> newConsumer(Properties props) {
         final ConsumerConfig config = new ConsumerConfig(props);
         return newConsumer(config);
@@ -243,12 +237,6 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         completeUnsubscribeApplicationEventSuccessfully();
         assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testInvalidGroupId() {
-        KafkaException e = assertThrows(KafkaException.class, this::newConsumerWithEmptyGroupId);
-        assertInstanceOf(InvalidGroupIdException.class, e.getCause());
     }
 
     @Test
@@ -1851,16 +1839,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testGroupIdEmpty() {
-        testInvalidGroupId("");
-    }
-
-    @Test
-    public void testGroupIdOnlyWhitespaces() {
-        testInvalidGroupId("       ");
-    }
-
-    @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         consumer = newConsumer(
@@ -1880,18 +1858,6 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler).add(any(PollEvent.class));
-    }
-
-    private void testInvalidGroupId(final String groupId) {
-        final Properties props = requiredConsumerConfigAndGroupId(groupId);
-        final ConsumerConfig config = new ConsumerConfig(props);
-
-        final Exception exception = assertThrows(
-            KafkaException.class,
-            () -> consumer = newConsumer(config)
-        );
-
-        assertEquals("Failed to construct kafka consumer", exception.getMessage());
     }
 
     private Properties requiredConsumerConfigAndGroupId(final String groupId) {

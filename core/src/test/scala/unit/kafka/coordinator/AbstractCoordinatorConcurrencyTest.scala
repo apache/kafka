@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
@@ -217,7 +218,7 @@ object AbstractCoordinatorConcurrencyTest {
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
-                               requestLocal: RequestLocal = RequestLocal.NoCaching,
+                               requestLocal: RequestLocal = RequestLocal.noCaching,
                                actionQueue: ActionQueue = null,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
 

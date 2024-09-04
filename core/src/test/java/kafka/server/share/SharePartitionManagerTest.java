@@ -56,6 +56,7 @@ import org.apache.kafka.server.share.ShareSession;
 import org.apache.kafka.server.share.ShareSessionCache;
 import org.apache.kafka.server.share.ShareSessionContext;
 import org.apache.kafka.server.share.ShareSessionKey;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -1367,9 +1368,9 @@ public class SharePartitionManagerTest {
 
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
-        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId.toString()))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
-        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId.toString()))).thenReturn(CompletableFuture.completedFuture(
-                Optional.of(new InvalidRecordStateException("Unable to release acquired records for the batch"))
+        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId.toString()))).thenReturn(CompletableFuture.completedFuture(null));
+        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId.toString()))).thenReturn(FutureUtils.failedFuture(
+                new InvalidRecordStateException("Unable to release acquired records for the batch")
         ));
 
         ShareSessionCache cache = mock(ShareSessionCache.class);
@@ -1515,7 +1516,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         SharePartition sp = mock(SharePartition.class);
 
-        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(null));
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp), sp);
@@ -1549,9 +1550,9 @@ public class SharePartitionManagerTest {
         SharePartition sp2 = mock(SharePartition.class);
         SharePartition sp3 = mock(SharePartition.class);
 
-        when(sp1.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
-        when(sp2.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
-        when(sp3.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp1.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(sp2.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(sp3.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(null));
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
@@ -1669,8 +1670,8 @@ public class SharePartitionManagerTest {
 
         TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         SharePartition sp = mock(SharePartition.class);
-        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(
-                Optional.of(new InvalidRequestException("Member is not the owner of batch record"))
+        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(FutureUtils.failedFuture(
+                new InvalidRequestException("Member is not the owner of batch record")
         ));
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp), sp);

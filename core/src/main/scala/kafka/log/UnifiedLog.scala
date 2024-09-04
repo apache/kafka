@@ -20,7 +20,6 @@ package kafka.log
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.LocalLog.nextOption
 import kafka.log.remote.RemoteLogManager
-import kafka.server.RequestLocal
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -32,7 +31,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -715,7 +714,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestProduction,
-                     requestLocal: RequestLocal = RequestLocal.NoCaching,
+                     requestLocal: RequestLocal = RequestLocal.noCaching,
                      verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
@@ -1395,8 +1394,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       case ListOffsetsRequest.LATEST_TIMESTAMP =>
         startIndex = offsetTimeArray.length - 1
       case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
-        startIndex = 0
-      case ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP =>
         startIndex = 0
       case _ =>
         var isFound = false
