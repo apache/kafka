@@ -28,6 +28,7 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName, Network
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
@@ -212,7 +213,7 @@ class RequestConvertToJsonTest {
       startTimeNanos = 0,
       mock(classOf[MemoryPool]),
       buffer,
-      mock(classOf[RequestChannel.Metrics])
+      mock(classOf[RequestChannelMetrics])
     )
   }
 

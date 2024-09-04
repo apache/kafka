@@ -83,7 +83,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     }
 
     public String queryableStoreName() {
-        return joinMerger().getQueryableName();
+        return joinMerger().queryableName();
     }
 
     /**
