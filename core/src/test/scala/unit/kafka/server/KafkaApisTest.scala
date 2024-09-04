@@ -11855,7 +11855,7 @@ class KafkaApisTest extends Logging {
       authorizer = Option(authorizer),
       raftSupport = true
     )
-    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching())
 
     future.complete(new ReadShareGroupStateResponseData()
       .setResults(readStateResult))
@@ -11885,7 +11885,7 @@ class KafkaApisTest extends Logging {
       authorizer = Option(authorizer),
       raftSupport = true
     )
-    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching())
 
     future.complete(new WriteShareGroupStateResponseData()
       .setResults(writeStateResult))
