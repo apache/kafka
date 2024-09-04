@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.tools
 
 import kafka.server.KafkaConfig
@@ -24,11 +23,11 @@ import java.nio.file.{Files, Paths}
 import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
-import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace}
+import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace, Subparser, Subparsers}
 import net.sourceforge.argparse4j.internal.HelpScreenException
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.{Exit, Utils}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
 import org.apache.kafka.raft.DynamicVoters
@@ -87,9 +86,14 @@ object StorageTool extends Logging {
         runFormatCommand(namespace, config.get, printStream)
         0
 
+      case "version-mapping" =>
+        runVersionMappingCommand(namespace, printStream)
+        0
+
       case "random-uuid" =>
         printStream.println(Uuid.randomUuid)
         0
+
       case _ =>
         throw new RuntimeException(s"Unknown command $command")
     }
@@ -134,6 +138,35 @@ object StorageTool extends Logging {
     formatter.run()
   }
 
+  /**
+   * Maps the given release version to the corresponding metadata version
+   * and prints the corresponding features.
+   *
+   * @param namespace       Arguments containing the release version.
+   * @param printStream     The print stream to output the version mapping.
+   */
+  def runVersionMappingCommand(
+    namespace: Namespace,
+    printStream: PrintStream
+  ): Unit = {
+    val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
+    try {
+      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion)
+
+      val metadataVersionLevel = metadataVersion.featureLevel()
+      printStream.print(f"metadata.version=$metadataVersionLevel%d ($releaseVersion%s)%n")
+
+      for (feature <- Features.values()) {
+        val featureLevel = feature.defaultValue(metadataVersion)
+        printStream.print(f"${feature.featureName}%s=$featureLevel%d%n")
+      }
+    } catch {
+      case e: IllegalArgumentException =>
+        throw new TerseFailure(s"Unsupported release version '$releaseVersion'. Supported versions are: " +
+          s"${MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
+    }
+  }
+
   def createStandaloneDynamicVoters(
     config: KafkaConfig
   ): DynamicVoters = {
@@ -153,50 +186,90 @@ object StorageTool extends Logging {
   }
 
   def parseArguments(args: Array[String]): Namespace = {
-    val parser = ArgumentParsers.
-      newArgumentParser("kafka-storage", /* defaultHelp */ true, /* prefixChars */ "-", /* fromFilePrefix */ "@").
-      description("The Kafka storage tool.")
+    val parser = ArgumentParsers
+      .newArgumentParser("kafka-storage", /* defaultHelp */true, /* prefixChars */"-", /* fromFilePrefix */ "@")
+      .description("The Kafka storage tool.")
 
     val subparsers = parser.addSubparsers().dest("command")
 
-    val infoParser = subparsers.addParser("info").
-      help("Get information about the Kafka log directories on this node.")
-    val formatParser = subparsers.addParser("format").
-      help("Format the Kafka log directories on this node.")
-    subparsers.addParser("random-uuid").help("Print a random UUID.")
-    List(infoParser, formatParser).foreach(parser => {
-      parser.addArgument("--config", "-c").
-        action(store()).
-        required(true).
-        help("The Kafka configuration file to use.")
-    })
-    formatParser.addArgument("--cluster-id", "-t").
-      action(store()).
-      required(true).
-      help("The cluster ID to use.")
-    formatParser.addArgument("--add-scram", "-S").
-      action(append()).
-      help("""A SCRAM_CREDENTIAL to add to the __cluster_metadata log e.g.
+    addInfoParser(subparsers)
+    addFormatParser(subparsers)
+    addVersionMappingParser(subparsers)
+    addRandomUuidParser(subparsers)
+
+    parser.parseArgs(args)
+  }
+
+  private def addInfoParser(subparsers: Subparsers): Unit = {
+    val infoParser = subparsers.addParser("info")
+      .help("Get information about the Kafka log directories on this node.")
+
+    addConfigArguments(infoParser)
+  }
+
+  private def addFormatParser(subparsers: Subparsers): Unit = {
+    val formatParser = subparsers.addParser("format")
+      .help("Format the Kafka log directories on this node.")
+
+    addConfigArguments(formatParser)
+
+    formatParser.addArgument("--cluster-id", "-t")
+      .action(store())
+      .required(true)
+      .help("The cluster ID to use.")
+
+    formatParser.addArgument("--add-scram", "-S")
+      .action(append())
+      .help("""A SCRAM_CREDENTIAL to add to the __cluster_metadata log e.g.
               |'SCRAM-SHA-256=[name=alice,password=alice-secret]'
               |'SCRAM-SHA-512=[name=alice,iterations=8192,salt="N3E=",saltedpassword="YCE="]'""".stripMargin)
-    formatParser.addArgument("--ignore-formatted", "-g").
-      action(storeTrue())
-    formatParser.addArgument("--release-version", "-r").
-      action(store()).
-      help(s"The release version to use for the initial feature settings. The minimum is " +
+
+    formatParser.addArgument("--ignore-formatted", "-g")
+      .action(storeTrue())
+
+    formatParser.addArgument("--release-version", "-r")
+      .action(store())
+      .help(s"The release version to use for the initial feature settings. The minimum is " +
         s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
-    formatParser.addArgument("--feature", "-f").
-      help("The setting to use for a specific feature, in feature=level format. For example: `kraft.version=1`.").
-      action(append())
+
+    formatParser.addArgument("--feature", "-f")
+      .help("The setting to use for a specific feature, in feature=level format. For example: `kraft.version=1`.")
+      .action(append())
+
     val reconfigurableQuorumOptions = formatParser.addMutuallyExclusiveGroup()
-    reconfigurableQuorumOptions.addArgument("--standalone", "-s").
-      help("Used to initialize a single-node quorum controller quorum.").
-      action(storeTrue())
-    reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I").
-      help("The initial controllers, as a comma-separated list of id@hostname:port:directory. The same values must be used to format all nodes. For example:\n" +
-        "0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n").
-      action(store())
-    parser.parseArgs(args)
+    reconfigurableQuorumOptions.addArgument("--standalone", "-s")
+      .help("Used to initialize a single-node quorum controller quorum.")
+      .action(storeTrue())
+
+    reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I")
+      .help("The initial controllers, as a comma-separated list of id@hostname:port:directory. The same values must be used to format all nodes. For example:\n" +
+        "0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n")
+      .action(store())
+  }
+
+  private def addVersionMappingParser(subparsers: Subparsers): Unit = {
+    val versionMappingParser = subparsers.addParser("version-mapping")
+      .help("Look up the corresponding features for a given metadata version. " +
+        "Using the command with no --release-version  argument will return the mapping for " +
+        "the latest stable metadata version"
+      )
+
+    versionMappingParser.addArgument("--release-version", "-r")
+      .action(store())
+      .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
+        s"${MetadataVersion.IBP_3_0_IV0}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+  }
+
+  private def addRandomUuidParser(subparsers: Subparsers): Unit = {
+    subparsers.addParser("random-uuid")
+      .help("Print a random UUID.")
+  }
+
+  private def addConfigArguments(parser: Subparser): Unit = {
+    parser.addArgument("--config", "-c")
+      .action(store())
+      .required(true)
+      .help("The Kafka configuration file to use.")
   }
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
