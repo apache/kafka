@@ -156,7 +156,7 @@ public class ConsumerGroupCommand {
     }
 
     static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
-        String format = "\n%-30s %-30s %-10s %-15s";
+        String format = "%n%-30s %-30s %-10s %-15s";
         if (!groupAssignmentsToReset.isEmpty())
             System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
 
@@ -657,7 +657,7 @@ public class ConsumerGroupCommand {
                     printError("Encounter some unknown error: " + topLevelResult, Optional.empty());
             }
 
-            String format = "\n%-30s %-15s %-15s";
+            String format = "%n%-30s %-15s %-15s";
 
             System.out.printf(format, "TOPIC", "PARTITION", "STATUS");
             partitionLevelResult.entrySet().stream()
