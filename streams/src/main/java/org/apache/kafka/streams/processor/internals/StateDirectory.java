@@ -251,7 +251,6 @@ public class StateDirectory implements AutoCloseable {
                     // initialize and suspend new Tasks
                     try {
                         task.initializeIfNeeded();
-                        task.suspend();
 
                         tasksForLocalState.put(id, task);
                     } catch (final TaskCorruptedException e) {
@@ -294,6 +293,7 @@ public class StateDirectory implements AutoCloseable {
 
             // now that we have exclusive ownership of the drained tasks, close them
             for (final Task task : drainedTasks) {
+                task.suspend();
                 task.closeClean();
             }
         }
@@ -587,6 +587,7 @@ public class StateDirectory implements AutoCloseable {
                             final Task task = tasksForLocalState.remove(id);
                             if (task != null) {
                                 // close the pending Task, if one still exists
+                                task.suspend();
                                 task.closeClean();
                             }
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",

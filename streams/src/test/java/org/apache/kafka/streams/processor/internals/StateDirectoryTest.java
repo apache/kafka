@@ -876,7 +876,6 @@ public class StateDirectoryTest {
 
         assertNotNull(task);
         assertThat(task, instanceOf(StandbyTask.class));
-        assertThat(task.state(), is(Task.State.SUSPENDED));
 
         // verify the owner of the task directory lock has been shifted over to our assigned StreamThread
         assertThat(directory.lockOwner(taskId), is(instanceOf(FakeStreamThread.class)));
