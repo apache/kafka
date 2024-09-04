@@ -60,11 +60,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def isUnstableApiEnabled: Boolean = {
-    cluster.config.serverProperties.get("unstable.api.versions.enable") == "true"
+    cluster.brokers.values.stream.allMatch(b => b.config.unstableApiVersionsEnabled)
   }
 
   protected def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.config.serverProperties.get("group.coordinator.new.enable") == "true"
+    cluster.brokers.values.stream.allMatch(b => b.config.isNewGroupCoordinatorEnabled)
   }
 
   protected def commitOffset(
