@@ -4119,18 +4119,15 @@ public class KafkaAdminClient extends AdminClient {
 
         describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).whenComplete((res, ex) -> {
             if (ex != null) {
-                future.completeExceptionally(ex);
+                future.completeExceptionally(new KafkaException("Encounter exception when trying to get members from group: " + groupId, ex));
             }
-            Collection<MemberDescription> members = res.members();
             List<MemberIdentity> membersToRemove = new ArrayList<>();
-            for (final MemberDescription member : members) {
+            for (final MemberDescription member : res.members()) {
                 MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
 
-                if (member.groupInstanceId().isPresent()) {
-                    memberIdentity.setGroupInstanceId(member.groupInstanceId().get());
-                } else {
-                    memberIdentity.setMemberId(member.consumerId());
-                }
+                member.groupInstanceId()
+                        .map(memberIdentity::setGroupInstanceId)
+                        .orElseGet(() -> memberIdentity.setMemberId(member.consumerId()));
 
                 membersToRemove.add(memberIdentity);
             }
