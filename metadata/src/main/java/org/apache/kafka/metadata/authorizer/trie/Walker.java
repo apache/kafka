@@ -37,6 +37,7 @@ import java.util.function.Predicate;
  * </p>
  *
  * @see <a href='https://en.wikipedia.org/wiki/Tree_traversal'>Tree Traversal [Wikipedia]</a>
+ * @param <T> the data type for the Nodes.
  */
 public class Walker<T> {
 
@@ -46,7 +47,7 @@ public class Walker<T> {
      * @param predicate the Predicate to apply.
      * @param data the Node to start at.
      * @return The node on which the predicate returned {@code true} or null if that did not occur.
-     *
+     * @param <T> the data type for the Nodes.
      */
     static <T> Node<T> depthFirst(Predicate<Node<T>> predicate, Node<T> data) {
         if (data == null) {
@@ -68,7 +69,7 @@ public class Walker<T> {
      * @param predicate the Predicate to apply.
      * @param data the Trie to search
      * @return The node on which the predicate returned {@code true} or null if that did not occur.
-     *
+     * @param <T> the data type for the Nodes.
      */
     public static <T> Matcher.SearchResult<T>  depthFirst(Predicate<Node<T>> predicate, Trie<T> data) {
         return new Matcher.SearchResult<>(data == null ? null : depthFirst(predicate, data.getRoot()));
@@ -80,6 +81,7 @@ public class Walker<T> {
      * @param predicate the Predicate to apply.
      * @param data the Node to start at.
      * @return The node on which the predicate returned {@code true} or null if that did not occur.
+     * @param <T> the data type for the Nodes.
      */
     static <T> Node<T> preOrder(Predicate<Node<T>> predicate, Node<T> data) {
         if (data != null) {
@@ -104,14 +106,33 @@ public class Walker<T> {
      * @param predicate the Predicate to apply.
      * @param data the trie to search.
      * @return The node on which the predicate returned {@code true} or null if that did not occur.
+     * @param <T> the data type for the Nodes.
      */
     public static <T> Matcher.SearchResult<T> preOrder(Predicate<Node<T>> predicate, Trie<T> data) {
         return new Matcher.SearchResult<>(data == null ? null : preOrder(predicate, data.getRoot()));
     }
 
+    /**
+     * Executes a Traverser on the specified Trie.
+     * @param trie the trie to execute on.
+     * @param traverser the Traverser to use.
+     * @return the traverser.
+     * @param <T> the data type for the Nodes.
+     * @param <W> the implementation of the Traverser
+     */
+    public static <T, W extends Traverser<T>> W traverse(Trie<T> trie, W traverser) {
+        traverser.traverse(trie.getRoot());
+        return traverser;
+    }
+
     public Walker() {
     }
 
+    /**
+     * create a standard inserter for the node data type.
+     * @param pattern the pattern to insert.
+     * @return the Inserter that will insert the pattern.
+     */
     public Inserter inserter(String pattern) {
         return new StandardInserter(pattern);
     }

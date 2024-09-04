@@ -19,15 +19,37 @@ package org.apache.kafka.metadata.authorizer.trie;
 import java.util.SortedSet;
 
 /**
- * Information shared across Nodes.
- * @param <T>
+ * The data stored on a node.
+ * @param <T> the Structure of the contents.
  */
 public interface NodeData<T> extends FragmentHolder {
+    /**
+     * Returns {@code true} if the node has contents.
+     * @return {@code true} if the node has contents.
+     */
     boolean hasContents();
+
+    /**
+     * Returns the contents of the node.
+     * @return the contents of the node, may be {@code null}.
+     */
     T getContents();
+
+    /**
+     * Gets the name of the node.  This is the fully qualified name from the root to this node.
+     * @return the fully qualified name of this node.
+     */
     String getName();
+
+    /**
+     * Returns the parent of this node.  Will be {@code null} if this is the root.
+     * @return the parent node.
+     */
     NodeData<T> getParent();
 
+    /**
+     * Returns the children of this node.  Will return an empty set if there are no children.
+     * @return the children of this node or an empty set.
+     */
     SortedSet<? extends NodeData<T>> getChildren();
-
 }

@@ -29,11 +29,11 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.bitmap.BitMaps;
-import org.apache.kafka.metadata.authorizer.trie.Matcher;
 import org.apache.kafka.metadata.authorizer.trie.Node;
 import org.apache.kafka.metadata.authorizer.trie.NodeData;
 import org.apache.kafka.metadata.authorizer.trie.ReadOnlyNode;
 import org.apache.kafka.metadata.authorizer.trie.StandardMatcher;
+import org.apache.kafka.metadata.authorizer.trie.Traverser;
 import org.apache.kafka.metadata.authorizer.trie.Trie;
 import org.apache.kafka.metadata.authorizer.trie.Walker;
 import org.apache.kafka.server.authorizer.Action;
@@ -362,40 +362,44 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
         Predicate<StandardAcl> filter = acl -> acl.operation() == operation || acl.operation() == ALL;
 
         if (principal != null) {
-            filter = filter.and(acl -> principal.equals(acl.kafkaPrincipal()));
+            filter = filter.and(acl -> principal.toString().equals(acl.principal()) || acl.principal().equals(principal.getPrincipalType() + ":*") || acl.principal().equals(WILDCARD));
         }
         if (host != null) {
-            filter = filter.and(acl -> host.equals(acl.host()));
+            filter = filter.and(acl -> host.equals(acl.host()) || acl.host().equals(WILDCARD));
+        }
+
+        if (log.isDebugEnabled()) {
+            final Predicate<StandardAcl> f = filter;
+            filter = acl -> {
+                boolean result = f.test(acl);
+                log.debug("TriAuthzData TypeFilter: p:{} h:{} o:{} -> {} -> {}", principal, host, operation, acl, result);
+                return result;
+            };
         }
         return filter;
     }
+
     /**
      * Performs a search and locates a matching rule for the resource type.
+     * Should walk the tree in preorder-NLR order.  If DENY is determined for any node do not process the children.
+     * If an ALLOW is discovered return ALLOW.
+     * otherwise return noAclRule.
      * @param filter The filter for node contents.
      * @param resourceType the resource type to limit the search to.
      * @return the matching rule.
      */
     private MatchingRule matchingRuleByResourceType(final Predicate<StandardAcl> filter, final ResourceType resourceType) {
         // Define the filter used in the traversal of the trie.  If the contents matches the filter we are done.
-        Predicate<Node<AclContainer>> traversalFilter = n -> {
-            AclContainer contents = n.getContents();
-            if (contents != null) {
-                return contents.first(filter).isPresent();
-            }
-            return false;
-        };
-        // walk the trie looking for a match.
-        final Matcher.SearchResult<AclContainer> found = Walker.preOrder(traversalFilter, trieData.getTrie(resourceType));
-        // if found is set we have the match.
-        if (found.hasContents()) {
-            Optional<StandardAcl> optionalAcl = found.getContents().first(filter);
-            if (optionalAcl.isPresent()) {
-                log.info("ACL found {}", optionalAcl);
-                return matchingRuleFromOptionalAcl(optionalAcl);
-            }
+
+        Trie<AclContainer> trie = trieData.getTrie(resourceType);
+        if (trie == null) {
+            log.debug("No ACL found -- returning {}", noAclRule.result());
+            return noAclRule;
         }
-        log.info("No ACL found -- returning " + noAclRule);
-        return noAclRule;
+
+        // walk the trie looking for a match.
+        MatchingRuleTraversal traversal = Walker.traverse(trie, new MatchingRuleTraversal(filter));
+        return matchingRuleFromOptionalAcl(traversal.optionalAcl);
     }
 
 
@@ -451,12 +455,16 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
 
     /**
      * Creates a matching rule from an Optional ACL.
-     * @param optionalAcl the optional ACL must be present.
+     * @param optionalAcl the optional ACL, it not present return noAclRule.
      * @return a matching rule.
      */
     private MatchingRule matchingRuleFromOptionalAcl(Optional<StandardAcl> optionalAcl) {
-        StandardAcl acl = optionalAcl.get();
-        return new MatchingAclRule(acl, acl.permissionType().equals(ALLOW) ? ALLOWED : DENIED);
+        if (optionalAcl.isPresent()) {
+            StandardAcl acl = optionalAcl.get();
+            return new MatchingAclRule(acl, acl.permissionType().equals(ALLOW) ? ALLOWED : DENIED);
+        } else {
+            return noAclRule;
+        }
     }
 
     /**
@@ -793,4 +801,77 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
         }
     }
 
+    /**
+     * Traverser for use when ALLOW ALL is not set.
+     * <p></p>
+     * This traverser walks the tree using a modified PreOrder strategy looking for an ALLOW access.
+     * The modification is: </p>
+     * <ul>
+     * <li>If it finds a matching DENY on a node it stores the matching ACL and does not search the children (TRUNCATE state)</li>
+     * <li>If it finds a matching ALLOW on a node it stores the matching ACL and stops (STOP state)</li>
+     * <li>If it does not find a matching ACLit if follows the normatl preorder walk strategy (CONTINUE state)</li>
+     * </ul>
+     */
+    private static class MatchingRuleTraversal implements Traverser<AclContainer> {
+
+        enum State { CONTINUE, TRUNCATE, STOP };
+
+        /** The ACL that was most recently matched */
+        private Optional<StandardAcl> optionalAcl = Optional.empty();
+
+        /** the filter to match the ACLs with */
+        private final Predicate<StandardAcl> filter;
+
+        /**
+         * Constructs a traverser.
+         * @param filter the filter to match the ACLs with.
+         */
+        MatchingRuleTraversal(final Predicate<StandardAcl> filter) {
+            this.filter = filter;
+        }
+
+        @Override
+        public void traverse(Node<AclContainer> node) {
+            checkNode(node);
+        }
+
+        /**
+         * Checks a node and determines the state of the node.
+         * @param node the node to check.
+         * @return The state of the node.
+         */
+        private State checkNode(Node<AclContainer> node) {
+            switch (getState(node)) {
+                case CONTINUE:
+                    for (Node<AclContainer> child : node.getChildren()) {
+                        if (checkNode(child) == State.STOP) {
+                            return State.STOP;
+                        }
+                    }
+                    break;
+                case STOP:
+                    return State.STOP;
+                case TRUNCATE:
+                    break;
+            }
+            return State.CONTINUE;
+        }
+
+        /**
+         * Calculates the state of a determining if it has an ACL that matches the filter.
+         * @param node the node to get the State for.
+         * @return the State.
+         */
+        private State getState(Node<AclContainer> node) {
+            if (node.hasContents()) {
+                List<StandardAcl> lst = node.getContents().findMatch(filter);
+                if (!lst.isEmpty()) {
+                    StandardAcl acl = lst.get(0);
+                    optionalAcl = Optional.of(acl);
+                    return acl.permissionType() == DENY ? State.TRUNCATE : State.STOP;
+                }
+            }
+            return State.CONTINUE;
+        }
+    }
 }

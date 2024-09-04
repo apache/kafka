@@ -19,12 +19,27 @@ package org.apache.kafka.metadata.authorizer.trie;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+/**
+ * A node that does not allow modification.
+ * @param <T> the data stored on the node.
+ */
 public class ReadOnlyNode<T> implements NodeData<T> {
+    /**
+     * Creates the Readonly Node from a NodeData instance.
+     * If {@code data} is an instance of a ReadOnlyNode it returns it unchanged, otherwise
+     * an instance of ReadOnlyNode that wraps the NodeData is created.  Underlying changes to
+     * {@code data} are reflected in the ReadOnlyNode.
+     * @param data the NodeData instance to convert.
+     * @return a ReadOnly version of the data.
+     * @param <T> the data stored on the node.
+     */
     public static <T> ReadOnlyNode<T> create(NodeData<T> data) {
         return data instanceof ReadOnlyNode ? (ReadOnlyNode<T>) data : new ReadOnlyNode<>(data);
     }
 
+    /** the delegate for data calls.  Package private for testing */
     NodeData<T> delegate;
+
     private ReadOnlyNode(NodeData<T> data) {
         this.delegate = data;
     }
