@@ -365,17 +365,18 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
         // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
         // case it times out, subsequent attempts will also use the event in order to wait for the results.
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchCommittedFuture;
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> refreshWithCommitted;
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
             // Generate a new OffsetFetch request and update positions when a response is received
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
-            fetchCommittedFuture = commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
-            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions, fetchCommittedFuture);
-            refreshOffsetsAndCompleteResultOnResponseReceived(fetchCommittedFuture, result);
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsets =
+                    commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
+            refreshWithCommitted = refreshOffsetsAndCompleteResultOnResponseReceived(fetchOffsets, result);
+            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions, refreshWithCommitted);
         } else {
             // Reuse pending OffsetFetch request
-            fetchCommittedFuture = pendingOffsetFetchEvent.result;
-            fetchCommittedFuture.whenComplete((__, error) -> {
+            refreshWithCommitted = pendingOffsetFetchEvent.result;
+            refreshWithCommitted.whenComplete((__, error) -> {
                 if (error == null) {
                     result.complete(null);
                 } else {
@@ -387,10 +388,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         return result;
     }
 
-    private void refreshOffsetsAndCompleteResultOnResponseReceived(
+    private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> refreshOffsetsAndCompleteResultOnResponseReceived(
             final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchCommittedFuture,
             final CompletableFuture<Void> result) {
-        fetchCommittedFuture.whenComplete((offsets, error) -> {
+        return fetchCommittedFuture.whenComplete((offsets, error) -> {
             pendingOffsetFetchEvent = null;
 
             // Ensure we only set positions for the partitions that still require one (ex. some partitions may have
@@ -431,7 +432,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      *
      * <ul>
      *     <li>A pending offset fetch event exists</li>
-     *     <li>The partition set of the pending offset fetch event is the same as the given partition set</li>
+     *     <li>The partition set of the pending offset fetch event contains all the given partitions</li>
      * </ul>
      */
     private boolean canReusePendingOffsetFetchEvent(Set<TopicPartition> partitions) {
