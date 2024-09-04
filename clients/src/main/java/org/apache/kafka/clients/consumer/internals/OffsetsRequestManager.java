@@ -440,7 +440,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             return false;
         }
 
-        return pendingOffsetFetchEvent.requestedPartitions.equals(partitions);
+        return pendingOffsetFetchEvent.requestedPartitions.containsAll(partitions);
     }
 
     /**
