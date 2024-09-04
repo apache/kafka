@@ -317,7 +317,8 @@ object StorageTool extends Logging {
   private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {
     val featureDependenciesParser = subparsers.addParser("feature-dependencies")
       .help("Look up dependencies for a given feature version. " +
-        "If the feature is not known or the version not yet defined, an error is thrown")
+        "If the feature is not known or the version not yet defined, an error is thrown. "
+      )
 
     featureDependenciesParser.addArgument("--feature", "-f")
       .required(true)
