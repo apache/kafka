@@ -367,16 +367,29 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // case it times out, subsequent attempts will also use the event in order to wait for the results.
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchCommittedFuture;
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
-            // Need to generate a new request to fetch committed offsets
+            // Generate a new OffsetFetch request and update positions when a response is received
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
             fetchCommittedFuture = commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
             pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions, fetchCommittedFuture);
+            refreshOffsetsAndCompleteResultOnResponseReceived(fetchCommittedFuture, result);
         } else {
+            // Reuse pending OffsetFetch request
             fetchCommittedFuture = pendingOffsetFetchEvent.result;
+            fetchCommittedFuture.whenComplete((__, error) -> {
+                if (error == null) {
+                    result.complete(null);
+                } else {
+                    result.completeExceptionally(error);
+                }
+            });
         }
 
-        // when the ongoing OffsetFetch completes, carry on with updating positions and
-        // completing the result future for the current attempt to initWithCommittedOffsetsIfNeeded
+        return result;
+    }
+
+    private void refreshOffsetsAndCompleteResultOnResponseReceived(
+            final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchCommittedFuture,
+            final CompletableFuture<Void> result) {
         fetchCommittedFuture.whenComplete((offsets, error) -> {
             pendingOffsetFetchEvent = null;
 
@@ -391,8 +404,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 result.completeExceptionally(error);
             }
         });
-
-        return result;
     }
 
     /**
