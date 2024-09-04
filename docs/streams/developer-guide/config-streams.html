@@ -70,11 +70,10 @@ settings.put(... , ...);</code></pre>
           <li><a class="reference internal" href="#optional-configuration-parameters" id="id6">Optional configuration parameters</a>
             <ul>
               <li><a class="reference internal" href="#acceptable-recovery-lag" id="id27">acceptable.recovery.lag</a></li>
-              <li><a class="reference internal" href="#default-deserialization-exception-handler" id="id7">default.deserialization.exception.handler (deprecated since 4.0)</a></li>
               <li><a class="reference internal" href="#default-key-serde" id="id8">default.key.serde</a></li>
-              <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler (deprecated since 4.0)</a></li>
               <li><a class="reference internal" href="#default-value-serde" id="id9">default.value.serde</a></li>
-              <li><a class="reference internal" href="#deserialization-exception-handler" id="id42">deserialization.exception.handler</a></li>
+              <li><a class="reference internal" href="#deserialization-exception-handler" id="id7">default.deserialization.exception.handler (deprecated since 4.0)</a></li>
+              <li><a class="reference internal" href="#deserialization-exception-handler" id="id7">deserialization.exception.handler</a></li>
               <li><a class="reference internal" href="#log-summary-interval-ms" id="id40">log.summary.interval.ms</a></li>
               <li><a class="reference internal" href="#max-task-idle-ms" id="id28">max.task.idle.ms</a></li>
               <li><a class="reference internal" href="#max-warmup-replicas" id="id29">max.warmup.replicas</a></li>
@@ -83,7 +82,8 @@ settings.put(... , ...);</code></pre>
               <li><a class="reference internal" href="#probing-rebalance-interval-ms" id="id30">probing.rebalance.interval.ms</a></li>
               <li><a class="reference internal" href="#processing-exception-handler" id="id41">processing.exception.handler</a></li>
               <li><a class="reference internal" href="#processing-guarantee" id="id25">processing.guarantee</a></li>
-              <li><a class="reference internal" href="#production-exception-handler" id="id43">production.exception.handler</a></li>
+              <li><a class="reference internal" href="#production-exception-handler" id="id24">default.production.exception.handler (deprecated since 4.0)</a></li>
+              <li><a class="reference internal" href="#production-exception-handler" id="id24">production.exception.handler</a></li>
               <li><a class="reference internal" href="#rack-aware-assignment-non-overlap-cost" id="id37">rack.aware.assignment.non_overlap_cost</a></li>
               <li><a class="reference internal" href="#rack-aware-assignment-strategy" id="id35">rack.aware.assignment.strategy</a></li>
               <li><a class="reference internal" href="#rack-aware-assignment-tags" id="id34">rack.aware.assignment.tags</a></li>
@@ -490,10 +490,10 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             </div>
           </blockquote>
         </div>
-        <div class="section" id="default-deserialization-exception-handler">
-          <span id="streams-developer-guide-deh"></span><h4><a class="toc-backref" href="#id7">default.deserialization.exception.handler</a><a class="headerlink" href="#default-deserialization-exception-handler" title="Permalink to this headline"></a></h4>
+        <div class="section" id="deserialization-exception-handler">
+          <span id="streams-developer-guide-deh"></span><h4><a class="toc-backref" href="#id7">deserialization.exception.handler</a><a class="headerlink" href="#deserialization-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>The default deserialization exception handler (Deprecated. See <h4><a class="toc-backref" href="#id42">deserialization.exception.handler</a><a class="headerlink" href="#deserialization-exception-handler" title="Permalink to this headline"></a></h4> instead.) allows you to manage record exceptions that fail to deserialize. This
+            <div><p>The deserialization exception handler allows you to manage record exceptions that fail to deserialize. This
               can be caused by corrupt data, incorrect serialization logic, or unhandled record types. The implemented exception
               handler needs to return a <code>FAIL</code> or <code>CONTINUE</code> depending on the record and the exception thrown. Returning
               <code>FAIL</code> will signal that Streams should shut down and <code>CONTINUE</code> will signal that Streams should ignore the issue
@@ -542,10 +542,10 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
 
             </div></blockquote>
         </div>
-        <div class="section" id="default-production-exception-handler">
-          <span id="streams-developer-guide-peh"></span><h4><a class="toc-backref" href="#id24">default.production.exception.handler</a><a class="headerlink" href="#default-production-exception-handler" title="Permalink to this headline"></a></h4>
+        <div class="section" id="production-exception-handler">
+          <span id="streams-developer-guide-peh"></span><h4><a class="toc-backref" href="#id24">production.exception.handler</a><a class="headerlink" href="#production-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>The default production exception handler (Deprecated. See <h4><a class="toc-backref" href="#id43">production.exception.handler</a><a class="headerlink" href="#production-exception-handler" title="Permalink to this headline"></a></h4> instead.) allows you to manage exceptions triggered when trying to interact with a broker
+            <div><p>The production exception handler allows you to manage exceptions triggered when trying to interact with a broker
               such as attempting to produce a record that is too large. By default, Kafka provides and uses the <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html">DefaultProductionExceptionHandler</a>
               that always fails when these exceptions occur.</p>
 
@@ -576,7 +576,7 @@ Properties settings = new Properties();
 
 // other various kafka streams settings, e.g. bootstrap servers, application id, etc
 
-settings.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+settings.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
              IgnoreRecordTooLargeHandler.class);</code></pre></div>
           </blockquote>
         </div>
