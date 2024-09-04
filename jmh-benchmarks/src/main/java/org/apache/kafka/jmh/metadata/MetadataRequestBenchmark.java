@@ -59,6 +59,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
+import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;
@@ -101,7 +102,7 @@ import scala.Option;
 
 public class MetadataRequestBenchmark {
     private final RequestChannel requestChannel = Mockito.mock(RequestChannel.class, Mockito.withSettings().stubOnly());
-    private final RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
+    private final RequestChannelMetrics requestChannelMetrics = Mockito.mock(RequestChannelMetrics.class);
     private final ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
     private final GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
     private final ZkAdminManager adminManager = Mockito.mock(ZkAdminManager.class);

@@ -21,7 +21,7 @@ import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.UnifiedLog
-import kafka.network.{RequestChannel, RequestMetrics}
+import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
 import kafka.server.share.SharePartitionManager
@@ -76,8 +76,9 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.ClientMetricsManager
@@ -113,7 +114,7 @@ import scala.jdk.CollectionConverters._
 
 class KafkaApisTest extends Logging {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
-  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+  private val requestChannelMetrics: RequestChannelMetrics = mock(classOf[RequestChannelMetrics])
   private val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
   private val groupCoordinator: GroupCoordinator = mock(classOf[GroupCoordinator])
   private val adminManager: ZkAdminManager = mock(classOf[ZkAdminManager])
@@ -1339,8 +1340,8 @@ class KafkaApisTest extends Logging {
             groupId, AuthorizationResult.ALLOWED)
           Topic.GROUP_METADATA_TOPIC_NAME
         case CoordinatorType.TRANSACTION =>
-          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
-          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
           authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TRANSACTIONAL_ID,
             groupId, AuthorizationResult.ALLOWED)
@@ -1458,8 +1459,8 @@ class KafkaApisTest extends Logging {
           true
 
         case Topic.TRANSACTION_STATE_TOPIC_NAME =>
-          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
-          topicConfigOverride.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
+          topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
           when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
           true
         case _ =>
@@ -2441,7 +2442,7 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.ADD_PARTITIONS_TO_TXN)
   def testHandleAddPartitionsToTxnAuthorizationFailedAndMetrics(version: Short): Unit = {
-    val requestMetrics = new RequestChannel.Metrics(Seq(ApiKeys.ADD_PARTITIONS_TO_TXN))
+    val requestMetrics = new RequestChannelMetrics(Collections.singleton(ApiKeys.ADD_PARTITIONS_TO_TXN))
     try {
       val topic = "topic"
 
@@ -2493,7 +2494,7 @@ class KafkaApisTest extends Logging {
       val expectedError = if (version < 4) Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED else Errors.CLUSTER_AUTHORIZATION_FAILED
       assertEquals(expectedError, error)
 
-      val metricName = if (version < 4) ApiKeys.ADD_PARTITIONS_TO_TXN.name else RequestMetrics.verifyPartitionsInTxnMetricName
+      val metricName = if (version < 4) ApiKeys.ADD_PARTITIONS_TO_TXN.name else RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME
       assertEquals(8, TestUtils.metersCount(metricName))
     } finally {
       requestMetrics.close()
@@ -4153,6 +4154,31 @@ class KafkaApisTest extends Logging {
   @Test
   def testReadCommittedConsumerListOffsetLatest(): Unit = {
     testConsumerListOffsetLatest(IsolationLevel.READ_COMMITTED)
+  }
+
+  @Test
+  def testListOffsetMaxTimestampWithUnsupportedVersion(): Unit = {
+    testConsumerListOffsetWithUnsupportedVersion(ListOffsetsRequest.MAX_TIMESTAMP, 6)
+  }
+
+  @Test
+  def testListOffsetEarliestLocalTimestampWithUnsupportedVersion(): Unit = {
+    testConsumerListOffsetWithUnsupportedVersion(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, 7)
+  }
+
+  @Test
+  def testListOffsetLatestTieredTimestampWithUnsupportedVersion(): Unit = {
+    testConsumerListOffsetWithUnsupportedVersion(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, 8)
+  }
+
+  @Test
+  def testListOffsetNegativeTimestampWithZeroVersion(): Unit = {
+    testConsumerListOffsetWithUnsupportedVersion(-3, 0)
+  }
+
+  @Test
+  def testListOffsetNegativeTimestampWithOneOrAboveVersion(): Unit = {
+    testConsumerListOffsetWithUnsupportedVersion(-6, 1)
   }
 
   /**
@@ -8854,7 +8880,7 @@ class KafkaApisTest extends Logging {
     ).build()
 
     val requestChannelRequest = buildRequest(offsetCommitRequest)
-    
+
     metadataCache = MetadataCache.zkMetadataCache(brokerId, IBP_2_2_IV1)
     brokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
     kafkaApis = createKafkaApis(IBP_2_2_IV1)
@@ -10119,6 +10145,30 @@ class KafkaApisTest extends Logging {
     verifyNoThrottling[MetadataResponse](requestChannelRequest)
   }
 
+  private def testConsumerListOffsetWithUnsupportedVersion(timestamp: Long, version: Short): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val targetTimes = List(new ListOffsetsTopic()
+      .setName(tp.topic)
+      .setPartitions(List(new ListOffsetsPartition()
+        .setPartitionIndex(tp.partition)
+        .setTimestamp(timestamp)).asJava)).asJava
+
+    val data = new ListOffsetsRequestData().setTopics(targetTimes).setReplicaId(ListOffsetsRequest.CONSUMER_REPLICA_ID)
+    val listOffsetRequest = ListOffsetsRequest.parse(MessageUtil.toByteBuffer(data, version), version)
+    val request = buildRequest(listOffsetRequest)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleListOffsetRequest(request)
+
+    val response = verifyNoThrottling[ListOffsetsResponse](request)
+    val partitionDataOptional = response.topics.asScala.find(_.name == tp.topic).get
+      .partitions.asScala.find(_.partitionIndex == tp.partition)
+    assertTrue(partitionDataOptional.isDefined)
+
+    val partitionData = partitionDataOptional.get
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, partitionData.errorCode)
+  }
+
   private def testConsumerListOffsetLatest(isolationLevel: IsolationLevel): Unit = {
     val tp = new TopicPartition("foo", 0)
     val latestOffset = 15L
@@ -10164,7 +10214,7 @@ class KafkaApisTest extends Logging {
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None,
-                           requestMetrics: RequestChannel.Metrics = requestChannelMetrics): RequestChannel.Request = {
+                           requestMetrics: RequestChannelMetrics = requestChannelMetrics): RequestChannel.Request = {
     val buffer = request.serializeWithHeader(
       requestHeader.getOrElse(new RequestHeader(request.apiKey, request.version, clientId, 0)))
 
