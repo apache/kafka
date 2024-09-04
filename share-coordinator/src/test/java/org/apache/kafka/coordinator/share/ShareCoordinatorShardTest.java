@@ -27,12 +27,10 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
-import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
@@ -68,8 +66,6 @@ class ShareCoordinatorShardTest {
 
     public static class ShareCoordinatorShardBuilder {
         private final LogContext logContext = new LogContext();
-        private final MockTime time = new MockTime();
-        private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         private ShareCoordinatorConfig config = null;
         private CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
         private CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
@@ -84,8 +80,6 @@ class ShareCoordinatorShardTest {
 
             ShareCoordinatorShard shard = new ShareCoordinatorShard(
                 logContext,
-                time,
-                timer,
                 config,
                 coordinatorMetrics,
                 metricsShard,

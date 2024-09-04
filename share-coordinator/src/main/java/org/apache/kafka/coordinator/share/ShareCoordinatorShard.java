@@ -65,8 +65,6 @@ import java.util.stream.Collectors;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
     private final Logger log;
-    private final Time time;
-    private final CoordinatorTimer<Void, CoordinatorRecord> timer;
     private final ShareCoordinatorConfig config;
     private final CoordinatorMetrics coordinatorMetrics;
     private final CoordinatorMetricsShard metricsShard;
@@ -83,8 +81,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private ShareCoordinatorConfig config;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
-        private Time time;
-        private CoordinatorTimer<Void, CoordinatorRecord> timer;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
 
@@ -106,13 +102,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         @Override
         public CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> withTime(Time time) {
-            this.time = time;
+            // method is required due to interface
             return this;
         }
 
         @Override
         public CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> withTimer(CoordinatorTimer<Void, CoordinatorRecord> timer) {
-            this.timer = timer;
+            // method is required due to interface
             return this;
         }
 
@@ -136,10 +132,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 throw new IllegalArgumentException("Config must be set.");
             if (snapshotRegistry == null)
                 throw new IllegalArgumentException("SnapshotRegistry must be set.");
-            if (time == null)
-                throw new IllegalArgumentException("Time must be set.");
-            if (timer == null)
-                throw new IllegalArgumentException("Timer must be set.");
             if (coordinatorMetrics == null || !(coordinatorMetrics instanceof ShareCoordinatorMetrics))
                 throw new IllegalArgumentException("CoordinatorMetrics must be set and be of type ShareCoordinatorMetrics.");
             if (topicPartition == null)
@@ -150,8 +142,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
             return new ShareCoordinatorShard(
                 logContext,
-                time,
-                timer,
                 config,
                 coordinatorMetrics,
                 metricsShard,
@@ -162,16 +152,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     ShareCoordinatorShard(
         LogContext logContext,
-        Time time,
-        CoordinatorTimer<Void, CoordinatorRecord> timer,
         ShareCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
         CoordinatorMetricsShard metricsShard,
         SnapshotRegistry snapshotRegistry
     ) {
         this.log = logContext.logger(ShareCoordinatorShard.class);
-        this.time = time;
-        this.timer = timer;
         this.config = config;
         this.coordinatorMetrics = coordinatorMetrics;
         this.metricsShard = metricsShard;
