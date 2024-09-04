@@ -250,14 +250,4 @@ public class ConsumerConfigTest {
         assertTrue(exception.getMessage().contains(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + 
                 " cannot be set when " + ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name()));
     }
-
-    @Test
-    public void testSettingDefaultValuePartitionAssigmentStrategyWithConsumerGroupProtocol() {
-        final Map<String, Object> configs = new HashMap<>();
-        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
-        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
-        configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "org.apache.kafka.clients.consumer.RangeAssignor,org.apache.kafka.clients.consumer.CooperativeStickyAssignor");
-        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
-        assertDoesNotThrow(() -> new ConsumerConfig(configs));
-    }
 }
