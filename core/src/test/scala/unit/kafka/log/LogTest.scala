@@ -541,7 +541,7 @@ class LogTest {
   @Test
   def testTimeBasedLogRoll(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
+    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L, liMinSegmentRollMs = 0L)
 
     // create a log
     val log = createLog(logDir, logConfig, maxProducerIdExpirationMs = 24 * 60)
@@ -1665,7 +1665,7 @@ class LogTest {
     var set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
     val maxJitter = 20 * 60L
     // create a log
-    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L, segmentJitterMs = maxJitter)
+    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L, segmentJitterMs = maxJitter, liMinSegmentRollMs = 0L)
     val log = createLog(logDir, logConfig)
     assertEquals(1, log.numberOfSegments, "Log begins with a single empty segment.")
     log.appendAsLeader(set, leaderEpoch = 0)
@@ -1680,6 +1680,38 @@ class LogTest {
     log.appendAsLeader(set, leaderEpoch = 0)
     assertEquals(2, log.numberOfSegments,
       "Log should roll after segmentMs adjusted by random jitter")
+  }
+
+  /**
+   * Test for jitter s for time based log roll with liMinSegmentRollMs not 0
+   */
+  @Test
+  def testTimeBasedLogRollJitterWithMinSegmentRollMs(): Unit = {
+    var set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    val maxJitter = 20 * 60L
+    // create a log
+    val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L, segmentJitterMs = maxJitter,
+      liMinSegmentRollMs = 10 * 60 * 60L)
+    val log = createLog(logDir, logConfig)
+    assertEquals(1, log.numberOfSegments, "Log begins with a single empty segment.")
+    log.appendAsLeader(set, leaderEpoch = 0)
+
+    mockTime.sleep(log.config.segmentMs - maxJitter)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    log.appendAsLeader(set, leaderEpoch = 0)
+    assertEquals(1, log.numberOfSegments,
+      "Log does not roll on this append because it occurs earlier than max jitter")
+    mockTime.sleep(maxJitter - log.activeSegment.rollJitterMs + 1)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    log.appendAsLeader(set, leaderEpoch = 0)
+    assertEquals(1, log.numberOfSegments,
+      "Log should not roll before liMinSegmentRollMs")
+
+    mockTime.sleep(log.config.liMinSegmentRollMs)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    log.appendAsLeader(set, leaderEpoch = 0)
+    assertEquals(2, log.numberOfSegments,
+      "Log should roll as it passes liMinSegmentRollMs")
   }
 
   /**

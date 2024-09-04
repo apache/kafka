@@ -66,7 +66,8 @@ class LogSegment private[log] (val log: FileRecords,
   def timeIndex: TimeIndex = lazyTimeIndex.get
 
   def shouldRoll(rollParams: RollParams): Boolean = {
-    val reachedRollMs = timeWaitedForRoll(rollParams.now, rollParams.maxTimestampInMessages) > rollParams.maxSegmentMs - rollJitterMs
+    val reachedRollMs = timeWaitedForRoll(rollParams.now, rollParams.maxTimestampInMessages) >
+      math.max(rollParams.maxSegmentMs - rollJitterMs, rollParams.liMinLogRollMs)
     size > rollParams.maxSegmentBytes - rollParams.messagesSize ||
       (size > 0 && reachedRollMs) ||
       offsetIndex.isFull || timeIndex.isFull || !canConvertToRelativeOffset(rollParams.maxOffsetInMessages)

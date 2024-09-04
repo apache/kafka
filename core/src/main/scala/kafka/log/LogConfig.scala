@@ -44,6 +44,7 @@ object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
   val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
   val SegmentJitterMs = kafka.server.Defaults.LogRollJitterHours * 60 * 60 * 1000L
+  val LiMinSegmentRollMs = kafka.server.Defaults.LiMinSegmentRollMs
   val FlushInterval = kafka.server.Defaults.LogFlushIntervalMessages
   val FlushMs = kafka.server.Defaults.LogFlushSchedulerIntervalMs
   val RetentionSize = kafka.server.Defaults.LogRetentionBytes
@@ -87,6 +88,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val segmentSize = getInt(LogConfig.SegmentBytesProp)
   val segmentMs = getLong(LogConfig.SegmentMsProp)
   val segmentJitterMs = getLong(LogConfig.SegmentJitterMsProp)
+  val liMinSegmentRollMs = getLong(KafkaConfig.LiMinLogRollTimeMillisProp)
   val maxIndexSize = getInt(LogConfig.SegmentIndexBytesProp)
   val flushInterval = getLong(LogConfig.FlushMessagesProp)
   val flushMs = getLong(LogConfig.FlushMsProp)
@@ -312,6 +314,8 @@ object LogConfig {
         KafkaConfig.LogRollTimeMillisProp)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
+      .define(KafkaConfig.LiMinLogRollTimeMillisProp, LONG, Defaults.LiMinSegmentRollMs, atLeast(0), MEDIUM, KafkaConfig.LiMinLogRollTimeMillisDoc,
+        KafkaConfig.LiMinLogRollTimeMillisProp)
       .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc,
         KafkaConfig.LogIndexSizeMaxBytesProp)
       .define(FlushMessagesProp, LONG, Defaults.FlushInterval, atLeast(0), MEDIUM, FlushIntervalDoc,

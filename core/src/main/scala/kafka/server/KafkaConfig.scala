@@ -138,6 +138,7 @@ object Defaults {
   val LogRollHours = 24 * 7
   val LogRollJitterHours = 0
   val LogRetentionHours = 24 * 7
+  val LiMinSegmentRollMs = 15 * 60 * 1000L
 
   val LogRetentionBytes = -1L
   val LogCleanupIntervalMs = 5 * 60 * 1000L
@@ -514,6 +515,8 @@ object KafkaConfig {
 
   val LogRollTimeJitterMillisProp = "log.roll.jitter.ms"
   val LogRollTimeJitterHoursProp = "log.roll.jitter.hours"
+
+  val LiMinLogRollTimeMillisProp = "li.min.log.roll.ms"
 
   val LogRetentionTimeMillisProp = "log.retention.ms"
   val LogRetentionTimeMinutesProp = "log.retention.minutes"
@@ -918,6 +921,8 @@ object KafkaConfig {
 
   val LogRollTimeJitterMillisDoc = "The maximum jitter to subtract from logRollTimeMillis (in milliseconds). If not set, the value in " + LogRollTimeJitterHoursProp + " is used"
   val LogRollTimeJitterHoursDoc = "The maximum jitter to subtract from logRollTimeMillis (in hours), secondary to " + LogRollTimeJitterMillisProp + " property"
+
+  val LiMinLogRollTimeMillisDoc = "The minimum interval (in milliseconds) before a log segment can be forced to roll over due to time-based rolling. Segments may still roll faster due to size limits."
 
   val LogRetentionTimeMillisDoc = "The number of milliseconds to keep a log file before deleting it (in milliseconds), If not set, the value in " + LogRetentionTimeMinutesProp + " is used. If set to -1, no time limit is applied."
   val LogRetentionTimeMinsDoc = "The number of minutes to keep a log file before deleting it (in minutes), secondary to " + LogRetentionTimeMillisProp + " property. If not set, the value in " + LogRetentionTimeHoursProp + " is used"

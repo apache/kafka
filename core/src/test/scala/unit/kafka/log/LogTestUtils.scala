@@ -20,7 +20,7 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
-import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, KafkaConfig, LogDirFailureChannel}
 import kafka.utils.{Scheduler, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
@@ -48,6 +48,7 @@ object LogTestUtils {
 
   def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
                       segmentBytes: Int = Defaults.SegmentSize,
+                      liMinSegmentRollMs: Long = Defaults.LiMinSegmentRollMs,
                       retentionMs: Long = Defaults.RetentionMs,
                       retentionBytes: Long = Defaults.RetentionSize,
                       localRetentionMs: Long = Defaults.LocalRetentionMs,
@@ -75,6 +76,7 @@ object LogTestUtils {
     logProps.put(LogConfig.RemoteLogStorageEnableProp, remoteLogStorageEnable: java.lang.Boolean)
     logProps.put(LogConfig.LocalLogRetentionMsProp, localRetentionMs: java.lang.Long)
     logProps.put(LogConfig.LocalLogRetentionBytesProp, localRetentionBytes: java.lang.Long)
+    logProps.put(KafkaConfig.LiMinLogRollTimeMillisProp, liMinSegmentRollMs: java.lang.Long)
     LogConfig(logProps)
   }
 
