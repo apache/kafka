@@ -491,7 +491,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </blockquote>
         </div>
         <div class="section" id="deserialization-exception-handler">
-          <span id="streams-developer-guide-deh"></span><h4><a class="toc-backref" href="#id7">deserialization.exception.handler</a><a class="headerlink" href="#deserialization-exception-handler" title="Permalink to this headline"></a></h4>
+          <span id="streams-developer-guide-deh"></span><h4><a class="toc-backref" href="#id7">deserialization.exception.handler (deprecated: default.deserialization.exception.handler)</a><a class="headerlink" href="#deserialization-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div><p>The deserialization exception handler allows you to manage record exceptions that fail to deserialize. This
               can be caused by corrupt data, incorrect serialization logic, or unhandled record types. The implemented exception
@@ -543,7 +543,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             </div></blockquote>
         </div>
         <div class="section" id="production-exception-handler">
-          <span id="streams-developer-guide-peh"></span><h4><a class="toc-backref" href="#id24">production.exception.handler</a><a class="headerlink" href="#production-exception-handler" title="Permalink to this headline"></a></h4>
+          <span id="streams-developer-guide-peh"></span><h4><a class="toc-backref" href="#id24">production.exception.handler (deprecated: default.production.exception.handler)</a><a class="headerlink" href="#production-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div><p>The production exception handler allows you to manage exceptions triggered when trying to interact with a broker
               such as attempting to produce a record that is too large. By default, Kafka provides and uses the <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html">DefaultProductionExceptionHandler</a>
