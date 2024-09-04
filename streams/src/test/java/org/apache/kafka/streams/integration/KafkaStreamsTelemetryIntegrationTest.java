@@ -129,7 +129,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
     void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws InterruptedException {
         final Properties properties = props(stateUpdaterEnabled);
         final Topology topology = topologyType.equals("simple") ? simpleTopology() : complexTopology();
-
+        /*
+           This test verifies that all Kafka Streams metrics with a thread-id tag get passed to the consumer
+         */
         try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
             streams.start();
             waitForCondition(() -> KafkaStreams.State.RUNNING == streams.state(),
@@ -159,6 +161,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
         properties2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         properties2.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
 
+        /*
+          This test ensures metrics are registered and removed correctly with Kafka Steams dynamic membership changes
+         */
+
         final Topology topology = complexTopology();
         try (final KafkaStreams streamsOne = new KafkaStreams(topology, properties1)) {
             streamsOne.start();
@@ -172,6 +178,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
             final List<MetricName> consumerPassedStreamTaskMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CONSUMER).passedMetrics.stream().map(KafkaMetric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
 
+            /*
+             With only one instance, Kafka Streams should register task metrics for all tasks 0_0, 0_1, 1_0, 1_1
+             */
             final List<String> streamTaskIds = getTaskIdsAsStrings(streamsOne);
             final long consumerPassedTaskMetricCount = consumerPassedStreamTaskMetricNames.stream().filter(metricName -> streamTaskIds.contains(metricName.tags().get("task-id"))).count();
             assertEquals(streamsTaskMetricNames.size(), consumerPassedStreamTaskMetricNames.size());
@@ -184,6 +193,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         IntegrationTestUtils.DEFAULT_TIMEOUT,
                         () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
 
+                /*
+                  Now with 2 instances, the tasks will get split amongst both Kafka Streams applications
+                 */
                 final List<String> streamOneTaskIds = getTaskIdsAsStrings(streamsOne);
                 final List<String> streamTwoTasksIds = getTaskIdsAsStrings(streamsTwo);
 
@@ -198,10 +210,15 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 
                 final List<MetricName> consumerTwoPassedTaskMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CONSUMER)
                         .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
-
+                /*
+                 Confirm pre-existing KafkaStreams instance one only passes metrics for its tasks and has no metrics for previous tasks
+                 */
                 final long consumerOneStreamOneTaskCount = consumerOnePassedTaskMetrics.stream().filter(metricName -> streamOneTaskIds.contains(metricName.tags().get("task-id"))).count();
                 final long consumerOneTaskTwoMetricCount = consumerOnePassedTaskMetrics.stream().filter(metricName -> streamTwoTasksIds.contains(metricName.tags().get("task-id"))).count();
 
+                /*
+                  Confirm new KafkaStreams instance only passes metrics for the newly assigned tasks
+                 */
                 final long consumerTwoStreamTwoTaskCount = consumerTwoPassedTaskMetrics.stream().filter(metricName -> streamTwoTasksIds.contains(metricName.tags().get("task-id"))).count();
                 final long consumerTwoTaskOneMetricCount = consumerTwoPassedTaskMetrics.stream().filter(metricName -> streamOneTaskIds.contains(metricName.tags().get("task-id"))).count();
 
