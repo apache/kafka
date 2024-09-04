@@ -283,6 +283,7 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metadata.properties" />
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.server.util" />
@@ -306,12 +307,14 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
     <allow pkg="kafka.test" />
+    <allow pkg="kafka.testkit" />
     <allow pkg="joptsimple" />
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
     <allow pkg="org.apache.kafka.coordinator.transaction" />
     <allow pkg="org.apache.kafka.coordinator.group" />
+    <allow pkg="org.apache.kafka.image" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
