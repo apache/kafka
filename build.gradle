@@ -84,7 +84,6 @@ ext {
 
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
-  userDisableJUnitReports = project.hasProperty('disableJUnitReports') && disableJUnitReports.toBoolean()
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
@@ -253,7 +252,7 @@ if (repo != null) {
   rat.enabled = false
 }
 println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
-println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries, disableJUnitReports=$userDisableJUnitReports")
+println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
 
@@ -500,12 +499,6 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-
-    // Disable reports in some cases
-    /*reports {
-      junitXml.required = !userDisableJUnitReports
-      html.required = !userDisableJUnitReports
-    }*/
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -538,12 +531,6 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-
-    // Disable reports in some cases
-    reports {
-      junitXml.required = !userDisableJUnitReports
-      html.required = !userDisableJUnitReports
-    }
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
@@ -574,12 +561,6 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-
-    // Disable reports in some cases
-    reports {
-      junitXml.required = !userDisableJUnitReports
-      html.required = !userDisableJUnitReports
-    }
   }
 
   // remove test output from all test types
@@ -587,22 +568,6 @@ subprojects {
     cleanTest {
       delete t.reports.junitXml.outputLocation
       delete t.reports.html.outputLocation
-    }
-
-    afterSuite { desc, result ->
-      if (!desc.parent) {
-        // Only summarize results for whole modules
-        String summary = "${t.project.name}:${t.name} results: ${result.resultType} " +
-                "(" +
-                "${result.testCount} tests, " +
-                "${result.successfulTestCount} successes, " +
-                "${result.failedTestCount} failures, " +
-                "${result.skippedTestCount} skipped" +
-                ") " +
-                "\n" +
-                "Report file: ${t.reports.junitXml.entryPoint}"
-        println summary
-      }
     }
 
     doLast {
