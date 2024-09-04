@@ -468,14 +468,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     private OffsetAndMetadata findOffsetAndMetadata(final TopicPartition partition) {
-        final Long offset = partitionGroup.headRecordOffset(partition);
+        Long offset = partitionGroup.headRecordOffset(partition);
         Optional<Integer> leaderEpoch = partitionGroup.headRecordLeaderEpoch(partition);
         final long partitionTime = partitionGroup.partitionTimestamp(partition);
         if (offset == null) {
-            if (nextOffsetsAndMetadataToBeConsumed.containsKey(partition)) {
-                leaderEpoch = nextOffsetsAndMetadataToBeConsumed.get(partition).leaderEpoch();
-            } else {
-                leaderEpoch = Optional.empty();
+            try {
+                final OffsetAndMetadata offsetAndMetadata = nextOffsetsAndMetadataToBeConsumed.get(partition);
+                offset = offsetAndMetadata.offset();
+                leaderEpoch = offsetAndMetadata.leaderEpoch();
+            } catch (final NullPointerException e) {
+                // NullPointerException indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                log.error("Stream task {} does not know the partition: {}", id, partition);
+                throw new IllegalStateException(e);
+            } catch (final KafkaException fatal) {
+                throw new StreamsException(fatal);
             }
         }
         return new OffsetAndMetadata(offset,

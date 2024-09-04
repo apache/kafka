@@ -92,7 +92,12 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     }
 
     public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
-        return new HashMap<>();
+        HashMap<TopicPartition, OffsetAndMetadata> ret = new HashMap<>();
+        for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : records.entrySet()) {
+            final ConsumerRecord<K, V> lastRecord = entry.getValue().get(entry.getValue().size() - 1);
+            ret.put(entry.getKey(), new OffsetAndMetadata(lastRecord.offset() + 1, lastRecord.leaderEpoch(), ""));
+        }
+        return Collections.unmodifiableMap(ret);
     }
 
     private static class ConcatenatedIterable<K, V> implements Iterable<ConsumerRecord<K, V>> {

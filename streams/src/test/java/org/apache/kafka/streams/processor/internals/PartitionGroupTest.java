@@ -44,7 +44,13 @@ import org.apache.log4j.Level;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
