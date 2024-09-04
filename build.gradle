@@ -569,6 +569,14 @@ subprojects {
       delete t.reports.junitXml.outputLocation
       delete t.reports.html.outputLocation
     }
+
+    doLast {
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+      println "Copy JUnit XML for ${project.name} to $dest"
+      ant.copy(todir: "$dest") {
+        ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
+      }
+    }
   }
 
   jar {
