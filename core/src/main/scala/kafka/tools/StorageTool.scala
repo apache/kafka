@@ -240,7 +240,7 @@ object StorageTool extends Logging {
 
   def parseArguments(args: Array[String]): Namespace = {
     val parser = ArgumentParsers
-      .newArgumentParser("kafka-storage", /* defaultHelp */true, /* prefixChars */"-", /* fromFilePrefix */ "@")
+      .newArgumentParser("kafka-storage", /* defaultHelp */ true, /* prefixChars */ "-", /* fromFilePrefix */ "@")
       .description("The Kafka storage tool.")
 
     val subparsers = parser.addSubparsers().dest("command")
@@ -316,11 +316,14 @@ object StorageTool extends Logging {
 
   private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {
     val featureDependenciesParser = subparsers.addParser("feature-dependencies")
-      .help("Look up dependencies for a given feature version.")
+      .help("Look up dependencies for a given feature version. " +
+        "If the feature is not known or the version not yet defined, an error is thrown")
 
     featureDependenciesParser.addArgument("--feature", "-f")
       .required(true)
-      .help("The feature and version to look up dependencies for, in feature=level format. For example: `metadata.version=5`.")
+      .help("The feature and version to look up dependencies for, in feature=level format." +
+        " For example: `metadata.version=5`."
+      )
       .action(store())
   }
 

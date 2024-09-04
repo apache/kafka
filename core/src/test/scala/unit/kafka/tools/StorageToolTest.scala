@@ -321,7 +321,7 @@ Found problem:
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq("--feature", "metadata.version=20")))
-    assertTrue(stream.toString().contains("3.9-IV0"),
+    assertTrue(stream.toString().contains("4.0-IV0"),
       "Failed to find content in output: " + stream.toString())
   }
 
@@ -534,10 +534,7 @@ Found problem:
   ): Int = {
     val tempDir = TestUtils.tempDir()
     try {
-      val configPathString = new File(tempDir.getAbsolutePath, "feature-dependencies.props").toString
-      PropertiesUtils.writePropertiesFile(properties, configPathString, true)
-
-      val arguments = ListBuffer[String]("feature-dependencies", "--feature", feature, "--config", configPathString)
+      val arguments = ListBuffer[String]("feature-dependencies", "--feature", feature)
       StorageTool.execute(arguments.toArray, new PrintStream(stream))
     } finally {
       Utils.delete(tempDir)
