@@ -4652,6 +4652,149 @@ public class TaskManagerTest {
         assertEquals(taskManager.notPausedTasks().size(), 0);
     }
 
+    @Test
+    public void shouldRecyclePendingTasksFromStateDirectoryAsActive() {
+        final StandbyTask pendingTask = mock(StandbyTask.class);
+        when(pendingTask.id()).thenReturn(taskId00);
+        when(pendingTask.isActive()).thenReturn(false);
+        when(pendingTask.prepareCommit()).thenReturn(Collections.emptyMap());
+        when(pendingTask.stateManager()).thenReturn(stateManager);
+        doNothing().when(stateManager).assignToStreamThread(any(), any(), any());
+        doNothing().when(pendingTask).updateInputPartitions(any(), any());
+
+        final StreamTask activeTask = mock(StreamTask.class);
+        when(activeTask.id()).thenReturn(taskId00);
+        when(activeTask.isActive()).thenReturn(true);
+        when(activeTask.inputPartitions()).thenReturn(taskId00Partitions);
+        when(activeTaskCreator.createActiveTaskFromStandby(eq(pendingTask), eq(taskId00Partitions), any()))
+            .thenReturn(activeTask);
+
+        when(stateDirectory.hasPendingTasks()).thenReturn(true, false);
+        when(stateDirectory.removePendingTask(taskId00)).thenReturn(pendingTask, (Task) null);
+
+        taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
+
+        // ensure we recycled our existing pending Standby into an Active task
+        verify(activeTaskCreator).createActiveTaskFromStandby(eq(pendingTask), eq(taskId00Partitions), any());
+
+        // ensure we didn't construct any new Tasks
+        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
+        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        verifyNoMoreInteractions(activeTaskCreator);
+        verifyNoMoreInteractions(standbyTaskCreator);
+
+        // verify the recycled task is now being used as an assiged Active
+        assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
+        assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
+    }
+
+    @Test
+    public void shouldUsePendingTasksFromStateDirectoryAsStandby() {
+        final StandbyTask pendingTask = mock(StandbyTask.class);
+        when(pendingTask.id()).thenReturn(taskId00);
+        when(pendingTask.isActive()).thenReturn(false);
+        when(pendingTask.stateManager()).thenReturn(stateManager);
+
+        when(stateDirectory.hasPendingTasks()).thenReturn(true, true, false);
+        when(stateDirectory.removePendingTask(taskId00)).thenReturn(pendingTask, (Task) null);
+
+        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
+
+        // ensure we used our existing pending Task directly as a Standby
+        verify(pendingTask).resume();
+
+        // ensure we didn't construct any new Tasks, or recycle an existing Task; we only used the one we already have
+        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
+        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        verifyNoMoreInteractions(activeTaskCreator);
+        verifyNoMoreInteractions(standbyTaskCreator);
+
+        // verify the pending Standby is now being used as an assigned Standby
+        assertEquals(Collections.emptyMap(), taskManager.activeTaskMap());
+        assertEquals(Collections.singletonMap(taskId00, pendingTask), taskManager.standbyTaskMap());
+    }
+
+    @Test
+    public void shouldRecyclePendingTasksFromStateDirectoryAsActiveWithStateUpdater() {
+        final Tasks taskRegistry = new Tasks(new LogContext());
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry, true);
+        final StandbyTask pendingTask = mock(StandbyTask.class);
+        when(pendingTask.id()).thenReturn(taskId00);
+        when(pendingTask.isActive()).thenReturn(false);
+        when(pendingTask.stateManager()).thenReturn(stateManager);
+        doNothing().when(stateManager).assignToStreamThread(any(), any(), any());
+        doNothing().when(pendingTask).updateInputPartitions(any(), any());
+
+        final StreamTask activeTask = mock(StreamTask.class);
+        when(activeTask.id()).thenReturn(taskId00);
+        when(activeTask.isActive()).thenReturn(true);
+        when(activeTaskCreator.createActiveTaskFromStandby(eq(pendingTask), eq(taskId00Partitions), any()))
+                .thenReturn(activeTask);
+
+        when(stateDirectory.hasPendingTasks()).thenReturn(true, false);
+        when(stateDirectory.removePendingTask(taskId00)).thenReturn(pendingTask, (Task) null);
+
+        taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
+
+        // ensure we used our existing pending Task directly as a Standby
+        assertTrue(taskRegistry.hasPendingTasksToInit());
+        assertEquals(Collections.singleton(activeTask), taskRegistry.drainPendingTasksToInit());
+
+        // we're using a mock StateUpdater here, so now that we've drained the task from the queue of pending tasks to init
+        // let's "add" it to our mock StateUpdater
+        when(stateUpdater.getTasks()).thenReturn(Collections.singleton(activeTask));
+        when(stateUpdater.getStandbyTasks()).thenReturn(Collections.emptySet());
+
+        // ensure we recycled our existing pending Standby into an Active task
+        verify(activeTaskCreator).createActiveTaskFromStandby(eq(pendingTask), eq(taskId00Partitions), any());
+
+        // ensure we didn't construct any new Tasks
+        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
+        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        verifyNoMoreInteractions(activeTaskCreator);
+        verifyNoMoreInteractions(standbyTaskCreator);
+
+        // verify the recycled task is now being used as an assiged Active
+        assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
+        assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
+    }
+
+    @Test
+    public void shouldUsePendingTasksFromStateDirectoryAsStandbyWithStateUpdater() {
+        final Tasks taskRegistry = new Tasks(new LogContext());
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry, true);
+        final StandbyTask pendingTask = mock(StandbyTask.class);
+        when(pendingTask.id()).thenReturn(taskId00);
+        when(pendingTask.isActive()).thenReturn(false);
+        when(pendingTask.stateManager()).thenReturn(stateManager);
+
+        when(stateDirectory.hasPendingTasks()).thenReturn(true, true, false);
+        when(stateDirectory.removePendingTask(taskId00)).thenReturn(pendingTask, (Task) null);
+
+        assertFalse(taskRegistry.hasPendingTasksToInit());
+
+        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
+
+        // ensure we used our existing pending Task directly as a Standby
+        assertTrue(taskRegistry.hasPendingTasksToInit());
+        assertEquals(Collections.singleton(pendingTask), taskRegistry.drainPendingTasksToInit());
+
+        // we're using a mock StateUpdater here, so now that we've drained the task from the queue of pending tasks to init
+        // let's "add" it to our mock StateUpdater
+        when(stateUpdater.getTasks()).thenReturn(Collections.singleton(pendingTask));
+        when(stateUpdater.getStandbyTasks()).thenReturn(Collections.singleton(pendingTask));
+
+        // ensure we didn't construct any new Tasks, or recycle an existing Task; we only used the one we already have
+        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
+        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        verifyNoMoreInteractions(activeTaskCreator);
+        verifyNoMoreInteractions(standbyTaskCreator);
+
+        // verify the pending Standby is now being used as an assigned Standby
+        assertEquals(Collections.emptyMap(), taskManager.activeTaskMap());
+        assertEquals(Collections.singletonMap(taskId00, pendingTask), taskManager.standbyTaskMap());
+    }
+
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
         futureDeletedRecords.complete(null);
