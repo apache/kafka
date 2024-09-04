@@ -669,13 +669,12 @@ public class OffsetsRequestManagerTest {
         // tp1 assigned and requires a position
         mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
 
-        // call to updateFetchPositions. Should send an OffsetFetch request and use the response to set positions
+        // Call to updateFetchPositions. Should send an OffsetFetch request and use the response to set positions
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
         CompletableFuture<Boolean> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone(), "Update positions should wait for the OffsetFetch request");
         verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
-        // clearInvocations(commitRequestManager);
 
         // Receive response with committed offsets. Should complete the updatePositions operation (the set
         // of initializing partitions hasn't changed)
@@ -684,6 +683,39 @@ public class OffsetsRequestManagerTest {
         fetchResult.complete(Collections.singletonMap(tp1, offsetAndMetadata));
 
         assertTrue(updatePositions1.isDone(), "Update positions should complete after the OffsetFetch response");
+        SubscriptionState.FetchPosition expectedPosition = new SubscriptionState.FetchPosition(
+                offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
+        verify(subscriptionState).seekUnvalidated(tp1, expectedPosition);
+    }
+
+    @Test
+    public void testUpdatePositionsWithCommittedOffsetsReusesRequest() {
+        long internalFetchCommittedTimeout = time.milliseconds() + DEFAULT_API_TIMEOUT_MS;
+        TopicPartition tp1 = new TopicPartition("topic1", 1);
+        Set<TopicPartition> initPartitions1 = Collections.singleton(tp1);
+        Metadata.LeaderAndEpoch leaderAndEpoch = testLeaderEpoch(LEADER_1, Optional.of(1));
+
+        // tp1 assigned and requires a position
+        mockAssignedPartitionsMissingPositions(initPartitions1, initPartitions1, leaderAndEpoch);
+
+        // call to updateFetchPositions. Should send an OffsetFetch request
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
+        when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
+        CompletableFuture<Boolean> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        assertFalse(updatePositions1.isDone(), "Update positions should wait for the OffsetFetch request");
+        verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
+        clearInvocations(commitRequestManager);
+
+        // Call to updateFetchPositions again with the same set of initializing partitions should reuse request
+        CompletableFuture<Boolean> updatePositions2 = requestManager.updateFetchPositions(time.milliseconds());
+        verify(commitRequestManager, never()).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
+
+        // Receive response with committed offsets, should complete both calls
+        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(10, Optional.of(1), "");
+        fetchResult.complete(Collections.singletonMap(tp1, offsetAndMetadata));
+
+        assertTrue(updatePositions1.isDone());
+        assertTrue(updatePositions2.isDone());
         SubscriptionState.FetchPosition expectedPosition = new SubscriptionState.FetchPosition(
                 offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
         verify(subscriptionState).seekUnvalidated(tp1, expectedPosition);
