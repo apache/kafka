@@ -15,7 +15,6 @@
 
 import json
 import re
-import time
 
 from functools import partial
 
@@ -28,32 +27,10 @@ from kafkatest.services.kafka.quorum import combined_kraft, ServiceQuorumInfo, i
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_3_8, DEV_BRANCH, KafkaVersion
-
-
-def assert_nodes_in_output(pattern, output, *node_ids):
-    nodes = json_from_line(pattern, output)
-    assert len(nodes) == len(node_ids)
-
-    for node in nodes:
-        assert node["id"] in node_ids
-
-def json_from_line(pattern, output):
-    match = re.search(pattern, output)
-    if not match:
-        raise Exception("Expected match for pattern %s in describe quorum output" % pattern)
-    line = match.group(0)
-    start_index = line.find('[')
-    end_index = line.rfind(']') + 1
-
-    return json.loads(line[start_index:end_index])
+from kafkatest.version import DEV_BRANCH
 
 #
-# Test upgrading between different KRaft versions.
-#
-# Note that the earliest supported KRaft version is 3.0, not 0.8 as it is for
-# ZK mode. The upgrade process is also somewhat different for KRaft because we
-# use metadata.version instead of inter.broker.protocol.
+# Test quorum reconfiguration for combined and isolated mode
 #
 class TestQuorumReconfiguration(ProduceConsumeValidateTest):
     def __init__(self, test_context):
@@ -68,6 +45,41 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
         self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
+
+    def perform_reconfig(self, active_controller_id, inactive_controller_id, inactive_controller, broker_ids):
+        # Check describe quorum output shows the controller (first node) is the leader and the only voter
+        output = self.kafka.describe_quorum()
+        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
+        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id)
+        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
+
+        # Start second controller
+        self.kafka.controller_quorum.add_broker(inactive_controller)
+        output = self.kafka.describe_quorum()
+        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
+        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id)
+        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids + [inactive_controller_id])
+
+        # Add controller to quorum
+        self.kafka.controller_quorum.add_controller(inactive_controller_id, inactive_controller)
+
+        # Check describe quorum output shows both controllers are voters
+        output = self.kafka.describe_quorum()
+        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
+        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id, inactive_controller_id)
+        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
+
+        # Remove leader from quorum
+        voters = json_from_line(r"CurrentVoters:.*", output)
+        directory_id = next(voter["directoryId"] for voter in voters if voter["id"] == active_controller_id)
+        self.kafka.controller_quorum.remove_controller(active_controller_id, directory_id)
+
+        # Check describe quorum output to show second_controller is now the leader
+        output = self.kafka.describe_quorum()
+        assert re.search(r"LeaderId:\s*" + str(inactive_controller_id), output)
+        assert_nodes_in_output(r"CurrentVoters:.*", output, inactive_controller_id)
+        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
+
 
     @cluster(num_nodes=6)
     @matrix(metadata_quorum=[combined_kraft])
@@ -92,7 +104,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                            version=DEV_BRANCH, offline_nodes=[inactive_controller])
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         self.topic, new_consumer=True, consumer_timeout_ms=30000,
-                                        message_validator=is_int, version=DEV_BRANCH) # check we can remove offline node
+                                        message_validator=is_int, version=DEV_BRANCH)
         # Perform reconfigurations
         self.run_produce_consume_validate(
             core_test_action=lambda: self.perform_reconfig(self.kafka.idx(self.kafka.nodes[0]),
@@ -135,40 +147,19 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                                            inactive_controller,
                                                            [self.kafka.idx(node) for node in self.kafka.nodes]))
 
-    def perform_reconfig(self, active_controller_id, inactive_controller_id, inactive_controller, broker_ids):
-        # Check describe quorum output shows the controller (first node) is the leader and the only voter
-        output = self.kafka.describe_quorum()
-        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
-        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id)
-        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
+def assert_nodes_in_output(pattern, output, *node_ids):
+    nodes = json_from_line(pattern, output)
+    assert len(nodes) == len(node_ids)
 
-        # Start second controller
-        self.kafka.controller_quorum.add_broker(inactive_controller)
-        output = self.kafka.describe_quorum()
-        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
-        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id)
-        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids + [inactive_controller_id])
+    for node in nodes:
+        assert node["id"] in node_ids
 
-        # Add controller to quorum
-        # currently this is the only node (the inactive controller we want to add) from which add_controller is successful in combined mode
-        self.kafka.add_controller(inactive_controller_id, inactive_controller)
-        # # example of what won't work in combined mode, running add_controller from active controller
-        # # also currently unable to run add_controller from any node in isolated mode
-        # self.kafka.add_controller(inactive_controller_id, self.kafka.nodes[0])
+def json_from_line(pattern, output):
+    match = re.search(pattern, output)
+    if not match:
+        raise Exception("Expected match for pattern %s in describe quorum output" % pattern)
+    line = match.group(0)
+    start_index = line.find('[')
+    end_index = line.rfind(']') + 1
 
-        # Check describe quorum output shows both controllers are voters
-        output = self.kafka.describe_quorum()
-        assert re.search(r"LeaderId:\s*" + str(active_controller_id), output)
-        assert_nodes_in_output(r"CurrentVoters:.*", output, active_controller_id, inactive_controller_id)
-        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
-
-        # Remove leader from quorum
-        voters = json_from_line(r"CurrentVoters:.*", output)
-        directory_id = next(voter["directoryId"] for voter in voters if voter["id"] == active_controller_id)
-        self.kafka.controller_quorum.remove_controller(active_controller_id, directory_id)
-
-        # Check describe quorum output to show second_controller is now the leader
-        output = self.kafka.describe_quorum()
-        assert re.search(r"LeaderId:\s*" + str(inactive_controller_id), output)
-        assert_nodes_in_output(r"CurrentVoters:.*", output, inactive_controller_id)
-        assert_nodes_in_output(r"CurrentObservers:.*", output, *broker_ids)
+    return json.loads(line[start_index:end_index])

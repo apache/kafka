@@ -201,7 +201,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
                  extra_kafka_opts="", tls_version=None,
                  isolated_kafka=None,
-                 controller_num_nodes_override=-1,
+                 controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
                  quorum_info_provider=None,
                  use_new_coordinator=None,
@@ -218,12 +218,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 The node.id values will be 1..num_nodes
                 The number of nodes having a controller role will by default be 1, 3, or 5 depending on num_nodes
                 (1 if num_nodes < 3, otherwise 3 if num_nodes < 5, otherwise 5).  This calculation
-                can be overridden via controller_num_nodes_override, which must be between 0 and num_nodes,
-                inclusive, when not -1.  Here are some possibilities:
+                can be overridden via controller_num_nodes_override, which must be between 1 and num_nodes,
+                inclusive, when non-zero.  Here are some possibilities:
                 num_nodes = 1:
                     broker having node.id=1: broker.roles=broker+controller
-
-
                 num_nodes = 2:
                     broker having node.id=1: broker.roles=broker+controller
                     broker having node.id=2: broker.roles=broker
@@ -334,19 +332,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 self.controller_quorum = self
             else:
                 num_isolated_controller_nodes = self.num_kraft_controllers(num_nodes, controller_num_nodes_override)
-                if num_isolated_controller_nodes > 0:
-                    self.isolated_controller_quorum = KafkaService(
-                        context, num_isolated_controller_nodes, self.zk, security_protocol=self.controller_security_protocol,
-                        interbroker_security_protocol=self.intercontroller_security_protocol,
-                        client_sasl_mechanism=self.controller_sasl_mechanism, interbroker_sasl_mechanism=self.intercontroller_sasl_mechanism,
-                        authorizer_class_name=authorizer_class_name, version=version, jmx_object_names=jmx_object_names,
-                        jmx_attributes=jmx_attributes,
-                        listener_security_config=listener_security_config,
-                        extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
-                        isolated_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
-                        server_prop_overrides=server_prop_overrides, kip853=self.kip853
-                    )
-                    self.controller_quorum = self.isolated_controller_quorum
+                self.isolated_controller_quorum = KafkaService(
+                    context, num_isolated_controller_nodes, self.zk, security_protocol=self.controller_security_protocol,
+                    interbroker_security_protocol=self.intercontroller_security_protocol,
+                    client_sasl_mechanism=self.controller_sasl_mechanism, interbroker_sasl_mechanism=self.intercontroller_sasl_mechanism,
+                    authorizer_class_name=authorizer_class_name, version=version, jmx_object_names=jmx_object_names,
+                    jmx_attributes=jmx_attributes,
+                    listener_security_config=listener_security_config,
+                    extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
+                    isolated_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
+                    server_prop_overrides=server_prop_overrides, kip853=self.kip853
+                )
+                self.controller_quorum = self.isolated_controller_quorum
 
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
@@ -499,12 +496,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.controller_quorum = kraft_quorum
 
     def num_kraft_controllers(self, num_nodes_broker_role, controller_num_nodes_override):
-        if controller_num_nodes_override < -1:
+        if controller_num_nodes_override < 0:
             raise Exception("controller_num_nodes_override must not be negative: %i" % controller_num_nodes_override)
         if controller_num_nodes_override > num_nodes_broker_role and self.quorum_info.quorum_type == quorum.combined_kraft:
             raise Exception("controller_num_nodes_override must not exceed the service's node count in the combined case: %i > %i" %
                             (controller_num_nodes_override, num_nodes_broker_role))
-        if controller_num_nodes_override > -1:
+        if controller_num_nodes_override:
             return controller_num_nodes_override
         if num_nodes_broker_role < 3:
             return 1
@@ -878,19 +875,19 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.maybe_setup_broker_scram_credentials(node)
 
         if self.quorum_info.using_kraft:
-            # define controller.quorum.voters text
+            # define controller.quorum.bootstrap.servrers or controller.quorum.voters text
             security_protocol_to_use = self.controller_quorum.controller_security_protocol
             first_node_id = 1 if self.quorum_info.has_brokers_and_controllers else config_property.FIRST_CONTROLLER_ID
-            endpoints = ','.join(["%s@%s:%s" %
-                                  (self.controller_quorum.idx(node) + first_node_id - 1,
-                                   node.account.hostname,
-                                   config_property.FIRST_CONTROLLER_PORT +
-                                   KafkaService.SECURITY_PROTOCOLS.index(security_protocol_to_use))
-                                  for node in self.controller_quorum.nodes[:self.controller_quorum.num_nodes_controller_role]])
+            controller_quorum_bootstrap_servers = ','.join(["%s:%s" % (node.account.hostname,
+                                                                       config_property.FIRST_CONTROLLER_PORT +
+                                                                       KafkaService.SECURITY_PROTOCOLS.index(security_protocol_to_use))
+                                                            for node in self.controller_quorum.nodes[:self.controller_quorum.num_nodes_controller_role]])
             if self.kip853:
-                self.controller_quorum_voters = endpoints
+                self.controller_quorum_bootstrap_servers = controller_quorum_bootstrap_servers
             else:
-                self.controller_quorum_bootstrap_servers = endpoints
+                self.controller_quorum_voters = ','.join(["%s@%s" % (self.controller_quorum.idx(node) + first_node_id - 1,
+                                                                     bootstrap_server)
+                                                          for bootstrap_server in controller_quorum_bootstrap_servers])
             # define controller.listener.names
             self.controller_listener_names = ','.join(self.controller_listener_name_list(node))
             # define sasl.mechanism.controller.protocol to match the isolated quorum if one exists
@@ -1029,12 +1026,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         JmxMixin.clean_node(self, node)
         self.security_config.clean_node(node)
         node.account.kill_process(self.java_class_name(),
-                                         clean_shutdown=False, allow_fail=True)
+                                  clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
-    def kafka_metadata_quorum_cmd(self, node, kafka_security_protocol=None):
+    def kafka_metadata_quorum_cmd(self, node, kafka_security_protocol=None, use_controller_bootstrap=False):
         if kafka_security_protocol is None:
-            # it wasn't specified, so use the inter-broker security protocol if it is PLAINTEXT,
+            # it wasn't specified, so use the inter-broker/controller security protocol if it is PLAINTEXT,
             # otherwise use the client security protocol
             if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
                 security_protocol_to_use = SecurityConfig.PLAINTEXT
@@ -1042,9 +1039,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 security_protocol_to_use = self.security_protocol
         else:
             security_protocol_to_use = kafka_security_protocol
-        bootstrap_server = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
+        if use_controller_bootstrap:
+            bootstrap = "--bootstrap-controller %s" % (self.bootstrap_controllers("CONTROLLER_%s" % security_protocol_to_use))
+        else:
+            bootstrap = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
         kafka_metadata_script = self.path.script("kafka-metadata-quorum.sh", node)
-        return "%s %s" % (kafka_metadata_script, bootstrap_server)
+        return "%s %s" % (kafka_metadata_script, bootstrap)
 
     def kafka_topics_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol=None, offline_nodes=[]):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
@@ -1209,61 +1209,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             if not self.node_inter_broker_protocol_version(node).supports_topic_ids_when_using_zk():
                 return False
         return True
-
-    def describe_quorum(self, node=None):
-        """Run the admin tool describe quorum command.
-        Specifying node is optional, if not specified the command will be run from self.nodes[0]
-        """
-        if node is None:
-            node = self.nodes[0]
-        cmd = fix_opts_for_new_jvm(node)
-        cmd += "%(kafka_metadata_quorum_cmd)s describe --status" % {
-            'kafka_metadata_quorum_cmd': self.kafka_metadata_quorum_cmd(node)
-        }
-        self.logger.info("Running describe quorum command...\n%s" % cmd)
-        node.account.ssh(cmd)
-
-        output = ""
-        for line in node.account.ssh_capture(cmd):
-            output += line
-
-        return output
-
-    def add_controller(self, controllerId, node):
-        """Run the admin tool add controller command.
-        """
-        command_config_path = os.path.join(KafkaService.PERSISTENT_ROOT, "controller_command_config.properties")
-
-        configs = f"""
-{config_property.NODE_ID}={controllerId}
-{config_property.PROCESS_ROLES}=controller
-{config_property.METADATA_LOG_DIR}={KafkaService.METADATA_LOG_DIR}
-{config_property.ADVERTISED_LISTENERS}=PLAINTEXT://{node.account.hostname}:9092
-{config_property.LISTENERS}=PLAINTEXT://:9092,CONTROLLER_PLAINTEXT://:9592
-{config_property.CONTROLLER_LISTENER_NAMES}=CONTROLLER_PLAINTEXT"""
-
-        node.account.create_file(command_config_path, configs)
-        cmd = fix_opts_for_new_jvm(node)
-        cmd += "%(kafka_metadata_quorum_cmd)s --command-config %(command_config)s add-controller" % {
-            'kafka_metadata_quorum_cmd': self.kafka_metadata_quorum_cmd(node, "PLAINTEXT"),
-            'command_config': command_config_path
-        }
-        self.logger.info("Running add controller command...\n%s" % cmd)
-        node.account.ssh(cmd)
-
-    def remove_controller(self, controllerId, directoryId, node=None):
-        """Run the admin tool remove controller command.
-        """
-        if node is None:
-            node = self.nodes[0]
-        cmd = fix_opts_for_new_jvm(node)
-        cmd += "%(kafka_metadata_quorum_cmd)s remove-controller -i %(controller_id)s -d %(directory_id)s" % {
-            'kafka_metadata_quorum_cmd': self.kafka_metadata_quorum_cmd(node, "PLAINTEXT"),
-            'controller_id': controllerId,
-            'directory_id': directoryId
-        }
-        self.logger.info("Running remove controller command...\n%s" % cmd)
-        node.account.ssh(cmd)
 
     def create_topic(self, topic_cfg, node=None):
         """Run the admin tool create topic command.
@@ -1848,6 +1793,62 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
+    def describe_quorum(self, node=None):
+        """Run the describe quorum command.
+        Specifying node is optional, if not specified the command will be run from self.nodes[0]
+        """
+        if node is None:
+            node = self.nodes[0]
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%(kafka_metadata_quorum_cmd)s describe --status" % {
+            'kafka_metadata_quorum_cmd': self.kafka_metadata_quorum_cmd(node)
+        }
+        self.logger.info("Running describe quorum command...\n%s" % cmd)
+        node.account.ssh(cmd)
+
+        output = ""
+        for line in node.account.ssh_capture(cmd):
+            output += line
+
+        return output
+
+    def add_controller(self, controllerId, controller):
+        """Run the metadata quorum add controller command. This should be run on the node that is being added.
+        """
+        command_config_path = os.path.join(KafkaService.PERSISTENT_ROOT, "controller_command_config.properties")
+
+        configs = f"""
+{config_property.NODE_ID}={controllerId}
+{config_property.PROCESS_ROLES}=controller
+{config_property.METADATA_LOG_DIR}={KafkaService.METADATA_LOG_DIR}
+{config_property.ADVERTISED_LISTENERS}={self.advertised_listeners}
+{config_property.LISTENERS}={self.listeners}
+{config_property.CONTROLLER_LISTENER_NAMES}={self.controller_listener_names}"""
+
+        controller.account.create_file(command_config_path, configs)
+        cmd = fix_opts_for_new_jvm(controller)
+        cmd += "%(kafka_metadata_quorum_cmd)s --command-config %(command_config)s add-controller" % {
+            'kafka_metadata_quorum_cmd': self.kafka_metadata_quorum_cmd(controller, use_controller_bootstrap=True),
+            'command_config': command_config_path
+        }
+        self.logger.info("Running add controller command...\n%s" % cmd)
+        controller.account.ssh(cmd)
+
+    def remove_controller(self, controllerId, directoryId, node=None):
+        """Run the admin tool remove controller command.
+        Specifying node is optional, if not specified the command will be run from self.nodes[0]
+        """
+        if node is None:
+            node = self.nodes[0]
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%(kafka_metadata_quorum_cmd)s remove-controller -i %(controller_id)s -d %(directory_id)s" % {
+            'kafka_metadata_quorum_cmd': self.kafka_metadata_quorum_cmd(node, use_controller_bootstrap=True),
+            'controller_id': controllerId,
+            'directory_id': directoryId
+        }
+        self.logger.info("Running remove controller command...\n%s" % cmd)
+        node.account.ssh(cmd)
+
     def zk_connect_setting(self):
         if self.quorum_info.using_kraft and not self.zk:
             raise Exception("No zookeeper connect string available with KRaft unless ZooKeeper is explicitly enabled")
@@ -1862,6 +1863,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                          for node in self.nodes
                          if node not in offline_nodes])
 
+    def __bootstrap_controllers(self, port, validate=True, offline_nodes=[]):
+        if validate and not port.open:
+            raise ValueError("We are retrieving bootstrap servers for the port: %s which is not currently open. - " %
+                             str(port.port_number))
+
+        return ','.join([node.account.hostname + ":" + str(port.port_number)
+                         for node in self.controller_quorum.nodes[:self.controller_quorum.num_nodes_controller_role]
+                         if node not in offline_nodes])
+
     def bootstrap_servers(self, protocol='PLAINTEXT', validate=True, offline_nodes=[]):
         """Return comma-delimited list of brokers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
 
@@ -1870,6 +1880,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         port_mapping = self.port_mappings[protocol]
         self.logger.info("Bootstrap client port is: " + str(port_mapping.port_number))
         return self.__bootstrap_servers(port_mapping, validate, offline_nodes)
+
+    def bootstrap_controllers(self, protocol='CONTROLLER_PLAINTEXT', validate=True, offline_nodes=[]):
+        """Return comma-delimited list of controllers in this cluster formatted as HOSTNAME1:PORT1,HOSTNAME:PORT2,...
+
+        This is the format expected by many config files.
+        """
+        port_mapping = self.port_mappings[protocol]
+        self.logger.info("Bootstrap client port is: " + str(port_mapping.port_number))
+        return self.__bootstrap_controllers(port_mapping, validate, offline_nodes)
 
     def controller(self):
         """ Get the controller node
