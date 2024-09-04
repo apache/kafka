@@ -236,7 +236,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
             return AuthorizationResult.ALLOWED;
         }
         if (data.defaultResult() == ALLOWED) {
-            // we only have ot check if there is a literal prohibition on resource "*"
+            // we only have to check if there is a literal prohibition on resource "*"
             ResourcePattern pattern = new ResourcePattern(resourceType, "*", LITERAL);
             Action action = new Action(operation, pattern, 1, false, false);
 
