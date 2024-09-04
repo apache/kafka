@@ -883,13 +883,13 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldClosePendingTasksOnUserCleanUp() {
+    public void shouldClosePendingTasksOnDirectoryClose() {
         final StateStore store = initializeTasksForLocalState(new TaskId(0, 0), true);
 
         assertTrue(directory.hasPendingTasks());
         assertTrue(store.isOpen());
 
-        directory.clean();
+        directory.close();
 
         assertFalse(directory.hasPendingTasks());
         assertFalse(store.isOpen());
@@ -921,6 +921,7 @@ public class StateDirectoryTest {
     }
 
     private StateStore initializeTasksForLocalState(final TaskId taskId, final boolean createTaskDir) {
+        directory.initializeProcessId();
         final TopologyMetadata metadata = Mockito.mock(TopologyMetadata.class);
         final TopologyConfig topologyConfig = new TopologyConfig(config);
 

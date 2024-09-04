@@ -678,7 +678,6 @@ public class StateDirectory implements AutoCloseable {
             log.warn("Found some still-locked task directories when user requested to cleaning up the state, "
                 + "since Streams is not running any more these will be ignored to complete the cleanup");
         }
-        closePendingTasks();
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final TaskDirectory taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.file().getName();
