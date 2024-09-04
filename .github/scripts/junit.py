@@ -55,6 +55,9 @@ class TestCase:
     def key(self) -> Tuple[str, str]:
         return self.class_name, self.test_name
 
+    def __repr__(self):
+        return f"{self.class_name} {self.test_name}"
+
 
 @dataclasses.dataclass
 class TestSuite:
