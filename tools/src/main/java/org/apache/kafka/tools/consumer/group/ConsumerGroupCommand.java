@@ -44,6 +44,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
@@ -812,6 +813,9 @@ public class ConsumerGroupCommand {
                         : new Unknown()
                 ));
             } catch (InterruptedException | ExecutionException e) {
+                if (e.getCause() instanceof UnknownTopicOrPartitionException) {
+                    return topicPartitions.stream().collect(Collectors.toMap(Function.identity(), tp -> new Unknown()));
+                }
                 throw new RuntimeException(e);
             }
         }

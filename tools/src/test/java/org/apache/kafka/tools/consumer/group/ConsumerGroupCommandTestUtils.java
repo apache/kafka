@@ -20,8 +20,12 @@ package org.apache.kafka.tools.consumer.group;
 import kafka.test.ClusterConfig;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
@@ -30,6 +34,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,6 +52,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_CO
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 /**
  * The old test framework {@link kafka.api.BaseConsumerTest#getTestQuorumAndGroupProtocolParametersAll} test for the following cases:
@@ -79,12 +85,21 @@ class ConsumerGroupCommandTestUtils {
     }
 
     static List<ClusterConfig> generator() {
-        return Stream.concat(forConsumerGroupCoordinator().stream(), forClassicGroupCoordinator().stream())
+        return generator(Collections.emptyMap());
+    }
+
+    static List<ClusterConfig> generator(Map<String, String> defaultServerConfig) {
+        return Stream.concat(forConsumerGroupCoordinator(defaultServerConfig).stream(), forClassicGroupCoordinator(defaultServerConfig).stream())
                 .collect(Collectors.toList());
     }
 
     static List<ClusterConfig> forConsumerGroupCoordinator() {
+        return forConsumerGroupCoordinator(Collections.emptyMap());
+    }
+
+    static List<ClusterConfig> forConsumerGroupCoordinator(Map<String, String> defaultServerConfig) {
         Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.putAll(defaultServerConfig);
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
         serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
@@ -97,8 +112,9 @@ class ConsumerGroupCommandTestUtils {
                 .build());
     }
 
-    static List<ClusterConfig> forClassicGroupCoordinator() {
+    static List<ClusterConfig> forClassicGroupCoordinator(Map<String, String> defaultServerConfig) {
         Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.putAll(defaultServerConfig);
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
         serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false");
@@ -168,5 +184,21 @@ class ConsumerGroupCommandTestUtils {
         } catch (WakeupException e) {
             // OK
         }
+    }
+
+    static void produceRecord(String topic, String bootstrapServers) {
+        try (KafkaProducer<byte[], byte[]> producer = createProducer(bootstrapServers)) {
+            assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(topic, 0, null, null)).get());
+        }
+    }
+
+    private static KafkaProducer<byte[], byte[]> createProducer(String bootstrapServers) {
+        Properties config = new Properties();
+        config.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1");
+        config.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        config.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+
+        return new KafkaProducer<>(config);
     }
 }
