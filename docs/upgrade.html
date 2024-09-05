@@ -28,6 +28,11 @@
                 MirrorMaker (MM2), as described in the
                 <a href="/{{version}}/documentation/#georeplication">Geo-Replication section</a>.
             </li>
+            <li>
+                The <code>kafka.common.MessageReader</code> class has been removed. Please use the
+                <a href="/{{version}}/javadoc/org/apache/kafka/tools/api/RecordReader.html"><code>org.apache.kafka.tools.api.RecordReader</code></a>
+                interface to build custom readers for the <code>kafka-console-producer</code> tool.
+            </li>
         </ul>
     </ul>
 
