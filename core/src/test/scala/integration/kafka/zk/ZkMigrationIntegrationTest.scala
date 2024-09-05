@@ -1167,6 +1167,7 @@ class ZkMigrationIntegrationTest {
 
   def shutdownInSequence(zkCluster: ClusterInstance, kraftCluster: KafkaClusterTestKit): Unit = {
     zkCluster.brokerIds().forEach(zkCluster.shutdownBroker(_))
+    kraftCluster.nonFatalFaultHandler().setIgnore(true)
     kraftCluster.close()
     zkCluster.stop()
   }
