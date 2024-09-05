@@ -288,7 +288,6 @@ public class GlobalStreamThread extends Thread {
 
             return;
         }
-        setState(RUNNING);
 
         boolean wipeStateStore = false;
         try {
@@ -423,6 +422,7 @@ public class GlobalStreamThread extends Thread {
                 );
             }
 
+            setState(RUNNING);
             return stateConsumer;
         } catch (final StreamsException fatalException) {
             closeStateConsumer(stateConsumer, false);

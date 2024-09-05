@@ -194,10 +194,6 @@ abstract class QuorumTestHarness extends Logging {
     TestInfoUtils.isZkMigrationTest(testInfo)
   }
 
-  def isNewGroupCoordinatorEnabled(): Boolean = {
-    TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
-  }
-
   def isShareGroupTest(): Boolean = {
     TestInfoUtils.isShareGroupTest(testInfo)
   }
