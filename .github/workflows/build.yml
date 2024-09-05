@@ -110,12 +110,12 @@ jobs:
         timeout-minutes: 180  # 3 hours
         continue-on-error: true
         run: |
-          ./gradlew --info --build-cache --scan --continue \
+          ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          :metadata:test
+          test
       - name: Archive JUnit reports
         if: always()
         uses: actions/upload-artifact@v4
