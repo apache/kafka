@@ -205,7 +205,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  allow_zk_with_kraft=False,
                  quorum_info_provider=None,
                  use_new_coordinator=None,
-                 kip853=False
+                 dynamicRaftQuorum=False
                  ):
         """
         :param context: test context
@@ -300,7 +300,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.num_nodes_controller_role = 0
 
         if self.quorum_info.using_kraft:
-            self.kip853 = kip853
+            self.dynamicRaftQuorum = dynamicRaftQuorum
             self.first_controller_started = False
             if self.quorum_info.has_brokers:
                 num_nodes_broker_role = num_nodes
@@ -341,7 +341,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     listener_security_config=listener_security_config,
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
                     isolated_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
-                    server_prop_overrides=server_prop_overrides, kip853=self.kip853
+                    server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum
                 )
                 self.controller_quorum = self.isolated_controller_quorum
 
@@ -881,7 +881,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                                                        config_property.FIRST_CONTROLLER_PORT +
                                                                        KafkaService.SECURITY_PROTOCOLS.index(security_protocol_to_use))
                                                             for node in self.controller_quorum.nodes[:self.controller_quorum.num_nodes_controller_role]])
-            if self.kip853:
+            if self.dynamicRaftQuorum:
                 self.controller_quorum_bootstrap_servers = controller_quorum_bootstrap_servers
             else:
                 self.controller_quorum_voters = ','.join(["%s@%s" % (self.controller_quorum.idx(node) + first_node_id - 1,
@@ -903,7 +903,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             # format log directories if necessary
             kafka_storage_script = self.path.script("kafka-storage.sh", node)
             cmd = "%s format --ignore-formatted --config %s --cluster-id %s" % (kafka_storage_script, KafkaService.CONFIG_FILE, config_property.CLUSTER_ID)
-            if self.kip853:
+            if self.dynamicRaftQuorum:
                 cmd += " --feature kraft.version=1"
                 if not self.first_controller_started and self.node_quorum_info.has_controller_role:
                     cmd += " --standalone"

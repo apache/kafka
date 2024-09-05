@@ -92,7 +92,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                                        'configs': {"min.insync.replicas": 1}}},
                                   version=DEV_BRANCH,
                                   controller_num_nodes_override=2,
-                                  kip853=True)
+                                  dynamicRaftQuorum=True)
         # Start one out of two controllers (standalone mode)
         inactive_controller = self.kafka.nodes[1]
         self.kafka.start(nodes_to_skip=[inactive_controller])
@@ -126,7 +126,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                   version=DEV_BRANCH,
                                   controller_num_nodes_override=2,
                                   quorum_info_provider=remote_quorum,
-                                  kip853=True)
+                                  dynamicRaftQuorum=True)
         # Start one out of two controllers (standalone mode)
         controller_quorum = self.kafka.controller_quorum
         inactive_controller = controller_quorum.nodes[1]
