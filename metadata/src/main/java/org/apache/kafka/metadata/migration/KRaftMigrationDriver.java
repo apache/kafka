@@ -563,21 +563,27 @@ public class KRaftMigrationDriver implements MetadataPublisher {
 
             Map<String, Integer> dualWriteCounts = new TreeMap<>();
             long startTime = time.nanoseconds();
+            final long zkWriteTimeMs;
             if (isSnapshot) {
                 zkMetadataWriter.handleSnapshot(image, countingOperationConsumer(
                     dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation));
-                controllerMetrics.updateZkWriteSnapshotTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
+                zkWriteTimeMs = NANOSECONDS.toMillis(time.nanoseconds() - startTime);
+                controllerMetrics.updateZkWriteSnapshotTimeMs(zkWriteTimeMs);
             } else {
                 if (zkMetadataWriter.handleDelta(prevImage, image, delta, countingOperationConsumer(
                       dualWriteCounts, KRaftMigrationDriver.this::applyMigrationOperation))) {
                     // Only record delta write time if we changed something. Otherwise, no-op records will skew timings.
-                    controllerMetrics.updateZkWriteDeltaTimeMs(NANOSECONDS.toMillis(time.nanoseconds() - startTime));
+                    zkWriteTimeMs = NANOSECONDS.toMillis(time.nanoseconds() - startTime);
+                    controllerMetrics.updateZkWriteDeltaTimeMs(zkWriteTimeMs);
+                } else {
+                    zkWriteTimeMs = 0;
                 }
             }
             if (dualWriteCounts.isEmpty()) {
                 log.trace("Did not make any ZK writes when handling KRaft {}", isSnapshot ? "snapshot" : "delta");
             } else {
-                log.debug("Made the following ZK writes when handling KRaft {}: {}", isSnapshot ? "snapshot" : "delta", dualWriteCounts);
+                log.debug("Made the following ZK writes in {} ms when handling KRaft {}: {}",
+                    zkWriteTimeMs, isSnapshot ? "snapshot" : "delta", dualWriteCounts);
             }
 
             // Persist the offset of the metadata that was written to ZK
