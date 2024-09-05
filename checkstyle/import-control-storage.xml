@@ -42,7 +42,7 @@
     <allow pkg="org.apache.kafka.common.security" />
     <allow pkg="org.apache.kafka.common.serialization" />
     <allow pkg="org.apache.kafka.common.utils" />
-    <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
+    <allow pkg="org.apache.kafka.common.errors"/>
     <allow pkg="org.apache.kafka.common.memory" />
 
 
@@ -61,17 +61,11 @@
             <allow pkg="org.apache.kafka.server.record" />
             <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.apache.kafka.storage"/>
-            <subpackage name="remote">
-                <allow pkg="scala.collection" />
-                <subpackage name="quota">
-                    <allow pkg="org.apache.kafka.server.quota" />
-                </subpackage>
-                <subpackage name="storage">
-                    <allow pkg="com.yammer.metrics.core" />
-                    <allow pkg="org.apache.kafka.server.metrics" />
-                    <allow pkg="kafka.test" />
-                </subpackage>
-            </subpackage>
+            <allow pkg="scala.collection" />
+            <allow pkg="org.apache.kafka.server.quota" />
+            <allow pkg="com.yammer.metrics.core" />
+            <allow pkg="org.apache.kafka.server.metrics" />
+            <allow pkg="kafka.test" />
         </subpackage>
     </subpackage>
 
@@ -98,9 +92,6 @@
         <allow pkg="scala" />
 
         <allow pkg="org.apache.kafka.tiered.storage" />
-        <allow pkg="org.apache.kafka.tiered.storage.actions" />
-        <allow pkg="org.apache.kafka.tiered.storage.specs" />
-        <allow pkg="org.apache.kafka.tiered.storage.utils" />
 
         <allow pkg="kafka.api" />
         <allow pkg="kafka.log" />
@@ -114,31 +105,14 @@
         <allow pkg="org.apache.kafka.common.network" />
 
         <allow pkg="org.apache.kafka.clients" />
-        <allow pkg="org.apache.kafka.clients.admin" />
-        <allow pkg="org.apache.kafka.clients.consumer" />
-        <allow pkg="org.apache.kafka.clients.producer" />
 
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.apache.kafka.storage"/>
-        <allow pkg="org.apache.kafka.storage.internals.log" />
 
         <allow pkg="org.apache.kafka.server.log" />
-        <allow pkg="org.apache.kafka.server.log.remote" />
-        <allow pkg="org.apache.kafka.server.log.remote.storage" />
         <allow pkg="org.apache.kafka.server.config" />
 
         <allow pkg="org.apache.kafka.test" />
-        <subpackage name="actions">
-        </subpackage>
-
-        <subpackage name="specs">
-        </subpackage>
-
-        <subpackage name="utils">
-        </subpackage>
-
-        <subpackage name="integration">
-        </subpackage>
     </subpackage>
     <!-- END OF TIERED STORAGE INTEGRATION TEST IMPORT DEPENDENCIES -->
 
