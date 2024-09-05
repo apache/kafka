@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
@@ -42,9 +43,7 @@ import java.util.HashSet;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -114,123 +113,6 @@ public class ShareGroupTest {
         shareGroup.removeMember("member");
         assertFalse(shareGroup.hasMember("member"));
 
-    }
-
-    @Test
-    public void testUpdatingMemberUpdatesPartitionEpoch() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
-        ShareGroup shareGroup = createShareGroup("foo");
-        ShareGroupMember member;
-
-        member = new ShareGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .build();
-
-        shareGroup.updateMember(member);
-
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 1));
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 2));
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 3));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(barTopicId, 4));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(barTopicId, 5));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(barTopicId, 6));
-
-        member = new ShareGroupMember.Builder(member)
-            .setMemberEpoch(11)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(barTopicId, 1, 2, 3)))
-            .build();
-
-        shareGroup.updateMember(member);
-
-        assertEquals(11, shareGroup.currentPartitionEpoch(barTopicId, 1));
-        assertEquals(11, shareGroup.currentPartitionEpoch(barTopicId, 2));
-        assertEquals(11, shareGroup.currentPartitionEpoch(barTopicId, 3));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 1));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 2));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 3));
-    }
-
-    @Test
-    public void testRemovePartitionEpochs() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        ShareGroup shareGroup = createShareGroup("foo");
-
-        // Removing should fail because there is no epoch set.
-        assertThrows(IllegalStateException.class, () -> shareGroup.removePartitionEpochs(
-            mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ),
-            10
-        ));
-
-        ShareGroupMember m1 = new ShareGroupMember.Builder("m1")
-            .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
-            .build();
-
-        shareGroup.updateMember(m1);
-
-        // Removing should fail because the expected epoch is incorrect.
-        assertThrows(IllegalStateException.class, () -> shareGroup.removePartitionEpochs(
-            mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ),
-            11
-        ));
-    }
-
-    @Test
-    public void testAddPartitionEpochs() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        ShareGroup shareGroup = createShareGroup("foo");
-
-        shareGroup.addPartitionEpochs(
-            mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ),
-            10
-        );
-
-        // Changing the epoch should fail because the owner of the partition
-        // should remove it first.
-        assertThrows(IllegalStateException.class, () -> shareGroup.addPartitionEpochs(
-            mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)
-            ),
-            11
-        ));
-    }
-
-    @Test
-    public void testDeletingMemberRemovesPartitionEpoch() {
-        Uuid fooTopicId = Uuid.randomUuid();
-
-        ShareGroup shareGroup = createShareGroup("foo");
-        ShareGroupMember member;
-
-        member = new ShareGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .build();
-
-        shareGroup.updateMember(member);
-
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 1));
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 2));
-        assertEquals(10, shareGroup.currentPartitionEpoch(fooTopicId, 3));
-
-        shareGroup.removeMember(member.memberId());
-
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 1));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 2));
-        assertEquals(-1, shareGroup.currentPartitionEpoch(fooTopicId, 3));
     }
 
     @Test
@@ -670,7 +552,7 @@ public class ShareGroupTest {
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testValidateOffsetCommit(short version) {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, () ->
+        assertThrows(GroupIdNotFoundException.class, () ->
             shareGroup.validateOffsetCommit(null, null, -1, false, version));
     }
 
@@ -678,13 +560,13 @@ public class ShareGroupTest {
     public void testAsListedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ShareGroup shareGroup = new ShareGroup(snapshotRegistry, "group-foo");
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ShareGroupState.EMPTY, shareGroup.state(0));
         assertEquals("Empty", shareGroup.stateAsString(0));
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
             .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
         assertEquals(ShareGroupState.EMPTY, shareGroup.state(0));
         assertEquals("Empty", shareGroup.stateAsString(0));
         assertEquals(ShareGroupState.STABLE, shareGroup.state(1));
@@ -700,14 +582,14 @@ public class ShareGroupTest {
     @Test
     public void testValidateOffsetFetch() {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, () ->
+        assertThrows(GroupIdNotFoundException.class, () ->
             shareGroup.validateOffsetFetch(null, -1, -1));
     }
 
     @Test
     public void testValidateOffsetDelete() {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, shareGroup::validateOffsetDelete);
+        assertThrows(GroupIdNotFoundException.class, shareGroup::validateOffsetDelete);
     }
 
     @Test
@@ -786,7 +668,7 @@ public class ShareGroupTest {
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ShareGroup shareGroup = new ShareGroup(snapshotRegistry, "group-id-1");
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ShareGroupState.EMPTY.toString(), shareGroup.stateAsString(0));
 
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
@@ -794,7 +676,7 @@ public class ShareGroupTest {
                 .build());
         shareGroup.updateMember(new ShareGroupMember.Builder("member2")
                 .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
 
         ShareGroupDescribeResponseData.DescribedGroup expected = new ShareGroupDescribeResponseData.DescribedGroup()
             .setGroupId("group-id-1")
@@ -818,14 +700,14 @@ public class ShareGroupTest {
     public void testIsInStatesCaseInsensitive() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ShareGroup shareGroup = new ShareGroup(snapshotRegistry, "group-foo");
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         assertTrue(shareGroup.isInStates(Collections.singleton("empty"), 0));
         assertFalse(shareGroup.isInStates(Collections.singleton("Empty"), 0));
 
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
             .setSubscribedTopicNames(Collections.singletonList("foo"))
             .build());
-        snapshotRegistry.getOrCreateSnapshot(1);
+        snapshotRegistry.idempotentCreateSnapshot(1);
         assertTrue(shareGroup.isInStates(Collections.singleton("empty"), 0));
         assertTrue(shareGroup.isInStates(Collections.singleton("stable"), 1));
         assertFalse(shareGroup.isInStates(Collections.singleton("empty"), 1));

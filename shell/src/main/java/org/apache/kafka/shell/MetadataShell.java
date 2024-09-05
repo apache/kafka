@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -107,7 +108,7 @@ public final class MetadataShell {
      * this hole would require the parent directory to always be writable when loading a
      * snapshot so that we could create our .lock file there.
      */
-    static FileLock takeDirectoryLockIfExists(File directory) {
+    static FileLock takeDirectoryLockIfExists(File directory) throws IOException {
         if (new File(directory, ".lock").exists()) {
             return takeDirectoryLock(directory);
         } else {
@@ -118,7 +119,7 @@ public final class MetadataShell {
     /**
      * Take the FileLock in the given directory.
      */
-    static FileLock takeDirectoryLock(File directory) {
+    static FileLock takeDirectoryLock(File directory) throws IOException {
         FileLock fileLock = new FileLock(new File(directory, ".lock"));
         try {
             if (!fileLock.tryLock()) {

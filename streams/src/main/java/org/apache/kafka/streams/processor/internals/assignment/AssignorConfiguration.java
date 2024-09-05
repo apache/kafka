@@ -97,7 +97,7 @@ public final class AssignorConfiguration {
     public RebalanceProtocol rebalanceProtocol() {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
-            switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
+            switch (UpgradeFromValues.fromString(upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                 case UPGRADE_FROM_0101:
                 case UPGRADE_FROM_0102:
@@ -154,7 +154,7 @@ public final class AssignorConfiguration {
     public int configuredMetadataVersion(final int priorVersion) {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
-            switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
+            switch (UpgradeFromValues.fromString(upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                     log.info(
                         "Downgrading metadata.version from {} to 1 for upgrade from 0.10.0.x.",

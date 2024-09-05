@@ -459,7 +459,7 @@ public class CommitRequestManagerTest {
         // Commit should mark the coordinator unknown and fail with RetriableCommitFailedException.
         assertTrue(commitResult.isDone());
         assertFutureThrows(commitResult, RetriableCommitFailedException.class);
-        assertCoordinatorDisconnect();
+        assertCoordinatorDisconnectHandling();
     }
 
     @Test
@@ -649,8 +649,8 @@ public class CommitRequestManagerTest {
             1,
             error);
         // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
-        if (isRetriableOnOffsetFetch(error))
-            testRetriable(commitRequestManager, futures);
+        if (error.exception() instanceof RetriableException)
+            testRetriable(commitRequestManager, futures, error);
         else {
             testNonRetriable(futures);
             assertEmptyPendingRequests(commitRequestManager);
@@ -671,24 +671,21 @@ public class CommitRequestManagerTest {
                 1,
                 error);
 
-        if (isRetriableOnOffsetFetch(error)) {
+        if (error.exception() instanceof RetriableException) {
             futures.forEach(f -> assertFalse(f.isDone()));
 
             // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
             // OffsetFetchRequestState is evaluated via isExpired().
             time.sleep(defaultApiTimeoutMs);
             assertFalse(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
-            commitRequestManager.poll(time.milliseconds());
+            NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
+            mimicResponse(error, poll);
             futures.forEach(f -> assertFutureThrows(f, TimeoutException.class));
             assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
         } else {
             futures.forEach(f -> assertFutureThrows(f, KafkaException.class));
             assertEmptyPendingRequests(commitRequestManager);
         }
-    }
-
-    private boolean isRetriableOnOffsetFetch(Errors error) {
-        return error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE;
     }
 
     @Test
@@ -752,7 +749,7 @@ public class CommitRequestManagerTest {
         // Request not completed just yet
         assertFalse(result.isDone());
         if (shouldRediscoverCoordinator) {
-            assertCoordinatorDisconnect();
+            assertCoordinatorDisconnectOnCoordinatorError();
         }
 
         // Request should be retried with backoff.
@@ -782,7 +779,7 @@ public class CommitRequestManagerTest {
 
         // Request not completed just yet, but should have marked the coordinator unknown
         assertFalse(result.isDone());
-        assertCoordinatorDisconnect();
+        assertCoordinatorDisconnectHandling();
 
         time.sleep(retryBackoffMs);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -922,7 +919,11 @@ public class CommitRequestManagerTest {
         assertRetryBackOff(commitRequestManager, retryBackoffMs);
     }
 
-    private void assertCoordinatorDisconnect() {
+    private void assertCoordinatorDisconnectHandling() {
+        verify(coordinatorRequestManager).handleCoordinatorDisconnect(any(), anyLong());
+    }
+
+    private void assertCoordinatorDisconnectOnCoordinatorError() {
         verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
     }
 
@@ -1200,13 +1201,31 @@ public class CommitRequestManagerTest {
     }
 
     private void testRetriable(final CommitRequestManager commitRequestManager,
-                               final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
+                               final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures,
+                               final Errors error
+    ) {
         futures.forEach(f -> assertFalse(f.isDone()));
 
-        // The manager should backoff for 100ms
-        time.sleep(100);
-        commitRequestManager.poll(time.milliseconds());
+        // The manager should backoff before retry
+        time.sleep(retryBackoffMs);
+        NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, poll.unsentRequests.size());
         futures.forEach(f -> assertFalse(f.isDone()));
+        mimicResponse(error, poll);
+
+        // Sleep util timeout
+        time.sleep(defaultApiTimeoutMs);
+        poll = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, poll.unsentRequests.size());
+        mimicResponse(error, poll);
+        futures.forEach(f -> {
+            assertTrue(f.isCompletedExceptionally());
+            assertFutureThrows(f, TimeoutException.class);
+        });
+    }
+
+    private void mimicResponse(Errors error, NetworkClientDelegate.PollResult poll) {
+        poll.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(poll.unsentRequests.get(0), new HashSet<>(), error));
     }
 
     private void testNonRetriable(final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
@@ -1295,7 +1314,7 @@ public class CommitRequestManagerTest {
                 Errors.NONE,
                 false));
         if (isRetriable)
-            testRetriable(commitRequestManager, Collections.singletonList(future));
+            testRetriable(commitRequestManager, Collections.singletonList(future), error);
         else
             testNonRetriable(Collections.singletonList(future));
     }

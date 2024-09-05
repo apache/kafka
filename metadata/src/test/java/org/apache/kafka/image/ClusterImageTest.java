@@ -317,4 +317,15 @@ public class ClusterImageTest {
                 build());
         assertEquals("controller registration data", lossString.get());
     }
+
+    @Test
+    public void testBrokerEpoch() {
+        assertEquals(123L, IMAGE1.brokerEpoch(2));
+    }
+
+    @Test
+    public void testBrokerEpochForNonExistentBroker() {
+        assertEquals(-1L, IMAGE1.brokerEpoch(20));
+    }
+
 }

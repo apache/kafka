@@ -789,6 +789,7 @@ public class RaftEventSimulationTest {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
+                true,
                 clusterId,
                 Collections.emptyList(),
                 endpointsFromId(nodeId, channel.listenerName()),

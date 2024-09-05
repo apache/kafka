@@ -14,451 +14,506 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.AssignReplicasToDirsRequest;
 import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.metadata.AssignmentsHelper;
+import org.apache.kafka.common.utils.ExponentialBackoff;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.test.TestUtils;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Metric;
 import com.yammer.metrics.core.MetricName;
+import com.yammer.metrics.core.MetricsRegistry;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import org.mockito.ArgumentCaptor;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
-import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
+import static org.apache.kafka.server.AssignmentsManager.QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.atMostOnce;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 public class AssignmentsManagerTest {
-
+    private static final Logger LOG = LoggerFactory.getLogger(AssignmentsManagerTest.class);
     private static final Uuid TOPIC_1 = Uuid.fromString("88rnFIqYSZykX4ZSKv81bg");
     private static final Uuid TOPIC_2 = Uuid.fromString("VKCnzHdhR5uDQc1shqBYrQ");
+    private static final Uuid TOPIC_3 = Uuid.fromString("ZeAwvYt-Ro2suQudGUdbRg");
     private static final Uuid DIR_1 = Uuid.fromString("cbgD8WdLQCyzLrFIMBhv3w");
     private static final Uuid DIR_2 = Uuid.fromString("zO0bDc0vSuam7Db9iH7rYQ");
     private static final Uuid DIR_3 = Uuid.fromString("CGBWbrFkRkeJQy6Aryzq2Q");
 
-    private MockTime time;
-    private NodeToControllerChannelManager channelManager;
-    private AssignmentsManager manager;
+    private static final MetadataImage TEST_IMAGE;
 
-    @BeforeEach
-    public void setup() {
-        time = new MockTime();
-        channelManager = mock(NodeToControllerChannelManager.class);
-        Map<Uuid, String> topicNames = new HashMap<>();
-        topicNames.put(TOPIC_1, "TOPIC_1");
-        topicNames.put(TOPIC_2, "TOPIC_2");
-        Map<Uuid, String> dirPaths = new HashMap<>();
-        dirPaths.put(DIR_1, "DIR_1");
-        dirPaths.put(DIR_2, "DIR_2");
-        dirPaths.put(DIR_3, "DIR_3");
-        manager = new AssignmentsManager(time, channelManager, 8, () -> 100L,
-                id -> Optional.ofNullable(dirPaths.get(id)), id -> Optional.ofNullable(topicNames.get(id)));
+    static {
+        MetadataDelta delta = new MetadataDelta.Builder().
+            setImage(MetadataImage.EMPTY).
+            build();
+        delta.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_8_IV0.featureLevel()));
+        delta.replay(new RegisterBrokerRecord().
+            setBrokerId(0).
+            setIncarnationId(Uuid.fromString("JJsH6zB0R7eKbr0Sy49ULw")).
+            setBrokerEpoch(123));
+        delta.replay(new RegisterBrokerRecord().
+            setBrokerId(1).
+            setIncarnationId(Uuid.fromString("DtnWclXyQ4qNDvL97JlnvQ")).
+            setBrokerEpoch(456));
+        delta.replay(new RegisterBrokerRecord().
+            setBrokerId(2).
+            setIncarnationId(Uuid.fromString("UFa_RKgLR4mxEXyquEPEmg")).
+            setBrokerEpoch(789));
+        delta.replay(new RegisterBrokerRecord().
+            setBrokerId(3).
+            setIncarnationId(Uuid.fromString("jj-cnHYASAmb_H9JR6nmtQ")).
+            setBrokerEpoch(987));
+        delta.replay(new TopicRecord().
+            setName("foo").
+            setTopicId(TOPIC_1));
+        delta.replay(new PartitionRecord().
+            setPartitionId(0).
+            setTopicId(TOPIC_1).
+            setReplicas(Arrays.asList(0, 1, 2)).
+            setIsr(Arrays.asList(0, 1, 2)).
+            setLeader(1));
+        delta.replay(new PartitionRecord().
+            setPartitionId(1).
+            setTopicId(TOPIC_1).
+            setReplicas(Arrays.asList(1, 2, 3)).
+            setIsr(Arrays.asList(1, 2, 3)).
+            setLeader(1));
+        delta.replay(new TopicRecord().
+            setName("bar").
+            setTopicId(TOPIC_2));
+        delta.replay(new PartitionRecord().
+            setPartitionId(0).
+            setTopicId(TOPIC_2).
+            setReplicas(Arrays.asList(0, 3, 2)).
+            setIsr(Arrays.asList(0, 3, 2)).
+            setLeader(1));
+        delta.replay(new PartitionRecord().
+            setPartitionId(1).
+            setTopicId(TOPIC_2).
+            setReplicas(Arrays.asList(1, 2, 3)).
+            setIsr(Arrays.asList(2)).
+            setLeader(2));
+        delta.replay(new PartitionRecord().
+            setPartitionId(2).
+            setTopicId(TOPIC_2).
+            setReplicas(Arrays.asList(3, 2, 1)).
+            setIsr(Arrays.asList(3, 2, 1)).
+            setLeader(3));
+        TEST_IMAGE = delta.apply(MetadataProvenance.EMPTY);
     }
 
-    @AfterEach
-    void tearDown() throws InterruptedException {
-        manager.close();
-    }
+    static class MockNodeToControllerChannelManager implements NodeToControllerChannelManager {
+        LinkedBlockingDeque<Map.Entry<AssignReplicasToDirsRequestData, ControllerRequestCompletionHandler>> callbacks =
+            new LinkedBlockingDeque<>();
 
-    AssignReplicasToDirsRequestData normalize(AssignReplicasToDirsRequestData request) {
-        request = request.duplicate();
-        request.directories().sort(Comparator.comparing(
-            AssignReplicasToDirsRequestData.DirectoryData::id));
-        for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
-            directory.topics().sort(Comparator.comparing(
-                AssignReplicasToDirsRequestData.TopicData::topicId));
-            for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
-                topic.partitions().sort(Comparator.comparing(
-                    AssignReplicasToDirsRequestData.PartitionData::partitionIndex));
+        @Override
+        public void start() {
+        }
+
+        @Override
+        public void shutdown() {
+        }
+
+        @Override
+        public Optional<NodeApiVersions> controllerApiVersions() {
+            return Optional.empty();
+        }
+
+        @Override
+        public void sendRequest(
+            AbstractRequest.Builder<? extends AbstractRequest> request,
+            ControllerRequestCompletionHandler callback
+        ) {
+            AssignReplicasToDirsRequest inputRequest = (AssignReplicasToDirsRequest) request.build();
+            synchronized (this) {
+                callbacks.add(new AbstractMap.SimpleEntry<>(inputRequest.data(), callback));
             }
         }
-        return request;
+
+        @Override
+        public long getTimeoutMs() {
+            return 0L;
+        }
+
+        void completeCallback(Function<AssignReplicasToDirsRequestData, Optional<ClientResponse>> completionist) throws InterruptedException {
+            Map.Entry<AssignReplicasToDirsRequestData, ControllerRequestCompletionHandler> entry = callbacks.take();
+            Optional<ClientResponse> clientResponse = completionist.apply(entry.getKey());
+            if (clientResponse.isPresent()) {
+                entry.getValue().onComplete(clientResponse.get());
+            } else {
+                entry.getValue().onTimeout();
+            }
+        }
     }
 
+    static class TestEnv implements AutoCloseable {
+        final ExponentialBackoff backoff;
+        final MockNodeToControllerChannelManager channelManager;
+        final MetricsRegistry metricsRegistry = new MetricsRegistry();
+        final AssignmentsManager assignmentsManager;
+        final Map<TopicIdPartition, Integer> successes;
 
-    void assertRequestEquals(
-        AssignReplicasToDirsRequestData expected,
-        AssignReplicasToDirsRequestData actual
-    ) {
-        assertEquals(normalize(expected), normalize(actual));
+        TestEnv() {
+            this.backoff = new ExponentialBackoff(1, 2, 4, 0);
+            this.channelManager = new MockNodeToControllerChannelManager();
+            this.assignmentsManager = new AssignmentsManager(
+                    backoff, Time.SYSTEM, channelManager, 1, () -> TEST_IMAGE,
+                        t -> t.toString(), metricsRegistry);
+            this.successes = new HashMap<>();
+        }
+
+        void onAssignment(TopicIdPartition topicIdPartition, Uuid directoryId) {
+            assignmentsManager.onAssignment(topicIdPartition, directoryId, "test", () -> {
+                synchronized (successes) {
+                    successes.put(topicIdPartition, successes.getOrDefault(topicIdPartition, 0) + 1);
+                }
+            });
+        }
+
+        int success(TopicIdPartition topicIdPartition) {
+            synchronized (successes) {
+                return successes.getOrDefault(topicIdPartition, 0);
+            }
+        }
+
+        void successfullyCompleteCallbackOfRequestAssigningTopic1ToDir1() throws Exception {
+            channelManager.completeCallback(req -> {
+                AssignReplicasToDirsRequestData.DirectoryData directoryData = req.directories().get(0);
+                assertEquals(DIR_1, directoryData.id());
+                AssignReplicasToDirsRequestData.TopicData topicData = directoryData.topics().get(0);
+                assertEquals(TOPIC_1, topicData.topicId());
+                assertEquals(0, topicData.partitions().get(0).partitionIndex());
+                return mockClientResponse(new AssignReplicasToDirsResponseData().
+                    setDirectories(Arrays.asList(new AssignReplicasToDirsResponseData.DirectoryData().
+                        setId(DIR_1).
+                        setTopics(Arrays.asList(new AssignReplicasToDirsResponseData.TopicData().
+                            setTopicId(TOPIC_1).
+                            setPartitions(Arrays.asList(new AssignReplicasToDirsResponseData.PartitionData().
+                                setPartitionIndex(0).
+                                setErrorCode((short) 0))))))));
+            });
+        }
+
+        Metric findMetric(MetricName name) {
+            for (Map.Entry<MetricName, Metric> entry : metricsRegistry.allMetrics().entrySet()) {
+                if (name.equals(entry.getKey())) {
+                    return entry.getValue();
+                }
+            }
+            throw new IllegalArgumentException("metric named " + name + " not found");
+        }
+
+        @SuppressWarnings("unchecked") // do not warn about Gauge typecast.
+        int queuedReplicaToDirAssignments() {
+            Gauge<Integer> queuedReplicaToDirAssignments =
+                    (Gauge<Integer>) findMetric(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
+            return queuedReplicaToDirAssignments.value();
+        }
+
+        @Override
+        public void close() throws Exception {
+            try {
+                assignmentsManager.close();
+            } catch (Exception e) {
+                LOG.error("error shutting down assignmentsManager", e);
+            }
+            try {
+                metricsRegistry.shutdown();
+            } catch (Exception e) {
+                LOG.error("error shutting down metricsRegistry", e);
+            }
+        }
+    }
+
+    static Optional<ClientResponse> mockClientResponse(AssignReplicasToDirsResponseData data) {
+        return Optional.of(new ClientResponse(null, null, "", 0, 0, false,
+            null, null, new AssignReplicasToDirsResponse(data)));
+    }
+
+    @Test
+    public void testStartAndShutdown() throws Exception {
+        try (TestEnv testEnv = new TestEnv()) {
+        }
+    }
+
+    @Test
+    public void testSuccessfulAssignment() throws Exception {
+        try (TestEnv testEnv = new TestEnv()) {
+            assertEquals(0, testEnv.queuedReplicaToDirAssignments());
+            testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+                assertEquals(1, testEnv.assignmentsManager.numPending());
+                assertEquals(1, testEnv.queuedReplicaToDirAssignments());
+            });
+            assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());
+            assertEquals(1, testEnv.assignmentsManager.numInFlight());
+            testEnv.successfullyCompleteCallbackOfRequestAssigningTopic1ToDir1();
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+                assertEquals(0, testEnv.assignmentsManager.numPending());
+                assertEquals(0, testEnv.queuedReplicaToDirAssignments());
+                assertEquals(1, testEnv.success(new TopicIdPartition(TOPIC_1, 0)));
+            });
+            assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"invalidRequest", "timeout"})
+    public void testUnSuccessfulRequestCausesRetransmission(String failureType) throws Exception {
+        try (TestEnv testEnv = new TestEnv()) {
+            testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+                assertEquals(1, testEnv.assignmentsManager.numPending());
+            });
+            if (failureType.equals("invalidRequest")) {
+                testEnv.channelManager.completeCallback(req -> {
+                    return mockClientResponse(new AssignReplicasToDirsResponseData().
+                        setErrorCode(Errors.INVALID_REQUEST.code()));
+                });
+            } else if (failureType.equals("timeout")) {
+                testEnv.channelManager.completeCallback(req -> Optional.empty());
+            }
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+                assertEquals(1, testEnv.assignmentsManager.numPending());
+                assertEquals(0, testEnv.success(new TopicIdPartition(TOPIC_1, 0)));
+            });
+            assertEquals(1, testEnv.assignmentsManager.previousGlobalFailures());
+            testEnv.successfullyCompleteCallbackOfRequestAssigningTopic1ToDir1();
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+                assertEquals(0, testEnv.assignmentsManager.numPending());
+                assertEquals(1, testEnv.success(new TopicIdPartition(TOPIC_1, 0)));
+            });
+            assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missingTopic", "missingPartition", "notReplica"})
+    public void testMismatchedInputDoesNotTriggerCompletion(String mismatchType) throws Exception {
+        try (TestEnv testEnv = new TestEnv()) {
+            TopicIdPartition target;
+            if (mismatchType.equals("missingTopic")) {
+                target = new TopicIdPartition(TOPIC_3, 0);
+            } else if (mismatchType.equals("missingPartition")) {
+                target = new TopicIdPartition(TOPIC_1, 2);
+            } else if (mismatchType.equals("notReplica")) {
+                target = new TopicIdPartition(TOPIC_2, 0);
+            } else {
+                throw new RuntimeException("invalid mismatchType argument.");
+            }
+            testEnv.onAssignment(target, DIR_1);
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+                assertEquals(0, testEnv.assignmentsManager.numPending());
+                assertEquals(0, testEnv.success(target));
+            });
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missingResult", "errorResult"})
+    public void testOneAssignmentFailsOneSucceeds(String failureType) throws Exception {
+        try (TestEnv testEnv = new TestEnv()) {
+            testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
+            testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1);
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+                assertEquals(2, testEnv.assignmentsManager.numPending());
+                assertEquals(0, testEnv.success(new TopicIdPartition(TOPIC_1, 0)));
+                assertEquals(0, testEnv.success(new TopicIdPartition(TOPIC_1, 1)));
+            });
+            testEnv.channelManager.completeCallback(req -> {
+                AssignReplicasToDirsRequestData.DirectoryData directoryData = req.directories().get(0);
+                assertEquals(DIR_1, directoryData.id());
+                AssignReplicasToDirsRequestData.TopicData topicData = directoryData.topics().get(0);
+                assertEquals(TOPIC_1, topicData.topicId());
+                HashSet<Integer> foundPartitions = new HashSet<>();
+                topicData.partitions().forEach(p -> foundPartitions.add(p.partitionIndex()));
+                List<AssignReplicasToDirsResponseData.PartitionData> partitions = new ArrayList<>();
+                if (foundPartitions.contains(0)) {
+                    partitions.add(new AssignReplicasToDirsResponseData.PartitionData().
+                        setPartitionIndex(0).
+                        setErrorCode((short) 0));
+                }
+                if (foundPartitions.contains(1)) {
+                    if (failureType.equals("missingResult")) {
+                        // do nothing
+                    } else if (failureType.equals("errorResult")) {
+                        partitions.add(new AssignReplicasToDirsResponseData.PartitionData().
+                            setPartitionIndex(1).
+                            setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code()));
+                    } else {
+                        throw new RuntimeException("invalid failureType argument.");
+                    }
+                }
+                return mockClientResponse(new AssignReplicasToDirsResponseData().
+                    setDirectories(Arrays.asList(new AssignReplicasToDirsResponseData.DirectoryData().
+                        setId(DIR_1).
+                        setTopics(Arrays.asList(new AssignReplicasToDirsResponseData.TopicData().
+                            setTopicId(TOPIC_1).
+                            setPartitions(partitions))))));
+            });
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+                assertEquals(1, testEnv.assignmentsManager.numPending());
+                assertEquals(1, testEnv.assignmentsManager.numInFlight());
+                assertEquals(1, testEnv.success(new TopicIdPartition(TOPIC_1, 0)));
+                assertEquals(0, testEnv.success(new TopicIdPartition(TOPIC_1, 1)));
+                assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());
+            });
+        }
+    }
+
+    @Test
+    public void testGlobalResponseErrorTimeout() {
+        assertEquals(Optional.of("Timeout"),
+            AssignmentsManager.globalResponseError(Optional.empty()));
+    }
+
+    @Test
+    public void testNoGlobalResponseError() {
+        assertEquals(Optional.empty(),
+            AssignmentsManager.globalResponseError(Optional.of(
+                new ClientResponse(null, null, "", 0, 0, false, null,
+                    null, new AssignReplicasToDirsResponse(
+                        new AssignReplicasToDirsResponseData())))));
+    }
+
+    @Test
+    public void testGlobalResponseErrorAuthenticationException() {
+        assertEquals(Optional.of("AuthenticationException"),
+            AssignmentsManager.globalResponseError(Optional.of(
+                new ClientResponse(null, null, "", 0, 0, false, null,
+                    new AuthenticationException("failed"), null))));
+    }
+
+    @Test
+    public void testGlobalResponseErrorUnsupportedVersionException() {
+        assertEquals(Optional.of("UnsupportedVersionException"),
+            AssignmentsManager.globalResponseError(Optional.of(
+                new ClientResponse(null, null, "", 0, 0, false,
+                    new UnsupportedVersionException("failed"), null, null))));
+    }
+
+    @Test
+    public void testGlobalResponseErrorDisconnectedTimedOut() {
+        assertEquals(Optional.of("Disonnected[Timeout]"),
+            AssignmentsManager.globalResponseError(Optional.of(
+                new ClientResponse(null, null, "", 0, 0, true, true,
+                   null, null, null))));
+    }
+
+    @Test
+    public void testGlobalResponseErrorEmptyResponse() {
+        assertEquals(Optional.of("EmptyResponse"),
+            AssignmentsManager.globalResponseError(Optional.of(
+                new ClientResponse(null, null, "", 0, 0, false, false,
+                        null, null, null))));
+    }
+
+    @Test
+    public void testGlobalResponseErrorClassCastException() {
+        assertEquals(Optional.of("ClassCastException"),
+            AssignmentsManager.globalResponseError(Optional.of(
+                new ClientResponse(null, null, "", 0, 0, false, false,
+                    null, null, new ApiVersionsResponse(new ApiVersionsResponseData())))));
+    }
+
+    @Test
+    public void testGlobalResponseErrorResponseLevelError() {
+        assertEquals(Optional.of("Response-level error: INVALID_REQUEST"),
+            AssignmentsManager.globalResponseError(Optional.of(
+                new ClientResponse(null, null, "", 0, 0, false, false,
+                        null, null, new AssignReplicasToDirsResponse(
+                            new AssignReplicasToDirsResponseData().
+                                setErrorCode(Errors.INVALID_REQUEST.code()))))));
     }
 
     @Test
     void testBuildRequestData() {
-        Map<TopicIdPartition, Uuid> assignment = new HashMap<TopicIdPartition, Uuid>() {{
-                put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
-                put(new TopicIdPartition(TOPIC_1, 2), DIR_2);
-                put(new TopicIdPartition(TOPIC_1, 3), DIR_3);
-                put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
-                put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
-            }};
-        AssignReplicasToDirsRequestData built = AssignmentsManager.buildRequestData(8, 100L, assignment);
-        AssignReplicasToDirsRequestData expected = new AssignReplicasToDirsRequestData()
-            .setBrokerId(8)
-            .setBrokerEpoch(100L)
-            .setDirectories(Arrays.asList(
-                new AssignReplicasToDirsRequestData.DirectoryData()
-                    .setId(DIR_2)
-                    .setTopics(Arrays.asList(
-                        new AssignReplicasToDirsRequestData.TopicData()
-                            .setTopicId(TOPIC_1)
-                            .setPartitions(Collections.singletonList(
-                                    new AssignReplicasToDirsRequestData.PartitionData()
-                                            .setPartitionIndex(2))),
-                new AssignReplicasToDirsRequestData.TopicData()
-                    .setTopicId(TOPIC_2)
-                    .setPartitions(Collections.singletonList(
-                            new AssignReplicasToDirsRequestData.PartitionData()
-                                    .setPartitionIndex(5))))),
-            new AssignReplicasToDirsRequestData.DirectoryData()
-                .setId(DIR_3)
-                .setTopics(Collections.singletonList(
-                    new AssignReplicasToDirsRequestData.TopicData()
-                        .setTopicId(TOPIC_1)
-                        .setPartitions(Collections.singletonList(
-                            new AssignReplicasToDirsRequestData.PartitionData()
-                                    .setPartitionIndex(3))))),
-            new AssignReplicasToDirsRequestData.DirectoryData()
-                .setId(DIR_1)
-                .setTopics(Collections.singletonList(
-                    new AssignReplicasToDirsRequestData.TopicData()
-                        .setTopicId(TOPIC_1)
-                        .setPartitions(Arrays.asList(
-                            new AssignReplicasToDirsRequestData.PartitionData()
-                                .setPartitionIndex(4),
-                            new AssignReplicasToDirsRequestData.PartitionData()
-                                .setPartitionIndex(1)))))));
-        assertRequestEquals(expected, built);
-    }
-
-    @Test
-    public void testAssignmentAggregation() throws InterruptedException {
-        CountDownLatch readyToAssert = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            readyToAssert.countDown();
-            return null;
-        }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
-            any(ControllerRequestCompletionHandler.class));
-
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1, "testAssignmentAggregation", () -> { });
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_2, "testAssignmentAggregation", () -> { });
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 3), DIR_3, "testAssignmentAggregation", () -> { });
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 4), DIR_1, "testAssignmentAggregation", () -> { });
-        manager.onAssignment(new TopicIdPartition(TOPIC_2, 5), DIR_2, "testAssignmentAggregation", () -> { });
-        TestUtils.waitForCondition(() -> {
-            time.sleep(100);
-            manager.wakeup();
-            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
-
-        ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor =
-            ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
-        verify(channelManager, times(1)).start();
-        verify(channelManager).sendRequest(captor.capture(), any(ControllerRequestCompletionHandler.class));
-        verify(channelManager, atMostOnce()).shutdown();
-        verifyNoMoreInteractions(channelManager);
-        assertEquals(1, captor.getAllValues().size());
-        AssignReplicasToDirsRequestData actual = captor.getValue().build().data();
-        AssignReplicasToDirsRequestData expected = buildRequestData(
-            8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
-                    put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
-                    put(new TopicIdPartition(TOPIC_1, 2), DIR_2);
-                    put(new TopicIdPartition(TOPIC_1, 3), DIR_3);
-                    put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
-                    put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
-                }}
-        );
-        assertRequestEquals(expected, actual);
-    }
-
-    @Test
-    void testRequeuesFailedAssignmentPropagations() throws InterruptedException {
-        CountDownLatch readyToAssert = new CountDownLatch(5);
-        doAnswer(invocation -> {
-            readyToAssert.countDown();
-            if (readyToAssert.getCount() == 4) {
-                invocation.getArgument(1, ControllerRequestCompletionHandler.class).onTimeout();
-                manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_3, "testRequeuesFailedAssignmentPropagations", () -> { });
-            }
-            if (readyToAssert.getCount() == 3) {
-                invocation.getArgument(1, ControllerRequestCompletionHandler.class).onComplete(
-                    new ClientResponse(null, null, null, 0L, 0L, false, false,
-                        new UnsupportedVersionException("test unsupported version exception"), null, null));
-
-                // duplicate should be ignored
-                manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_3, "testRequeuesFailedAssignmentPropagations", () -> { });
-
-                manager.onAssignment(new TopicIdPartition(TOPIC_1, 3),
-                     Uuid.fromString("xHLCnG54R9W3lZxTPnpk1Q"), "testRequeuesFailedAssignmentPropagations", () -> { });
-            }
-            if (readyToAssert.getCount() == 2) {
-                invocation.getArgument(1, ControllerRequestCompletionHandler.class).onComplete(
-                        new ClientResponse(null, null, null, 0L, 0L, false, false, null,
-                                new AuthenticationException("test authentication exception"), null)
-                );
-
-                // duplicate should be ignored
-                manager.onAssignment(new TopicIdPartition(TOPIC_1, 3),
-                     Uuid.fromString("xHLCnG54R9W3lZxTPnpk1Q"), "testRequeuesFailedAssignmentPropagations", () -> { });
-
-                manager.onAssignment(new TopicIdPartition(TOPIC_1, 4),
-                     Uuid.fromString("RCYu1A0CTa6eEIpuKDOfxw"), "testRequeuesFailedAssignmentPropagations", () -> { });
-            }
-            if (readyToAssert.getCount() == 1) {
-                invocation.getArgument(1, ControllerRequestCompletionHandler.class).onComplete(
-                    new ClientResponse(null, null, null, 0L, 0L, false, false, null, null,
-                        new AssignReplicasToDirsResponse(new AssignReplicasToDirsResponseData()
-                            .setErrorCode(Errors.NOT_CONTROLLER.code())
-                            .setThrottleTimeMs(0))));
-            }
-            return null;
-        }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
-            any(ControllerRequestCompletionHandler.class));
-
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1, "testRequeuesFailedAssignmentPropagations", () -> { });
-        TestUtils.waitForCondition(() -> {
-            time.sleep(TimeUnit.SECONDS.toMillis(1));
-            manager.wakeup();
-            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
-
-        ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor =
-            ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
-        verify(channelManager, times(1)).start();
-        verify(channelManager, times(5)).sendRequest(captor.capture(),
-            any(ControllerRequestCompletionHandler.class));
-        verify(channelManager, atMostOnce()).shutdown();
-        verifyNoMoreInteractions(channelManager);
-        assertEquals(5, captor.getAllValues().size());
-        assertRequestEquals(buildRequestData(
-            8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
-                    put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
-                }}
-        ), captor.getAllValues().get(0).build().data());
-        assertRequestEquals(buildRequestData(
-            8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
-                    put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
-                    put(new TopicIdPartition(TOPIC_1, 2), DIR_3);
-                }}
-        ), captor.getAllValues().get(1).build().data());
-        assertRequestEquals(buildRequestData(
-            8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
-                    put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
-                    put(new TopicIdPartition(TOPIC_1, 2), DIR_3);
-                    put(new TopicIdPartition(TOPIC_1, 3), Uuid.fromString("xHLCnG54R9W3lZxTPnpk1Q"));
-                    put(new TopicIdPartition(TOPIC_1, 4), Uuid.fromString("RCYu1A0CTa6eEIpuKDOfxw"));
-                }}
-        ), captor.getAllValues().get(4).build().data());
-    }
-
-    @Timeout(30)
-    @Test
-    void testOnCompletion() throws Exception {
-        CountDownLatch readyToAssert = new CountDownLatch(300);
-        doAnswer(invocation -> {
-            AssignReplicasToDirsRequestData request = invocation.getArgument(0, AssignReplicasToDirsRequest.Builder.class).build().data();
-            ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
-            completionHandler.onComplete(buildSuccessfulResponse(request));
-
-            return null;
-        }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
-                any(ControllerRequestCompletionHandler.class));
-
-        for (int i = 0; i < 300; i++) {
-            manager.onAssignment(new TopicIdPartition(TOPIC_1, i % 5), DIR_1, "testOnCompletion", readyToAssert::countDown);
-        }
-
-        TestUtils.waitForCondition(() -> {
-            time.sleep(TimeUnit.SECONDS.toMillis(1));
-            manager.wakeup();
-            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
-    }
-
-    private static ClientResponse buildSuccessfulResponse(AssignReplicasToDirsRequestData request) {
-        return buildResponse(request, topicIdPartition -> Errors.NONE);
-    }
-
-    private static ClientResponse buildResponse(AssignReplicasToDirsRequestData request,
-                                                Function<TopicIdPartition, Errors> perPartitionError) {
-        Map<Uuid, Map<TopicIdPartition, Errors>> errors = new HashMap<>();
-        for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
-            for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
-                for (AssignReplicasToDirsRequestData.PartitionData partition : topic.partitions()) {
-                    TopicIdPartition topicIdPartition = new TopicIdPartition(topic.topicId(), partition.partitionIndex());
-                    Errors error = perPartitionError.apply(topicIdPartition);
-                    if (error == null) {
-                        error = Errors.NONE;
-                    }
-                    errors.computeIfAbsent(directory.id(), d -> new HashMap<>()).put(topicIdPartition, error);
-                }
-            }
-        }
-        AssignReplicasToDirsResponseData responseData = AssignmentsHelper.buildResponseData(Errors.NONE.code(), 0, errors);
-        return new ClientResponse(null, null, null,
-                0L, 0L, false, false, null, null,
-                new AssignReplicasToDirsResponse(responseData));
-    }
-
-    @Test
-    public void testAssignmentCompaction() throws Exception {
-        // Delay the first controller response to force assignment compaction logic
-        CompletableFuture<Runnable> completionFuture = new CompletableFuture<>();
-        doAnswer(invocation -> {
-            AssignReplicasToDirsRequestData request = invocation.getArgument(0, AssignReplicasToDirsRequest.Builder.class).build().data();
-            ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
-            ClientResponse response = buildSuccessfulResponse(request);
-            Runnable completion = () -> completionHandler.onComplete(response);
-            if (completionFuture.isDone()) completion.run();
-            else completionFuture.complete(completion);
-            return null;
-        }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
-                any(ControllerRequestCompletionHandler.class));
-
-        CountDownLatch remainingInvocations = new CountDownLatch(20);
-        Runnable onComplete = () -> {
-            assertTrue(completionFuture.isDone(), "Premature invocation");
-            assertTrue(remainingInvocations.getCount() > 0, "Extra invocation");
-            remainingInvocations.countDown();
-        };
-        Uuid[] dirs = {DIR_1, DIR_2, DIR_3};
-        for (int i = 0; i < remainingInvocations.getCount(); i++) {
-            time.sleep(100);
-            manager.onAssignment(new TopicIdPartition(TOPIC_1, 0), dirs[i % 3], "testAssignmentCompaction", onComplete);
-        }
-        activeWait(completionFuture::isDone);
-        completionFuture.get().run();
-        activeWait(() -> remainingInvocations.getCount() == 0);
-    }
-
-    void activeWait(Supplier<Boolean> predicate) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
-            boolean conditionSatisfied = predicate.get();
-            if (!conditionSatisfied) {
-                time.sleep(100);
-                manager.wakeup();
-            }
-            return conditionSatisfied;
-        }, TestUtils.DEFAULT_MAX_WAIT_MS, 50, null);
-    }
-
-    static Metric findMetric(String name) {
-        for (Map.Entry<MetricName, Metric> entry : KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet()) {
-            MetricName metricName = entry.getKey();
-            if (AssignmentsManager.class.getSimpleName().equals(metricName.getType()) && metricName.getName().equals(name)) {
-                return entry.getValue();
-            }
-        }
-        throw new IllegalArgumentException("metric named " + name + " not found");
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    void testQueuedReplicaToDirAssignmentsMetric() throws Exception {
-        CountDownLatch readyToAssert = new CountDownLatch(1);
-        doAnswer(invocation -> {
-            readyToAssert.countDown();
-            return null;
-        }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class), any(ControllerRequestCompletionHandler.class));
-
-        Gauge<Integer> queuedReplicaToDirAssignments = (Gauge<Integer>) findMetric(AssignmentsManager.QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME);
-        assertEquals(0, queuedReplicaToDirAssignments.value());
-
-        for (int i = 0; i < 4; i++) {
-            manager.onAssignment(new TopicIdPartition(TOPIC_1, i), DIR_1, "testQueuedReplicaToDirAssignmentsMetric", () -> { });
-        }
-        TestUtils.waitForCondition(() -> {
-            time.sleep(100);
-            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
-        assertEquals(4, queuedReplicaToDirAssignments.value());
-
-        for (int i = 4; i < 8; i++) {
-            manager.onAssignment(new TopicIdPartition(TOPIC_1, i), DIR_1, "testQueuedReplicaToDirAssignmentsMetric", () -> { });
-        }
-        TestUtils.retryOnExceptionWithTimeout(5_000, () -> assertEquals(8, queuedReplicaToDirAssignments.value()));
-    }
-
-    // AssignmentsManager retries to propagate assignments (via AssignReplicasToDirsRequest) after failures.
-    // When an assignment fails to propagate with NOT_LEADER_OR_FOLLOWER, AssignmentsManager should conclude
-    // that the broker has been removed as a replica for the partition, and stop trying to propagate it.
-    @Test
-    void testDropsOldAssignments() throws InterruptedException {
-        TopicIdPartition tp1 = new TopicIdPartition(TOPIC_1, 1), tp2 = new TopicIdPartition(TOPIC_1, 2);
-        List<AssignReplicasToDirsRequestData> requests = new ArrayList<>();
-        CountDownLatch readyToAssert = new CountDownLatch(2);
-        doAnswer(invocation -> {
-            AssignReplicasToDirsRequestData request = invocation.getArgument(0, AssignReplicasToDirsRequest.Builder.class).build().data();
-            ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
-            if (readyToAssert.getCount() == 2) {
-                // First request, reply with a partition-level NOT_LEADER_OR_FOLLOWER error and queue a different assignment
-                completionHandler.onComplete(buildResponse(request, topicIdPartition -> Errors.NOT_LEADER_OR_FOLLOWER));
-                manager.onAssignment(tp2, DIR_1, "testDropsOldAssignments-second");
-            }
-            if (readyToAssert.getCount() == 1) {
-                // Second request, reply with success
-                completionHandler.onComplete(buildSuccessfulResponse(request));
-            }
-            requests.add(request);
-            readyToAssert.countDown();
-            return null;
-        }).when(channelManager).sendRequest(any(), any());
-
-        manager.onAssignment(tp1, DIR_1, "testDropsOldAssignments-first");
-        TestUtils.waitForCondition(() -> {
-            time.sleep(TimeUnit.SECONDS.toMillis(1));
-            manager.wakeup();
-            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
-        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
-
-        assertEquals(Arrays.asList(
-                buildRequestData(8, 100, new HashMap<TopicIdPartition, Uuid>() {{
-                        put(tp1, DIR_1);
-                    }}),
-                // Even though the controller replied with NOT_LEADER_OR_FOLLOWER, the second request does not include
-                // partition 1, meaning AssignmentManager dropped (no longer retries) the assignment.
-                buildRequestData(8, 100, new HashMap<TopicIdPartition, Uuid>() {{
-                        put(tp2, DIR_1);
-                    }})
-        ), requests);
+        Map<TopicIdPartition, Uuid> assignments = new LinkedHashMap<>();
+        assignments.put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
+        assignments.put(new TopicIdPartition(TOPIC_1, 2), DIR_2);
+        assignments.put(new TopicIdPartition(TOPIC_1, 3), DIR_3);
+        assignments.put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
+        assignments.put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
+        Map<TopicIdPartition, Assignment> targetAssignments = new LinkedHashMap<>();
+        assignments.entrySet().forEach(e -> targetAssignments.put(e.getKey(),
+            new Assignment(e.getKey(), e.getValue(), 0, () -> { })));
+        AssignReplicasToDirsRequestData built =
+            AssignmentsManager.buildRequestData(8, 100L, targetAssignments);
+        AssignReplicasToDirsRequestData expected = new AssignReplicasToDirsRequestData().
+            setBrokerId(8).
+            setBrokerEpoch(100L).
+            setDirectories(Arrays.asList(
+                new AssignReplicasToDirsRequestData.DirectoryData().
+                    setId(DIR_2).
+                    setTopics(Arrays.asList(
+                        new AssignReplicasToDirsRequestData.TopicData().
+                            setTopicId(TOPIC_1).
+                            setPartitions(Collections.singletonList(
+                                new AssignReplicasToDirsRequestData.PartitionData().
+                                    setPartitionIndex(2))),
+                new AssignReplicasToDirsRequestData.TopicData().
+                    setTopicId(TOPIC_2).
+                    setPartitions(Collections.singletonList(
+                        new AssignReplicasToDirsRequestData.PartitionData().
+                            setPartitionIndex(5))))),
+                new AssignReplicasToDirsRequestData.DirectoryData().
+                    setId(DIR_3).
+                    setTopics(Collections.singletonList(
+                        new AssignReplicasToDirsRequestData.TopicData().
+                            setTopicId(TOPIC_1).
+                            setPartitions(Collections.singletonList(
+                                new AssignReplicasToDirsRequestData.PartitionData().
+                                    setPartitionIndex(3))))),
+                new AssignReplicasToDirsRequestData.DirectoryData().
+                    setId(DIR_1).
+                    setTopics(Collections.singletonList(
+                        new AssignReplicasToDirsRequestData.TopicData().
+                            setTopicId(TOPIC_1).
+                            setPartitions(Arrays.asList(
+                                new AssignReplicasToDirsRequestData.PartitionData().
+                                    setPartitionIndex(1),
+                                new AssignReplicasToDirsRequestData.PartitionData().
+                                    setPartitionIndex(4)))))));
+        assertEquals(expected, built);
     }
 }

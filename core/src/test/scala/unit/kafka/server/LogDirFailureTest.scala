@@ -22,12 +22,12 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
-import kafka.utils.{CoreUtils, Exit, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._

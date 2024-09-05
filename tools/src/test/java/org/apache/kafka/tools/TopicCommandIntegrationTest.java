@@ -23,7 +23,6 @@ import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
-import kafka.utils.Exit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.Config;
@@ -56,6 +55,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.test.TestUtils;
