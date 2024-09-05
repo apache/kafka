@@ -288,11 +288,6 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">LogAndContinueExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-odd"><td>deserialization.exception.handler</td>
-            <td>Medium</td>
-            <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
-            <td><code class="docutils literal"><span class="pre">LogAndContinueExceptionHandler</span></code></td>
-          </tr>
           <tr class="row-even"><td>default.key.serde</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer class for record keys, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface. Must be
@@ -300,11 +295,6 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
           <tr class="row-odd"><td>default.production.exception.handler (Deprecated. Use production.exception.handler instead.)</td>
-            <td>Medium</td>
-            <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
-            <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
-          </tr>
-          <tr class="row-odd"><td>production.exception.handler</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
@@ -327,6 +317,11 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               favor of <code>dsl.store.suppliers.class</code>
               </td>
             <td><code>ROCKS_DB</code></td>
+          </tr>
+          <tr class="row-odd"><td>deserialization.exception.handler</td>
+            <td>Medium</td>
+            <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
+            <td><code class="docutils literal"><span class="pre">LogAndContinueExceptionHandler</span></code></td>
           </tr>
           <tr class="row-odd"><td>dsl.store.suppliers.class</td>
             <td>Low</td>
@@ -412,6 +407,11 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
               or <code class="docutils literal"><span class="pre">"exactly_once_v2"</span></code> (for EOS version 2, requires broker version 2.5+). Deprecated config options are
               <code class="docutils literal"><span class="pre">"exactly_once"</span></code> (for EOS version 1) and <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code> (for EOS version 2, requires broker version 2.5+)</td>.
             <td>See <a class="reference internal" href="#streams-developer-guide-processing-guarantee"><span class="std std-ref">Processing Guarantee</span></a></td>
+          </tr>
+          <tr class="row-odd"><td>production.exception.handler</td>
+            <td>Medium</td>
+            <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
+            <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
           </tr>
           <tr class="row-even"><td>poll.ms</td>
             <td>Low</td>
