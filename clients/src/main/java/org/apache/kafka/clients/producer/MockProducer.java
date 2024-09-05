@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.Time;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -72,7 +73,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean producerFenced;
     private boolean sentOffsets;
     private long commitCount = 0L;
-    final List<KafkaMetric> addedMetrics = new ArrayList<>();
+    private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     public RuntimeException initTransactionException = null;
     public RuntimeException beginTransactionException = null;
@@ -607,6 +608,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
             }
             result.done();
         }
+    }
+
+    public List<KafkaMetric> addedMetrics() {
+        return Collections.unmodifiableList(addedMetrics);
     }
 
     @Override
