@@ -162,6 +162,19 @@ public class GroupCoordinatorConfig {
     public static final int SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT = 15000;
     public static final String SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC = "The maximum heartbeat interval for share group members.";
 
+    /** Streams group configs */
+    public static final String STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG = "group.streams.session.timeout.ms";
+    public static final int STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT = 45000;
+    public static final String STREAMS_GROUP_SESSION_TIMEOUT_MS_DOC = "The timeout to detect client failures when using the streams group protocol.";
+
+    public static final String STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.heartbeat.interval.ms";
+    public static final int STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT = 5000;
+    public static final String STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DOC = "The heartbeat interval given to the members of a streams group.";
+
+    public static final String STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG = "group.streams.num.standby.replicas";
+    public static final int STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT = 0;
+    public static final String STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas for each task.";
+
     public static final String OFFSET_METADATA_MAX_SIZE_CONFIG = "offset.metadata.max.bytes";
     public static final int OFFSET_METADATA_MAX_SIZE_DEFAULT = 4096;
     public static final String OFFSET_METADATA_MAX_SIZE_DOC = "The maximum size for a metadata entry associated with an offset commit.";
@@ -246,6 +259,10 @@ public class GroupCoordinatorConfig {
             .define(SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC)
             .define(SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC)
             .define(SHARE_GROUP_MAX_SIZE_CONFIG, INT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(10, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC);
+    public static final ConfigDef STREAMS_GROUP_CONFIG_DEF =  new ConfigDef()
+            .define(STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_SESSION_TIMEOUT_MS_DOC)
+            .define(STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
+            .define(STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, INT, STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC);
 
     /**
      * The timeout used to wait for a new member in milliseconds.
@@ -284,6 +301,11 @@ public class GroupCoordinatorConfig {
     private final int shareGroupHeartbeatIntervalMs;
     private final int shareGroupMinHeartbeatIntervalMs;
     private final int shareGroupMaxHeartbeatIntervalMs;
+    // Streams group configurations
+    private final int streamsGroupSessionTimeoutMs;
+    private final int streamsGroupHeartbeatIntervalMs;
+    private final int streamsGroupNumStandbyReplicas;
+
 
     public GroupCoordinatorConfig(AbstractConfig config) {
         this.numThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
@@ -322,6 +344,10 @@ public class GroupCoordinatorConfig {
         this.shareGroupMinHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxSize = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
+        // Streams group configurations
+        this.streamsGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG);
+        this.streamsGroupHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.streamsGroupNumStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG);
 
         // New group coordinator configs validation.
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -357,6 +383,10 @@ public class GroupCoordinatorConfig {
         require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
             String.format("%s must be less than or equals to %s",
                 SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
+
+        // Streams group configs validation.
+        require(streamsGroupHeartbeatIntervalMs <= streamsGroupSessionTimeoutMs,
+                String.format("%s must be less than or equals to %s", STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG));
     }
 
     /**
@@ -607,5 +637,26 @@ public class GroupCoordinatorConfig {
      */
     public int shareGroupMaxHeartbeatIntervalMs() {
         return shareGroupMaxHeartbeatIntervalMs;
+    }
+
+    /**
+     * The streams group session timeout in milliseconds.
+     */
+    public int streamsGroupSessionTimeoutMs() {
+        return streamsGroupSessionTimeoutMs;
+    }
+
+    /**
+     * The streams group heartbeat interval in milliseconds.
+     */
+    public int streamsGroupHeartbeatIntervalMs() {
+        return streamsGroupHeartbeatIntervalMs;
+    }
+
+    /**
+     * The streams group number of standby replicas
+     */
+    public int streamsGroupNumStandbyReplicas() {
+        return streamsGroupNumStandbyReplicas;
     }
 }

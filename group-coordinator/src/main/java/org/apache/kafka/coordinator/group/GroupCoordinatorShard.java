@@ -132,7 +132,7 @@ import static org.apache.kafka.coordinator.group.Utils.messageOrNull;
  * 2) The replay methods which apply records to the hard state. Those are used in the request
  *    handling as well as during the initial loading of the records from the partitions.
  */
-@SuppressWarnings("ClassFanOutComplexity")
+@SuppressWarnings({"ClassFanOutComplexity", "CyclomaticComplexity"})
 public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
 
     public static class Builder implements CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> {

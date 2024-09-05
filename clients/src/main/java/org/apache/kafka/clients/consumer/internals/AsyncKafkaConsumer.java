@@ -147,6 +147,7 @@ import static org.apache.kafka.common.utils.Utils.swallow;
  * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
  * This consumer implements the new consumer group protocol and is intended to be the default in coming releases.
  */
+@SuppressWarnings("this-escape")
 public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private static final long NO_CURRENT_THREAD = -1L;
