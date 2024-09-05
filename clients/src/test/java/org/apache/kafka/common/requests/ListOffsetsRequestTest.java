@@ -184,4 +184,32 @@ public class ListOffsetsRequestTest {
                 () -> versionInfo.latestUsableVersion(apiKey, (short) version, apiKey.latestVersion()));
         assertEquals("The node does not support " + apiKey, exception.getMessage());
     }
+
+    @Test
+    public void testListOffsetsRequestOldestVersion() {
+        ListOffsetsRequest.Builder consumerRequestBuilder = ListOffsetsRequest.Builder
+            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED);
+
+        ListOffsetsRequest.Builder requireTimestampRequestBuilder = ListOffsetsRequest.Builder
+            .forConsumer(true, IsolationLevel.READ_UNCOMMITTED);
+
+        ListOffsetsRequest.Builder requestCommittedRequestBuilder = ListOffsetsRequest.Builder
+            .forConsumer(false, IsolationLevel.READ_COMMITTED);
+
+        ListOffsetsRequest.Builder maxTimestampRequestBuilder = ListOffsetsRequest.Builder
+            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true, false, false);
+
+        ListOffsetsRequest.Builder requireEarliestLocalTimestampRequestBuilder = ListOffsetsRequest.Builder
+            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, true, false);
+
+        ListOffsetsRequest.Builder requireTieredStorageTimestampRequestBuilder = ListOffsetsRequest.Builder
+            .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, true);
+
+        assertEquals((short) 0, consumerRequestBuilder.oldestAllowedVersion());
+        assertEquals((short) 1, requireTimestampRequestBuilder.oldestAllowedVersion());
+        assertEquals((short) 2, requestCommittedRequestBuilder.oldestAllowedVersion());
+        assertEquals((short) 7, maxTimestampRequestBuilder.oldestAllowedVersion());
+        assertEquals((short) 8, requireEarliestLocalTimestampRequestBuilder.oldestAllowedVersion());
+        assertEquals((short) 9, requireTieredStorageTimestampRequestBuilder.oldestAllowedVersion());
+    }
 }

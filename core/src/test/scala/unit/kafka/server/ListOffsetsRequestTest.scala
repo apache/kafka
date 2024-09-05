@@ -24,7 +24,6 @@ import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -91,34 +90,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, consumerRequest)
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, replicaRequest)
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, debugReplicaRequest)
-  }
-
-  @Test
-  def testListOffsetsRequestOldestVersion(): Unit = {
-    val consumerRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-
-    val requireTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
-
-    val requestCommittedRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_COMMITTED)
-
-    val maxTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true, false, false)
-
-    val requireEarliestLocalTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, true, false)
-
-    val requireTieredStorageTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, true)
-
-    assertEquals(0.toShort, consumerRequestBuilder.oldestAllowedVersion())
-    assertEquals(1.toShort, requireTimestampRequestBuilder.oldestAllowedVersion())
-    assertEquals(2.toShort, requestCommittedRequestBuilder.oldestAllowedVersion())
-    assertEquals(7.toShort, maxTimestampRequestBuilder.oldestAllowedVersion())
-    assertEquals(8.toShort, requireEarliestLocalTimestampRequestBuilder.oldestAllowedVersion())
-    assertEquals(9.toShort, requireTieredStorageTimestampRequestBuilder.oldestAllowedVersion())
   }
 
   def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
