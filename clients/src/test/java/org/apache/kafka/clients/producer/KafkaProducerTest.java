@@ -2400,9 +2400,6 @@ public class KafkaProducerTest {
 
         @Override
         public void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
-            if (headers == null) {
-                return;
-            }
             if (!(headers instanceof RecordHeaders)) {
                 return;
             }
