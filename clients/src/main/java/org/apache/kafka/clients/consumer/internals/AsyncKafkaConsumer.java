@@ -80,6 +80,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -1288,7 +1289,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
         applicationEventHandler.add(unsubscribeEvent);
         try {
-            processBackgroundEvents(unsubscribeEvent.future(), timer);
+            Timer leaveGroupTimer = leaveGroupTimer(timer);
+            processBackgroundEvents(unsubscribeEvent.future(), leaveGroupTimer);
             log.info("Completed releasing assignment and sending leave group to close consumer");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
@@ -1300,6 +1302,42 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             timer.update();
         }
+    }
+
+    /**
+     * The unsubscribe process requires a handful of back-and-forth trips between the application thread and
+     * the background thread:
+     *
+     * <ol>
+     *     <li>
+     *         Application thread: enqueue {@link UnsubscribeEvent}
+     *     </li>
+     *     <li>
+     *         Background thread: process {@link UnsubscribeEvent} and
+     *                            enqueue {@link ConsumerRebalanceListenerCallbackNeededEvent}
+     *     </li>
+     *     <li>
+     *         Application thread: process {@link ConsumerRebalanceListenerCallbackNeededEvent},
+     *                             invoke appropriate {@link ConsumerRebalanceListener} method, and
+     *                             enqueue {@link ConsumerRebalanceListenerCallbackCompletedEvent}
+     *     </li>
+     *     <li>
+     *         Background thread: process {@link ConsumerRebalanceListenerCallbackCompletedEvent} and
+     *                            enqueue {@link NetworkClientDelegate.UnsentRequest} to send the
+     *                            {@link ConsumerGroupHeartbeatRequest} to leave the consumer group
+     *     </li>
+     * </ol>
+     *
+     * In cases where the incoming {@link Timer timer} has very little remaining time, e.g. 0, it is impossible
+     * to perform the thread switches necessary to leave the group. Therefore, in cases where there isn't much
+     * of a timeout left, increase it slightly (presently 1000 ms.) to improve the chances for the consumer to
+     * properly leave the group.
+     *
+     * @return Timer with enough room to perform necessary steps.
+     */
+    private Timer leaveGroupTimer(final Timer timer) {
+        final long minimumTimeoutMs = 1000;
+        return time.timer(Math.max(timer.remainingMs(), minimumTimeoutMs));
     }
 
     // Visible for testing
