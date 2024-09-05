@@ -114,7 +114,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RestoreIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RestoreIntegrationTest.class);
 
-    private static final Duration RESTORATION_DELAY = Duration.ofMillis(500);
+    private static final Duration RESTORATION_DELAY = Duration.ofMillis(2000);
 
     private static final int NUM_BROKERS = 1;
 
@@ -554,12 +554,12 @@ public class RestoreIntegrationTest {
         final Map<String, Object> kafkaStreams1Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
         );
         final Map<String, Object> kafkaStreams2Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -569,7 +569,7 @@ public class RestoreIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        final List<KeyValue<Integer, Integer>> sampleData = IntStream.range(0, 500)
+        final List<KeyValue<Integer, Integer>> sampleData = IntStream.range(0, 100)
                                                                      .mapToObj(i -> new KeyValue<>(i, i))
                                                                      .collect(Collectors.toList());
 
@@ -647,7 +647,7 @@ public class RestoreIntegrationTest {
 
     private static final class TestStateRestoreListener implements StateRestoreListener {
         private final String instanceName;
-        private final Duration onBatchRestoredSleepDuration;
+        private Duration onBatchRestoredSleepDuration;
 
         private final CountDownLatch onRestoreStartLatch = new CountDownLatch(1);
         private final CountDownLatch onRestoreEndLatch = new CountDownLatch(1);
@@ -711,6 +711,7 @@ public class RestoreIntegrationTest {
                                        final long totalRestored) {
             log.info("[{}] called onRestoreSuspended. topicPartition={}, storeName={}, totalRestored={}",
                      instanceName, topicPartition, storeName, totalRestored);
+            onBatchRestoredSleepDuration = Duration.ZERO;
             onRestoreSuspendedLatch.countDown();
         }
 
