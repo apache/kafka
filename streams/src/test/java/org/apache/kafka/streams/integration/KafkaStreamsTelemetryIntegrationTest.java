@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.integration;
 
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;

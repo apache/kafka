@@ -29,20 +29,19 @@ import java.util.Map;
 import java.util.Objects;
 
 public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
-
-
-    private static final Logger LOG = LoggerFactory.getLogger(StreamsThreadDelegatingMetricsReporter.class);
-    private Consumer<?, ?> consumer;
-    final String threadId;
-    final String stateUpdaterThreadId;
+    
+    private static final Logger log = LoggerFactory.getLogger(StreamsThreadDelegatingMetricsReporter.class);
     private static final String THREAD_ID_TAG = "thread-id";
+    private Consumer<?, ?> consumer;
+    private final String threadId;
+    private final String stateUpdaterThreadId;
 
 
     public StreamsThreadDelegatingMetricsReporter(final Consumer<?, ?> consumer, final String threadId, final String stateUpdaterThreadId) {
         this.consumer = Objects.requireNonNull(consumer);
         this.threadId = Objects.requireNonNull(threadId);
         this.stateUpdaterThreadId = Objects.requireNonNull(stateUpdaterThreadId);
-        LOG.debug("Creating MetricsReporter for threadId {} and stateUpdaterId {}", threadId, stateUpdaterThreadId);
+        log.debug("Creating MetricsReporter for threadId {} and stateUpdaterId {}", threadId, stateUpdaterThreadId);
     }
 
     @Override
@@ -53,7 +52,7 @@ public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
     @Override
     public void metricChange(final KafkaMetric metric) {
         if (tagMatchStreamOrStateUpdaterThreadId(metric)) {
-            LOG.debug("Registering metric {}", metric.metricName());
+            log.debug("Registering metric {}", metric.metricName());
             consumer.registerMetric(metric);
         }
     }
@@ -62,7 +61,7 @@ public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
         final Map<String, String> tags = metric.metricName().tags();
         final boolean shouldInclude = tags.containsKey(THREAD_ID_TAG) && (tags.get(THREAD_ID_TAG).equals(threadId) || tags.get(THREAD_ID_TAG).equals(stateUpdaterThreadId));
         if (!shouldInclude) {
-            LOG.warn("Rejecting metric {}", metric.metricName());
+            log.warn("Rejecting metric {}", metric.metricName());
         }
         return shouldInclude;
     }
@@ -70,7 +69,7 @@ public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
     @Override
     public void metricRemoval(final KafkaMetric metric) {
         if (tagMatchStreamOrStateUpdaterThreadId(metric)) {
-            LOG.info("Unregistering metric {}", metric.metricName());
+            log.debug("Unregistering metric {}", metric.metricName());
             consumer.unregisterMetric(metric);
         }
     }
