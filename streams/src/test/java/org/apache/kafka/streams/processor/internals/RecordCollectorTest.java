@@ -1914,6 +1914,7 @@ public class RecordCollectorTest {
             assertEquals(expectedContext.recordContext().offset(), context.offset());
             assertEquals(expectedProcessorNodeId, context.processorNodeId());
             assertEquals(expectedTaskId, context.taskId());
+            assertEquals(expectedContext.recordContext().timestamp(), context.timestamp());
             assertInstanceOf(RuntimeException.class, exception);
             assertEquals("KABOOM!", exception.getMessage());
         }

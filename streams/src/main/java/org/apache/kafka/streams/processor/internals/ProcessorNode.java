@@ -211,7 +211,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 internalProcessorContext.offset(),
                 internalProcessorContext.headers(),
                 internalProcessorContext.currentNode().name(),
-                internalProcessorContext.taskId());
+                internalProcessorContext.taskId(),
+                internalProcessorContext.timestamp());
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;
             try {
