@@ -592,7 +592,7 @@ public class RestoreIntegrationTest {
         // Simulate a new instance joining in the middle of the restoration.
         // When this happens, some of the partitions that kafkaStreams1 was restoring will be migrated to kafkaStreams2,
         // and kafkaStreams1 must call StateRestoreListener#onRestoreSuspended.
-        final TestStateRestoreListener kafkaStreams2StateRestoreListener = new TestStateRestoreListener("ks2", RESTORATION_DELAY);
+        final TestStateRestoreListener kafkaStreams2StateRestoreListener = new TestStateRestoreListener("ks2", Duration.ZERO);
 
         try (final KafkaStreams kafkaStreams2 = startKafkaStreams(builder,
                                                                   kafkaStreams2StateRestoreListener,
