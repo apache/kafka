@@ -29,6 +29,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.bitmap.BitMaps;
+import org.apache.kafka.metadata.authorizer.trie.Inserter;
 import org.apache.kafka.metadata.authorizer.trie.Node;
 import org.apache.kafka.metadata.authorizer.trie.NodeData;
 import org.apache.kafka.metadata.authorizer.trie.ReadOnlyNode;
@@ -152,7 +153,7 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
      * @return the logger.
      */
     private static Logger createLogger(int nodeId) {
-        return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
+        return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(TrieAuthorizerData.class);
     }
 
     private TrieAuthorizerData(Logger log,
@@ -297,6 +298,17 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
     }
 
     /**
+     * Checks if the node has a matching action within the filtered ACLs.
+     * @param node The node to check.
+     * @param aclFilter the ACL filter to apply.
+     * @return an Optional StandardACL that is present if a matching ACL is found.
+     */
+    private Optional<StandardAcl> checkWildcard(NodeData<AclContainer> node, Predicate<StandardAcl> aclFilter) {
+        AclContainer container = node.getContents();
+        return container == null ? Optional.empty() : container.first(LITERAL_PATTERN.and(aclFilter));
+    }
+
+    /**
      * Creates a predicate that will match the resource pattern type required by the action against the node.
      * @param fragment The fragment that we are currently looking at.
      * @param action the action to find.
@@ -438,7 +450,9 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
             return false;
         };
 
-        List<StandardAcl> targets = trieData.find(action.resourcePattern(), matchFilter, n -> check(n, exitFilter, action).isPresent());
+        Predicate<NodeData<AclContainer>> exit = n -> n.getName().equals("") ? checkWildcard(n, exitFilter).isPresent() : check(n, exitFilter, action).isPresent(); // || checkWildcard(n, exitFilter).isPresent();
+
+        List<StandardAcl> targets = trieData.find(action.resourcePattern(), matchFilter, exit);
 
         if (targets.isEmpty()) {
             targets = trieData.find(new ResourcePattern(action.resourcePattern().resourceType(), WILDCARD, LITERAL), aclFilter.and(LITERAL_PATTERN), n -> false);
@@ -687,7 +701,10 @@ public class TrieAuthorizerData extends AbstractAuthorizerData {
                     }
                 }
             }
-            trie.insert(walker.inserter(acl.resourceName()), new AclContainer(acl), (old, value) -> {
+            // if we are inserting a wildcard resource make it an empty string so that it is inserted on the
+            // root node and will be found first
+            Inserter inserter =  walker.inserter(acl.resourceName().equals(WILDCARD) ? "" : acl.resourceName());
+            trie.insert(inserter, new AclContainer(acl), (old, value) -> {
                 old.partialAcls.addAll(value.partialAcls);
                 return old;
             });

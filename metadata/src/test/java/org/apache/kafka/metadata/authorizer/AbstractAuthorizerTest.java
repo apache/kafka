@@ -20,12 +20,15 @@ package org.apache.kafka.metadata.authorizer;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+
 import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -52,6 +55,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -75,13 +79,13 @@ import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.PatternType.PREFIXED;
 import static org.apache.kafka.common.resource.ResourceType.GROUP;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
+import static org.apache.kafka.metadata.authorizer.AuthorizerData.WILDCARD;
+import static org.apache.kafka.metadata.authorizer.AuthorizerData.WILDCARD_PRINCIPAL;
 import static org.apache.kafka.metadata.authorizer.AuthorizerData.findResult;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.SUPER_USERS_CONFIG;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.getConfiguredSuperUsers;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.getDefaultResult;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD_PRINCIPAL;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -161,6 +165,11 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
 
         public final Builder addAcl(StandardAcl acl) {
             acls.add(AuthorizerTestUtils.withId(acl));
+            return this;
+        }
+
+        public final Builder addAcl(AccessControlEntry ace, ResourcePattern pattern) {
+            addAcl(new StandardAcl(pattern.resourceType(), pattern.name(), pattern.patternType(), ace.principal(), ace.host(), ace.operation(), ace.permissionType()));
             return this;
         }
 
@@ -1011,6 +1020,62 @@ public abstract class AbstractAuthorizerTest<T extends Authorizer> {
         if (!failures.isEmpty()) {
             fail("Failed on " + String.join(System.lineSeparator() + " and ", failures));
         }
+    }
+
+    @Test
+    public void testWildCardAcls() throws Exception {
+        Builder builder = getTestingWrapperBuilder().superUser("User:superman");
+
+        ResourcePattern resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL);
+        AuthorizableRequestContext requestContext = AuthorizerTestUtils.newRequestContext("alice", InetAddress.getByName("192.168.0.1"));
+
+        Action action = new Action(READ, resource, 1, true, true);
+        AuthorizationResult result = builder.get().getAuthorizer().authorize(requestContext, Collections.singletonList(action)).get(0);
+        assertEquals(DENIED, result);
+
+        InetAddress host1 = InetAddress.getByName("192.168.3.1");
+        StandardAcl readAcl = new StandardAcl(resource.resourceType(), resource.name(), resource.patternType(), "User:alice", host1.getHostAddress(), READ, ALLOW);
+        builder.addAcl(readAcl);
+
+
+        AuthorizableRequestContext host1Context = AuthorizerTestUtils.newRequestContext("alice", host1);
+        action = new Action(READ, resource, 1, true, true);
+        result = builder.get().getAuthorizer().authorize(host1Context, Collections.singletonList(action)).get(0);
+        assertEquals(ALLOWED, result);
+
+        StandardAcl writeAcl = new StandardAcl(resource.resourceType(), resource.name(), resource.patternType(), "User:alice", host1.getHostAddress(), WRITE, ALLOW);
+        builder.addAcl(writeAcl);
+
+        StandardAcl denyWriteOnWildCardResourceAcl = new StandardAcl(TOPIC, WILDCARD, LITERAL, "User:alice", host1.getHostAddress(), WRITE, DENY);
+        builder.addAcl(denyWriteOnWildCardResourceAcl);
+
+        action = new Action(WRITE, resource, 1, true, true);
+        result = builder.get().getAuthorizer().authorize(host1Context, Collections.singletonList(action)).get(0);
+        assertEquals(DENIED, result);
+    }
+
+    @Test
+    public void testAuthorizeByResourceTypeWildcardResourceDenyDominate() throws Exception {
+        Builder builder = getTestingWrapperBuilder().superUser("User:superman");
+
+        ResourcePattern wildcard = new ResourcePattern(TOPIC, ResourcePattern.WILDCARD_RESOURCE, LITERAL);
+        ResourcePattern prefixed = new ResourcePattern(TOPIC, "t", PREFIXED);
+        ResourcePattern literal = new ResourcePattern(TOPIC, "topic", LITERAL);
+
+        AccessControlEntry allowWriteAce = new AccessControlEntry("User:client", WILDCARD, WRITE, ALLOW);
+
+        AccessControlEntry denyWriteAce =  new AccessControlEntry("User:client", WILDCARD, WRITE, DENY);
+        builder.addAcl(allowWriteAce, prefixed)
+                        .addAcl(allowWriteAce, literal);
+
+        InetAddress host1 = InetAddress.getByName("localhost");
+        AuthorizableRequestContext requestContext = AuthorizerTestUtils.newRequestContext("client", host1);
+        AuthorizationResult result = builder.get().getAuthorizer().authorizeByResourceType(requestContext, WRITE, TOPIC);
+        assertEquals(ALLOWED, result);
+
+        builder.addAcl(denyWriteAce, wildcard);
+        result = builder.get().getAuthorizer().authorizeByResourceType(requestContext, WRITE, TOPIC);
+        assertEquals(DENIED, result);
     }
 
 }

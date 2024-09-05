@@ -70,7 +70,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     private volatile AuthorizerData data;
 
     public StandardAuthorizer() {
-        this(StandardAuthorizerData.createEmpty());
+        this(TrieAuthorizerData.createEmpty());
     }
 
     protected StandardAuthorizer(AuthorizerData data) {

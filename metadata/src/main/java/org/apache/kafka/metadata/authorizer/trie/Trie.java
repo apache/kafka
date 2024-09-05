@@ -43,17 +43,6 @@ public class Trie<T>  {
         root = Node.makeRoot();
     }
 
-//    /**
-//     * Find the list of nodes from the root to the node that matches the value or the last node the trie that would
-//     * be on the path to the matching node if it existed.
-//     * @param matcher The matcher to traverse the tree.
-//     * @return the list of Nodes on the path.  Will be an empty list if value was not found.
-//     */
-//    public List<Node<T>> pathTo(Matcher<T> matcher) {
-//        Matcher.SearchResult<T> result = matcher.searchIn(root);
-//        return result.getNode() == null ? Collections.emptyList() : result.getNode().pathTo();
-//    }
-//
     /**
      * Gets the root.
      * @return Returns root node of the trie

@@ -30,8 +30,8 @@ import org.junit.jupiter.api.Timeout;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD_PRINCIPAL;
+import static org.apache.kafka.metadata.authorizer.AuthorizerData.WILDCARD;
+import static org.apache.kafka.metadata.authorizer.AuthorizerData.WILDCARD_PRINCIPAL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 

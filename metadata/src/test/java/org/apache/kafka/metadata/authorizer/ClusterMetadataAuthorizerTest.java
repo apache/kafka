@@ -55,8 +55,8 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD_PRINCIPAL;
+import static org.apache.kafka.metadata.authorizer.AuthorizerData.WILDCARD;
+import static org.apache.kafka.metadata.authorizer.AuthorizerData.WILDCARD_PRINCIPAL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
