@@ -19,6 +19,7 @@ package unit.kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
+
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords
 import org.apache.kafka.common.message.{ShareAcknowledgeRequestData, ShareAcknowledgeResponseData, ShareFetchRequestData, ShareFetchResponseData}
 import org.apache.kafka.common.protocol.Errors
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util
 import java.util.Collections
+
 import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
 import scala.jdk.CollectionConverters._
 
@@ -39,13 +41,13 @@ import scala.jdk.CollectionConverters._
 @Tag("integration")
 class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance){
 
-  @AfterEach
-  def tearDown(): Unit = {
-    requestUtilities.closeProducer()
-  }
-
   private val requestUtilities: RequestUtilities = new RequestUtilities(cluster)
   private final val MAX_PARTITION_BYTES = 10000
+
+  @AfterEach
+  def tearDown(): Unit = {
+    requestUtilities.closeProducer
+  }
 
   @ClusterTest(
     serverProperties = Array(

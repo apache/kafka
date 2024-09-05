@@ -45,7 +45,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     offset: Long,
     expectedError: Errors,
     version: Short
-   ): Unit = {
+  ): Unit = {
     val request = new OffsetCommitRequest.Builder(
       new OffsetCommitRequestData()
         .setGroupId(groupId)
