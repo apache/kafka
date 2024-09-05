@@ -416,7 +416,6 @@ attempting to start new ones."
         [[ $? -ne 0 ]] && die "failed to find the /etc/hosts entry for ${node}"
     done
     exec 3>&-
-    sleep 3
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
         docker exec --user=root "${node}" \

@@ -20,7 +20,6 @@ Define Kafka configuration property names here.
 BROKER_ID = "broker.id"
 NODE_ID = "node.id"
 PROCESS_ROLES = "process.roles"
-DIRECTORY_ID = "directory.id"
 FIRST_BROKER_PORT = 9092
 FIRST_CONTROLLER_PORT = FIRST_BROKER_PORT + 500
 FIRST_CONTROLLER_ID = 3001
