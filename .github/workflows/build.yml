@@ -111,7 +111,7 @@ jobs:
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
+          -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
           test
