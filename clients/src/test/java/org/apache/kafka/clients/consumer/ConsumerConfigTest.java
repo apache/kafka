@@ -241,11 +241,11 @@ public class ConsumerConfigTest {
     @Test
     public void testUnsupportConfigsWithConsumerGroupProtocol() {
         testUnsupportConfigsWithConsumerGroupProtocol(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "RoundRobinAssignor");
-        testUnsupportConfigsWithConsumerGroupProtocol(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
-        testUnsupportConfigsWithConsumerGroupProtocol(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000");
+        testUnsupportConfigsWithConsumerGroupProtocol(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
+        testUnsupportConfigsWithConsumerGroupProtocol(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
     }
 
-    private void testUnsupportConfigsWithConsumerGroupProtocol(String configName, String value) {
+    private void testUnsupportConfigsWithConsumerGroupProtocol(String configName, Object value) {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
