@@ -142,7 +142,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
     parser.add_argument("--path",
                         required=False,
-                        default="**/test-results/**/*.xml",
+                        default="build/junit-xml/**/*.xml",
                         help="Path to XML files. Glob patterns are supported.")
 
     if not os.getenv("GITHUB_WORKSPACE"):
