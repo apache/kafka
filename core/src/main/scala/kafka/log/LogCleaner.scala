@@ -623,8 +623,9 @@ private[log] class Cleaner(val id: Int,
 
     val groupedSegments = groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize,
       log.config.maxIndexSize, cleanable.firstUncleanableOffset)
-    for (group <- groupedSegments)
-      cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs)
+    for (group <- groupedSegments.init)
+      cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, retainLastBatch = false)
+    groupedSegments.lastOption.foreach(group => cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, retainLastBatch = true))
 
     // record buffer utilization
     stats.bufferUtilization = offsetMap.utilization
@@ -652,7 +653,8 @@ private[log] class Cleaner(val id: Int,
                                  currentTime: Long,
                                  stats: CleanerStats,
                                  transactionMetadata: CleanedTransactionMetadata,
-                                 legacyDeleteHorizonMs: Long): Unit = {
+                                 legacyDeleteHorizonMs: Long,
+                                 retainLastBatch: Boolean): Unit = {
     // create a new segment with a suffix appended to the name of the log and indexes
     val cleaned = UnifiedLog.createNewCleanedSegment(log.dir, log.config, segments.head.baseOffset)
     transactionMetadata.cleanedIndex = Some(cleaned.txnIndex)
@@ -662,6 +664,8 @@ private[log] class Cleaner(val id: Int,
       val iter = segments.iterator
       var currentSegmentOpt: Option[LogSegment] = Some(iter.next())
       val lastOffsetOfActiveProducers = log.lastRecordsOfActiveProducers
+      val nextOffsetOfSourceSegments = segments.last.readNextOffset()
+      val isLastBatchOfSourceSegments = (batch: RecordBatch) => batch.nextOffset() == nextOffsetOfSourceSegments
 
       while (currentSegmentOpt.isDefined) {
         val currentSegment = currentSegmentOpt.get
@@ -670,7 +674,7 @@ private[log] class Cleaner(val id: Int,
         // Note that it is important to collect aborted transactions from the full log segment
         // range since we need to rebuild the full transaction index for the new segment.
         val startOffset = currentSegment.baseOffset
-        val upperBoundOffset = nextSegmentOpt.map(_.baseOffset).getOrElse(currentSegment.readNextOffset)
+        val upperBoundOffset = nextSegmentOpt.map(_.baseOffset).getOrElse(nextOffsetOfSourceSegments)
         val abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset)
         transactionMetadata.addAbortedTransactions(abortedTransactions)
 
@@ -682,7 +686,7 @@ private[log] class Cleaner(val id: Int,
 
         try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainLegacyDeletesAndTxnMarkers, log.config.deleteRetentionMs,
-            log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, stats, currentTime = currentTime)
+            log.config.maxMessageSize, transactionMetadata, lastOffsetOfActiveProducers, retainLastBatch, isLastBatchOfSourceSegments, stats, currentTime = currentTime)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -740,6 +744,8 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: mutable.Map[Long, LastRecord],
+                             retainLastBatch: Boolean,
+                             isLastBatch: RecordBatch => Boolean,
                              stats: CleanerStats,
                              currentTime: Long): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter(currentTime, deleteRetentionMs) {
@@ -774,7 +780,11 @@ private[log] class Cleaner(val id: Int,
         val batchRetention: BatchRetention =
           if (batch.hasProducerId && isBatchLastRecordOfProducer)
             BatchRetention.RETAIN_EMPTY
-          else if (discardBatchRecords)
+          else if (retainLastBatch && isLastBatch(batch)) {
+            // retain the last batch of the cleaning round, even if it's empty, so that last offset information
+            // is not lost after cleaning.
+            BatchRetention.RETAIN_EMPTY
+          } else if (discardBatchRecords)
             BatchRetention.DELETE
           else
             BatchRetention.DELETE_EMPTY
