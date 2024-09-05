@@ -107,7 +107,7 @@ jobs:
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
         # --continue:     Keep running even if a test fails
         # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
-        timeout-minutes: 10  # 3 hours
+        timeout-minutes: 180  # 3 hours
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
