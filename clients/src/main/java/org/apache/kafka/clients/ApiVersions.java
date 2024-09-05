@@ -21,10 +21,8 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.ProduceRequest;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Maintains node api versions for access outside of NetworkClient (which is where the information is derived).
@@ -36,14 +34,27 @@ public class ApiVersions {
 
     private final Map<String, NodeApiVersions> nodeApiVersions = new HashMap<>();
     private byte maxUsableProduceMagic = RecordBatch.CURRENT_MAGIC_VALUE;
-
     // The maximum finalized feature epoch of all the node api versions.
     private long maxFinalizedFeaturesEpoch = -1;
+    private Map<String, Short> finalizedFeatures;
+
+    public static class FinalizedFeaturesInfo {
+        public final long finalizedFeaturesEpoch;
+        public final Map<String, Short> finalizedFeatures;
+        FinalizedFeaturesInfo(long finalizedFeaturesEpoch, Map<String, Short> finalizedFeatures) {
+            this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
+            this.finalizedFeatures = finalizedFeatures;
+        }
+    }
 
     public synchronized void update(String nodeId, NodeApiVersions nodeApiVersions) {
+        if (maxFinalizedFeaturesEpoch > nodeApiVersions.finalizedFeaturesEpoch()) {
+            return;
+        }
         this.nodeApiVersions.put(nodeId, nodeApiVersions);
         this.maxUsableProduceMagic = computeMaxUsableProduceMagic();
-        this.maxFinalizedFeaturesEpoch = Math.max(this.maxFinalizedFeaturesEpoch, nodeApiVersions.finalizedFeaturesEpoch());
+        this.maxFinalizedFeaturesEpoch = nodeApiVersions.finalizedFeaturesEpoch();
+        this.finalizedFeatures = nodeApiVersions.finalizedFeatures();
     }
 
     public synchronized void remove(String nodeId) {
@@ -55,12 +66,12 @@ public class ApiVersions {
         return this.nodeApiVersions.get(nodeId);
     }
 
-    public synchronized List<String> getNodes() {
-        return nodeApiVersions.keySet().stream().collect(Collectors.toList());
-    }
-
     public synchronized long getMaxFinalizedFeaturesEpoch() {
         return maxFinalizedFeaturesEpoch;
+    }
+
+    public synchronized FinalizedFeaturesInfo getFinalizedFeaturesInfo() {
+        return new FinalizedFeaturesInfo(maxFinalizedFeaturesEpoch, finalizedFeatures);
     }
 
     private byte computeMaxUsableProduceMagic() {

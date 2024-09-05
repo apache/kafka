@@ -59,7 +59,7 @@ public class ApiVersionsTest {
     }
 
     @Test
-    public void testFinalizedFeatures() {
+    public void testFinalizedFeaturesUpdate() {
         ApiVersions apiVersions = new ApiVersions();
         assertEquals(-1, apiVersions.getMaxFinalizedFeaturesEpoch());
 
@@ -74,7 +74,26 @@ public class ApiVersionsTest {
                     .setName("transaction.version")
                     .setMaxVersionLevel((short) 2)
                     .setMinVersionLevel((short) 2)),
+                1));
+        ApiVersions.FinalizedFeaturesInfo info = apiVersions.getFinalizedFeaturesInfo();
+        assertEquals(1, info.finalizedFeaturesEpoch);
+        assertEquals((short) 2, info.finalizedFeatures.get("transaction.version"));
+
+        apiVersions.update("1",
+            new NodeApiVersions(NodeApiVersions.create().allSupportedApiVersions().values(),
+                Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
+                    .setName("transaction.version")
+                    .setMaxVersion((short) 2)
+                    .setMinVersion((short) 0)),
+                false,
+                Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
+                    .setName("transaction.version")
+                    .setMaxVersionLevel((short) 1)
+                    .setMinVersionLevel((short) 1)),
                 0));
-        assertEquals(0, apiVersions.getMaxFinalizedFeaturesEpoch());
+        // The stale update should be fenced.
+        info = apiVersions.getFinalizedFeaturesInfo();
+        assertEquals(1, info.finalizedFeaturesEpoch);
+        assertEquals((short) 2, info.finalizedFeatures.get("transaction.version"));
     }
 }

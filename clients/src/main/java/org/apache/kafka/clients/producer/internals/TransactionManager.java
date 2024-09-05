@@ -439,17 +439,10 @@ public class TransactionManager {
         if (latestFinalizedFeaturesEpoch >= apiVersions.getMaxFinalizedFeaturesEpoch()) {
             return isTransactionV2Enabled;
         }
-        List<String> nodes = apiVersions.getNodes();
-        for (String node : nodes) {
-            NodeApiVersions nodeApiVersions = apiVersions.get(node);
-            if (nodeApiVersions != null) {
-                if (nodeApiVersions.finalizedFeaturesEpoch() > latestFinalizedFeaturesEpoch) {
-                    Short transactionVersion = nodeApiVersions.finalizedFeatures().get("transaction.version");
-                    isTransactionV2Enabled = transactionVersion != null && transactionVersion >= 2;
-                    latestFinalizedFeaturesEpoch = nodeApiVersions.finalizedFeaturesEpoch();
-                }
-            }
-        }
+        ApiVersions.FinalizedFeaturesInfo info = apiVersions.getFinalizedFeaturesInfo();
+        latestFinalizedFeaturesEpoch = info.finalizedFeaturesEpoch;
+        Short transactionVersion = info.finalizedFeatures.get("transaction.version");
+        isTransactionV2Enabled = transactionVersion != null && transactionVersion >= 2;
         return isTransactionV2Enabled;
     }
 

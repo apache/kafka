@@ -149,6 +149,7 @@ public class TransactionManagerTest {
     private Sender sender = null;
     private TransactionManager transactionManager = null;
     private Node brokerNode = null;
+    private long finalizedFeaturesEpoch = 0;
 
     @BeforeEach
     public void setup() {
@@ -184,7 +185,8 @@ public class TransactionManagerTest {
                     .setName("transaction.version")
                     .setMaxVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)
                     .setMinVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)),
-                0));
+                finalizedFeaturesEpoch));
+        finalizedFeaturesEpoch += 1;
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
                 transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
@@ -2866,7 +2868,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
-        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                     .setMinVersion((short) 0)
@@ -2874,7 +2876,11 @@ public class TransactionManagerTest {
                 new ApiVersion()
                     .setApiKey(ApiKeys.PRODUCE.id)
                     .setMinVersion((short) 0)
-                    .setMaxVersion((short) 7))));
+                    .setMaxVersion((short) 7)),
+                Collections.emptyList(),
+                false,
+                Collections.emptyList(),
+                0));
 
         doInitTransactions();
 
@@ -3063,7 +3069,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testAbortTransactionAndReuseSequenceNumberOnError() throws InterruptedException {
-        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                         .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                         .setMinVersion((short) 0)
@@ -3071,7 +3077,11 @@ public class TransactionManagerTest {
                 new ApiVersion()
                         .setApiKey(ApiKeys.PRODUCE.id)
                         .setMinVersion((short) 0)
-                        .setMaxVersion((short) 7))));
+                        .setMaxVersion((short) 7)),
+                Collections.emptyList(),
+                false,
+                Collections.emptyList(),
+                0));
 
         doInitTransactions();
 
@@ -3115,7 +3125,7 @@ public class TransactionManagerTest {
         // Set the InitProducerId version such that bumping the epoch number is not supported. This will test the case
         // where the sequence number is reset on an UnknownProducerId error, allowing subsequent transactions to
         // append to the log successfully
-        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                     .setMinVersion((short) 0)
@@ -3123,7 +3133,11 @@ public class TransactionManagerTest {
                 new ApiVersion()
                     .setApiKey(ApiKeys.PRODUCE.id)
                     .setMinVersion((short) 0)
-                    .setMaxVersion((short) 7))));
+                    .setMaxVersion((short) 7)),
+                Collections.emptyList(),
+                false,
+                Collections.emptyList(),
+                0));
 
         doInitTransactions();
 
