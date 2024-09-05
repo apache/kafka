@@ -387,6 +387,16 @@ public class ConsumerConfig extends AbstractConfig {
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final List<Class<? extends AbstractPartitionAssignor>> PARTITION_ASSIGNOR_DEFAULT_VALUE =
             Collections.unmodifiableList(Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class));
+
+    /**
+     * A list of configuration keys for consumer protocol not supported. we should check the input string and clean up the
+     * default value.
+     */
+    private static final List<String> CONSUMER_PROTOCOL_UNSUPPORT_CONFIGS = Collections.unmodifiableList(Arrays.asList(
+            PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
+            HEARTBEAT_INTERVAL_MS_CONFIG, 
+            SESSION_TIMEOUT_MS_CONFIG
+    ));
     
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -678,7 +688,7 @@ public class ConsumerConfig extends AbstractConfig {
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
         checkGroupRemoteAssignor();
-        checkPartitionAssignmentStrategy();
+        checkUnsupportConfigsWithConsumerProtocol();
         return refinedConfigs;
     }
 
@@ -731,11 +741,24 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    private void checkPartitionAssignmentStrategy() {
-        Object config = originals().get(PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
-        if (isConsumerProtocol() && config != null && !Utils.isBlank(config.toString())) {
-            throw new ConfigException(PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
+    private void checkUnsupportConfigsWithConsumerProtocol() {
+        if (isConsumerProtocol()) {
+            CONSUMER_PROTOCOL_UNSUPPORT_CONFIGS.forEach(configName -> {
+                Object config = originals().get(configName);
+                if (config != null && !Utils.isBlank(config.toString())) {
+                    throw new ConfigException(configName + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
+                }
+            });
         }
+    }
+
+    @Override
+    protected void clearDefaultValues() {
+        CONSUMER_PROTOCOL_UNSUPPORT_CONFIGS.forEach(configName -> {
+            if (originals().containsKey(configName)) {
+                super.clearConfig(configName);
+            }
+        });
     }
 
     private boolean isClassicProtocol() {
