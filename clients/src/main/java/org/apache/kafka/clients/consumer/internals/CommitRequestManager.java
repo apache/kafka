@@ -616,7 +616,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
     }
 
-    private class OffsetCommitRequestState extends RetriableRequestState {
+    class OffsetCommitRequestState extends RetriableRequestState {
         private Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
         private final Optional<String> groupInstanceId;
@@ -711,6 +711,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();
+            boolean hasFailedAttempt = false;
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
                     TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
@@ -723,7 +724,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         continue;
                     }
 
-                    onFailedAttempt(currentTimeMs);
+                    if (!hasFailedAttempt) {
+                        onFailedAttempt(currentTimeMs);
+                        hasFailedAttempt = true;
+                    }
+
                     if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                         future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
                         return;
@@ -1042,11 +1047,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     response.partitionDataMap(groupId);
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
             Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
+            boolean hasError = false;
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
                 if (partitionData.hasError()) {
-                    onFailedAttempt(currentTimeMs);
+                    hasError = true;
                     Errors error = partitionData.error;
                     log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
 
@@ -1075,6 +1081,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     log.info("Found no committed offset for partition {}", tp);
                     offsets.put(tp, null);
                 }
+            }
+
+            if (hasError) {
+                onFailedAttempt(currentTimeMs);
             }
 
             if (unauthorizedTopics != null) {
