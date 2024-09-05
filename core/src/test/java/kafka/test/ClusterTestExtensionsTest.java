@@ -231,6 +231,16 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
+    public void testShutdownAndSyncMetadata(ClusterInstance clusterInstance) throws Exception {
+        String topicName = "test";
+        int numPartition = 3;
+        short numReplicas = 3;
+        clusterInstance.createTopic(topicName, numPartition, numReplicas);
+        clusterInstance.shutdownBroker(0);
+        clusterInstance.waitForTopic(topicName, numPartition);
+    }
+
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
     public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
         clusterInstance.waitForReadyBrokers();
 
