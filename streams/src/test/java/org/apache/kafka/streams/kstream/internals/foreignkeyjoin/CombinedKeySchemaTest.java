@@ -35,11 +35,14 @@ public class CombinedKeySchemaTest {
             () -> "pkTopic", Serdes.Integer()
         );
         final Integer primary = -999;
-        final Bytes result = cks.toBytes("foreignKey", primary);
+        final String foreignKey = "foreignKey";
+        final Bytes result = cks.toBytes(foreignKey, primary);
 
         final CombinedKey<String, Integer> deserializedKey = cks.fromBytes(result);
-        assertEquals("foreignKey", deserializedKey.foreignKey());
+        assertEquals(foreignKey, deserializedKey.foreignKey());
         assertEquals(primary, deserializedKey.primaryKey());
+
+        assertEquals(primary, cks.deserializePrimaryKeyFromBytes(result));
     }
 
     @Test
