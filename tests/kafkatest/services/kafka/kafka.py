@@ -735,7 +735,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.concurrent_start = False
         self.start_node(node)
         self.concurrent_start = orig_concurrent_start
-        # removing the wait for registration, start_node already does this
 
     def _ensure_zk_chroot(self):
         self.logger.info("Ensuring zk_chroot %s exists", self.zk_chroot)
