@@ -61,6 +61,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ProcessingExceptionHandlerIntegrationTest {
     private final String threadId = Thread.currentThread().getName();
 
+    private static final Instant TIMESTAMP = Instant.now();
+
     @Test
     public void shouldFailWhenProcessingExceptionOccursIfExceptionHandlerReturnsFail() {
         final List<KeyValue<String, String>> events = Arrays.asList(
@@ -71,7 +73,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         );
 
         final List<KeyValueTimestamp<String, String>> expectedProcessedRecords = Collections.singletonList(
-            new KeyValueTimestamp<>("ID123-1", "ID123-A1", 0)
+            new KeyValueTimestamp<>("ID123-1", "ID123-A1", TIMESTAMP.toEpochMilli())
         );
 
         final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
@@ -90,7 +92,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
 
             final StreamsException exception = assertThrows(StreamsException.class,
-                () -> inputTopic.pipeKeyValueList(events, Instant.EPOCH, Duration.ZERO));
+                () -> inputTopic.pipeKeyValueList(events, TIMESTAMP, Duration.ZERO));
 
             assertTrue(exception.getMessage().contains("Exception caught in process. "
                 + "taskId=0_0, processor=KSTREAM-SOURCE-0000000000, topic=TOPIC_NAME, "
@@ -118,10 +120,10 @@ public class ProcessingExceptionHandlerIntegrationTest {
         );
 
         final List<KeyValueTimestamp<String, String>> expectedProcessedRecords = Arrays.asList(
-            new KeyValueTimestamp<>("ID123-1", "ID123-A1", 0),
-            new KeyValueTimestamp<>("ID123-3", "ID123-A3", 0),
-            new KeyValueTimestamp<>("ID123-4", "ID123-A4", 0),
-            new KeyValueTimestamp<>("ID123-6", "ID123-A6", 0)
+            new KeyValueTimestamp<>("ID123-1", "ID123-A1", TIMESTAMP.toEpochMilli()),
+            new KeyValueTimestamp<>("ID123-3", "ID123-A3", TIMESTAMP.toEpochMilli()),
+            new KeyValueTimestamp<>("ID123-4", "ID123-A4", TIMESTAMP.toEpochMilli()),
+            new KeyValueTimestamp<>("ID123-6", "ID123-A6", TIMESTAMP.toEpochMilli())
         );
 
         final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
@@ -138,7 +140,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
-            inputTopic.pipeKeyValueList(events, Instant.EPOCH, Duration.ZERO);
+            inputTopic.pipeKeyValueList(events, TIMESTAMP, Duration.ZERO);
 
             assertEquals(expectedProcessedRecords.size(), processor.theCapturedProcessor().processed().size());
             assertIterableEquals(expectedProcessedRecords, processor.theCapturedProcessor().processed());
@@ -176,10 +178,10 @@ public class ProcessingExceptionHandlerIntegrationTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             isExecuted.set(false);
-            inputTopic.pipeInput(event.key, event.value, Instant.EPOCH);
+            inputTopic.pipeInput(event.key, event.value, TIMESTAMP);
             assertTrue(isExecuted.get());
             isExecuted.set(false);
-            final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, Instant.EPOCH));
+            final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, TIMESTAMP));
             assertTrue(e.getMessage().contains("Exception caught in process. "
                 + "taskId=0_0, processor=KSTREAM-SOURCE-0000000000, topic=TOPIC_NAME, "
                 + "partition=0, offset=1"));
@@ -212,10 +214,10 @@ public class ProcessingExceptionHandlerIntegrationTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             isExecuted.set(false);
-            inputTopic.pipeInput(event.key, event.value, Instant.EPOCH);
+            inputTopic.pipeInput(event.key, event.value, TIMESTAMP);
             assertTrue(isExecuted.get());
             isExecuted.set(false);
-            inputTopic.pipeInput(eventFalse.key, eventFalse.value, Instant.EPOCH);
+            inputTopic.pipeInput(eventFalse.key, eventFalse.value, TIMESTAMP);
             assertFalse(isExecuted.get());
         }
     }
@@ -245,7 +247,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             isExecuted.set(false);
-            inputTopic.pipeInput(event.key, event.value, Instant.EPOCH);
+            inputTopic.pipeInput(event.key, event.value, TIMESTAMP);
             assertTrue(isExecuted.get());
             isExecuted.set(false);
             final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, Instant.EPOCH));
@@ -281,7 +283,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             isExecuted.set(false);
-            inputTopic.pipeInput(event.key, event.value, Instant.EPOCH);
+            inputTopic.pipeInput(event.key, event.value, TIMESTAMP);
             assertTrue(isExecuted.get());
             isExecuted.set(false);
             final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, Instant.EPOCH));
@@ -328,6 +330,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         assertTrue(Arrays.asList("ID123-A2", "ID123-A5").contains((String) record.value()));
         assertEquals("TOPIC_NAME", context.topic());
         assertEquals("KSTREAM-PROCESSOR-0000000003", context.processorNodeId());
+        assertEquals(TIMESTAMP.toEpochMilli(), context.timestamp());
         assertTrue(exception.getMessage().contains("Exception should be handled by processing exception handler"));
     }
 
