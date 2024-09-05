@@ -1233,8 +1233,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // We are already closing with a timeout, don't allow wake-ups from here on.
         wakeupTrigger.disableWakeups();
 
-        final Timer closeTimer = time.timer(timeout);
-        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        final Timer closeTimer = time.timer(wasInterrupted ? Duration.ZERO : timeout);
+        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(closeTimer.remainingMs()));
         closeTimer.update();
         // Prepare shutting down the network thread
         swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
