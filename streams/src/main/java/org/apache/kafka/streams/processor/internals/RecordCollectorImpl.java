@@ -308,7 +308,8 @@ public class RecordCollectorImpl implements RecordCollector {
             context.recordContext().offset(),
             context.recordContext().headers(),
             processorNodeId,
-            taskId
+            taskId,
+            context.recordContext().timestamp()
         );
         final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
 
@@ -405,7 +406,8 @@ public class RecordCollectorImpl implements RecordCollector {
                     context.recordContext().offset(),
                     context.recordContext().headers(),
                     processorNodeId,
-                    taskId
+                    taskId,
+                    context.recordContext().timestamp()
                 );
 
                 final ProductionExceptionHandlerResponse response;
