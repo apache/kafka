@@ -45,7 +45,7 @@ import scala.jdk.CollectionConverters._
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class KafkaServerKRaftRegistrationTest {
 
-  @ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_4_IV0, serverProperties = Array(
+  @ClusterTest(types = Array(Type.ZK), brokers = 3, metadataVersion = MetadataVersion.IBP_3_6_IV1, serverProperties = Array(
     new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
     new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
     new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
@@ -57,7 +57,7 @@ class KafkaServerKRaftRegistrationTest {
     // Bootstrap the ZK cluster ID into KRaft
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV1).
         setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
@@ -99,7 +99,7 @@ class KafkaServerKRaftRegistrationTest {
     val clusterId = zkCluster.clusterId()
     val kraftCluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.IBP_3_4_IV0).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV1).
         setClusterId(clusterId).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
