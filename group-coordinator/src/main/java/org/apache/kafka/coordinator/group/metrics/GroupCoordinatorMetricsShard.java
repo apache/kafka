@@ -522,6 +522,9 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
                     break;
                 case DEAD:
                     incrementNumStreamsGroups(StreamsGroupState.DEAD);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown new state for streams group: " + newState);
             }
         }
 
@@ -544,6 +547,9 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
                     break;
                 case DEAD:
                     decrementNumStreamsGroups(StreamsGroupState.DEAD);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown old state for streams group: " + newState);
             }
         }
     }

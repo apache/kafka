@@ -43,7 +43,8 @@ public class GroupCoordinatorConfigTest {
             GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
             GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
             GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
-            GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF);
+            GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF,
+            GroupCoordinatorConfig.STREAMS_GROUP_CONFIG_DEF);
 
     @Test
     public void testConfigs() {
@@ -72,6 +73,9 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 666);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 73);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 42);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, 2);
 
         GroupCoordinatorConfig config = createConfig(configs);
 
@@ -100,6 +104,9 @@ public class GroupCoordinatorConfigTest {
         assertEquals(666, config.consumerGroupMaxSessionTimeoutMs());
         assertEquals(111, config.consumerGroupMinHeartbeatIntervalMs());
         assertEquals(222, config.consumerGroupMaxHeartbeatIntervalMs());
+        assertEquals(73, config.streamsGroupSessionTimeoutMs());
+        assertEquals(42, config.streamsGroupHeartbeatIntervalMs());
+        assertEquals(2, config.streamsGroupNumStandbyReplicas());
     }
 
     @Test
@@ -180,7 +187,26 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 50000);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
         assertEquals("group.share.heartbeat.interval.ms must be less than group.share.session.timeout.ms",
+        
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 0);
+        assertEquals("Invalid value 0 for configuration group.streams.session.timeout.ms: Value must be at least 1",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 0);
+        assertEquals("Invalid value 0 for configuration group.streams.heartbeat.interval.ms: Value must be at least 1",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 42);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 43);
+        assertEquals("group.streams.heartbeat.interval.ms must be less than or equals to group.streams.session.timeout.ms",
                 assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, -1);
+        assertEquals("Invalid value -1 for configuration group.streams.num.standby.replicas: Value must be at least 0",
+                assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
