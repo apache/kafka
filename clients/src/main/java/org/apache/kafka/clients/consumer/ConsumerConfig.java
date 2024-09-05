@@ -43,6 +43,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
 import static org.apache.kafka.clients.consumer.RangeAssignor.RANGE_ASSIGNOR_NAME;
@@ -110,10 +111,10 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>group.protocol</code>
      */
     public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
-    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT);
-    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use. We currently " +
-        "support \"classic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
-        "used. Otherwise, the classic group protocol will be used.";
+    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT);
+    public static final String GROUP_PROTOCOL_DOC = "The group protocol to use when communicating with the Kafka " +
+        "cluster. The supported group protocols are: " +
+        Arrays.stream(GroupProtocol.values()).map(gp -> gp.name().toLowerCase()).collect(Collectors.joining(", ")) + ".";
 
     /**
     * <code>group.remote.assignor</code>

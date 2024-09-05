@@ -170,12 +170,12 @@ public class ConsumerConfigTest {
     }
 
     @Test
-    public void testDefaultConsumerGroupConfig() {
+    public void testDefaultGroupProtocol() {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
-        assertEquals("classic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        assertEquals(ConsumerConfig.DEFAULT_GROUP_PROTOCOL, consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
         assertNull(consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
     }
 
@@ -199,6 +199,7 @@ public class ConsumerConfigTest {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
         configs.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, remoteAssignorName);
         ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertTrue(exception.getMessage().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG + " cannot be set when " + ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CLASSIC.name()));
