@@ -192,45 +192,24 @@ public class ClusterTestExtensionsTest {
         Assertions.assertEquals(MetadataVersion.latestTesting(), clusterInstance.config().metadataVersion());
     }
 
-    @ClusterTests({
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
-        }),
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
-        })
-    })
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
     public void testSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
         Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
         supportedGroupProtocols.add(CLASSIC);
         supportedGroupProtocols.add(CONSUMER);
-        Assertions.assertTrue(clusterInstance.supportedGroupProtocols().containsAll(supportedGroupProtocols));
-        Assertions.assertEquals(2, clusterInstance.supportedGroupProtocols().size());
+        Assertions.assertEquals(supportedGroupProtocols, clusterInstance.supportedGroupProtocols());
     }
 
     @ClusterTests({
         @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-        }),
-        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-        }),
-        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-        }),
-        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-            @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
         }),
         @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-            @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-        }, tags = {"disable-new-coordinator-and-disable-new-consumer-rebalance-coordinator"}),
+        })
     })
     public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
-        Assertions.assertTrue(clusterInstance.supportedGroupProtocols().contains(CLASSIC));
-        Assertions.assertEquals(1, clusterInstance.supportedGroupProtocols().size());
+        Assertions.assertEquals(Collections.singleton(CLASSIC), clusterInstance.supportedGroupProtocols());
     }
 
 

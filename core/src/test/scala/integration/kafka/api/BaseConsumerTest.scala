@@ -115,14 +115,12 @@ object BaseConsumerTest {
   // We want to test the following combinations:
   // * ZooKeeper and the classic group protocol
   // * KRaft and the classic group protocol
-  // * KRaft with the new group coordinator enabled and the classic group protocol
-  // * KRaft with the new group coordinator enabled and the consumer group protocol
+  // * KRaft and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
     util.Arrays.stream(Array(
         Arguments.of("zk", "classic"),
         Arguments.of("kraft", "classic"),
-        Arguments.of("kraft+kip848", "classic"),
-        Arguments.of("kraft+kip848", "consumer")
+        Arguments.of("kraft", "consumer")
     ))
   }
 
@@ -138,20 +136,18 @@ object BaseConsumerTest {
   // For tests that only work with the classic group protocol, we want to test the following combinations:
   // * ZooKeeper and the classic group protocol
   // * KRaft and the classic group protocol
-  // * KRaft with the new group coordinator enabled and the classic group protocol
   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
     util.Arrays.stream(Array(
         Arguments.of("zk", "classic"),
-        Arguments.of("kraft", "classic"),
-        Arguments.of("kraft+kip848", "classic")
+        Arguments.of("kraft", "classic")
     ))
   }
 
   // For tests that only work with the consumer group protocol, we want to test the following combination:
-  // * KRaft with the new group coordinator enabled and the consumer group protocol
+  // * KRaft and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): java.util.stream.Stream[Arguments] = {
     util.Arrays.stream(Array(
-        Arguments.of("kraft+kip848", "consumer")
+        Arguments.of("kraft", "consumer")
     ))
   }
 

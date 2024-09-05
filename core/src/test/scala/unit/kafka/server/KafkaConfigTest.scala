@@ -1939,14 +1939,6 @@ class KafkaConfigTest {
   def testGroupCoordinatorRebalanceProtocols(): Unit = {
     val props = new Properties()
 
-    // consumer cannot be enabled in ZK mode.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-
-    // share cannot be enabled in ZK mode.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-
     // Setting KRaft's properties.
     props.putAll(kraftProps())
 
@@ -1971,16 +1963,6 @@ class KafkaConfigTest {
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
     assertTrue(config.shareGroupConfig.isShareGroupEnabled)
-
-    // consumer cannot be used without the new group coordinator.
-    props.put(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false")
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-
-    // share cannot be used without the new group coordinator.
-    props.put(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false")
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test

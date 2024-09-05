@@ -76,9 +76,9 @@ public class GroupCoordinatorConfig {
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " +
             Arrays.stream(Group.GroupType.values()).map(Group.GroupType::toString).collect(Collectors.joining(",")) + ". " +
-            "The " + Group.GroupType.CONSUMER + " rebalance protocol is in preview and therefore must not be used in production. " +
             "The " + Group.GroupType.SHARE + " rebalance protocol is in early access and therefore must not be used in production.";
-    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(Group.GroupType.CLASSIC.toString());
+    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT =
+        Collections.unmodifiableList(Arrays.asList(Group.GroupType.CLASSIC.toString(), Group.GroupType.CONSUMER.toString()));
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
         "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";

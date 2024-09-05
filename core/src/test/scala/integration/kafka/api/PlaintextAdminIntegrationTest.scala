@@ -528,7 +528,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAbortTransaction(quorum: String): Unit = {
     client = createAdminClient
     val tp = new TopicPartition("topic1", 0)
@@ -538,7 +538,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val configs = new util.HashMap[String, Object]()
       configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
       configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString)
-      if (quorum == "kraft+kip848")
+      if (quorum == "kraft")
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, ConsumerProtocol.PROTOCOL_TYPE)
       val consumer = new KafkaConsumer(configs, new ByteArrayDeserializer, new ByteArrayDeserializer)
       try {
@@ -1006,7 +1006,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterAndDescribeGroupConfigs(quorum: String): Unit = {
     client = createAdminClient
     val group = "describe-alter-configs-group"

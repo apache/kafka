@@ -3831,7 +3831,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     GroupVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(GroupVersion.FEATURE_NAME, 0.toShort))
   }
 
-  private def isConsumerGroupProtocolEnabled(): Boolean = {
+  def isConsumerGroupProtocolEnabled(): Boolean = {
     groupCoordinator.isNewGroupCoordinator &&
       config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) &&
       groupVersion().isConsumerRebalanceProtocolSupported

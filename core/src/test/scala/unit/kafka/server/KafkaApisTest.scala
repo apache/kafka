@@ -3356,9 +3356,7 @@ class KafkaApisTest extends Logging {
         }.toMap
       )
     }
-    kafkaApis = createKafkaApis(overrideProperties = Map(
-      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"
-    ))
+    kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.noCaching)
 
     val expectedResponse = new WriteTxnMarkersResponseData()
@@ -3441,9 +3439,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(Duration.ofMillis(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT))
     )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
-    kafkaApis = createKafkaApis(overrideProperties = Map(
-      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"
-    ))
+    kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.noCaching)
 
     val expectedError = error match {
@@ -4612,7 +4608,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -4696,7 +4691,6 @@ class KafkaApisTest extends Logging {
     var request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -4800,7 +4794,6 @@ class KafkaApisTest extends Logging {
     var request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -4884,7 +4877,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -4962,7 +4954,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -5027,7 +5018,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -5084,7 +5074,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -5156,7 +5145,6 @@ class KafkaApisTest extends Logging {
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -5250,7 +5238,6 @@ class KafkaApisTest extends Logging {
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -5398,7 +5385,6 @@ class KafkaApisTest extends Logging {
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -5732,7 +5718,6 @@ class KafkaApisTest extends Logging {
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -6098,7 +6083,6 @@ class KafkaApisTest extends Logging {
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -6245,7 +6229,6 @@ class KafkaApisTest extends Logging {
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -6389,7 +6372,6 @@ class KafkaApisTest extends Logging {
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -6559,7 +6541,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -6733,7 +6714,6 @@ class KafkaApisTest extends Logging {
     var request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -6864,7 +6844,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "false"),
       raftSupport = true)
@@ -6917,7 +6896,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Option(authorizer),
@@ -6982,7 +6960,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7050,7 +7027,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7141,7 +7117,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "false"),
       raftSupport = true)
@@ -7193,7 +7168,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Option(authorizer),
@@ -7246,7 +7220,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7298,7 +7271,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7348,7 +7320,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7424,7 +7395,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7488,7 +7458,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7556,7 +7525,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7625,7 +7593,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7712,7 +7679,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7782,7 +7748,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7856,7 +7821,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7924,7 +7888,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -7997,7 +7960,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -8077,7 +8039,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -8158,7 +8119,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -8233,7 +8193,6 @@ class KafkaApisTest extends Logging {
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -8331,7 +8290,6 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true",
         ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
         ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true)
@@ -11105,7 +11063,6 @@ class KafkaApisTest extends Logging {
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11133,7 +11090,6 @@ class KafkaApisTest extends Logging {
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11157,7 +11113,6 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11184,7 +11139,6 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11255,7 +11209,6 @@ class KafkaApisTest extends Logging {
     future.complete(List().asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11279,7 +11232,6 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11470,7 +11422,7 @@ class KafkaApisTest extends Logging {
     )).thenReturn(future)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true", ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11494,7 +11446,7 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true", ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
       raftSupport = true
     )
@@ -11517,7 +11469,7 @@ class KafkaApisTest extends Logging {
     )).thenReturn(future)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true", ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       raftSupport = true
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11534,7 +11486,7 @@ class KafkaApisTest extends Logging {
       new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)),
       new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1))
     ).asJava
-    getShareGroupDescribeResponse(groupIds, Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true", ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
+    getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
       , true, null, describedGroups)
   }
 
@@ -11558,7 +11510,7 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-    val response = getShareGroupDescribeResponse(groupIds, Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true", ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
+    val response = getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
       , false, authorizer, describedGroups)
     assertNotNull(response.data)
     assertEquals(2, response.data.groups.size)
@@ -11576,7 +11528,7 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val response = getShareGroupDescribeResponse(groupIds, Map(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true", ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
+    val response = getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
       , false, authorizer, describedGroups)
 
     assertNotNull(response.data)
