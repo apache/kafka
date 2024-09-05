@@ -156,9 +156,9 @@ public class ConsumerGroupCommand {
     }
 
     static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
-        String format = "%-30s %-30s %-10s %-15s";
+        String format = "%n%-30s %-30s %-10s %-15s";
         if (!groupAssignmentsToReset.isEmpty())
-            System.out.printf("\n" + format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
+            System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
 
         groupAssignmentsToReset.forEach((groupId, assignment) ->
             assignment.forEach((consumerAssignment, offsetAndMetadata) ->
@@ -167,6 +167,7 @@ public class ConsumerGroupCommand {
                     consumerAssignment.topic(),
                     consumerAssignment.partition(),
                     offsetAndMetadata.offset())));
+        System.out.println();
     }
 
     @SuppressWarnings("ClassFanOutComplexity")
@@ -338,6 +339,7 @@ public class ConsumerGroupCommand {
                                 consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
                             );
                         }
+                        System.out.println();
                     }
                 }
             });
@@ -655,9 +657,9 @@ public class ConsumerGroupCommand {
                     printError("Encounter some unknown error: " + topLevelResult, Optional.empty());
             }
 
-            String format = "%-30s %-15s %-15s";
+            String format = "%n%-30s %-15s %-15s";
 
-            System.out.printf("\n" + format, "TOPIC", "PARTITION", "STATUS");
+            System.out.printf(format, "TOPIC", "PARTITION", "STATUS");
             partitionLevelResult.entrySet().stream()
                 .sorted(Comparator.comparing(e -> e.getKey().topic() + e.getKey().partition()))
                 .forEach(e -> {
@@ -669,6 +671,7 @@ public class ConsumerGroupCommand {
                         error != null ? "Error: :" + error.getMessage() : "Successful"
                     );
                 });
+            System.out.println();
         }
 
         Map<String, ConsumerGroupDescription> describeConsumerGroups(Collection<String> groupIds) throws Exception {

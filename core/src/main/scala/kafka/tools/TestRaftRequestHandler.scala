@@ -19,13 +19,14 @@ package kafka.tools
 
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
-import kafka.server.{ApiRequestHandler, ApiVersionManager, RequestLocal}
+import kafka.server.{ApiRequestHandler, ApiVersionManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.common.RequestLocal
 
 /**
  * Simple request handler implementation for use by [[TestRaftServer]].

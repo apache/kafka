@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{MetadataCache, ReplicaManager, RequestLocal}
+import kafka.server.{MetadataCache, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
-import org.apache.kafka.server.common.TransactionVersion
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
@@ -283,7 +283,7 @@ class TransactionStateManager(brokerId: Int,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
         responseCallback = removeFromCacheCallback,
-        requestLocal = RequestLocal.NoCaching)
+        requestLocal = RequestLocal.noCaching)
     }
   }
 
