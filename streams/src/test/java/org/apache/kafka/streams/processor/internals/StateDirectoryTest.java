@@ -450,11 +450,14 @@ public class StateDirectoryTest {
         final Thread thread = new Thread(() -> directory.lock(taskId));
         thread.start();
         thread.join(30000);
+
+        assertTrue(directory.canTryLock(taskId, System.currentTimeMillis()));
+
         assertFalse(directory.lock(taskId));
         assertFalse(directory.lock(taskId));
         assertFalse(directory.lock(taskId));
         // after 3 unsuccessful retries, backoff time is > 0
-        assertTrue(directory.canTryLock(taskId, System.currentTimeMillis()));
+        assertFalse(directory.canTryLock(taskId, System.currentTimeMillis()));
     }
 
     @Test
