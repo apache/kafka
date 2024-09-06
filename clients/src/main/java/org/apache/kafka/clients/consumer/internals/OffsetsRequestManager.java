@@ -273,28 +273,30 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     }
 
     /**
-     * Generate requests to fetch offsets, and update positions once a response is received.
+     * Generate requests to fetch offsets and update positions once a response is received. This will first attempt
+     * to use the committed offsets if available. If no committed offsets available, it will use the partition
+     * offsets retrieved from the leader.
      */
     private CompletableFuture<Void> updatePositionsWithOffsets(long deadlineMs) {
         CompletableFuture<Void> result = new CompletableFuture<>();
 
         cacheExceptionIfEventExpired(result, deadlineMs);
 
-        // Reset positions using committed offsets retrieved from the group coordinator, for any
-        // partitions which do not have a valid position and are not awaiting reset. This will
-        // trigger an OffsetFetch request and update positions with the offsets retrieved.
+        CompletableFuture<Void> updatePositions;
         if (commitRequestManager != null) {
-            CompletableFuture<Void> initWithCommittedOffsetsResult = initWithCommittedOffsetsIfNeeded(deadlineMs);
-            initWithCommittedOffsetsResult.whenComplete((__, error) -> {
-                if (error == null) {
-                    initWithPartitionOffsetsIfNeeded(result);
-                } else {
-                    result.completeExceptionally(error);
-                }
-            });
+            updatePositions = initWithCommittedOffsetsIfNeeded(deadlineMs);
         } else {
-            initWithPartitionOffsetsIfNeeded(result);
+            updatePositions = initWithPartitionOffsetsIfNeeded();
         }
+
+        updatePositions.whenComplete((__, resetError) -> {
+            if (resetError == null) {
+                result.complete(null);
+            } else {
+                result.completeExceptionally(resetError);
+            }
+        });
+
         return result;
     }
 
@@ -318,36 +320,32 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     }
 
     /**
-     * If there are partitions still needing a position and a reset policy is defined, request
-     * reset using the default policy.
+     * If there are partitions still needing a position and a reset policy is defined, request reset using the
+     * default policy.
      *
-     * @param result Future that will complete when the reset operation completes.
-     * @throws NoOffsetForPartitionException If no reset strategy is configured
+     * @return Future that will complete when the reset operation completes retrieving the offsets and setting
+     * positions in the subscription state using them.
+     * @throws NoOffsetForPartitionException If no reset strategy is configured.
      */
-    private void initWithPartitionOffsetsIfNeeded(CompletableFuture<Void> result) {
+    private CompletableFuture<Void> initWithPartitionOffsetsIfNeeded() {
+        CompletableFuture<Void> result = new CompletableFuture<>();
         try {
             // Mark partitions that need reset, using the configured reset strategy. If no
             // strategy is defined, this will raise a NoOffsetForPartitionException exception.
             subscriptionState.resetInitializingPositions();
         } catch (Exception e) {
             result.completeExceptionally(e);
-            return;
+            return result;
         }
 
         // For partitions awaiting reset, generate a ListOffset request to retrieve the partition
         // offsets according to the strategy (ex. earliest, latest), and update the positions.
-        resetPositionsIfNeeded().whenComplete((resetResult, error) -> {
-            if (error == null) {
-                result.complete(null);
-            } else {
-                result.completeExceptionally(error);
-            }
-        });
+        return resetPositionsIfNeeded();
     }
 
     /**
-     * Fetch the committed offsets for partitions that require initialization. Use them to set
-     * the fetch positions in the subscription state.
+     * Fetch the committed offsets for partitions that require initialization. This will trigger an OffsetFetch
+     * request and update positions in the subscription state once a response is received.
      *
      * @throws TimeoutException If offsets could not be retrieved within the timeout
      */
@@ -365,18 +363,20 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
         // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
         // case it times out, subsequent attempts will also use the event in order to wait for the results.
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> refreshWithCommitted;
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
             // Generate a new OffsetFetch request and update positions when a response is received
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsets =
                     commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
-            refreshWithCommitted = refreshOffsetsAndCompleteResultOnResponseReceived(fetchOffsets, result);
-            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions, refreshWithCommitted);
+            fetchOffsets.whenComplete((offsets, error) -> {
+                // Update positions with the retrieved offsets and request reset for partitions that may still
+                // require a position after it
+                refreshOffsetsAndResetPositionsStillMissing(offsets, error, result);
+            });
+            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions, fetchOffsets);
         } else {
             // Reuse pending OffsetFetch request
-            refreshWithCommitted = pendingOffsetFetchEvent.result;
-            refreshWithCommitted.whenComplete((__, error) -> {
+            pendingOffsetFetchEvent.result.whenComplete((__, error) -> {
                 if (error == null) {
                     result.complete(null);
                 } else {
@@ -388,23 +388,45 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         return result;
     }
 
-    private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> refreshOffsetsAndCompleteResultOnResponseReceived(
-            final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchCommittedFuture,
-            final CompletableFuture<Void> result) {
-        return fetchCommittedFuture.whenComplete((offsets, error) -> {
-            pendingOffsetFetchEvent = null;
+    /**
+     * Use the given committed offsets to update positions for partitions that still require it. If there are
+     * positions still missing, request to reset positions for them with the partition offsets retrieved from the
+     * leader.
+     *
+     * @param offsets Committed offsets to use to update positions for initializing partitions.
+     * @param error   Error received in response to the OffsetFetch request. Will be null if the request was successful.
+     * @param result  Future to complete once all positions have been updated. If there are committed offsets for
+     *                all initializing partitions, this will complete right after the offsets are used to set the
+     *                positions in the subscription state. If there are partitions requiring positions for which there
+     *                are no offsets, this will complete when the request to reset positions completes.
+     */
+    private void refreshOffsetsAndResetPositionsStillMissing(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                             final Throwable error,
+                                                             final CompletableFuture<Void> result) {
+        pendingOffsetFetchEvent = null;
+
+        if (error == null) {
 
             // Ensure we only set positions for the partitions that still require one (ex. some partitions may have
             // been assigned a position manually)
-            if (error == null) {
-                Map<TopicPartition, OffsetAndMetadata> offsetsToApply = offsetsForInitializingPartitions(offsets);
-                refreshCommittedOffsets(offsetsToApply, metadata, subscriptionState);
-                result.complete(null);
-            } else {
-                log.error("Error fetching committed offsets to update positions", error);
-                result.completeExceptionally(error);
-            }
-        });
+            Map<TopicPartition, OffsetAndMetadata> offsetsToApply = offsetsForInitializingPartitions(offsets);
+
+            refreshCommittedOffsets(offsetsToApply, metadata, subscriptionState);
+
+            // There may still be positions needing a position. Attempt to set them using the partition offsets
+            CompletableFuture<Void> resetMissingPositions = initWithPartitionOffsetsIfNeeded();
+            resetMissingPositions.whenComplete((__, resetError) -> {
+                if (resetError == null) {
+                    result.complete(null);
+                } else {
+                    result.completeExceptionally(resetError);
+                }
+            });
+
+        } else {
+            log.error("Error fetching committed offsets to update positions", error);
+            result.completeExceptionally(error);
+        }
     }
 
     /**
@@ -448,9 +470,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * with timestamps according to the reset strategy defined for each partition. This will
      * generate ListOffsets requests for the partitions and timestamps, and enqueue them to be sent
      * on the next call to {@link #poll(long)}.
-     *
      * <p/>
-     *
      * When a response is received, positions are updated in-memory, on the subscription state. If
      * an error is received in the response, it will be saved to be thrown on the next call to
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
