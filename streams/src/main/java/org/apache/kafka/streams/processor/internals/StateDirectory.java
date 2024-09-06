@@ -370,7 +370,6 @@ public class StateDirectory implements AutoCloseable {
             lockedTasksToOwner.put(taskId, Thread.currentThread());
             // make sure the task directory actually exists, and create it if not
             getOrCreateDirectoryForTask(taskId);
-            lockedTasksToBackoffRecord.remove(taskId);
             return true;
         }
     }
@@ -381,11 +380,9 @@ public class StateDirectory implements AutoCloseable {
 
     private void updateOrCreateBackoffRecord(final TaskId taskId, final long nowMs) {
         if (lockedTasksToBackoffRecord.containsKey(taskId)) {
-            final BackoffRecord backoffRecord = lockedTasksToBackoffRecord.get(taskId);
-            backoffRecord.lastAttemptMs = nowMs;
-            backoffRecord.attempts++;
+            lockedTasksToBackoffRecord.get(taskId).recordAttempt(nowMs);
         } else {
-            lockedTasksToBackoffRecord.put(taskId, new BackoffRecord());
+            lockedTasksToBackoffRecord.put(taskId, new BackoffRecord(nowMs));
         }
     }
 
@@ -704,15 +701,21 @@ public class StateDirectory implements AutoCloseable {
     public static class BackoffRecord {
         private long attempts;
         private long lastAttemptMs;
-        private static final ExponentialBackoff EXPONENTIAL_BACKOFF = new ExponentialBackoff(1, 2, 1000, 0.5);
+        private static final ExponentialBackoff EXPONENTIAL_BACKOFF = new ExponentialBackoff(1, 2, 10000, 0.5);
 
 
-        public BackoffRecord() {
-            this.attempts = 0;
+        public BackoffRecord(final long nowMs) {
+            this.attempts = 1;
+            this.lastAttemptMs = nowMs;
+        }
+
+        public void recordAttempt(final long nowMs) {
+            this.attempts++;
+            this.lastAttemptMs = nowMs;
         }
 
         public boolean canAttempt(final long nowMs) {
-            return  attempts == 0 || nowMs - lastAttemptMs >= EXPONENTIAL_BACKOFF.backoff(attempts);
+            return  nowMs - lastAttemptMs >= EXPONENTIAL_BACKOFF.backoff(attempts);
         }
     }
 }
