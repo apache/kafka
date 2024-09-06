@@ -36,7 +36,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 
 import java.util
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.MapHasAsScala
+import scala.jdk.CollectionConverters._
 
 object StorageTool extends Logging {
 
@@ -193,7 +193,7 @@ object StorageTool extends Logging {
         case _: IllegalArgumentException =>
           throw new TerseFailure(s"Unsupported metadata.version $featureLevel")
       }
-      printStream.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version())
+      printStream.print(f"$featureName%s=$featureLevel%d (${metadataVersion.version()}%s) has no dependencies.%n")
     } else {
       Features.values().find(_.featureName == featureName) match {
         case Some(feature) =>
@@ -201,9 +201,9 @@ object StorageTool extends Logging {
           val dependencies = featureVersion.dependencies().asScala
 
           if (dependencies.isEmpty) {
-            printStream.printf("%s=%d has no dependencies.%n", featureName, featureLevel)
+            printStream.print(f"$featureName%s=$featureLevel%d has no dependencies.%n")
           } else {
-            printStream.printf("%s=%d requires:%n", featureName, featureLevel)
+            printStream.print(f"$featureName%s=$featureLevel%d requires:%n")
             for ((depFeature, depLevel) <- dependencies) {
               if (depFeature == MetadataVersion.FEATURE_NAME) {
                 val metadataVersion = MetadataVersion.fromFeatureLevel(depLevel)
