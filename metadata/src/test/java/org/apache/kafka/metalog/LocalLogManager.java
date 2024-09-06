@@ -563,10 +563,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                             if (batch.newLeader.equals(sharedLeader)) {
                                 log.debug("Node {}: Executing handleLeaderChange {}",
                                     nodeId, sharedLeader);
-                                listenerData.handleLeaderChange(entryOffset, batch.newLeader);
                                 if (batch.newLeader.epoch() > leader.epoch()) {
                                     leader = batch.newLeader;
                                 }
+                                listenerData.handleLeaderChange(entryOffset, batch.newLeader);
                             } else {
                                 log.debug("Node {}: Ignoring {} since it doesn't match the latest known leader {}",
                                         nodeId, batch.newLeader, sharedLeader);
@@ -733,7 +733,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             throw new BufferAllocationException("Test asked to fail the next prepareAppend");
         }
 
-        return shared.tryAppend(nodeId, leader.epoch(), batch);
+        return shared.tryAppend(nodeId, epoch, batch);
     }
 
     @Override
