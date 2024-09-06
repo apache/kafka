@@ -2058,7 +2058,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void configurableObjectsShouldSeeGeneratedClientId() {
+    public void configurableObjectsShouldSeeGeneratedClientId() throws Exception {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, SerializerForClientId.class.getName());
@@ -2071,7 +2071,13 @@ public class KafkaProducerTest {
         assertNotEquals(0, producer.getClientId().length());
         assertEquals(4, CLIENT_IDS.size());
         CLIENT_IDS.forEach(id -> assertEquals(id, producer.getClientId()));
-        producer.close();
+
+        Future<RecordMetadata> future = producer.send(new ProducerRecord<>("topic", "key".getBytes(), "value".getBytes()));
+        try {
+            assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
+        } finally {
+            producer.close(Duration.ofMillis(0));
+        }
     }
 
     @Test
@@ -2400,11 +2406,12 @@ public class KafkaProducerTest {
 
         @Override
         public void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
-            if (!(headers instanceof RecordHeaders)) {
-                return;
-            }
             RecordHeaders recordHeaders = (RecordHeaders) headers;
-            assertTrue(recordHeaders.isReadOnly());
+            if (exception == null) {
+                assertTrue(recordHeaders.isReadOnly());
+            } else {
+                assertFalse(recordHeaders.isReadOnly());
+            }
         }
 
         @Override
