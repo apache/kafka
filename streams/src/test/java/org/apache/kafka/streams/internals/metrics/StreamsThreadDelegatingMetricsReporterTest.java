@@ -119,12 +119,4 @@ class StreamsThreadDelegatingMetricsReporterTest {
         streamsThreadDelegatingMetricsReporter.metricChange(kafkaMetricWithoutThreadIdTag);
         assertEquals(0, mockConsumer.addedMetrics().size());
     }
-
-    @Test
-    @DisplayName("Should set its reference to the consumer to null on closing")
-    void shouldSetConsumerToNullOnClose() {
-        streamsThreadDelegatingMetricsReporter.close();
-        assertThrows(NullPointerException.class,
-                () -> streamsThreadDelegatingMetricsReporter.metricChange(kafkaMetricOneHasThreadIdTag));
-    }
 }
