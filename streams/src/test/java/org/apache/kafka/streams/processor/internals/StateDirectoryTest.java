@@ -26,13 +26,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 
@@ -58,6 +58,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -445,6 +448,18 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldSleepIfStateDirLockedByAnotherThread() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
+        assertEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
+        final Thread thread = new Thread(() -> directory.lock(taskId));
+        thread.start();
+        thread.join(30000);
+        assertEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
+        assertFalse(directory.lock(taskId));
+        assertNotEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
+    }
+
+    @Test
     public void shouldNotUnLockStateDirLockedByAnotherThread() throws Exception {
         final TaskId taskId = new TaskId(0, 0);
         final CountDownLatch lockLatch = new CountDownLatch(1);
@@ -463,14 +478,14 @@ public class StateDirectoryTest {
         thread.start();
         lockLatch.await(5, TimeUnit.SECONDS);
 
-        assertNull("should not have had an exception on other thread", exceptionOnThread.get());
+        assertNull(exceptionOnThread.get(), "should not have had an exception on other thread");
         directory.unlock(taskId);
         assertFalse(directory.lock(taskId));
 
         unlockLatch.countDown();
         thread.join(30000);
 
-        assertNull("should not have had an exception on other thread", exceptionOnThread.get());
+        assertNull(exceptionOnThread.get(), "should not have had an exception on other thread");
         assertTrue(directory.lock(taskId));
     }
 
