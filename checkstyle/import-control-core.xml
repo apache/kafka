@@ -57,8 +57,8 @@
     <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.fault" />
-    <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
-    <allow class="org.apache.kafka.network.SocketServerConfigs" />
+    <allow pkg="org.apache.kafka.storage.internals" />
+    <allow pkg="org.apache.kafka.network" />
   </subpackage>
 
   <subpackage name="tools">
@@ -79,8 +79,7 @@
 
   <subpackage name="log.remote">
     <allow pkg="org.apache.kafka.server.common" />
-    <allow pkg="org.apache.kafka.server.log.remote" />
-    <allow pkg="org.apache.kafka.server.log.remote.quota" />
+    <allow pkg="org.apache.kafka.server.log" />
     <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="org.apache.kafka.storage.log.metrics" />

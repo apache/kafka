@@ -79,9 +79,7 @@
             <!-- only the factory package can use persistent collection library-specific wrapper implementations -->
             <!-- the library-specific wrapper implementation for PCollections -->
             <allow pkg="org.apache.kafka.server.immutable.pcollections" />
-            <subpackage name="pcollections">
-                <allow pkg="org.pcollections" />
-            </subpackage>
+            <allow pkg="org.pcollections" />
         </subpackage>
 
         <subpackage name="metrics">
@@ -93,23 +91,13 @@
         </subpackage>
 
         <subpackage name="util">
-            <!-- InterBrokerSendThread uses some clients classes that are not part of the public -->
-            <!-- API but are still relatively common -->
-            <allow class="org.apache.kafka.clients.admin.AdminClientConfig" />
-            <allow class="org.apache.kafka.clients.ClientRequest" />
-            <allow class="org.apache.kafka.clients.ClientResponse" />
-            <allow class="org.apache.kafka.clients.KafkaClient" />
-            <allow class="org.apache.kafka.clients.RequestCompletionHandler" />
-            <allow class="org.apache.kafka.clients.CommonClientConfigs" />
+            <allow pkg="org.apache.kafka.clients.admin" />
+            <allow pkg="org.apache.kafka.clients" exact-match="true" />
             <allow pkg="com.fasterxml.jackson" />
             <allow pkg="org.apache.kafka.server.util.json" />
 
-            <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
-            <allow class="org.apache.kafka.test.TestUtils" />
-            <subpackage name="timer">
-                <allow class="org.apache.kafka.server.util.MockTime" />
-                <allow class="org.apache.kafka.server.util.ShutdownableThread" />
-            </subpackage>
+            <allow pkg="org.apache.kafka.server.util" />
+            <allow pkg="org.apache.kafka.test" />
         </subpackage>
         <subpackage name="config">
             <allow pkg="org.apache.kafka.server"/>

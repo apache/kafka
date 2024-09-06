@@ -125,20 +125,16 @@
         <allow pkg="org.apache.kafka.snapshot" />
         <allow pkg="org.apache.kafka.test" />
         <subpackage name="loader">
-            <subpackage name="metrics">
-                <allow pkg="com.yammer.metrics"/>
-                <allow pkg="org.apache.kafka.common.metrics" />
-                <allow pkg="org.apache.kafka.controller.metrics" />
-                <allow pkg="org.apache.kafka.server.metrics" />
-            </subpackage>
+            <allow pkg="com.yammer.metrics"/>
+            <allow pkg="org.apache.kafka.common.metrics" />
+            <allow pkg="org.apache.kafka.controller.metrics" />
+            <allow pkg="org.apache.kafka.server.metrics" />
         </subpackage>
         <subpackage name="publisher">
-            <subpackage name="metrics">
-                <allow pkg="com.yammer.metrics"/>
-                <allow pkg="org.apache.kafka.common.metrics" />
-                <allow pkg="org.apache.kafka.controller.metrics" />
-                <allow pkg="org.apache.kafka.server.metrics" />
-            </subpackage>
+            <allow pkg="com.yammer.metrics"/>
+            <allow pkg="org.apache.kafka.common.metrics" />
+            <allow pkg="org.apache.kafka.controller.metrics" />
+            <allow pkg="org.apache.kafka.server.metrics" />
         </subpackage>
     </subpackage>
 
@@ -187,12 +183,12 @@
             <allow pkg="org.apache.kafka.snapshot" />
         </subpackage>
         <subpackage name="util">
-            <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
+            <allow pkg="org.apache.kafka.common.compress" />
         </subpackage>
     </subpackage>
 
     <subpackage name="metalog">
-        <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
+        <allow pkg="org.apache.kafka.common.compress"/>
         <allow pkg="org.apache.kafka.common.metadata" />
         <allow pkg="org.apache.kafka.common.protocol" />
         <allow pkg="org.apache.kafka.common.record" />
