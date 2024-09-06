@@ -354,9 +354,13 @@ public class AbstractConfig {
         });
         return nonInternalConfigs;
     }
-    
+
     protected void clearConfig(String key) {
-        values.remove(key);
+        Object value = values.get(key);
+        if (value instanceof Number)
+            values.put(key, 0);
+        else
+            values.put(key, null);
     }
 
     private void logAll() {
