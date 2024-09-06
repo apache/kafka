@@ -713,7 +713,7 @@ public class StateDirectory implements AutoCloseable {
         private static final double JITTER = 0.5;
 
         private long attempts;
-        private ExponentialBackoff exponentialBackoff;
+        private final ExponentialBackoff exponentialBackoff;
 
         public BackoffRecord() {
             this.attempts = 0;
