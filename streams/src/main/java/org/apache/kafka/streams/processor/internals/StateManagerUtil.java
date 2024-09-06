@@ -93,7 +93,9 @@ final class StateManagerUtil {
         }
 
         final TaskId id = stateMgr.taskId();
-        if (!stateDirectory.lock(id)) {
+        if (!stateDirectory.canTryLock(id, System.currentTimeMillis())) {
+            log.debug("Task {} is still not allowed to retry acquiring the state directory lock", id);
+        } else if (!stateDirectory.lock(id)) {
             throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
         }
         log.debug("Acquired state directory lock");

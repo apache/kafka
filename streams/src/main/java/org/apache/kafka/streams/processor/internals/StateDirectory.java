@@ -100,6 +100,8 @@ public class StateDirectory implements AutoCloseable {
 
     private final HashMap<TaskId, BackoffRecord> lockedTasksToBackoffRecord = new HashMap<>();
 
+    private static final ExponentialBackoff exponentialBackoff = new ExponentialBackoff(1, 2, 1000, 0.5);
+
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
@@ -352,11 +354,6 @@ public class StateDirectory implements AutoCloseable {
             return true;
         }
 
-        try {
-            Thread.sleep(updateOrCreateBackoffRecord(taskId));
-        } catch (final InterruptedException e) {
-            throw new RuntimeException(e);
-        }
         final Thread lockOwner = lockedTasksToOwner.get(taskId);
         if (lockOwner != null) {
             if (lockOwner.equals(Thread.currentThread())) {
@@ -366,11 +363,11 @@ public class StateDirectory implements AutoCloseable {
                 return true;
             } else {
                 // another thread owns the lock
+                updateOrCreateBackoffRecord(taskId, System.currentTimeMillis());
                 return false;
             }
         } else if (!stateDir.exists()) {
             log.error("Tried to lock task directory for {} but the state directory does not exist", taskId);
-            lockedTasksToBackoffRecord.remove(taskId);
             throw new IllegalStateException("The state directory has been deleted");
         } else {
             lockedTasksToOwner.put(taskId, Thread.currentThread());
@@ -381,17 +378,18 @@ public class StateDirectory implements AutoCloseable {
         }
     }
 
-    /* Visible for testing*/
-    public long updateOrCreateBackoffRecord(final TaskId taskId) {
-        long sleepTime = 0;
+    public boolean canTryLock(final TaskId taskId, final long nowMs) {
+        return !lockedTasksToBackoffRecord.containsKey(taskId) || lockedTasksToBackoffRecord.get(taskId).canAttempt(nowMs);
+    }
+
+    private void updateOrCreateBackoffRecord(final TaskId taskId, final long nowMs) {
         if (lockedTasksToBackoffRecord.containsKey(taskId)) {
             final BackoffRecord backoffRecord = lockedTasksToBackoffRecord.get(taskId);
-            sleepTime = backoffRecord.exponentialBackoff.backoff(backoffRecord.attempts);
+            backoffRecord.lastAttemptMs = nowMs;
             backoffRecord.attempts++;
         } else {
             lockedTasksToBackoffRecord.put(taskId, new BackoffRecord());
         }
-        return sleepTime;
     }
 
     /**
@@ -707,18 +705,15 @@ public class StateDirectory implements AutoCloseable {
     }
 
     public static class BackoffRecord {
-        private static final long INITIAL_INTERVAL = 1;
-        private static final int MULTIPLIER = 2;
-        private static final long MAX_INTERVAL = 1000;
-        private static final double JITTER = 0.5;
-
         private long attempts;
-        private final ExponentialBackoff exponentialBackoff;
+        private long lastAttemptMs;
 
         public BackoffRecord() {
             this.attempts = 0;
-            this.exponentialBackoff = new ExponentialBackoff(INITIAL_INTERVAL, MULTIPLIER, MAX_INTERVAL, JITTER);
+        }
+
+        public boolean canAttempt(final long nowMs) {
+            return  attempts == 0 || nowMs - lastAttemptMs >= exponentialBackoff.backoff(attempts);
         }
     }
-
 }
