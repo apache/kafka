@@ -54,7 +54,7 @@ jobs:
       - name: Test
         timeout-minutes: 60
         run: |
-          ./gradlew --build-cache --scan --continue \
+          ./gradlew --info --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
           -Pkafka.cluster.test.repeat=${{ inputs.test-repeat }} \
