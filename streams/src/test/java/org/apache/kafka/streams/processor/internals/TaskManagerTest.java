@@ -4742,8 +4742,8 @@ public class TaskManagerTest {
 
         // we're using a mock StateUpdater here, so now that we've drained the task from the queue of pending tasks to init
         // let's "add" it to our mock StateUpdater
-        when(stateUpdater.getTasks()).thenReturn(Collections.singleton(activeTask));
-        when(stateUpdater.getStandbyTasks()).thenReturn(Collections.emptySet());
+        when(stateUpdater.tasks()).thenReturn(Collections.singleton(activeTask));
+        when(stateUpdater.standbyTasks()).thenReturn(Collections.emptySet());
 
         // ensure we recycled our existing pending Standby into an Active task
         verify(activeTaskCreator).createActiveTaskFromStandby(eq(pendingTask), eq(taskId00Partitions), any());
@@ -4781,8 +4781,8 @@ public class TaskManagerTest {
 
         // we're using a mock StateUpdater here, so now that we've drained the task from the queue of pending tasks to init
         // let's "add" it to our mock StateUpdater
-        when(stateUpdater.getTasks()).thenReturn(Collections.singleton(pendingTask));
-        when(stateUpdater.getStandbyTasks()).thenReturn(Collections.singleton(pendingTask));
+        when(stateUpdater.tasks()).thenReturn(Collections.singleton(pendingTask));
+        when(stateUpdater.standbyTasks()).thenReturn(Collections.singleton(pendingTask));
 
         // ensure we didn't construct any new Tasks, or recycle an existing Task; we only used the one we already have
         verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
