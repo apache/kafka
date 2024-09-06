@@ -432,7 +432,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      *
      * <ul>
      *     <li>A pending offset fetch event exists</li>
-     *     <li>The partition set of the pending offset fetch event contains all the given partitions</li>
+     *     <li>The partition set of the pending offset fetch event is the same as the given partitions</li>
      * </ul>
      */
     private boolean canReusePendingOffsetFetchEvent(Set<TopicPartition> partitions) {
@@ -440,7 +440,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             return false;
         }
 
-        return pendingOffsetFetchEvent.requestedPartitions.containsAll(partitions);
+        return pendingOffsetFetchEvent.requestedPartitions.equals(partitions);
     }
 
     /**
