@@ -114,7 +114,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT);
     public static final String GROUP_PROTOCOL_DOC = "The group protocol to use when communicating with the Kafka " +
         "cluster. The supported group protocols are: " +
-        Arrays.stream(GroupProtocol.values()).map(gp -> gp.name().toLowerCase()).collect(Collectors.joining(", ")) + ".";
+        Arrays.stream(GroupProtocol.values()).map(gp -> gp.name().toLowerCase(Locale.ROOT)).collect(Collectors.joining(", ")) + ".";
 
     /**
     * <code>group.remote.assignor</code>
