@@ -88,7 +88,8 @@ public class ActivationRecordsGenerator {
         // initialization, etc.
         records.addAll(bootstrapMetadata.records());
 
-        if (metadataVersion.isMigrationSupported()) {
+        // In 3.9, we moved the minimum MV for migrations to 3.6. For empty logs, we only allow the newer 3.6 MV
+        if (metadataVersion.isMetadataTransactionSupported()) {
             if (zkMigrationEnabled) {
                 logMessageBuilder.append("Putting the controller into pre-migration mode. No metadata updates " +
                     "will be allowed until the ZK metadata has been migrated. ");
@@ -107,6 +108,7 @@ public class ActivationRecordsGenerator {
 
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
         if (metadataVersion.isMetadataTransactionSupported()) {
+            // End marker for bootstrap records
             records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
             return ControllerResult.of(records, null);
         } else {
@@ -149,6 +151,7 @@ public class ActivationRecordsGenerator {
                 .append(". ");
         }
 
+        // In 3.9, we moved the minimum MV for migrations to 3.6. For non-empty logs, we allow the older 3.4 MV
         if (zkMigrationEnabled && !metadataVersion.isMigrationSupported()) {
             throw new RuntimeException("Should not have ZK migrations enabled on a cluster running " +
                 "metadata.version " + featureControl.metadataVersion());
