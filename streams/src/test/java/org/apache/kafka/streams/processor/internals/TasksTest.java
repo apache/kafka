@@ -164,4 +164,48 @@ public class TasksTest {
         assertTrue(tasks.hasPendingTasksToInit());
         assertTrue(tasks.pendingTasksToInit().containsAll(mkSet(standbyTask1, standbyTask2)));
     }
+
+    @Test
+    public void shouldAddFailedTask() {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_B_0)).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, mkSet(TOPIC_PARTITION_B_1)).build();
+        tasks.addTask(activeTask2);
+
+        tasks.addFailedTask(activeTask1);
+
+        assertEquals(activeTask1, tasks.task(TASK_0_0));
+        assertEquals(activeTask2, tasks.task(TASK_0_1));
+        assertTrue(tasks.allTasks().contains(activeTask1));
+        assertTrue(tasks.allTasks().contains(activeTask2));
+        assertFalse(tasks.allNonFailedTasks().contains(activeTask1));
+        assertTrue(tasks.allNonFailedTasks().contains(activeTask2));
+    }
+
+    @Test
+    public void shouldRemoveFailedTask() {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_B_0))
+            .inState(State.SUSPENDED).build();
+        tasks.addFailedTask(activeTask1);
+
+        tasks.removeTask(activeTask1);
+        assertFalse(tasks.allNonFailedTasks().contains(activeTask1));
+        assertFalse(tasks.allTasks().contains(activeTask1));
+
+        tasks.addTask(activeTask1);
+        assertTrue(tasks.allNonFailedTasks().contains(activeTask1));
+    }
+
+    @Test
+    public void shouldClearFailedTask() {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_B_0))
+            .inState(State.SUSPENDED).build();
+        tasks.addFailedTask(activeTask1);
+
+        tasks.clear();
+        assertFalse(tasks.allNonFailedTasks().contains(activeTask1));
+        assertFalse(tasks.allTasks().contains(activeTask1));
+
+        tasks.addTask(activeTask1);
+        assertTrue(tasks.allNonFailedTasks().contains(activeTask1));
+    }
 }
