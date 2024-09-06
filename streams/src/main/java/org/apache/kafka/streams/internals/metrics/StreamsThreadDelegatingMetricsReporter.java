@@ -76,7 +76,7 @@ public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
 
     @Override
     public void close() {
-        this.consumer = null;
+        // No op
     }
 
     @Override

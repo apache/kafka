@@ -149,7 +149,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("multiTaskParameters")
-    @DisplayName("Correct treams metrics should get passed with dynamic membership")
+    @DisplayName("Correct streams metrics should get passed with dynamic membership")
     void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled) throws InterruptedException {
         final Properties properties1 = props(stateUpdaterEnabled);
         properties1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
