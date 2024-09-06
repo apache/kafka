@@ -80,7 +80,7 @@ ext {
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
       Math.min(Runtime.runtime.availableProcessors(), 8)
-  userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
+  userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures.toBoolean() : false
 
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
@@ -524,7 +524,7 @@ subprojects {
 
       // If there were any test failures, we want to fail the task to prevent the failures
       // from being cached.
-      if (ext.hadFailure) {
+      if (ext.hadFailure && !userIgnoreFailures) {
         throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
       }
     }
