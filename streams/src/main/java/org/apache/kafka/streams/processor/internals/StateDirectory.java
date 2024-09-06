@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -96,6 +97,12 @@ public class StateDirectory implements AutoCloseable {
     private final boolean hasNamedTopologies;
 
     private final HashMap<TaskId, Thread> lockedTasksToOwner = new HashMap<>();
+
+    private final HashMap<TaskId, BackoffRecord> lockedTasksToBackoffRecord = new HashMap<>();
+
+    private static final long INTERVALS_MS = 10;
+    private static final long MAX_ATTEMPTS = 50;
+
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
@@ -348,11 +355,17 @@ public class StateDirectory implements AutoCloseable {
             return true;
         }
 
+        try {
+            Thread.sleep(updateOrCreateBackoffRecord(taskId));
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         final Thread lockOwner = lockedTasksToOwner.get(taskId);
         if (lockOwner != null) {
             if (lockOwner.equals(Thread.currentThread())) {
                 log.trace("{} Found cached state dir lock for task {}", logPrefix(), taskId);
                 // we already own the lock
+                lockedTasksToBackoffRecord.remove(taskId);
                 return true;
             } else {
                 // another thread owns the lock
@@ -360,13 +373,28 @@ public class StateDirectory implements AutoCloseable {
             }
         } else if (!stateDir.exists()) {
             log.error("Tried to lock task directory for {} but the state directory does not exist", taskId);
+            lockedTasksToBackoffRecord.remove(taskId);
             throw new IllegalStateException("The state directory has been deleted");
         } else {
             lockedTasksToOwner.put(taskId, Thread.currentThread());
             // make sure the task directory actually exists, and create it if not
             getOrCreateDirectoryForTask(taskId);
+            lockedTasksToBackoffRecord.remove(taskId);
             return true;
         }
+    }
+
+    /* Visible for testing*/
+    public long updateOrCreateBackoffRecord(final TaskId taskId) {
+        long sleepTime = 0;
+        if (lockedTasksToBackoffRecord.containsKey(taskId)) {
+            final BackoffRecord backoffRecord = lockedTasksToBackoffRecord.get(taskId);
+            sleepTime = backoffRecord.exponentialBackoff.backoff(backoffRecord.attempts);
+            backoffRecord.attempts++;
+        } else {
+            lockedTasksToBackoffRecord.put(taskId, new BackoffRecord());
+        }
+        return sleepTime;
     }
 
     /**
@@ -678,6 +706,21 @@ public class StateDirectory implements AutoCloseable {
         @Override
         public int hashCode() {
             return Objects.hash(file, namedTopology);
+        }
+    }
+
+    public static class BackoffRecord {
+        private static final long INITIAL_INTERVAL = 1;
+        private static final int MULTIPLIER = 2;
+        private static final long MAX_INTERVAL = 1000;
+        private static final double JITTER = 0.5;
+
+        private long attempts;
+        private ExponentialBackoff exponentialBackoff;
+
+        public BackoffRecord() {
+            this.attempts = 0;
+            this.exponentialBackoff = new ExponentialBackoff(INITIAL_INTERVAL, MULTIPLIER, MAX_INTERVAL, JITTER);
         }
     }
 

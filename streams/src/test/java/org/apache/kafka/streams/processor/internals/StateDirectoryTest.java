@@ -77,6 +77,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -442,6 +443,18 @@ public class StateDirectoryTest {
         thread.start();
         thread.join(30000);
         assertFalse(directory.lock(taskId));
+    }
+
+    @Test
+    public void shouldSleepIfStateDirLockedByAnotherThread() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
+        assertEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
+        final Thread thread = new Thread(() -> directory.lock(taskId));
+        thread.start();
+        thread.join(30000);
+        assertEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
+        assertFalse(directory.lock(taskId));
+        assertNotEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
     }
 
     @Test
