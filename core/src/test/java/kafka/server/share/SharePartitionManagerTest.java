@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
@@ -95,6 +96,7 @@ import java.util.function.Consumer;
 
 import scala.Tuple2;
 
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1355,6 +1357,32 @@ public class SharePartitionManagerTest {
         // Verify that the timer object in sharePartitionManager is closed by checking the calls to timer.close() and persister.stop().
         Mockito.verify(timer, times(1)).close();
         Mockito.verify(persister, times(1)).stop();
+    }
+
+    @Test
+    public void testCloseShouldCompletePendingFetchRequests() throws Exception {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+            1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        Uuid fooId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().build();
+
+        // Acquire the fetch lock so fetch requests keep waiting in the queue.
+        assertTrue(sharePartitionManager.acquireProcessFetchQueueLock());
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        // Verify that the fetch request is not completed.
+        assertFalse(future.isDone());
+
+        // Closing the sharePartitionManager closes pending fetch requests in the fetch queue.
+        sharePartitionManager.close();
+        // Verify that the fetch request is now completed.
+        assertTrue(future.isDone());
+        assertFutureThrows(future, BrokerNotAvailableException.class);
     }
 
     @Test
