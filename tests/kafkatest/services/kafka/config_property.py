@@ -19,12 +19,16 @@ Define Kafka configuration property names here.
 
 BROKER_ID = "broker.id"
 NODE_ID = "node.id"
+PROCESS_ROLES = "process.roles"
 FIRST_BROKER_PORT = 9092
 FIRST_CONTROLLER_PORT = FIRST_BROKER_PORT + 500
 FIRST_CONTROLLER_ID = 3001
 CLUSTER_ID = "I2eXt9rvSnyhct8BYmW6-w"
 PORT = "port"
 ADVERTISED_HOSTNAME = "advertised.host.name"
+ADVERTISED_LISTENERS = "advertised.listeners"
+LISTENERS = "listeners"
+CONTROLLER_LISTENER_NAMES = "controller.listener.names"
 
 NUM_NETWORK_THREADS = "num.network.threads"
 NUM_IO_THREADS = "num.io.threads"
