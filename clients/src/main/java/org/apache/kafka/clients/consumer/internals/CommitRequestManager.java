@@ -711,7 +711,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();
-            boolean hasFailedAttempt = false;
+            boolean failedRequestRegistered = false;
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
                     TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
@@ -724,9 +724,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         continue;
                     }
 
-                    if (!hasFailedAttempt) {
+                    if (!failedRequestRegistered) {
                         onFailedAttempt(currentTimeMs);
-                        hasFailedAttempt = true;
+                        failedRequestRegistered = true;
                     }
 
                     if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
@@ -1047,14 +1047,18 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     response.partitionDataMap(groupId);
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
             Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
-            boolean hasError = false;
+            boolean failedRequestRegistered = false;
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
                 if (partitionData.hasError()) {
-                    hasError = true;
                     Errors error = partitionData.error;
                     log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+
+                    if (!failedRequestRegistered) {
+                        onFailedAttempt(currentTimeMs);
+                        failedRequestRegistered = true;
+                    }
 
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does not exist"));
@@ -1081,10 +1085,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     log.info("Found no committed offset for partition {}", tp);
                     offsets.put(tp, null);
                 }
-            }
-
-            if (hasError) {
-                onFailedAttempt(currentTimeMs);
             }
 
             if (unauthorizedTopics != null) {
