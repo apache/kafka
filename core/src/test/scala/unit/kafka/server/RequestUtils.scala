@@ -34,7 +34,7 @@ import scala.collection.Seq
 import scala.collection.convert.ImplicitConversions.{`collection AsScalaIterable`, `map AsScala`}
 import scala.reflect.ClassTag
 
-class RequestUtilities(cluster: ClusterInstance) {
+class RequestUtils(cluster: ClusterInstance) {
 
   protected var producer: KafkaProducer[String, String] = _
 

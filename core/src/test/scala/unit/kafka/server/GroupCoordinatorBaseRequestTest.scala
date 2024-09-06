@@ -27,14 +27,14 @@ import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, Consum
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
-import unit.kafka.server.RequestUtilities
+import unit.kafka.server.RequestUtils
 
 import java.util.Comparator
 import scala.jdk.CollectionConverters._
 
 class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
-  val requestUtilities: RequestUtilities = new RequestUtilities(cluster)
+  val requestUtilities: RequestUtils = new RequestUtils(cluster)
 
   protected def commitOffset(
     groupId: String,

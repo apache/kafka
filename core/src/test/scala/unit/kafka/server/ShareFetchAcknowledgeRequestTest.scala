@@ -41,7 +41,7 @@ import scala.jdk.CollectionConverters._
 @Tag("integration")
 class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance){
 
-  private val requestUtilities: RequestUtilities = new RequestUtilities(cluster)
+  private val requestUtilities: RequestUtils = new RequestUtils(cluster)
   private final val MAX_PARTITION_BYTES = 10000
 
   @AfterEach
