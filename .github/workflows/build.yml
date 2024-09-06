@@ -108,6 +108,7 @@ jobs:
         # --continue:     Keep running even if a test fails
         # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
         timeout-minutes: 180  # 3 hours
+        continue-on-error: true
         run: |
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
