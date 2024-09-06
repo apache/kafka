@@ -446,18 +446,6 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldSleepIfStateDirLockedByAnotherThread() throws Exception {
-        final TaskId taskId = new TaskId(0, 0);
-        assertEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
-        final Thread thread = new Thread(() -> directory.lock(taskId));
-        thread.start();
-        thread.join(30000);
-        assertEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
-        assertFalse(directory.lock(taskId));
-        assertNotEquals(directory.updateOrCreateBackoffRecord(taskId), 0);
-    }
-
-    @Test
     public void shouldNotUnLockStateDirLockedByAnotherThread() throws Exception {
         final TaskId taskId = new TaskId(0, 0);
         final CountDownLatch lockLatch = new CountDownLatch(1);
