@@ -252,7 +252,7 @@ if (repo != null) {
   rat.enabled = false
 }
 println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
-println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
+println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
 
@@ -569,6 +569,14 @@ subprojects {
       delete t.reports.junitXml.outputLocation
       delete t.reports.html.outputLocation
     }
+
+    doLast {
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+      println "Copy JUnit XML for ${project.name} to $dest"
+      ant.copy(todir: "$dest") {
+        ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
+      }
+    }
   }
 
   jar {
@@ -882,6 +890,7 @@ project(':server') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -1366,6 +1375,7 @@ project(':group-coordinator:group-coordinator-api') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -1735,6 +1745,7 @@ project(':clients') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -1900,6 +1911,7 @@ project(':raft') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -1993,6 +2005,7 @@ project(':server-common') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -2051,6 +2064,7 @@ project(':storage:storage-api') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -2141,6 +2155,7 @@ project(':storage') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -2235,6 +2250,7 @@ project(':tools:tools-api') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
