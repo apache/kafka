@@ -111,7 +111,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SuppressWarnings("deprecation")
 @Tag("integration")
 @Timeout(600)
 public class EosIntegrationTest {
@@ -1033,6 +1032,7 @@ public class EosIntegrationTest {
         return data;
     }
 
+    @SuppressWarnings("deprecation")
     // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
