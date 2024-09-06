@@ -117,7 +117,6 @@ public class AbstractConfig {
         this.values.putAll(configUpdates);
         definition.parse(this.values);
         this.definition = definition;
-        clearDefaultValues();
         if (doLog)
             logAll();
     }
@@ -354,14 +353,6 @@ public class AbstractConfig {
             }
         });
         return nonInternalConfigs;
-    }
-
-    /**
-     * Some default values are not supported in the CONSUMER protocol. When these default values are printed 
-     * in the log, they can misdirect users. Therefore, in this case, the default values should be cleared.
-     */
-    protected void clearDefaultValues() {
-        // do nothing by default, subclasses can override this method to clear default values
     }
     
     protected void clearConfig(String key) {

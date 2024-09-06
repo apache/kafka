@@ -389,10 +389,18 @@ public class ConsumerConfig extends AbstractConfig {
             Collections.unmodifiableList(Arrays.asList(RangeAssignor.class, CooperativeStickyAssignor.class));
 
     /**
+     * A list of configuration keys for CLASSIC protocol not supported. we should check the input string and clean up the
+     * default value.
+     */
+    private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = Collections.singletonList(
+            GROUP_REMOTE_ASSIGNOR_CONFIG
+    );
+
+    /**
      * A list of configuration keys for consumer protocol not supported. we should check the input string and clean up the
      * default value.
      */
-    private static final List<String> CONSUMER_PROTOCOL_UNSUPPORT_CONFIGS = Collections.unmodifiableList(Arrays.asList(
+    private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = Collections.unmodifiableList(Arrays.asList(
             PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
             HEARTBEAT_INTERVAL_MS_CONFIG, 
             SESSION_TIMEOUT_MS_CONFIG
@@ -687,8 +695,8 @@ public class ConsumerConfig extends AbstractConfig {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
-        checkGroupRemoteAssignor();
-        checkUnsupportConfigsWithConsumerProtocol();
+        checkUnsupportedConfigs(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
+        checkUnsupportedConfigs(GroupProtocol.CONSUMER, CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS);
         return refinedConfigs;
     }
 
@@ -735,38 +743,22 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    private void checkGroupRemoteAssignor() {
-        if (isClassicProtocol() && getString(GROUP_REMOTE_ASSIGNOR_CONFIG) != null && !getString(GROUP_REMOTE_ASSIGNOR_CONFIG).isEmpty()) {
-            throw new ConfigException(GROUP_REMOTE_ASSIGNOR_CONFIG + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CLASSIC.name());
-        }
-    }
-
-    private void checkUnsupportConfigsWithConsumerProtocol() {
-        if (isConsumerProtocol()) {
-            CONSUMER_PROTOCOL_UNSUPPORT_CONFIGS.forEach(configName -> {
+    private void checkUnsupportedConfigs(GroupProtocol groupProtocol, List<String> unsupportedConfigs) {
+        if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(groupProtocol.name())) {
+            unsupportedConfigs.forEach(configName -> {
                 Object config = originals().get(configName);
                 if (config != null && !Utils.isBlank(config.toString())) {
-                    throw new ConfigException(configName + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name());
+                    throw new ConfigException(configName + " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + groupProtocol.name());
+                } else {
+                    /*
+                      Some default values are not supported in the CONSUMER protocol or CLASSIC protocol. When these default 
+                      values are printed in the log, they can misdirect users. Therefore, in this case, the default values 
+                      should be cleared.
+                     */
+                    super.clearConfig(configName);
                 }
             });
         }
-    }
-
-    @Override
-    protected void clearDefaultValues() {
-        CONSUMER_PROTOCOL_UNSUPPORT_CONFIGS.forEach(configName -> {
-            if (originals().containsKey(configName)) {
-                super.clearConfig(configName);
-            }
-        });
-    }
-
-    private boolean isClassicProtocol() {
-        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CLASSIC.name());
-    }
-
-    private boolean isConsumerProtocol() {
-        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.CONSUMER.name());
     }
 
     public ConsumerConfig(Properties props) {
