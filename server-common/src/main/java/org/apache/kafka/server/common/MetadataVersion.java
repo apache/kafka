@@ -221,6 +221,7 @@ public enum MetadataVersion {
     IBP_4_0_IV1(23, "4.0", "IV1", true),
 
     // Bootstrap metadata version for transaction versions 1 and 2 (KIP-890)
+    // Enables async remote LIST_OFFSETS support (KIP-1075)
     IBP_4_0_IV2(24, "4.0", "IV2", false);
 
     // NOTES when adding a new version:
@@ -475,7 +476,9 @@ public enum MetadataVersion {
     }
 
     public short listOffsetRequestVersion() {
-        if (this.isAtLeast(IBP_3_9_IV0)) {
+        if (this.isAtLeast(IBP_4_0_IV2)) {
+            return 10;
+        } else if (this.isAtLeast(IBP_3_9_IV0)) {
             return 9;
         } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 8;

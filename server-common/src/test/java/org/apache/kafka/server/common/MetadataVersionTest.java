@@ -493,4 +493,15 @@ class MetadataVersionTest {
     public void assertLatestIsNotProduction() {
         assertFalse(MetadataVersion.latestTesting().isProduction());
     }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testListOffsetsValueVersion(MetadataVersion metadataVersion) {
+        final short expectedVersion = 10;
+        if (metadataVersion.isAtLeast(IBP_4_0_IV2)) {
+            assertEquals(expectedVersion, metadataVersion.listOffsetRequestVersion());
+        } else {
+            assertTrue(metadataVersion.listOffsetRequestVersion() < expectedVersion);
+        }
+    }
 }
