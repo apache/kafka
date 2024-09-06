@@ -360,7 +360,7 @@ public class AbstractConfig {
         if (value instanceof Number)
             values.put(key, 0);
         else
-            values.put(key, null);
+            values.remove(key);
     }
 
     private void logAll() {
