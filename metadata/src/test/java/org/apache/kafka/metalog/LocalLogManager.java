@@ -733,7 +733,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             throw new BufferAllocationException("Test asked to fail the next prepareAppend");
         }
 
-        return shared.tryAppend(nodeId, leader.epoch(), batch);
+        return shared.tryAppend(nodeId, epoch, batch);
     }
 
     @Override
