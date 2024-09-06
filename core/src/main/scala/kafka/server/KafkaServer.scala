@@ -413,6 +413,12 @@ class KafkaServer(
 
         if (config.migrationEnabled) {
           logger.info("Starting up additional components for ZooKeeper migration")
+          if (!config.interBrokerProtocolVersion.isMetadataTransactionSupported) {
+            logger.error("Caution! Enabled ZooKeeper migration without metadata transactions support. " +
+              "The controller will not allow the migration to begin. If a migration is in progress, it will be able to " +
+              "continue, but without the fault tolerance afforded by metadata transactions."
+            )
+          }
           lifecycleManager = new BrokerLifecycleManager(config,
             time,
             s"zk-broker-${config.nodeId}-",
