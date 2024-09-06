@@ -83,7 +83,7 @@ public class ListConsumerGroupTest {
     }
 
     private static List<ClusterConfig> consumerProtocolOnlyGenerator() {
-        return ConsumerGroupCommandTestUtils.forConsumerGroupCoordinator();
+        return ConsumerGroupCommandTestUtils.forKRaftGroupCoordinator();
     }
 
     private List<GroupProtocol> supportedGroupProtocols() {
