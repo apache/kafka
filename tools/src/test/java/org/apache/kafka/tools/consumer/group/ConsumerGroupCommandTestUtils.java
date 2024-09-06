@@ -42,6 +42,7 @@ import java.util.stream.Stream;
 
 import static kafka.test.annotation.Type.CO_KRAFT;
 import static kafka.test.annotation.Type.ZK;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
@@ -85,6 +86,7 @@ class ConsumerGroupCommandTestUtils {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+        serverProperties.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "1000");
 
         return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(CO_KRAFT))
@@ -97,6 +99,7 @@ class ConsumerGroupCommandTestUtils {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+        serverProperties.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "1000");
 
         return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(ZK))
