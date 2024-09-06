@@ -308,7 +308,9 @@ class ZkMigrationIntegrationTest {
           false
         } else {
           topicDescribe.topicNameValues().values().stream().allMatch {
-            topic => topic.get(32, TimeUnit.SECONDS).partitions().stream().allMatch(part => part.leader() != null)
+            topic => topic.get(62, TimeUnit.SECONDS).partitions().stream().allMatch(part => {
+              part.leader() != null && part.isr().size() == 3
+            })
           }
         }
       }, msg="waiting for topics to be available", waitTimeMs=303000)
