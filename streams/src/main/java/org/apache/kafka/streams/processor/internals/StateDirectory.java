@@ -100,9 +100,6 @@ public class StateDirectory implements AutoCloseable {
 
     private final HashMap<TaskId, BackoffRecord> lockedTasksToBackoffRecord = new HashMap<>();
 
-    private static final long INTERVALS_MS = 10;
-    private static final long MAX_ATTEMPTS = 50;
-
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
