@@ -42,6 +42,8 @@ class DefaultMessageFormatter implements MessageFormatter {
     private boolean printValue = true;
     private boolean printPartition = false;
     private boolean printOffset = false;
+    private boolean printDelivery = false;
+    private boolean printEpoch = false;
     private boolean printHeaders = false;
     private byte[] keySeparator = utfBytes("\t");
     private byte[] lineSeparator = utfBytes("\n");
@@ -62,6 +64,12 @@ class DefaultMessageFormatter implements MessageFormatter {
         }
         if (configs.containsKey("print.offset")) {
             printOffset = getBoolProperty(configs, "print.offset");
+        }
+        if (configs.containsKey("print.delivery")) {
+            printDelivery = getBoolProperty(configs, "print.delivery");
+        }
+        if (configs.containsKey("print.epoch")) {
+            printEpoch = getBoolProperty(configs, "print.epoch");
         }
         if (configs.containsKey("print.partition")) {
             printPartition = getBoolProperty(configs, "print.partition");
@@ -126,18 +134,30 @@ class DefaultMessageFormatter implements MessageFormatter {
                 } else {
                     output.print("NO_TIMESTAMP");
                 }
-                writeSeparator(output, printOffset || printPartition || printHeaders || printKey || printValue);
+                writeSeparator(output, printPartition || printOffset || printDelivery || printEpoch || printHeaders || printKey || printValue);
             }
 
             if (printPartition) {
                 output.print("Partition:");
                 output.print(consumerRecord.partition());
-                writeSeparator(output, printOffset || printHeaders || printKey || printValue);
+                writeSeparator(output, printOffset || printDelivery || printEpoch || printHeaders || printKey || printValue);
             }
 
             if (printOffset) {
                 output.print("Offset:");
                 output.print(consumerRecord.offset());
+                writeSeparator(output, printDelivery || printEpoch || printHeaders || printKey || printValue);
+            }
+
+            if (printDelivery) {
+                output.print("Delivery:");
+                output.print(consumerRecord.deliveryCount().map(delivery -> Short.toString(delivery)).orElse("NOT_PRESENT"));
+                writeSeparator(output, printEpoch || printHeaders || printKey || printValue);
+            }
+
+            if (printEpoch) {
+                output.print("Epoch:");
+                output.print(consumerRecord.leaderEpoch().map(epoch -> Integer.toString(epoch)).orElse("NOT_PRESENT"));
                 writeSeparator(output, printHeaders || printKey || printValue);
             }
 

@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
@@ -57,13 +56,6 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
 
     public WrappedStateStore(final S wrapped) {
         this.wrapped = wrapped;
-    }
-
-    @Deprecated
-    @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        wrapped.init(context, root);
     }
 
     @Override

@@ -152,7 +152,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     public Collection<NamedTopology> getAllTopologies() {
-        return topologyMetadata.getAllNamedTopologies();
+        return topologyMetadata.allNamedTopologies();
     }
 
     /**
@@ -404,7 +404,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName, final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadataForStore(storeName, topologyName);
+        return streamsMetadataState.allMetadataForStore(storeName, topologyName);
     }
 
     /**
@@ -412,7 +412,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      */
     public Collection<StreamsMetadata> allStreamsClientsMetadataForTopology(final String topologyName) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadataForTopology(topologyName);
+        return streamsMetadataState.allMetadataForTopology(topologyName);
     }
 
     /**
@@ -424,7 +424,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                                     final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
     }
 
     /**

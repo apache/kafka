@@ -25,13 +25,13 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 
 public interface ClusterInstance {
 
@@ -160,15 +160,11 @@ public interface ClusterInstance {
     }
 
     default Set<GroupProtocol> supportedGroupProtocols() {
-        Map<String, String> serverProperties = config().serverProperties();
-        Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
-        supportedGroupProtocols.add(CLASSIC);
-
-        if (serverProperties.getOrDefault(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "").contains("consumer")) {
-            supportedGroupProtocols.add(CONSUMER);
+        if (isKRaftTest() && brokers().values().stream().allMatch(b -> b.dataPlaneRequestProcessor().isConsumerGroupProtocolEnabled())) {
+            return mkSet(CLASSIC, CONSUMER);
+        } else {
+            return Collections.singleton(CLASSIC);
         }
-
-        return Collections.unmodifiableSet(supportedGroupProtocols);
     }
 
     //---------------------------[modify]---------------------------//
@@ -186,13 +182,20 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }
+    
+    default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
+        try (Admin admin = createAdminClient()) {
+            admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
+            waitForTopic(topicName, partitions);
+        }
+    }
 
     void waitForReadyBrokers() throws InterruptedException;
 
     default void waitForTopic(String topic, int partitions) throws InterruptedException {
         // wait for metadata
         TestUtils.waitForCondition(
-            () -> brokers().values().stream().allMatch(broker -> partitions == 0 ?
+            () -> aliveBrokers().values().stream().allMatch(broker -> partitions == 0 ?
                 broker.metadataCache().numPartitions(topic).isEmpty() :
                 broker.metadataCache().numPartitions(topic).contains(partitions)
         ), 60000L, topic + " metadata not propagated after 60000 ms");
@@ -200,7 +203,7 @@ public interface ClusterInstance {
         for (ControllerServer controller : controllers().values()) {
             long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
-                () -> brokers().values().stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
+                () -> aliveBrokers().values().stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");
         }
     }

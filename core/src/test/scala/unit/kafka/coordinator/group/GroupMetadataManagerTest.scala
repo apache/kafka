@@ -27,7 +27,7 @@ import javax.management.ObjectName
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.UnifiedLog
-import kafka.server.{HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{HostedPartition, KafkaConfig, ReplicaManager}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
@@ -45,7 +45,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetConfig}
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
@@ -56,7 +56,6 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{immutable, _}
 
@@ -80,7 +79,6 @@ class GroupMetadataManagerTest {
   val defaultRequireStable = false
   val numOffsetsPartitions = 2
 
-  @nowarn("cat=deprecation")
   private val offsetConfig = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
     new OffsetConfig(config.groupCoordinatorConfig.offsetMetadataMaxSize,
@@ -91,8 +89,7 @@ class GroupMetadataManagerTest {
       config.groupCoordinatorConfig.offsetsTopicSegmentBytes,
       config.groupCoordinatorConfig.offsetsTopicReplicationFactor,
       config.groupCoordinatorConfig.offsetTopicCompressionType,
-      config.groupCoordinatorConfig.offsetCommitTimeoutMs,
-      config.groupCoordinatorConfig.offsetCommitRequiredAcks)
+      config.groupCoordinatorConfig.offsetCommitTimeoutMs)
   }
 
   @BeforeEach

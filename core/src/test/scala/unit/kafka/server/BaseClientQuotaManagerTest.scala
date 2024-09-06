@@ -30,6 +30,8 @@ import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestC
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.network.Session
+import org.apache.kafka.network.metrics.RequestChannelMetrics
+import org.apache.kafka.server.quota.ThrottleCallback
 import org.junit.jupiter.api.AfterEach
 import org.mockito.Mockito.mock
 
@@ -56,7 +58,7 @@ class BaseClientQuotaManagerTest {
 
     val request = builder.build()
     val buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey, request.version, "", 0))
-    val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+    val requestChannelMetrics: RequestChannelMetrics = mock(classOf[RequestChannelMetrics])
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)

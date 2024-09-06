@@ -55,8 +55,8 @@ object TestInfoUtils {
 
   final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
 
-  def isNewGroupCoordinatorEnabled(testInfo: TestInfo): Boolean = {
-    testInfo.getDisplayName.contains("kraft+kip848")
+  def isShareGroupTest(testInfo: TestInfo): Boolean = {
+    testInfo.getDisplayName.contains("kraft+kip932")
   }
 
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {

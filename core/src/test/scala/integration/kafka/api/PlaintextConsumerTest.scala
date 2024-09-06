@@ -16,7 +16,7 @@ import java.time.Duration
 import java.util
 import java.util.Arrays.asList
 import java.util.{Collections, Locale, Optional, Properties}
-import kafka.server.{KafkaBroker, QuotaType}
+import kafka.server.KafkaBroker
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
@@ -26,12 +26,13 @@ import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicExce
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
+import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.server.quota.QuotaType
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
@@ -629,15 +630,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                   "client-id", clientId)
         assertNull(broker.metrics.metric(metricName), "Metric should not have been created " + metricName)
     }
-    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
-    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
-    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Fetch, consumerClientId))
-    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Fetch, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.PRODUCE, producerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.PRODUCE, producerClientId))
+    brokers.foreach(assertNoMetric(_, "byte-rate", QuotaType.FETCH, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.FETCH, consumerClientId))
 
-    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, producerClientId))
-    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
-    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
-    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.REQUEST, producerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.REQUEST, producerClientId))
+    brokers.foreach(assertNoMetric(_, "request-time", QuotaType.REQUEST, consumerClientId))
+    brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.REQUEST, consumerClientId))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -718,67 +719,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer1.assign(List(tp).asJava)
     assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
-  }
-
-  // Empty group ID only supported for classic group protocol
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testConsumingWithEmptyGroupId(quorum: String, groupProtocol: String): Unit = {
-    val topic = "test_topic"
-    val partition = 0
-    val tp = new TopicPartition(topic, partition)
-    createTopic(topic)
-
-    val producer = createProducer()
-    producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
-    producer.send(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).get()
-    producer.close()
-
-    // consumer 1 uses the empty group id
-    val consumer1Config = new Properties(consumerConfig)
-    consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
-    consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
-    consumer1Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
-    val consumer1 = createConsumer(configOverrides = consumer1Config)
-
-    // consumer 2 uses the empty group id and consumes from latest offset if there is no committed offset
-    val consumer2Config = new Properties(consumerConfig)
-    consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
-    consumer2Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
-    consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
-    consumer2Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
-    val consumer2 = createConsumer(configOverrides = consumer2Config)
-
-    consumer1.assign(asList(tp))
-    consumer2.assign(asList(tp))
-
-    val records1 = consumer1.poll(Duration.ofMillis(5000))
-    consumer1.commitSync()
-
-    val records2 = consumer2.poll(Duration.ofMillis(5000))
-    consumer2.commitSync()
-
-    consumer1.close()
-    consumer2.close()
-
-    assertTrue(records1.count() == 1 && records1.records(tp).asScala.head.offset == 0,
-      "Expected consumer1 to consume one message from offset 0")
-    assertTrue(records2.count() == 1 && records2.records(tp).asScala.head.offset == 1,
-      "Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1")
-  }
-
-  // Empty group ID not supported with consumer group protocol
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array(
-    "kraft+kip848, consumer"
-  ))
-  def testEmptyGroupIdNotSupported(quorum:String, groupProtocol: String): Unit = {
-    val consumer1Config = new Properties(consumerConfig)
-    consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
-    consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
-
-    assertThrows(classOf[KafkaException], () => createConsumer(configOverrides = consumer1Config))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
