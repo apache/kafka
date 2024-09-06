@@ -369,6 +369,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsets =
                     commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
             fetchOffsets.whenComplete((offsets, error) -> {
+                pendingOffsetFetchEvent = null;
                 // Update positions with the retrieved offsets and request reset for partitions that may still
                 // require a position after it
                 refreshOffsetsAndResetPositionsStillMissing(offsets, error, result);
@@ -403,8 +404,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     private void refreshOffsetsAndResetPositionsStillMissing(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                              final Throwable error,
                                                              final CompletableFuture<Void> result) {
-        pendingOffsetFetchEvent = null;
-
         if (error == null) {
 
             // Ensure we only set positions for the partitions that still require one (ex. some partitions may have
