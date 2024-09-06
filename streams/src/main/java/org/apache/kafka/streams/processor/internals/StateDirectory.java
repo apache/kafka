@@ -100,9 +100,6 @@ public class StateDirectory implements AutoCloseable {
 
     private final HashMap<TaskId, BackoffRecord> lockedTasksToBackoffRecord = new HashMap<>();
 
-    private static final ExponentialBackoff exponentialBackoff = new ExponentialBackoff(1, 2, 1000, 0.5);
-
-
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
 
@@ -707,13 +704,15 @@ public class StateDirectory implements AutoCloseable {
     public static class BackoffRecord {
         private long attempts;
         private long lastAttemptMs;
+        private static final ExponentialBackoff EXPONENTIAL_BACKOFF = new ExponentialBackoff(1, 2, 1000, 0.5);
+
 
         public BackoffRecord() {
             this.attempts = 0;
         }
 
         public boolean canAttempt(final long nowMs) {
-            return  attempts == 0 || nowMs - lastAttemptMs >= exponentialBackoff.backoff(attempts);
+            return  attempts == 0 || nowMs - lastAttemptMs >= EXPONENTIAL_BACKOFF.backoff(attempts);
         }
     }
 }
