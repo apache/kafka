@@ -824,6 +824,17 @@ gradle.taskGraph.whenReady { taskGraph ->
   }
 }
 
+tasks.named("test") {
+  if (System.getenv('GITHUB_ACTIONS') != null) {
+    finalizedBy {
+      doLast {
+        def doneFile = rootProject.layout.buildDirectory.dir("junit-xml/done").get().asFile
+        doneFile.createNewFile()
+      }
+    }
+  }
+}
+
 def fineTuneEclipseClasspathFile(eclipse, project) {
   eclipse.classpath.file {
     beforeMerged { cp ->

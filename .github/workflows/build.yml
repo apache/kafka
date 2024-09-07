@@ -110,14 +110,12 @@ jobs:
         timeout-minutes: 180  # 3 hours
         continue-on-error: true
         run: |
-          rm -f build/junit-xml/done
           ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
           test
-          touch build/junit-xml/done
       - name: Archive JUnit reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
