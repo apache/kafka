@@ -23,6 +23,7 @@ import os.path
 import sys
 from typing import Tuple, Optional, List, Iterable
 import xml.etree.ElementTree
+import html
 
 
 logger = logging.getLogger()
@@ -100,7 +101,8 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
                 if failure_message:
-                    failure_message = failure_message.replace('\n', ' ').replace('\r', ' ')
+                    failure_message = failure_message.replace('\n', '<br>').replace('\r', '<br>')
+                    failure_message = html.escape(failure_message)
                 failure_class = elem.get("type")
                 failure_stack_trace = elem.text
                 failure = partial_test_case(failure_message, failure_class, failure_stack_trace)
