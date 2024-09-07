@@ -144,6 +144,7 @@ if __name__ == "__main__":
                         required=False,
                         default="build/junit-xml/**/*.xml",
                         help="Path to XML files. Glob patterns are supported.")
+
     if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")
         exit(1)
@@ -152,7 +153,7 @@ if __name__ == "__main__":
 
     reports = glob(pathname=args.path, recursive=True)
     logger.debug(f"Found {len(reports)} JUnit results")
-    workspace_path = get_env("GITHUB_WORKSPACE")  # e.g., /home/runner/work/apache/kafka
+    workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
     total_file_count = 0
     total_run = 0       # All test runs according to <testsuite tests="N"/>
@@ -248,7 +249,7 @@ if __name__ == "__main__":
         print("\n</details>")
 
     # Print special message if there was a timeout
-    if get_env("GRADLE_EXIT_CODE") == 124:
+    if get_env("GRADLE_EXIT_CODE") == "124":
         logger.debug(f"Gradle command timed out. These are partial results!")
         logger.debug(summary)
         logger.debug("Failing this step because the tests timed out.")
