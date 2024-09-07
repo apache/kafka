@@ -645,7 +645,7 @@ public class SharePartitionManager implements AutoCloseable {
         }
 
         if (throwable instanceof NotLeaderOrFollowerException || throwable instanceof FencedStateEpochException) {
-            log.info("The share partition with key {} is fenced with message: {}", sharePartitionKey, throwable.getMessage());
+            log.info("The share partition with key {} is fenced: {}", sharePartitionKey, throwable.getMessage());
             // The share partition is fenced hence remove the partition from map and let the client retry.
             // But surface the error to the client so client might take some action i.e. re-fetch
             // the metadata and retry the fetch on new leader.
