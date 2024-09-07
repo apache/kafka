@@ -253,18 +253,22 @@ if __name__ == "__main__":
         print("\n</details>")
 
     # Print special message if there was a timeout
-    if get_env("GRADLE_EXIT_CODE", int) == 124:
+    exit_code = get_env("GRADLE_EXIT_CODE", int)
+    if exit_code == 124:
         logger.debug(f"Gradle command timed out. These are partial results!")
         logger.debug(summary)
         logger.debug("Failing this step because the tests timed out.")
         exit(1)
-
-    logger.debug(summary)
-    if total_failures > 0:
-        logger.debug(f"Failing this step due to {total_failures} test failures")
-        exit(1)
-    elif total_errors > 0:
-        logger.debug(f"Failing this step due to {total_errors} test errors")
-        exit(1)
+    elif exit_code in (0, 1):
+        logger.debug(summary)
+        if total_failures > 0:
+            logger.debug(f"Failing this step due to {total_failures} test failures")
+            exit(1)
+        elif total_errors > 0:
+            logger.debug(f"Failing this step due to {total_errors} test errors")
+            exit(1)
+        else:
+            exit(0)
     else:
-        exit(0)
+        logger.debug(f"Gradle had unexpected exit code {exit_code}. Failing this step")
+        exit(1)
