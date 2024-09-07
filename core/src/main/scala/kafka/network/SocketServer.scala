@@ -417,8 +417,8 @@ object SocketServer {
     channel: SocketChannel,
     logging: Logging
   ): Unit = {
-    CoreUtils.swallow(channel.socket().close(), logging, Level.ERROR)
-    CoreUtils.swallow(channel.close(), logging, Level.ERROR)
+    Utils.closeQuietly(channel.socket, "channel socket")
+    Utils.closeQuietly(channel, "channel")
   }
 }
 

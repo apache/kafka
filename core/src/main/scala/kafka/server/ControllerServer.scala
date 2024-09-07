@@ -30,7 +30,7 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.{LogContext, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint, Uuid}
 import org.apache.kafka.controller.metrics.{ControllerMetadataMetricsPublisher, QuorumControllerMetrics}
 import org.apache.kafka.controller.{Controller, QuorumController, QuorumFeatures}
@@ -66,15 +66,11 @@ case class ControllerMigrationSupport(
   brokersRpcClient: LegacyPropagator
 ) {
   def shutdown(logging: Logging): Unit = {
-    if (zkClient != null) {
-      CoreUtils.swallow(zkClient.close(), logging)
-    }
+    Utils.closeQuietly(zkClient, "zk client")
     if (brokersRpcClient != null) {
       CoreUtils.swallow(brokersRpcClient.shutdown(), logging)
     }
-    if (migrationDriver != null) {
-      CoreUtils.swallow(migrationDriver.close(), logging)
-    }
+    Utils.closeQuietly(migrationDriver, "migration driver")
   }
 }
 

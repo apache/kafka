@@ -18,7 +18,7 @@
 package kafka.zk
 
 import org.apache.zookeeper.server.{NIOServerCnxnFactory, SessionTrackerImpl, ZooKeeperServer}
-import kafka.utils.{Exit, Logging, TestUtils}
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 
 import java.net.InetSocketAddress
 import org.apache.kafka.common.utils.Utils
