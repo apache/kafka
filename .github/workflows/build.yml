@@ -110,7 +110,7 @@ jobs:
         id: junit-test
         run: |
           set +e
-          timeout 5 ./gradlew --build-cache --scan --continue \
+          timeout 180 ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
