@@ -439,7 +439,7 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "not-required", "run")
+        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run")
 
 class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
@@ -451,12 +451,12 @@ class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
 
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "not-required", "verify")
+        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify")
 
 
 class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "not-required", "verify-complex")
+        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex")
 
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
