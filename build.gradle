@@ -824,18 +824,19 @@ gradle.taskGraph.whenReady { taskGraph ->
   }
 }
 
-task createDoneFile() {
+tasks.register("createDoneFile") {
+  def doneFile = rootProject.layout.buildDirectory.file("junit-xml/done")
+  outputs.file doneFile
+  outputs.cacheIf { false }
+
   doLast {
-    def doneFile = rootProject.layout.buildDirectory.file("junit-xml/done").get().asFile
-    doneFile.createNewFile()
+    println "Creating done file for GitHub Actions workflow."
+    def file = doneFile.get().asFile
+    file.parentFile.mkdirs()
+    file.createNewFile()
   }
 }
 
-tasks.named("test") {
-  if (System.getenv('GITHUB_ACTIONS') != null) {
-    finalizedBy "createDoneFile"
-  }
-}
 
 def fineTuneEclipseClasspathFile(eclipse, project) {
   eclipse.classpath.file {

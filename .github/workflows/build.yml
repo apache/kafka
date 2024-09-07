@@ -115,7 +115,7 @@ jobs:
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          test
+          test createDoneFile
       - name: List files
         run:
           find .
