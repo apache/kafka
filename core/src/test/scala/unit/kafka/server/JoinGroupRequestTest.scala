@@ -62,15 +62,15 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
   private def testJoinGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    requestUtilities.createOffsetsTopic()
+    createOffsetsTopic()
 
     // Create the topic.
-    requestUtilities.createTopic(
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )
 
-    for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)) {
+    for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled)) {
       val metadata = ConsumerProtocol.serializeSubscription(
         new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
       ).array
@@ -281,19 +281,19 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         groupId = "grp",
         memberId = leaderMemberId,
         useNewProtocol = false,
-        version = ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
       leaveGroup(
         groupId = "grp",
         memberId = followerMemberId,
         useNewProtocol = false,
-        version = ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
 
       deleteGroups(
         groupIds = List("grp"),
         expectedErrors = List(Errors.NONE),
-        version = ApiKeys.DELETE_GROUPS.latestVersion(requestUtilities.isUnstableApiEnabled)
+        version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
       )
     }
   }

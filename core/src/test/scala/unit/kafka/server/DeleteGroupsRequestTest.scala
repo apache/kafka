@@ -65,16 +65,16 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   private def testDeleteGroups(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !requestUtilities.isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    requestUtilities.createOffsetsTopic()
+    createOffsetsTopic()
 
     // Create the topic.
-    requestUtilities.createTopic(
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -87,7 +87,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       useNewProtocol = useNewProtocol
     )
 
-    for (version <- ApiKeys.DELETE_GROUPS.oldestVersion() to ApiKeys.DELETE_GROUPS.latestVersion(requestUtilities.isUnstableApiEnabled)) {
+    for (version <- ApiKeys.DELETE_GROUPS.oldestVersion() to ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)) {
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
       val (memberId, memberEpoch) = joinConsumerGroup(
@@ -100,7 +100,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         groupId = "grp",
         memberId = memberId,
         useNewProtocol = useNewProtocol,
-        version = ApiKeys.LEAVE_GROUP.latestVersion(requestUtilities.isUnstableApiEnabled)
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
 
       deleteGroups(
@@ -118,7 +118,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           partition = 0,
           offset = 100L,
           expectedError = Errors.GROUP_ID_NOT_FOUND,
-          version = ApiKeys.OFFSET_COMMIT.latestVersion(requestUtilities.isUnstableApiEnabled)
+          version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
         )
       } else {
         assertEquals(

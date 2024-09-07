@@ -48,9 +48,9 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
   def testConsumerGroupDescribeWithZookeeperCluster(): Unit = {
     val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
       new ConsumerGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
-    ).build(ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(requestUtilities.isUnstableApiEnabled))
+    ).build(ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
 
-    val consumerGroupDescribeResponse = requestUtilities.connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
+    val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
     val expectedResponse = new ConsumerGroupDescribeResponseData()
     expectedResponse.groups().add(
       new ConsumerGroupDescribeResponseData.DescribedGroup()
@@ -79,9 +79,9 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
   def testConsumerGroupDescribeWhenFeatureFlagNotEnabled(): Unit = {
     val consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
       new ConsumerGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
-    ).build(ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(requestUtilities.isUnstableApiEnabled))
+    ).build(ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
 
-    val consumerGroupDescribeResponse = requestUtilities.connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
+    val consumerGroupDescribeResponse = connectAndReceive[ConsumerGroupDescribeResponse](consumerGroupDescribeRequest)
     val expectedResponse = new ConsumerGroupDescribeResponseData()
     expectedResponse.groups().add(
       new ConsumerGroupDescribeResponseData.DescribedGroup()
@@ -107,7 +107,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
   def testConsumerGroupDescribeWithNewGroupCoordinator(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    requestUtilities.createOffsetsTopic()
+    createOffsetsTopic()
 
     val admin = cluster.createAdminClient()
     val topicId = TestUtils.createTopicWithAdminRaw(
@@ -160,7 +160,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
       topicPartitions = List.empty
     )
 
-    for (version <- ApiKeys.CONSUMER_GROUP_DESCRIBE.oldestVersion() to ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(requestUtilities.isUnstableApiEnabled)) {
+    for (version <- ApiKeys.CONSUMER_GROUP_DESCRIBE.oldestVersion() to ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
       val expected = List(
         new DescribedGroup()
           .setGroupId("grp-1")

@@ -122,16 +122,16 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   private def testSingleGroupOffsetFetch(useNewProtocol: Boolean, requireStable: Boolean): Unit = {
-    if (useNewProtocol && !requestUtilities.isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    requestUtilities.createOffsetsTopic()
+    createOffsetsTopic()
 
     // Create the topic.
-    requestUtilities.createTopic(
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -150,12 +150,12 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         partition = partitionId,
         offset = 100L + partitionId,
         expectedError = Errors.NONE,
-        version = ApiKeys.OFFSET_COMMIT.latestVersion(requestUtilities.isUnstableApiEnabled)
+        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
       )
     }
 
     // Start from version 1 because version 0 goes to ZK.
-    for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(requestUtilities.isUnstableApiEnabled)) {
+    for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
       // Fetch with partitions.
       assertEquals(
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
@@ -294,16 +294,16 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   private def testSingleGroupAllOffsetFetch(useNewProtocol: Boolean, requireStable: Boolean): Unit = {
-    if (useNewProtocol && !requestUtilities.isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    requestUtilities.createOffsetsTopic()
+    createOffsetsTopic()
 
     // Create the topic.
-    requestUtilities.createTopic(
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -322,13 +322,13 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         partition = partitionId,
         offset = 100L + partitionId,
         expectedError = Errors.NONE,
-        version = ApiKeys.OFFSET_COMMIT.latestVersion(requestUtilities.isUnstableApiEnabled)
+        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
       )
     }
 
     // Start from version 2 because fetching all partitions is not
     // supported before.
-    for (version <- 2 to ApiKeys.OFFSET_FETCH.latestVersion(requestUtilities.isUnstableApiEnabled)) {
+    for (version <- 2 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
       // Fetch all partitions.
       assertEquals(
         new OffsetFetchResponseData.OffsetFetchResponseGroup()
@@ -407,16 +407,16 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   private def testMultipleGroupsOffsetFetch(useNewProtocol: Boolean, requireStable: Boolean): Unit = {
-    if (useNewProtocol && !requestUtilities.isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    requestUtilities.createOffsetsTopic()
+    createOffsetsTopic()
 
     // Create the topic.
-    requestUtilities.createTopic(
+    createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -436,14 +436,14 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           partition = partitionId,
           offset = 100L + partitionId,
           expectedError = Errors.NONE,
-          version = ApiKeys.OFFSET_COMMIT.latestVersion(requestUtilities.isUnstableApiEnabled)
+          version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
         )
       }
     }
 
     // Start from version 8 because older versions do not support
     // fetch offsets for multiple groups.
-    for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion(requestUtilities.isUnstableApiEnabled)) {
+    for (version <- 8 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
       assertEquals(
         List(
           // Fetch foo-0, foo-1 and foo-5.

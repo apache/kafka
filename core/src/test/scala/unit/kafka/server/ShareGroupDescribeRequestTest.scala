@@ -52,9 +52,9 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
     val shareGroupDescribeRequest = new ShareGroupDescribeRequest.Builder(
       new ShareGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava),
       true
-    ).build(ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(requestUtilities.isUnstableApiEnabled))
+    ).build(ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
 
-    val shareGroupDescribeResponse = requestUtilities.connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
+    val shareGroupDescribeResponse = connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
     val expectedResponse = new ShareGroupDescribeResponseData()
     expectedResponse.groups().add(
       new ShareGroupDescribeResponseData.DescribedGroup()
@@ -81,7 +81,7 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
   def testShareGroupDescribe(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
-    requestUtilities.createOffsetsTopic()
+    createOffsetsTopic()
 
     val admin = cluster.createAdminClient()
     TestUtils.createTopicWithAdminRaw(
@@ -106,7 +106,7 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
       grp1Member1Response.errorCode == Errors.NONE.code
     }, msg = s"Could not join the group successfully. Last response $grp1Member1Response.")
 
-    for (version <- ApiKeys.SHARE_GROUP_DESCRIBE.oldestVersion() to ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(requestUtilities.isUnstableApiEnabled)) {
+    for (version <- ApiKeys.SHARE_GROUP_DESCRIBE.oldestVersion() to ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)) {
       val expected = List(
         new DescribedGroup()
           .setGroupId("grp-1")
