@@ -826,7 +826,7 @@ gradle.taskGraph.whenReady { taskGraph ->
 
 task createDoneFile() {
   doLast {
-    def doneFile = rootProject.layout.buildDirectory.dir("junit-xml/done").get().asFile
+    def doneFile = rootProject.layout.buildDirectory.file("junit-xml/done").get().asFile
     doneFile.createNewFile()
   }
 }
