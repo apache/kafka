@@ -323,7 +323,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">LogAndContinueExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-odd"><td>dsl.store.suppliers.class</td>
+          <tr class="row-even"><td>dsl.store.suppliers.class</td>
             <td>Low</td>
             <td colspan="2">
               Defines a default state store implementation to be used by any stateful DSL operator
@@ -332,12 +332,12 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             </td>
             <td><code>BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers</code></td>
           </tr>
-          <tr class="row-even"><td>log.summary.interval.ms</td>
+          <tr class="row-odd"><td>log.summary.interval.ms</td>
             <td>Low</td>
             <td colspan="2">The output interval in milliseconds for logging summary information (disabled if negative).</td>
             <td>120000 milliseconds (2 minutes)</td>
           </tr>
-          <tr class="row-odd"><td>max.task.idle.ms</td>
+          <tr class="row-even"><td>max.task.idle.ms</td>
             <td>Medium</td>
             <td colspan="2">
               <p>
@@ -356,52 +356,52 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             </td>
             <td>0 milliseconds</td>
           </tr>
-          <tr class="row-even"><td>max.warmup.replicas</td>
+          <tr class="row-odd"><td>max.warmup.replicas</td>
             <td>Medium</td>
             <td colspan="2">The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once.</td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
-          <tr class="row-odd"><td>metric.reporters</td>
+          <tr class="row-even"><td>metric.reporters</td>
             <td>Low</td>
             <td colspan="2">A list of classes to use as metrics reporters.</td>
             <td>the empty list</td>
           </tr>
-          <tr class="row-even"><td>metrics.num.samples</td>
+          <tr class="row-odd"><td>metrics.num.samples</td>
             <td>Low</td>
             <td colspan="2">The number of samples maintained to compute metrics.</td>
             <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
-          <tr class="row-odd"><td>metrics.recording.level</td>
+          <tr class="row-even"><td>metrics.recording.level</td>
             <td>Low</td>
             <td colspan="2">The highest recording level for metrics.</td>
             <td><code class="docutils literal"><span class="pre">INFO</span></code></td>
           </tr>
-          <tr class="row-even"><td>metrics.sample.window.ms</td>
+          <tr class="row-odd"><td>metrics.sample.window.ms</td>
             <td>Low</td>
             <td colspan="2">The window of time in milliseconds a metrics sample is computed over.</td>
             <td>30000 milliseconds (30 seconds)</td>
           </tr>
-          <tr class="row-odd"><td>num.standby.replicas</td>
+          <tr class="row-even"><td>num.standby.replicas</td>
             <td>High</td>
             <td colspan="2">The number of standby replicas for each task.</td>
             <td><code class="docutils literal"><span class="pre">0</span></code></td>
           </tr>
-          <tr class="row-even"><td>num.stream.threads</td>
+          <tr class="row-odd"><td>num.stream.threads</td>
             <td>Medium</td>
             <td colspan="2">The number of threads to execute stream processing.</td>
             <td><code class="docutils literal"><span class="pre">1</span></code></td>
           </tr>
-          <tr class="row-odd"><td>probing.rebalance.interval.ms</td>
+          <tr class="row-even"><td>probing.rebalance.interval.ms</td>
             <td>Low</td>
             <td colspan="2">The maximum time in milliseconds to wait before triggering a rebalance to probe for warmup replicas that have sufficiently caught up.</td>
             <td>600000 milliseconds (10 minutes)</td>
           </tr>
-          <tr class="row-even"><td>processing.exception.handler</td>
+          <tr class="row-odd"><td>processing.exception.handler</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProcessingExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">LogAndFailProcessingExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-odd"><td>processing.guarantee</td>
+          <tr class="row-even"><td>processing.guarantee</td>
             <td>Medium</td>
             <td colspan="2">The processing mode. Can be either <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default)
               or <code class="docutils literal"><span class="pre">"exactly_once_v2"</span></code> (for EOS version 2, requires broker version 2.5+). Deprecated config options are
