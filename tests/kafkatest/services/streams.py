@@ -393,7 +393,7 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
-                      streams_property.PROCESSING_GUARANTEE: "EXACTLY_ONCE_V2",
+                      streams_property.PROCESSING_GUARANTEE: "exactly_once_v2",
                       "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
                       "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
                       }
