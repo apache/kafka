@@ -824,14 +824,16 @@ gradle.taskGraph.whenReady { taskGraph ->
   }
 }
 
+task createDoneFile() {
+  doLast {
+    def doneFile = rootProject.layout.buildDirectory.dir("junit-xml/done").get().asFile
+    doneFile.createNewFile()
+  }
+}
+
 tasks.named("test") {
   if (System.getenv('GITHUB_ACTIONS') != null) {
-    finalizedBy {
-      doLast {
-        def doneFile = rootProject.layout.buildDirectory.dir("junit-xml/done").get().asFile
-        doneFile.createNewFile()
-      }
-    }
+    finalizedBy "createDoneFile"
   }
 }
 
