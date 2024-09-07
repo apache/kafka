@@ -280,6 +280,7 @@ public class RecordDeserializerTest {
             assertEquals(expectedRecord.offset(), context.offset());
             assertEquals(expectedProcessorNodeId, context.processorNodeId());
             assertEquals(expectedTaskId, context.taskId());
+            assertEquals(expectedRecord.timestamp(), context.timestamp());
             assertEquals(expectedRecord, record);
             assertInstanceOf(RuntimeException.class, exception);
             assertEquals("KABOOM!", exception.getMessage());
