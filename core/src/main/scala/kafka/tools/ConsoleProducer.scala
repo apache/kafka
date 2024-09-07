@@ -22,7 +22,6 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.regex.Pattern
 import joptsimple.{OptionException, OptionParser, OptionSet, OptionSpec}
-import kafka.common.MessageReader
 import kafka.utils.Implicits._
 import kafka.utils.{Logging, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
@@ -34,9 +33,7 @@ import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.tools.api.RecordReader
 
 import java.lang
-import scala.annotation.nowarn
 
-@nowarn("cat=deprecation")
 object ConsoleProducer extends Logging {
 
   private[tools] def newReader(className: String, prop: Properties): RecordReader = {
@@ -45,41 +42,7 @@ object ConsoleProducer extends Logging {
       case r: RecordReader =>
         r.configure(prop.asInstanceOf[java.util.Map[String, _]])
         r
-      case r: MessageReader =>
-        logger.warn("MessageReader is deprecated. Please use org.apache.kafka.tools.api.RecordReader instead")
-        new RecordReader {
-          private[this] var initialized = false
-
-          override def readRecords(inputStream: InputStream): java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] = {
-            if (initialized) throw new IllegalStateException("It is invalid to call readRecords again when the reader is based on deprecated MessageReader")
-            if (!initialized) {
-              r.init(inputStream, prop)
-              initialized = true
-            }
-            new java.util.Iterator[ProducerRecord[Array[Byte], Array[Byte]]] {
-              private[this] var current: ProducerRecord[Array[Byte], Array[Byte]] = _
-              // a flag used to avoid accessing readMessage again after it does return null
-              private[this] var done: Boolean = false
-
-              override def hasNext: Boolean = {
-                if (current != null) true
-                else if (done) false
-                else {
-                  current = r.readMessage()
-                  done = current == null
-                  !done
-                }
-              }
-
-              override def next(): ProducerRecord[Array[Byte], Array[Byte]] =
-                try if (hasNext) current
-                else throw new NoSuchElementException("no more records from input stream")
-                finally current = null
-            }
-          }
-          override def close(): Unit = r.close()
-        }
-      case _ => throw new IllegalArgumentException(f"the reader must extend ${classOf[RecordReader].getName}")
+      case _ => throw new IllegalArgumentException(f"the reader must implement ${classOf[RecordReader].getName}")
     }
   }
 
