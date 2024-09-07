@@ -37,10 +37,14 @@ FLAKY = "FLAKY ⚠️ "
 SKIPPED = "SKIPPED 🙈"
 
 
-def get_env(key: str) -> str:
+def get_env(key: str, fn = str) -> Optional:
     value = os.getenv(key)
-    logger.debug(f"Read env {key}: {value}")
-    return value
+    if value is None:
+        logger.debug(f"Could not find env {key}")
+        return None
+    else:
+        logger.debug(f"Read env {key}: {value}")
+        return fn(value)
 
 
 @dataclasses.dataclass
@@ -249,7 +253,7 @@ if __name__ == "__main__":
         print("\n</details>")
 
     # Print special message if there was a timeout
-    if get_env("GRADLE_EXIT_CODE") == "124":
+    if get_env("GRADLE_EXIT_CODE", int) == 124:
         logger.debug(f"Gradle command timed out. These are partial results!")
         logger.debug(summary)
         logger.debug("Failing this step because the tests timed out.")
