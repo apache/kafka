@@ -198,7 +198,7 @@ public class EmbeddedKafkaCluster {
                     "The Kafka cluster used in this test was not able to start successfully in time. "
                             + "If no recent changes have altered the behavior of Kafka brokers or clients, and this error "
                             + "is not occurring frequently, it is probably the result of the testing machine being temporarily "
-                            + "and can be safely ignored.",
+                            + "overloaded and can be safely ignored.",
                     e
             );
         }
