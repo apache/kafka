@@ -384,7 +384,7 @@ public class LeaderState<T> implements EpochState {
     }
 
     public boolean isReplicaCaughtUp(ReplicaKey replicaKey, long currentTimeMs) {
-        // In summary, let's consider a replica caughed up for add voter, if they
+        // In summary, let's consider a replica caught up for add voter, if they
         // have fetched within the last hour
         long anHourInMs = TimeUnit.HOURS.toMillis(1);
         return Optional.ofNullable(observerStates.get(replicaKey))
