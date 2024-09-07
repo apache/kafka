@@ -908,22 +908,22 @@ public class CommitRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("t1", 1), new OffsetAndMetadata(1));
-        offsets.put(new TopicPartition("t1", 2), new OffsetAndMetadata(2));
-        offsets.put(new TopicPartition("t1", 3), new OffsetAndMetadata(3));
+        offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(1));
+        offsets.put(new TopicPartition("t1", 1), new OffsetAndMetadata(2));
+        offsets.put(new TopicPartition("t1", 2), new OffsetAndMetadata(3));
 
         commitRequestManager.commitSync(offsets, time.milliseconds() + defaultApiTimeoutMs);
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
 
-        res.unsentRequests.get(0).handler().onComplete(mockOffsetCommitResponse("topic", (short) 1, error));
+        res.unsentRequests.get(0).handler().onComplete(mockOffsetCommitResponse("topic", (short) 1, error, offsets.size()));
         CommitRequestManager.OffsetCommitRequestState commitRequest = commitRequestManager.pendingRequests.unsentOffsetCommits.peek();
         if (error.exception() instanceof RetriableException) {
             assertNotNull(commitRequest);
             assertEquals(1, commitRequest.numAttempts, "Only one failed attempt should be registered, even if the response contains multiple partition errors");
             time.sleep(retryBackoffMs);
             res = commitRequestManager.poll(time.milliseconds());
-            res.unsentRequests.get(0).handler().onComplete(mockOffsetCommitResponse("topic", (short) 1, error));
+            res.unsentRequests.get(0).handler().onComplete(mockOffsetCommitResponse("topic", (short) 1, error, offsets.size()));
             assertEquals(2, commitRequest.numAttempts, "Only one failed attempt should be registered, even if the response contains multiple partition errors");
         } else assertNull(commitRequest);
     }
@@ -1536,21 +1536,23 @@ public class CommitRequestManagerTest {
     }
 
     private ClientResponse mockOffsetCommitResponse(String topic,
-                                                   short apiKeyVersion,
-                                                   Errors error) {
-        return mockOffsetCommitResponse(topic, apiKeyVersion, time.milliseconds(), time.milliseconds(), error);
+                                                    short apiKeyVersion,
+                                                    Errors error,
+                                                    int partitionSize) {
+        return mockOffsetCommitResponse(topic, apiKeyVersion, time.milliseconds(), time.milliseconds(), error, partitionSize);
     }
 
     private ClientResponse mockOffsetCommitResponse(String topic,
-                                                   short apiKeyVersion,
-                                                   long createdTimeMs,
-                                                   long receivedTimeMs,
-                                                   Errors error) {
+                                                    short apiKeyVersion,
+                                                    long createdTimeMs,
+                                                    long receivedTimeMs,
+                                                    Errors error,
+                                                    int partitionSize) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
                 .setTopics(Collections.singletonList(
                         new OffsetCommitResponseData.OffsetCommitResponseTopic()
                                 .setName(topic)
-                                .setPartitions(mockOffsetCommitResponseWithPartitionErrors(error))));
+                                .setPartitions(mockOffsetCommitResponseWithPartitionErrors(error, partitionSize))));
         OffsetCommitResponse response = mock(OffsetCommitResponse.class);
         when(response.data()).thenReturn(responseData);
         return new ClientResponse(
@@ -1621,11 +1623,11 @@ public class CommitRequestManagerTest {
             CONSUMER_COORDINATOR_METRICS));
     }
 
-    private List<OffsetCommitResponseData.OffsetCommitResponsePartition> mockOffsetCommitResponseWithPartitionErrors(Errors error) {
-        List<OffsetCommitResponseData.OffsetCommitResponsePartition> partitions = new ArrayList<>();
-        partitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition().setErrorCode(error.code()).setPartitionIndex(1));
-        partitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition().setErrorCode(error.code()).setPartitionIndex(2));
-        partitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition().setErrorCode(error.code()).setPartitionIndex(3));
+    private List<OffsetCommitResponseData.OffsetCommitResponsePartition> mockOffsetCommitResponseWithPartitionErrors(Errors error, int partitionSize) {
+        List<OffsetCommitResponseData.OffsetCommitResponsePartition> partitions = new ArrayList<>(partitionSize);
+        for (int i = 0; i < partitionSize; i++) {
+            partitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition().setErrorCode(error.code()).setPartitionIndex(i));
+        }
         return partitions;
     }
 }
