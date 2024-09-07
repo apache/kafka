@@ -318,63 +318,7 @@ subprojects {
     targetCompatibility = minJavaVersion
   }
 
-  if (shouldPublish) {
-
-    if (shouldPublishWithShadow) {
-      apply plugin: 'io.github.goooler.shadow'
-
-      configurations {
-        shadowed
-      }
-
-      task createVersionFile() {
-        def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
-        inputs.property "commitId", commitId
-        inputs.property "version", version
-        outputs.file receiptFile
-
-        doLast {
-          def data = [
-                  commitId: commitId,
-                  version: version,
-          ]
-
-          receiptFile.parentFile.mkdirs()
-          def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
-          receiptFile.setText(content, "ISO-8859-1")
-        }
-      }
-
-      shadowJar {
-        dependsOn createVersionFile
-        // archiveClassifier defines the classifier for the shadow jar, the default is 'all'.
-        // We don't want to use the default classifier because it will cause the shadow jar to
-        // overwrite the original jar. We also don't want to use the 'shadow' classifier because
-        // it will cause the shadow jar to be named kafka-clients-shadow.jar. We want to use the
-        // same name as the original jar, kafka-clients.jar.
-        archiveClassifier = null
-        // KIP-714: move shaded dependencies to a shaded location
-        relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
-        relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
-
-        // dependencies excluded from the final jar, since they are declared as runtime dependencies
-        dependencies {
-          project.configurations.shadowed.allDependencies.each {
-            exclude(dependency(it.group + ':' + it.name))
-          }
-          // exclude proto files from the jar
-          exclude "**/opentelemetry/proto/**/*.proto"
-          exclude "**/google/protobuf/*.proto"
-        }
-
-        from("$buildDir") {
-          include "kafka/$buildVersionFileName"
-        }
-
-        from "$rootDir/LICENSE"
-        from "$rootDir/NOTICE"
-      }
-    }
+  if (shouldPublish && !shouldPublishWithShadow) {
 
     publishing {
       repositories {
@@ -387,32 +331,10 @@ subprojects {
           }
         }
       }
+
       publications {
         mavenJava(MavenPublication) {
-          if (!shouldPublishWithShadow) {
-            from components.java
-          } else {
-
-            project.shadow.component(mavenJava)
-
-            // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
-            // https://github.com/johnrengelman/shadow/issues/324
-            afterEvaluate {
-              pom.withXml { xml ->
-                if (xml.asNode().get('dependencies') == null) {
-                  xml.asNode().appendNode('dependencies')
-                }
-                def dependenciesNode = xml.asNode().get('dependencies').get(0)
-                project.configurations.shadowed.allDependencies.each {
-                  def dependencyNode = dependenciesNode.appendNode('dependency')
-                  dependencyNode.appendNode('groupId', it.group)
-                  dependencyNode.appendNode('artifactId', it.name)
-                  dependencyNode.appendNode('version', it.version)
-                  dependencyNode.appendNode('scope', 'runtime')
-                }
-              }
-            }
-          }
+          from components.java
 
           afterEvaluate {
             ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
@@ -1730,6 +1652,7 @@ project(':clients') {
 
   configurations {
     generator
+    shadowed
   }
 
   dependencies {
@@ -1765,9 +1688,115 @@ project(':clients') {
     generator project(':generator')
   }
 
+  task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  apply plugin: 'io.github.goooler.shadow'
+
+  shadowJar {
+    dependsOn createVersionFile
+    // archiveClassifier defines the classifier for the shadow jar, the default is 'all'.
+    // We don't want to use the default classifier because it will cause the shadow jar to
+    // overwrite the original jar. We also don't want to use the 'shadow' classifier because
+    // it will cause the shadow jar to be named kafka-clients-shadow.jar. We want to use the
+    // same name as the original jar, kafka-clients.jar.
+    archiveClassifier = null
+    // KIP-714: move shaded dependencies to a shaded location
+    relocate('io.opentelemetry.proto', 'org.apache.kafka.shaded.io.opentelemetry.proto')
+    relocate('com.google.protobuf', 'org.apache.kafka.shaded.com.google.protobuf')
+
+    // dependencies excluded from the final jar, since they are declared as runtime dependencies
+    dependencies {
+      project.configurations.shadowed.allDependencies.each {
+        exclude(dependency(it.group + ':' + it.name))
+      }
+      // exclude proto files from the jar
+      exclude "**/opentelemetry/proto/**/*.proto"
+      exclude "**/google/protobuf/*.proto"
+    }
+
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
+  }
+
   jar {
     enabled false
     dependsOn 'shadowJar'
+  }
+
+  publishing {
+    repositories {
+      // To test locally, invoke gradlew with `-PmavenUrl=file:///some/local/path`
+      maven {
+        url = mavenUrl
+        credentials {
+          username = mavenUsername
+          password = mavenPassword
+        }
+      }
+    }
+
+    publications {
+      mavenJava(MavenPublication) {
+        project.shadow.component(mavenJava)
+
+        // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
+        // https://github.com/johnrengelman/shadow/issues/324
+        afterEvaluate {
+          pom.withXml { xml ->
+            if (xml.asNode().get('dependencies') == null) {
+              xml.asNode().appendNode('dependencies')
+            }
+            def dependenciesNode = xml.asNode().get('dependencies').get(0)
+            project.configurations.shadowed.allDependencies.each {
+              def dependencyNode = dependenciesNode.appendNode('dependency')
+              dependencyNode.appendNode('groupId', it.group)
+              dependencyNode.appendNode('artifactId', it.name)
+              dependencyNode.appendNode('version', it.version)
+              dependencyNode.appendNode('scope', 'runtime')
+            }
+          }
+
+          ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
+            def task = tasks.findByName(taskName)
+            if (task != null)
+              artifact task
+          }
+
+          artifactId = base.archivesName.get()
+          pom {
+            name = 'Apache Kafka'
+            url = 'https://kafka.apache.org'
+            licenses {
+              license {
+                name = 'The Apache License, Version 2.0'
+                url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution = 'repo'
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   clean.doFirst {
