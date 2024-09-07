@@ -198,7 +198,7 @@ class BrokerRegistrationRequestTest {
     clusterType = Type.KRAFT,
     brokers = 1,
     controllers = 1,
-    metadataVersion = MetadataVersion.IBP_3_4_IV0,
+    metadataVersion = MetadataVersion.IBP_3_6_IV1,
     autoStart = AutoStart.NO,
     serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
   def testRegisterZkWithKRaftMigrationEnabled(clusterInstance: ClusterInstance): Unit = {
@@ -211,6 +211,10 @@ class BrokerRegistrationRequestTest {
 
       assertEquals(
         Errors.NONE,
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_6_IV1))))
+
+      assertEquals(
+        Errors.UNSUPPORTED_VERSION,
         registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
 
       assertEquals(

@@ -1353,18 +1353,18 @@ public class QuorumControllerTest {
     @Test
     public void testBootstrapZkMigrationRecord() throws Exception {
         assertEquals(ZkMigrationState.PRE_MIGRATION,
-            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, true));
+            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_6_IV1, true));
+
+        assertEquals(ZkMigrationState.NONE,
+            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_6_IV1, false));
 
         assertEquals(ZkMigrationState.NONE,
             checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, false));
 
-        assertEquals(ZkMigrationState.NONE,
-            checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, false));
-
         assertEquals(
-            "The bootstrap metadata.version 3.3-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
+            "The bootstrap metadata.version 3.4-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
             assertThrows(FaultHandlerException.class, () ->
-                checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_3_IV0, true)).getCause().getMessage()
+                checkBootstrapZkMigrationRecord(MetadataVersion.IBP_3_4_IV0, true)).getCause().getMessage()
         );
     }
 
@@ -1467,9 +1467,10 @@ public class QuorumControllerTest {
     public void testActivationRecords34() {
         FeatureControlManager featureControl;
 
-        featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
-        assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
+        assertEquals(
+            "The bootstrap metadata.version 3.4-IV0 does not support ZK migrations. Cannot continue with ZK migrations enabled.",
+            assertThrows(RuntimeException.class, () -> getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), true)).getMessage()
+        );
 
         featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0, Optional.empty(), false);
         assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
@@ -1508,8 +1509,8 @@ public class QuorumControllerTest {
     @Test
     public void testActivationRecordsNonEmptyLog() {
         FeatureControlManager featureControl = getActivationRecords(
-            MetadataVersion.IBP_3_4_IV0, Optional.empty(), true);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+            MetadataVersion.IBP_3_6_IV1, Optional.empty(), true);
+        assertEquals(MetadataVersion.IBP_3_6_IV1, featureControl.metadataVersion());
         assertEquals(ZkMigrationState.PRE_MIGRATION, featureControl.zkMigrationState());
     }
 
@@ -1700,7 +1701,7 @@ public class QuorumControllerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
+    @EnumSource(value = MetadataVersion.class, names = {"IBP_3_6_IV1", "IBP_3_6_IV2", "IBP_3_7_IV0"})
     public void testBrokerHeartbeatDuringMigration(MetadataVersion metadataVersion) throws Exception {
         try (
             LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
