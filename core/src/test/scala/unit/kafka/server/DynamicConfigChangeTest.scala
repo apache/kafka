@@ -36,7 +36,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ServerLogConfigs, ZooKeeperInternals}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -62,10 +62,6 @@ import scala.jdk.CollectionConverters._
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   override def generateConfigs: Seq[KafkaConfig] = {
     val cfg = TestUtils.createBrokerConfig(0, zkConnectOrNull)
-    if (isNewGroupCoordinatorEnabled()) {
-      cfg.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true")
-      cfg.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    }
     List(KafkaConfig.fromProps(cfg))
   }
 
@@ -584,7 +580,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicGroupConfigChange(quorum: String): Unit = {
     val newSessionTimeoutMs = 50000
     val consumerGroupId = "group-foo"
@@ -611,7 +607,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
     val admin = createAdminClient()
     try {
