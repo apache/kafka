@@ -824,20 +824,6 @@ gradle.taskGraph.whenReady { taskGraph ->
   }
 }
 
-tasks.register("createDoneFile") {
-  def doneFile = rootProject.layout.buildDirectory.file("junit-xml/done")
-  outputs.file doneFile
-  outputs.cacheIf { false }
-
-  doLast {
-    println "Creating done file for GitHub Actions workflow."
-    def file = doneFile.get().asFile
-    file.parentFile.mkdirs()
-    file.createNewFile()
-  }
-}
-
-
 def fineTuneEclipseClasspathFile(eclipse, project) {
   eclipse.classpath.file {
     beforeMerged { cp ->

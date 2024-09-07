@@ -107,18 +107,17 @@ jobs:
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
         # --continue:     Keep running even if a test fails
         # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
-        timeout-minutes: 180  # 3 hours
-        continue-on-error: true
+        id: junit-test
         run: |
-          ./gradlew --build-cache --scan --continue \
+          set +e
+          timeout 5 ./gradlew --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          test createDoneFile
-      - name: List files
-        run:
-          find .
+          test
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
@@ -128,7 +127,8 @@ jobs:
             **/build/reports/tests/test/*
           if-no-files-found: ignore
       - name: Parse JUnit tests
-        run: python .github/scripts/junit.py --done-file build/junit-xml/done >> $GITHUB_STEP_SUMMARY
+        run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
+          GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}

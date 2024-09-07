@@ -144,10 +144,6 @@ if __name__ == "__main__":
                         required=False,
                         default="build/junit-xml/**/*.xml",
                         help="Path to XML files. Glob patterns are supported.")
-    parser.add_argument("--done-file",
-                        required=False,
-                        default="",
-                        help="A file that signals the test suite was completed")
     if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")
         exit(1)
@@ -251,14 +247,12 @@ if __name__ == "__main__":
             print(f"| {row_joined} |")
         print("\n</details>")
 
-
-    # Print special message if these are partial results
-    if args.done_file:
-        if not os.path.exists(args.done_file):
-            logger.debug(f"Did not find done file '{args.done_file}'. These are partial results!")
-            logger.debug(summary)
-            logger.debug("Failing this step because done file was missing.")
-            exit(1)
+    # Print special message if there was a timeout
+    if get_env("GRADLE_EXIT_CODE") == 124:
+        logger.debug(f"Gradle command timed out. These are partial results!")
+        logger.debug(summary)
+        logger.debug("Failing this step because the tests timed out.")
+        exit(1)
 
     logger.debug(summary)
     if total_failures > 0:
