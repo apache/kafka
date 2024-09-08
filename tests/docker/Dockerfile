@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG jdk_version=openjdk:8
+ARG jdk_version=eclipse-temurin:8
 FROM $jdk_version AS build-native-image
 
 WORKDIR /build
@@ -61,9 +61,17 @@ LABEL ducker.creator=$ducker_creator
 
 # Update Linux and install necessary utilities.
 # we have to install git since it is included in openjdk:8 but not openjdk:11
-RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping && apt-get -y clean
-RUN python3 -m pip install -U pip==21.1.1;
-RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy && pip3 install --upgrade "ducktape>0.8"
+# we have to install netcat-openbsd because eclipse-temurin:8 doesn't have netcat
+RUN apt update && apt install -y sudo git netcat-openbsd iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping && apt-get -y clean
+
+# install python3.9 because ducktape's dependency: pyzmq is not compatible with python3.12
+RUN apt install software-properties-common -y
+RUN add-apt-repository ppa:deadsnakes/ppa -y
+RUN apt install python3.9 python3.9-dev python3.9-venv -y
+RUN python3.9 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
+RUN pip3 install --upgrade cffi virtualenv pyasn1 ipaddress enum34 debugpy && pip3 install --upgrade "ducktape>0.8"
+# RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy && pip3 install --upgrade "ducktape>0.8"
 
 COPY --from=build-native-image /build/kafka-binary/ /opt/kafka-binary/
 # Set up ssh
