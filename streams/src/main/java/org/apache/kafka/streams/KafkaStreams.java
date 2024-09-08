@@ -1169,7 +1169,7 @@ public class KafkaStreams implements AutoCloseable {
                     final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
                     if (streamThread.isThreadAlive() && (callingThreadIsNotCurrentStreamThread || numLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread " + streamThread.getName());
-                        final Optional<String> groupInstanceID = streamThread.getGroupInstanceID();
+                        final Optional<String> groupInstanceID = streamThread.groupInstanceID();
                         streamThread.requestLeaveGroupDuringShutdown();
                         streamThread.shutdown();
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
@@ -1604,7 +1604,7 @@ public class KafkaStreams implements AutoCloseable {
 
     private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {
         return thread -> {
-            final Optional<String> groupInstanceId = thread.getGroupInstanceID();
+            final Optional<String> groupInstanceId = thread.groupInstanceID();
             if (groupInstanceId.isPresent()) {
                 log.debug("Sending leave group trigger to removing instance from consumer group: {}.",
                     groupInstanceId.get());
@@ -1659,7 +1659,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public Collection<StreamsMetadata> metadataForAllStreamsClients() {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadata();
+        return streamsMetadataState.allMetadata();
     }
 
     /**
@@ -1679,7 +1679,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public Collection<StreamsMetadata> streamsMetadataForStore(final String storeName) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getAllMetadataForStore(storeName);
+        return streamsMetadataState.allMetadataForStore(storeName);
     }
 
     /**
@@ -1696,7 +1696,7 @@ public class KafkaStreams implements AutoCloseable {
                                                     final K key,
                                                     final Serializer<K> keySerializer) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, keySerializer);
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, keySerializer);
     }
 
     /**
@@ -1713,7 +1713,7 @@ public class KafkaStreams implements AutoCloseable {
                                                     final K key,
                                                     final StreamPartitioner<? super K, ?> partitioner) {
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.getKeyQueryMetadataForKey(storeName, key, partitioner);
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, partitioner);
     }
 
     /**
@@ -1740,7 +1740,7 @@ public class KafkaStreams implements AutoCloseable {
                 "Cannot get state store " + storeName + " because no such store is registered in the topology."
             );
         }
-        return queryableStoreProvider.getStore(storeQueryParameters);
+        return queryableStoreProvider.store(storeQueryParameters);
     }
 
     /**
@@ -2023,7 +2023,7 @@ public class KafkaStreams implements AutoCloseable {
             final long changelogPosition = allChangelogPositions.getOrDefault(entry.getKey(), earliestOffset);
             final long latestOffset = entry.getValue().offset();
             final LagInfo lagInfo = new LagInfo(changelogPosition == Task.LATEST_OFFSET ? latestOffset : changelogPosition, latestOffset);
-            final String storeName = streamsMetadataState.getStoreForChangelogTopic(entry.getKey().topic());
+            final String storeName = streamsMetadataState.storeForChangelogTopic(entry.getKey().topic());
             localStorePartitionLags.computeIfAbsent(storeName, ignored -> new TreeMap<>())
                 .put(entry.getKey().partition(), lagInfo);
         }
@@ -2090,7 +2090,7 @@ public class KafkaStreams implements AutoCloseable {
                     final TaskId taskId = task.id();
                     final int partition = taskId.partition();
                     if (request.isAllPartitions() || request.getPartitions().contains(partition)) {
-                        final StateStore store = task.getStore(storeName);
+                        final StateStore store = task.store(storeName);
                         if (store != null) {
                             final StreamThread.State state = thread.state();
                             final boolean active = task.isActive();

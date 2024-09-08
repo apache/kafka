@@ -19,6 +19,23 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
+    <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
+    <ul>
+        <li>A number of deprecated classes, methods and tools have been removed from the <code>clients</code>, <code>connect</code>, <code>core</code> and <code>tools</code> modules:</li>
+        <ul>
+            <li> The original MirrorMaker (MM1) and related classes have been removed. Please use the Connect-based
+                MirrorMaker (MM2), as described in the
+                <a href="/{{version}}/documentation/#georeplication">Geo-Replication section</a>.
+            </li>
+            <li>
+                The <code>kafka.common.MessageReader</code> class has been removed. Please use the
+                <a href="/{{version}}/javadoc/org/apache/kafka/tools/api/RecordReader.html"><code>org.apache.kafka.tools.api.RecordReader</code></a>
+                interface to build custom readers for the <code>kafka-console-producer</code> tool.
+            </li>
+        </ul>
+    </ul>
+
 <h4><a id="upgrade_3_9_0" href="#upgrade_3_9_0">Upgrading to 3.9.0 from any version 0.8.x through 3.8.x</a></h4>
     <h5><a id="upgrade_390_notable" href="#upgrade_390_notable">Notable changes in 3.9.0</a></h5>
     <ul>
@@ -28,10 +45,19 @@
             For example, this could be done via the <code>KAFKA_OPTS</code> environment variable like follows: <code>export KAFKA_OPTS="-DZstdTempFolder=/opt/kafka/tmp -Dorg.xerial.snappy.tempdir=/opt/kafka/tmp"</code>.
 	    This is a known issue for version 3.8.0 as well.
         </li>
-        <li>In KRaft mode, the tiered storage feature can be dynamically disabled and then re-enabled on topic level.
-            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-950%3A++Tiered+Storage+Disablement">KIP-950</a> for more details.</li>
-        <li>Tiered storage quota is implemented. Users can set an "upper bound" on the rate at which logs are copied/read to/from the remote storage.
-            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-956+Tiered+Storage+Quotas">KIP-956</a> for more details.</li>
+        <li><code>unclean.leader.election.enable</code> config is supported in KRaft. Compared with ZK mode, there is one behavior change in KRaft mode
+            when dynamically enabling <code>unclean.leader.election.enable</code> config. Please check
+            <a href="https://kafka.apache.org/documentation/#brokerconfigs_unclean.leader.election.enable">here</a> for more details.</li>
+        <li>Tiered storage is now a production ready feature. You can check
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+GA+Release+Notes">Kafka Tiered Storage GA Release Notes</a> for more details.
+            The below enhancements are added in this release.
+            <ul>
+                <li>In KRaft mode, the tiered storage feature can be dynamically disabled and then re-enabled on topic level.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-950%3A++Tiered+Storage+Disablement">KIP-950</a> for more details.</li>
+                <li>With the tiered storage quota feature, users can define a maximum limit on the rate at which log segments are transferred to or retrieved from the remote storage.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-956+Tiered+Storage+Quotas">KIP-956</a> for more details.</li>
+            </ul>
+        </li>
     </ul>
 
 <h4><a id="upgrade_3_8_0" href="#upgrade_3_8_0">Upgrading to 3.8.0 from any version 0.8.x through 3.7.x</a></h4>

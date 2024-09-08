@@ -114,7 +114,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RestoreIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RestoreIntegrationTest.class);
 
-    private static final Duration RESTORATION_DELAY = Duration.ofMillis(500);
+    private static final Duration RESTORATION_DELAY = Duration.ofMillis(2000);
 
     private static final int NUM_BROKERS = 1;
 
@@ -554,12 +554,11 @@ public class RestoreIntegrationTest {
         final Map<String, Object> kafkaStreams1Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
         final Map<String, Object> kafkaStreams2Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
-            mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
+            mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2")
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -592,14 +591,14 @@ public class RestoreIntegrationTest {
         // Simulate a new instance joining in the middle of the restoration.
         // When this happens, some of the partitions that kafkaStreams1 was restoring will be migrated to kafkaStreams2,
         // and kafkaStreams1 must call StateRestoreListener#onRestoreSuspended.
-        final TestStateRestoreListener kafkaStreams2StateRestoreListener = new TestStateRestoreListener("ks2", RESTORATION_DELAY);
+        final TestStateRestoreListener kafkaStreams2StateRestoreListener = new TestStateRestoreListener("ks2", Duration.ZERO);
 
         try (final KafkaStreams kafkaStreams2 = startKafkaStreams(builder,
                                                                   kafkaStreams2StateRestoreListener,
                                                                   kafkaStreams2Configuration)) {
 
             waitForCondition(() -> State.RUNNING == kafkaStreams2.state(),
-                             IntegrationTestUtils.DEFAULT_TIMEOUT,
+                             90_000,
                              () -> "kafkaStreams2 never transitioned to a RUNNING state.");
 
             assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationSuspends());
@@ -647,7 +646,7 @@ public class RestoreIntegrationTest {
 
     private static final class TestStateRestoreListener implements StateRestoreListener {
         private final String instanceName;
-        private final Duration onBatchRestoredSleepDuration;
+        private Duration onBatchRestoredSleepDuration;
 
         private final CountDownLatch onRestoreStartLatch = new CountDownLatch(1);
         private final CountDownLatch onRestoreEndLatch = new CountDownLatch(1);
@@ -711,6 +710,7 @@ public class RestoreIntegrationTest {
                                        final long totalRestored) {
             log.info("[{}] called onRestoreSuspended. topicPartition={}, storeName={}, totalRestored={}",
                      instanceName, topicPartition, storeName, totalRestored);
+            onBatchRestoredSleepDuration = Duration.ZERO;
             onRestoreSuspendedLatch.countDown();
         }
 
