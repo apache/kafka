@@ -201,6 +201,10 @@ public class ListValueStoreTest {
         it.close();
 
         // A new all() iterator after a previous all() iterator was closed should not return deleted records.
-        assertThrows(InvalidStateStoreException.class, it::next);
+        if (storeType == StoreType.InMemory) {
+            assertThrows(IllegalStateException.class, it::next);
+        } else {
+            assertThrows(InvalidStateStoreException.class, it::next);
+        }
     }
 }
