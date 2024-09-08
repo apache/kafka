@@ -26,10 +26,6 @@ on:
         description: "Should the Gradle cache be write-only?"
         default: "false"
         type: string
-      github-actions-opt-in:
-        description: "Should we run the opt-in steps?"
-        default: "false"
-        type: string
 
 jobs:
   validate:
