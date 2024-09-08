@@ -63,7 +63,7 @@ jobs:
         # --build-cache:  Let Gradle restore the build cache
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
-        run: ./gradlew --build-cache --info --scan check -x test
+        run: ./gradlew --build-cache --info --no-scan check -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,6 +79,11 @@ jobs:
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Archive scan
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-scan-validate-${{ matrix.java }}
+          path: ~/.gradle/build-scan-data
 
   test:
     needs: validate
@@ -110,7 +115,7 @@ jobs:
         id: junit-test
         run: |
           set +e
-          timeout 180m ./gradlew --build-cache --scan --continue \
+          timeout 180m ./gradlew --build-cache --no-scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
@@ -132,3 +137,8 @@ jobs:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
           GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
+      - name: Archive scan
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-scan-test-${{ matrix.java }}
+          path: ~/.gradle/build-scan-data
