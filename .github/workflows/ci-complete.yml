@@ -22,7 +22,8 @@ on:
       - completed
 
 jobs:
-  download:
+  upload-build-scan:
+    if: ${{ github.event.workflow_run.head_repository.full_name != 'apache/kafka' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
