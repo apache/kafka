@@ -136,6 +136,12 @@
     <h3><a id="streams_api_changes_400" href="#streams_api_changes_400">Streams API changes in 4.0.0</a></h3>
 
     <p>
+        In this release two configs <code>default.deserialization.exception.handler</code> and <code>default.production.exception.handler</code> are deprecated, as they don't have any overwrites, which is described in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1056%3A+Remove+%60default.%60+prefix+for+exception+handler+StreamsConfig">KIP-1056</a>
+        You can refer to new configs via <code>deserialization.exception.handler</code> and <code>production.exception.handler</code>.
+    </p>
+
+    <p>
         In previous release, a new version of the Processor API was introduced and the old Processor API was
         incrementally replaced and deprecated.
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1070%3A+deprecate+MockProcessorContext">KIP-1070</a>

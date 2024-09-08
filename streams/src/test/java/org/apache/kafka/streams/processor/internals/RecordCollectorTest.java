@@ -1845,6 +1845,16 @@ public class RecordCollectorTest {
         private TaskId expectedTaskId;
         private SerializationExceptionOrigin expectedSerializationExceptionOrigin;
 
+        // No args constructor, referred in StreamsConfigTest
+        public ProductionExceptionHandlerMock() {
+            this.response = Optional.empty();
+            this.shouldThrowException = false;
+            this.expectedContext = null;
+            this.expectedProcessorNodeId = null;
+            this.expectedTaskId = null;
+            this.expectedSerializationExceptionOrigin = null;
+        }
+
         public ProductionExceptionHandlerMock(final Optional<ProductionExceptionHandlerResponse> response) {
             this.response = response;
         }

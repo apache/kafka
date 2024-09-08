@@ -122,7 +122,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             config.getLong(StreamsConfig.POLL_MS_CONFIG) + requestTimeoutMs
         );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
-        deserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
+        deserializationExceptionHandler = config.deserializationExceptionHandler();
     }
 
     @Override
