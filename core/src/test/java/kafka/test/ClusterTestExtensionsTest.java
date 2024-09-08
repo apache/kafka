@@ -50,7 +50,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 
 @ClusterTestDefaults(types = {Type.ZK}, serverProperties = {

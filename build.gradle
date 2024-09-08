@@ -858,8 +858,10 @@ project(':server') {
     implementation project(':metadata')
     implementation project(':server-common')
     implementation project(':storage')
+    implementation project(':share')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
+    implementation project(':coordinator-common')
     implementation project(':raft')
     implementation libs.metrics
     implementation libs.jacksonDatabind
@@ -922,6 +924,8 @@ project(':share') {
 
   dependencies {
     implementation project(':server-common')
+    implementation project(':clients')
+    implementation project(':coordinator-common')
 
     implementation libs.slf4jApi
 
@@ -1427,6 +1431,7 @@ project(':group-coordinator') {
     implementation project(':metadata')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':storage')
+    implementation project(':share')
     implementation project(':coordinator-common')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
@@ -1436,6 +1441,7 @@ project(':group-coordinator') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':share').sourceSets.test.output
     testImplementation project(':coordinator-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore

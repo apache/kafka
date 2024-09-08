@@ -18,6 +18,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.server.share.ShareGroupConfig;
+import org.apache.kafka.server.share.ShareGroupConfigTest;
 
 import org.junit.jupiter.api.Test;
 
@@ -79,7 +81,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
         props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, recordLockDurationMs);
-        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig()));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     @Test
@@ -103,10 +105,15 @@ public class GroupConfigTest {
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
-        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig()));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
     private GroupCoordinatorConfig createGroupCoordinatorConfig() {
         return GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60);
+    }
+
+    private ShareGroupConfig createShareGroupConfig() {
+        return ShareGroupConfigTest.createShareGroupConfig(true, 200, 5,
+            (short) 10, 30000, 15000, 60000);
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.server.share.ShareGroupConfig;
 
 import java.util.Map;
 import java.util.Optional;
@@ -67,13 +68,6 @@ public class GroupConfigManager implements AutoCloseable {
         return Optional.ofNullable(configMap.get(groupId));
     }
 
-    public Optional<Integer> getShareGroupRecordLockDurationMs(String groupId) {
-        if (!groupConfig(groupId).isPresent()) {
-            return Optional.empty();
-        }
-        return Optional.of(configMap.get(groupId).recordLockDurationMs());
-    }
-
     /**
      * Validate the given properties.
      *
@@ -83,12 +77,13 @@ public class GroupConfigManager implements AutoCloseable {
      */
     public static void validate(
         Properties newGroupConfig,
-        GroupCoordinatorConfig groupCoordinatorConfig
+        GroupCoordinatorConfig groupCoordinatorConfig,
+        ShareGroupConfig shareGroupConfig
     ) {
         Properties combinedConfigs = new Properties();
-        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap());
+        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
         combinedConfigs.putAll(newGroupConfig);
-        GroupConfig.validate(combinedConfigs, groupCoordinatorConfig);
+        GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
     }
 
     /**

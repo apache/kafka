@@ -414,12 +414,12 @@ class BrokerServer(
         replicaManager,
         time,
         shareFetchSessionCache,
+        config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         persister,
         new Metrics(),
         groupConfigManager,
-        config.groupCoordinatorConfig.shareGroupRecordLockDurationMs,
       )
 
       // Create the request processor objects.
@@ -608,7 +608,7 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
-      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap())
+      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
       new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
         .withTime(time)
         .withTimer(timer)

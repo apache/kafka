@@ -74,6 +74,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAndEpoch, SecurityUtils, Utils}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig
 import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
@@ -84,9 +85,9 @@ import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion}
-import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareGroupConfig}
+import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
-import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, FinalContext, ShareAcknowledgementBatch, ShareSession, ShareSessionContext, ShareSessionKey}
+import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, FinalContext, ShareAcknowledgementBatch, ShareGroupConfig, ShareSession, ShareSessionContext, ShareSessionKey}
 import org.apache.kafka.server.quota.ThrottleCallback
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
@@ -11104,7 +11105,7 @@ class KafkaApisTest extends Logging {
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
+      overrideProperties = Map(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11132,7 +11133,7 @@ class KafkaApisTest extends Logging {
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
+      overrideProperties = Map(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11156,7 +11157,7 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
+      overrideProperties = Map(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11183,7 +11184,7 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
+      overrideProperties = Map(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11254,7 +11255,7 @@ class KafkaApisTest extends Logging {
     future.complete(List().asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
+      overrideProperties = Map(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )
@@ -11278,7 +11279,7 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
+      overrideProperties = Map(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,consumer"),
       featureVersions = Seq(GroupVersion.GV_1),
       raftSupport = true
     )

@@ -31,6 +31,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -40,9 +41,10 @@ import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ShareGroupConfig, ZkConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
+import org.apache.kafka.server.share.ShareGroupConfig
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -1136,9 +1138,9 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case GroupCoordinatorConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case GroupCoordinatorConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
-        case GroupCoordinatorConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
@@ -1940,33 +1942,33 @@ class KafkaConfigTest {
     val props = new Properties()
 
     // consumer cannot be enabled in ZK mode.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
+    props.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // share cannot be enabled in ZK mode.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
+    props.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // Setting KRaft's properties.
     props.putAll(kraftProps())
 
     // Only classic, consumer and share are supported.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "foo")
+    props.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // classic cannot be disabled.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "consumer")
+    props.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "consumer")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // This is OK.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
+    props.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     var config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
     assertFalse(config.shareGroupConfig.isShareGroupEnabled)
 
     // This is OK.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
+    props.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
     config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
@@ -1974,12 +1976,12 @@ class KafkaConfigTest {
 
     // consumer cannot be used without the new group coordinator.
     props.put(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false")
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
+    props.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // share cannot be used without the new group coordinator.
     props.put(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false")
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
+    props.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -2060,19 +2062,19 @@ class KafkaConfigTest {
     val props = new Properties()
     props.putAll(kraftProps())
 
-    props.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "10")
+    props.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "10")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    props.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "10000000")
+    props.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "10000000")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // The duration should be within the min-max range.
-    props.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "1000")
-    props.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "3600000")
-    props.put(GroupCoordinatorConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "999")
+    props.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "1000")
+    props.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "3600000")
+    props.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "999")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    props.put(GroupCoordinatorConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "3600001")
+    props.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "3600001")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    props.put(GroupCoordinatorConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "30000")
+    props.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "30000")
     assertDoesNotThrow(() => KafkaConfig.fromProps(props))
   }
 }

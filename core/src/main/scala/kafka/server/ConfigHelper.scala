@@ -159,7 +159,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Group name must not be empty")
             } else {
               val groupProps = configRepository.groupConfig(group)
-              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap, groupProps)
+              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
               createResponseConfig(allConfigs(groupConfig), createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
             }
 

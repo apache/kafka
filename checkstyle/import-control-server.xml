@@ -90,6 +90,7 @@
       <allow pkg="org.apache.kafka.server" />
       <allow pkg="org.apache.kafka.network" />
       <allow pkg="org.apache.kafka.storage.internals.log" />
+      <allow pkg="org.apache.kafka.coordinator.common.runtime" />
     </subpackage>
   </subpackage>
 

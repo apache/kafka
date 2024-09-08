@@ -4767,7 +4767,7 @@ public class SharePartitionTest {
         }
 
         public SharePartition build() {
-            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount, mockTimer, MOCK_TIME, persister, defaultAcquisitionLockTimeoutMs, groupConfigManager);
+            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount, defaultAcquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, groupConfigManager);
         }
     }
 }

@@ -64,6 +64,7 @@
             <allow pkg="org.apache.kafka.image"/>
             <allow pkg="org.apache.kafka.server.common"/>
             <allow pkg="org.apache.kafka.server.record"/>
+            <allow pkg="org.apache.kafka.server.share"/>
             <allow pkg="org.apache.kafka.server.util"/>
             <allow pkg="org.apache.kafka.storage.internals.log"/>
             <allow pkg="org.apache.kafka.test" />

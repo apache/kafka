@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+import org.apache.kafka.server.share.ShareGroupConfig;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,7 +31,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -73,12 +73,6 @@ public class GroupCoordinatorConfig {
     public static final String NEW_GROUP_COORDINATOR_ENABLE_DOC = "Enable the new group coordinator.";
     public static final boolean NEW_GROUP_COORDINATOR_ENABLE_DEFAULT = true;
 
-    public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
-    public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " +
-            Arrays.stream(Group.GroupType.values()).map(Group.GroupType::toString).collect(Collectors.joining(",")) + ". " +
-            "The " + Group.GroupType.CONSUMER + " rebalance protocol is in preview and therefore must not be used in production. " +
-            "The " + Group.GroupType.SHARE + " rebalance protocol is in early access and therefore must not be used in production.";
-    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(Group.GroupType.CLASSIC.toString());
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
         "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";
@@ -162,18 +156,6 @@ public class GroupCoordinatorConfig {
     public static final int SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT = 15000;
     public static final String SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC = "The maximum heartbeat interval for share group members.";
 
-    public static final String SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG = "group.share.record.lock.duration.ms";
-    public static final int SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT = 30000;
-    public static final String SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC = "The record acquisition lock duration in milliseconds for share groups.";
-
-    public static final String SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG = "group.share.min.record.lock.duration.ms";
-    public static final int SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT = 15000;
-    public static final String SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC = "The record acquisition lock minimum duration in milliseconds for share groups.";
-
-    public static final String SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG = "group.share.max.record.lock.duration.ms";
-    public static final int SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT = 60000;
-    public static final String SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC = "The record acquisition lock maximum duration in milliseconds for share groups.";
-
     public static final String OFFSET_METADATA_MAX_SIZE_CONFIG = "offset.metadata.max.bytes";
     public static final int OFFSET_METADATA_MAX_SIZE_DEFAULT = 4096;
     public static final String OFFSET_METADATA_MAX_SIZE_DOC = "The maximum size for a metadata entry associated with an offset commit.";
@@ -223,8 +205,6 @@ public class GroupCoordinatorConfig {
             .define(GROUP_MAX_SIZE_CONFIG, INT, GROUP_MAX_SIZE_DEFAULT, atLeast(1), MEDIUM, GROUP_MAX_SIZE_DOC);
 
     public static final ConfigDef NEW_GROUP_CONFIG_DEF =  new ConfigDef()
-            .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT,
-                    ConfigDef.ValidList.in(Utils.enumOptions(Group.GroupType.class)), MEDIUM, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC)
             .define(GROUP_COORDINATOR_NUM_THREADS_CONFIG, INT, GROUP_COORDINATOR_NUM_THREADS_DEFAULT, atLeast(1), MEDIUM, GROUP_COORDINATOR_NUM_THREADS_DOC)
             .define(GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, INT, GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT, atLeast(0), MEDIUM, GROUP_COORDINATOR_APPEND_LINGER_MS_DOC)
             // Internal configuration used by integration and system tests.
@@ -257,9 +237,6 @@ public class GroupCoordinatorConfig {
             .define(SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
             .define(SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC)
             .define(SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, INT, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC)
-            .define(SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 60000), MEDIUM, SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC)
-            .define(SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 30000), MEDIUM, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC)
-            .define(SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, INT, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT, between(30000, 3600000), MEDIUM, SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC)
             .define(SHARE_GROUP_MAX_SIZE_CONFIG, INT, SHARE_GROUP_MAX_SIZE_DEFAULT, between(10, 1000), MEDIUM, SHARE_GROUP_MAX_SIZE_DOC);
 
     /**
@@ -299,9 +276,6 @@ public class GroupCoordinatorConfig {
     private final int shareGroupHeartbeatIntervalMs;
     private final int shareGroupMinHeartbeatIntervalMs;
     private final int shareGroupMaxHeartbeatIntervalMs;
-    private final int shareGroupRecordLockDurationMs;
-    private final int shareGroupMaxRecordLockDurationMs;
-    private final int shareGroupMinRecordLockDurationMs;
 
     public GroupCoordinatorConfig(AbstractConfig config) {
         this.numThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
@@ -339,10 +313,7 @@ public class GroupCoordinatorConfig {
         this.shareGroupHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareGroupMinHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
-        this.shareGroupRecordLockDurationMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG);
         this.shareGroupMaxSize = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG);
-        this.shareGroupMaxRecordLockDurationMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
-        this.shareGroupMinRecordLockDurationMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
 
         // New group coordinator configs validation.
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -378,22 +349,16 @@ public class GroupCoordinatorConfig {
         require(shareGroupSessionTimeoutMs <= shareGroupMaxSessionTimeoutMs,
             String.format("%s must be less than or equals to %s",
                 SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
-        require(shareGroupRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
-                String.format("%s must be greater than or equals to %s",
-                        SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG));
-        require(shareGroupMaxRecordLockDurationMs >= shareGroupRecordLockDurationMs,
-                String.format("%s must be greater than or equals to %s",
-                        SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG));
     }
 
     /**
      * Copy the subset of properties that are relevant to consumer group.
      */
-    public Map<String, Integer> extractGroupConfigMap() {
+    public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
         Map<String, Integer> groupProps = new HashMap<>();
         groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs());
         groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
-        groupProps.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, shareGroupRecordLockDurationMs());
+        groupProps.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, shareGroupConfig.shareGroupRecordLockDurationMs());
         return groupProps;
     }
 
@@ -635,17 +600,5 @@ public class GroupCoordinatorConfig {
      */
     public int shareGroupMaxHeartbeatIntervalMs() {
         return shareGroupMaxHeartbeatIntervalMs;
-    }
-
-    public int shareGroupRecordLockDurationMs() {
-        return shareGroupRecordLockDurationMs;
-    }
-
-    public int shareGroupMaxRecordLockDurationMs() {
-        return shareGroupMaxRecordLockDurationMs;
-    }
-
-    public int shareGroupMinRecordLockDurationMs() {
-        return shareGroupMinRecordLockDurationMs;
     }
 }

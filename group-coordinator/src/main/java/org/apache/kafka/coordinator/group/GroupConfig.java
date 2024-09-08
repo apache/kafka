@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.server.share.ShareGroupConfig;
 
 import java.util.Map;
 import java.util.Optional;
@@ -64,10 +65,10 @@ public class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
         .define(SHARE_RECORD_LOCK_DURATION_MS,
             INT,
-            GroupCoordinatorConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT,
+            ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT,
             atLeast(1),
             MEDIUM,
-            GroupCoordinatorConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC);
+            ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC);
 
     @SuppressWarnings("this-escape")
     public GroupConfig(Map<?, ?> props) {
@@ -104,7 +105,7 @@ public class GroupConfig extends AbstractConfig {
     /**
      * Validates the values of the given properties.
      */
-    private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig) {
+    private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         int shareRecordLockDurationMs = (Integer) valueMaps.get(SHARE_RECORD_LOCK_DURATION_MS);
@@ -124,13 +125,13 @@ public class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equals to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
         }
-        if (shareRecordLockDurationMs > groupCoordinatorConfig.shareGroupMaxRecordLockDurationMs()) {
+        if (shareRecordLockDurationMs > shareGroupConfig.shareGroupMaxRecordLockDurationMs()) {
             throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS + " must be less than or equals to " +
-                GroupCoordinatorConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
+                ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
         }
-        if (shareRecordLockDurationMs < groupCoordinatorConfig.shareGroupMinRecordLockDurationMs()) {
+        if (shareRecordLockDurationMs < shareGroupConfig.shareGroupMinRecordLockDurationMs()) {
             throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS + " must be greater than or equals to " +
-                GroupCoordinatorConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
+                ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
         }
     }
 
@@ -138,10 +139,10 @@ public class GroupConfig extends AbstractConfig {
      * Check that the given properties contain only valid consumer group config names and that all values can be
      * parsed and are valid.
      */
-    public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig) {
+    public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         validateNames(props);
         Map<?, ?> valueMaps = CONFIG.parse(props);
-        validateValues(valueMaps, groupCoordinatorConfig);
+        validateValues(valueMaps, groupCoordinatorConfig, shareGroupConfig);
     }
 
     /**
@@ -157,21 +158,21 @@ public class GroupConfig extends AbstractConfig {
     /**
      * The consumer group session timeout in milliseconds.
      */
-    public int sessionTimeoutMs() {
+    public int consumerSessionTimeoutMs() {
         return consumerSessionTimeoutMs;
     }
 
     /**
      * The consumer group heartbeat interval in milliseconds.
      */
-    public int heartbeatIntervalMs() {
+    public int consumerHeartbeatIntervalMs() {
         return consumerHeartbeatIntervalMs;
     }
 
     /**
      * The share group record lock duration in milliseconds
      */
-    public int recordLockDurationMs() {
+    public int shareRecordLockDurationMs() {
         return shareRecordLockDurationMs;
     }
 }

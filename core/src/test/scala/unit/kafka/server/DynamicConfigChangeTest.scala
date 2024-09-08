@@ -36,6 +36,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ServerLogConfigs, ZooKeeperInternals}
@@ -64,7 +65,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val cfg = TestUtils.createBrokerConfig(0, zkConnectOrNull)
     if (isNewGroupCoordinatorEnabled()) {
       cfg.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true")
-      cfg.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
+      cfg.setProperty(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     }
     List(KafkaConfig.fromProps(cfg))
   }
@@ -599,7 +600,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
 
     val groupConfig = brokerServers.head.groupCoordinator.groupConfig(consumerGroupId).get()
-    assertEquals(newSessionTimeoutMs, groupConfig.sessionTimeoutMs)
+    assertEquals(newSessionTimeoutMs, groupConfig.consumerSessionTimeoutMs())
   }
 
   @ParameterizedTest
@@ -626,7 +627,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
 
     val groupConfig = brokerServers.head.groupCoordinator.groupConfig(shareGroupId).get()
-    assertEquals(newRecordLockDurationMs, groupConfig.recordLockDurationMs)
+    assertEquals(newRecordLockDurationMs, groupConfig.shareRecordLockDurationMs)
   }
 
   @ParameterizedTest

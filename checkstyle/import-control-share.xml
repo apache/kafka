@@ -33,6 +33,8 @@
   <!-- anyone can use public classes -->
   <allow pkg="org.apache.kafka.common" exact-match="true" />
   <allow pkg="org.apache.kafka.common.utils" />
+  <allow pkg="org.apache.kafka.common.config" />
+  <allow pkg="org.apache.kafka.coordinator.common.runtime" />
 
   <!-- protocol, records and request/response utilities -->
   <allow pkg="org.apache.kafka.common.message" />

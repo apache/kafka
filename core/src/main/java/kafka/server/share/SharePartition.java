@@ -243,10 +243,10 @@ public class SharePartition {
         TopicIdPartition topicIdPartition,
         int maxInFlightMessages,
         int maxDeliveryCount,
+        int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
         Persister persister,
-        int defaultRecordLockDurationMs,
         GroupConfigManager groupConfigManager
     ) {
         this.groupId = groupId;
@@ -257,10 +257,10 @@ public class SharePartition {
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = new AtomicBoolean(false);
         this.fetchLock = new AtomicBoolean(false);
+        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.time = time;
         this.persister = persister;
-        this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.groupConfigManager = groupConfigManager;
         // Initialize the partition.
         initialize();
@@ -1602,8 +1602,16 @@ public class SharePartition {
     }
 
     private AcquisitionLockTimerTask scheduleAcquisitionLockTimeout(String memberId, long firstOffset, long lastOffset) {
-        return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset,
-                groupConfigManager.getShareGroupRecordLockDurationMs(groupId).orElse(defaultRecordLockDurationMs));
+        // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
+        // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
+        // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
+        int recordLockDurationMs;
+        if (groupConfigManager.groupConfig(groupId).isPresent()) {
+            recordLockDurationMs = groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
+        } else {
+            recordLockDurationMs = defaultRecordLockDurationMs;
+        }
+        return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 
     /**

@@ -1069,11 +1069,11 @@ public class SharePartitionManagerTest {
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
-            k -> new SharePartition(groupId, tp0, MAX_IN_FLIGHT_MESSAGES, MAX_DELIVERY_COUNT,
-                    mockTimer, new MockTime(), NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+            k -> new SharePartition(groupId, tp0, MAX_IN_FLIGHT_MESSAGES, MAX_DELIVERY_COUNT, DEFAULT_RECORD_LOCK_DURATION_MS,
+                    mockTimer, new MockTime(), NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp1),
-            k -> new SharePartition(groupId, tp1, MAX_IN_FLIGHT_MESSAGES, MAX_DELIVERY_COUNT,
-                    mockTimer, new MockTime(), NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+            k -> new SharePartition(groupId, tp1, MAX_IN_FLIGHT_MESSAGES, MAX_DELIVERY_COUNT, DEFAULT_RECORD_LOCK_DURATION_MS,
+                    mockTimer, new MockTime(), NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap).build();
@@ -1136,11 +1136,11 @@ public class SharePartitionManagerTest {
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
-            k -> new SharePartition(groupId, tp0, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES,
-                    mockTimer, new MockTime(), NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+            k -> new SharePartition(groupId, tp0, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, DEFAULT_RECORD_LOCK_DURATION_MS,
+                    mockTimer, new MockTime(), NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp1),
-            k -> new SharePartition(groupId, tp1, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES,
-                    mockTimer, new MockTime(), NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+            k -> new SharePartition(groupId, tp1, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, DEFAULT_RECORD_LOCK_DURATION_MS,
+                    mockTimer, new MockTime(), NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap).build();
@@ -1198,17 +1198,17 @@ public class SharePartitionManagerTest {
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
-            k -> new SharePartition(groupId, tp0, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES,
-                    mockTimer, time, NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+            k -> new SharePartition(groupId, tp0, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, DEFAULT_RECORD_LOCK_DURATION_MS,
+                    mockTimer, time, NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp1),
-            k -> new SharePartition(groupId, tp1, MAX_DELIVERY_COUNT,  MAX_IN_FLIGHT_MESSAGES,
-                    mockTimer, time, NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+            k -> new SharePartition(groupId, tp1, MAX_DELIVERY_COUNT,  MAX_IN_FLIGHT_MESSAGES, DEFAULT_RECORD_LOCK_DURATION_MS,
+                    mockTimer, time, NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp2),
-            k -> new SharePartition(groupId, tp2, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES,
-                    mockTimer, time, NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+            k -> new SharePartition(groupId, tp2, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, DEFAULT_RECORD_LOCK_DURATION_MS,
+                    mockTimer, time, NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp3),
-            k -> new SharePartition(groupId, tp3, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES,
-                    mockTimer, time, NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+            k -> new SharePartition(groupId, tp3, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, DEFAULT_RECORD_LOCK_DURATION_MS,
+                    mockTimer, time, NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
 
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap).withTime(time).withReplicaManager(replicaManager).build();
@@ -1848,8 +1848,8 @@ public class SharePartitionManagerTest {
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new ConcurrentHashMap<>();
         partitionCacheMap.computeIfAbsent(new SharePartitionManager.SharePartitionKey(groupId, tp0),
-                key -> new SharePartition(groupId, tp0, MAX_IN_FLIGHT_MESSAGES, MAX_DELIVERY_COUNT,
-                        mockTimer, time, NoOpShareStatePersister.getInstance(), DEFAULT_RECORD_LOCK_DURATION_MS, GROUP_CONFIG_MANAGER));
+                key -> new SharePartition(groupId, tp0, MAX_IN_FLIGHT_MESSAGES, MAX_DELIVERY_COUNT, DEFAULT_RECORD_LOCK_DURATION_MS,
+                        mockTimer, time, NoOpShareStatePersister.getInstance(), GROUP_CONFIG_MANAGER));
 
         ConcurrentLinkedQueue<SharePartitionManager.ShareFetchPartitionData> fetchQueue = new ConcurrentLinkedQueue<>();
         // First request added to fetch queue is empty i.e. no topic partitions to fetch.
@@ -1982,7 +1982,7 @@ public class SharePartitionManagerTest {
         }
 
         public SharePartitionManager build() {
-            return new SharePartitionManager(replicaManager, time, cache, partitionCacheMap, fetchQueue, timer, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, persister, metrics, GROUP_CONFIG_MANAGER, DEFAULT_RECORD_LOCK_DURATION_MS);
+            return new SharePartitionManager(replicaManager, time, cache, partitionCacheMap, fetchQueue, DEFAULT_RECORD_LOCK_DURATION_MS, timer, MAX_DELIVERY_COUNT, MAX_IN_FLIGHT_MESSAGES, persister, metrics, GROUP_CONFIG_MANAGER);
         }
     }
 }
