@@ -2710,7 +2710,7 @@ public class StreamsPartitionAssignorTest {
                 (k, v) -> k,
                 Grouped.with("GroupName", Serdes.String(), Serdes.String())
             )
-            .windowedBy(TimeWindows.of(Duration.ofMinutes(10)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(10)))
             .aggregate(
                 () -> "",
                 (k, v, a) -> a + k)

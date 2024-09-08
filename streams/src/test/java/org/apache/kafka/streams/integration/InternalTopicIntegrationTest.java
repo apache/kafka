@@ -61,7 +61,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
@@ -71,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests related to internal topics in streams
  */
-@SuppressWarnings("deprecation")
 @Timeout(600)
 @Tag("integration")
 public class InternalTopicIntegrationTest {
@@ -166,7 +164,7 @@ public class InternalTopicIntegrationTest {
                 (k, v) -> k,
                 Grouped.with("GroupName", Serdes.String(), Serdes.String())
             )
-            .windowedBy(TimeWindows.of(Duration.ofMinutes(10)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(10)))
             .aggregate(
                 () -> "",
                 (k, v, a) -> a + k)
@@ -233,7 +231,7 @@ public class InternalTopicIntegrationTest {
 
         textLines.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
             .groupBy(MockMapper.selectValueMapper())
-            .windowedBy(TimeWindows.of(ofSeconds(1L)).grace(ofMillis(0L)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofSeconds(1L)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("CountWindows").withRetention(ofSeconds(2L)));
 
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp)) {

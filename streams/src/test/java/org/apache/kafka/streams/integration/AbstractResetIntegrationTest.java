@@ -327,7 +327,6 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     private Topology setupTopologyWithIntermediateTopic(final boolean useRepartitioned,
                                                         final String outputTopic2) {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -349,7 +348,7 @@ public abstract class AbstractResetIntegrationTest {
             stream = builder.stream(INTERMEDIATE_USER_TOPIC);
         }
         stream.groupByKey()
-            .windowedBy(TimeWindows.of(ofMillis(35)).advanceBy(ofMillis(10)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(35)).advanceBy(ofMillis(10)))
             .count()
             .toStream()
             .map((key, value) -> new KeyValue<>(key.window().start() + key.window().end(), value))
