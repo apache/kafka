@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -25,6 +24,7 @@ import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -90,6 +90,7 @@ public class FeatureCommand {
         addUpgradeParser(subparsers);
         addDowngradeParser(subparsers);
         addDisableParser(subparsers);
+        addVersionMappingParser(subparsers);
 
         Namespace namespace = parser.parseArgsOrFail(args);
         String command = namespace.getString("command");
@@ -113,6 +114,9 @@ public class FeatureCommand {
                     break;
                 case "disable":
                     handleDisable(namespace, adminClient);
+                    break;
+                case "version-mapping":
+                    handleVersionMapping(namespace);
                     break;
                 default:
                     throw new TerseException("Unknown command " + command);
@@ -169,6 +173,18 @@ public class FeatureCommand {
         downgradeParser.addArgument("--dry-run")
                 .help("Perform a dry-run of this disable operation.")
                 .action(storeTrue());
+    }
+
+    private static void addVersionMappingParser(Subparsers subparsers) {
+        Subparser versionMappingParser = subparsers.addParser("version-mapping")
+                .help("Look up the corresponding features for a given metadata version. " +
+                        "Using the command with no --release-version  argument will return the mapping for " +
+                        "the latest stable metadata version"
+                );
+        versionMappingParser.addArgument("--release-version")
+                .help("The release version to use for the corresponding feature mapping. The minimum is " +
+                        MetadataVersion.IBP_3_0_IV0 + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
+                .action(store());
     }
 
     static String levelToString(String feature, short level) {
@@ -280,6 +296,28 @@ public class FeatureCommand {
         }
 
         update("disable", adminClient, updates, namespace.getBoolean("dry_run"));
+    }
+
+    static void handleVersionMapping(Namespace namespace) throws TerseException {
+        // Get the release version from the command-line arguments or default to the latest stable version
+        String releaseVersion = Optional.ofNullable(namespace.getString("release_version"))
+            .orElseGet(() -> MetadataVersion.latestProduction().version());
+
+        try {
+            MetadataVersion version = MetadataVersion.fromVersionString(releaseVersion);
+
+            short metadataVersionLevel = version.featureLevel();
+            System.out.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion);
+
+            for (Features feature : Features.values()) {
+                short featureLevel = feature.defaultValue(version);
+                System.out.printf("%s=%d%n", feature.featureName(), featureLevel);
+            }
+        } catch (IllegalArgumentException e) {
+            throw new TerseException("Unsupported release version '" + releaseVersion + "'." +
+                " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+                " to " + MetadataVersion.LATEST_PRODUCTION);
+        }
     }
 
     private static void update(String op, Admin admin, Map<String, FeatureUpdate> updates, Boolean dryRun) throws TerseException {

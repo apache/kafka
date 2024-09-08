@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.GroupType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
@@ -312,6 +313,7 @@ public class OffsetMetadataManager {
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
+                log.info("[GroupId {}] Creating a simple consumer group via manual offset commit.", request.groupId());
                 group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
                 if (context.header.apiVersion() >= 9) {
@@ -454,7 +456,7 @@ public class OffsetMetadataManager {
 
         // In the old consumer group protocol, the offset commits maintain the session if
         // the group is in Stable or PreparingRebalance state.
-        if (group.type() == Group.GroupType.CLASSIC) {
+        if (group.type() == GroupType.CLASSIC) {
             ClassicGroup classicGroup = (ClassicGroup) group;
             if (classicGroup.isInState(ClassicGroupState.STABLE) || classicGroup.isInState(ClassicGroupState.PREPARING_REBALANCE)) {
                 groupMetadataManager.rescheduleClassicGroupMemberHeartbeat(

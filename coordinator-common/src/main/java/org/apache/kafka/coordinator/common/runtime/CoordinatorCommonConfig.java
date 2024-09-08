@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 
@@ -36,11 +35,11 @@ public class CoordinatorCommonConfig {
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols. Supported protocols: " +
         Arrays.stream(GroupType.values()).map(GroupType::toString).collect(Collectors.joining(",")) + ". " +
-        "The " + GroupType.CONSUMER + " rebalance protocol is in preview and therefore must not be used in production. " +
         "The " + GroupType.SHARE + " rebalance protocol is in early access and therefore must not be used in production.";
-    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(GroupType.CLASSIC.toString());
+    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT =
+        Collections.unmodifiableList(Arrays.asList(GroupType.CLASSIC.toString(), GroupType.CONSUMER.toString()));
 
-    public static final ConfigDef COMMON_GROUP_COORDINATOR_CONFIG_DEF =  new ConfigDef()
+    public static final ConfigDef COMMON_GROUP_COORDINATOR_CONFIG_DEF = new ConfigDef()
         .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT,
             ConfigDef.ValidList.in(Utils.enumOptions(GroupType.class)), MEDIUM, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC);
 

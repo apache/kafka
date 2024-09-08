@@ -516,6 +516,12 @@ public class SharePartitionManager implements AutoCloseable {
     public void close() throws Exception {
         this.timer.close();
         this.persister.stop();
+        if (!fetchQueue.isEmpty()) {
+            log.warn("Closing SharePartitionManager with pending fetch requests count: {}", fetchQueue.size());
+            fetchQueue.forEach(shareFetchPartitionData -> shareFetchPartitionData.future.completeExceptionally(
+                Errors.BROKER_NOT_AVAILABLE.exception()));
+            fetchQueue.clear();
+        }
     }
 
     private ShareSessionKey shareSessionKey(String groupId, Uuid memberId) {
@@ -531,7 +537,7 @@ public class SharePartitionManager implements AutoCloseable {
      */
     // Visible for testing.
     void maybeProcessFetchQueue() {
-        if (!processFetchQueueLock.compareAndSet(false, true)) {
+        if (!acquireProcessFetchQueueLock()) {
             // The queue is already being processed hence avoid re-triggering.
             return;
         }
@@ -700,6 +706,11 @@ public class SharePartitionManager implements AutoCloseable {
     void releaseFetchQueueAndPartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> partitionCacheMap.get(sharePartitionKey(groupId, tp)).releaseFetchLock());
         releaseProcessFetchQueueLock();
+    }
+
+    // Visible for testing.
+    boolean acquireProcessFetchQueueLock() {
+        return processFetchQueueLock.compareAndSet(false, true);
     }
 
     private void releaseProcessFetchQueueLock() {

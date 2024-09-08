@@ -27,7 +27,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.Features
@@ -70,8 +69,6 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-      new ClusterConfigProperty(key = CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     ),
@@ -103,8 +100,6 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-      new ClusterConfigProperty(key = CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )

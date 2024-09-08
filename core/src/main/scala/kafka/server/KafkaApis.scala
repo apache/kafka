@@ -69,10 +69,11 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
+import org.apache.kafka.coordinator.common.runtime.GroupType
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{GroupVersion, MetadataVersion}
+import org.apache.kafka.server.common.{GroupVersion, MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch, ShareFetchContext}
@@ -3831,9 +3832,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     GroupVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(GroupVersion.FEATURE_NAME, 0.toShort))
   }
 
-  private def isConsumerGroupProtocolEnabled(): Boolean = {
+  def isConsumerGroupProtocolEnabled(): Boolean = {
     groupCoordinator.isNewGroupCoordinator &&
-      config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) &&
+      config.groupCoordinatorRebalanceProtocols.contains(GroupType.CONSUMER) &&
       groupVersion().isConsumerRebalanceProtocolSupported
   }
 

@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.server.share;
 
-import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig;
+import org.apache.kafka.coordinator.common.runtime.GroupType;
 
 import java.util.Set;
 import java.util.stream.Collectors;

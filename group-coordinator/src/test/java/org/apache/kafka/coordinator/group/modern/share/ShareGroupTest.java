@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
@@ -24,7 +25,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.common.runtime.GroupType;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -56,7 +57,7 @@ public class ShareGroupTest {
     @Test
     public void testType() {
         ShareGroup shareGroup = createShareGroup("foo");
-        assertEquals(Group.GroupType.SHARE, shareGroup.type());
+        assertEquals(GroupType.SHARE, shareGroup.type());
     }
 
     @Test
@@ -136,10 +137,10 @@ public class ShareGroupTest {
 
     @Test
     public void testGroupTypeFromString() {
-        assertEquals(Group.GroupType.parse("share"), Group.GroupType.SHARE);
+        assertEquals(GroupType.parse("share"), GroupType.SHARE);
         // Test case insensitivity.
-        assertEquals(Group.GroupType.parse("Share"), Group.GroupType.SHARE);
-        assertEquals(Group.GroupType.parse("SHare"), Group.GroupType.SHARE);
+        assertEquals(GroupType.parse("Share"), GroupType.SHARE);
+        assertEquals(GroupType.parse("SHare"), GroupType.SHARE);
     }
 
     @Test
@@ -551,7 +552,7 @@ public class ShareGroupTest {
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
     public void testValidateOffsetCommit(short version) {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, () ->
+        assertThrows(GroupIdNotFoundException.class, () ->
             shareGroup.validateOffsetCommit(null, null, -1, false, version));
     }
 
@@ -581,14 +582,14 @@ public class ShareGroupTest {
     @Test
     public void testValidateOffsetFetch() {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, () ->
+        assertThrows(GroupIdNotFoundException.class, () ->
             shareGroup.validateOffsetFetch(null, -1, -1));
     }
 
     @Test
     public void testValidateOffsetDelete() {
         ShareGroup shareGroup = createShareGroup("group-foo");
-        assertThrows(UnsupportedOperationException.class, shareGroup::validateOffsetDelete);
+        assertThrows(GroupIdNotFoundException.class, shareGroup::validateOffsetDelete);
     }
 
     @Test

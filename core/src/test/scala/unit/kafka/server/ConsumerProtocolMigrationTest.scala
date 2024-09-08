@@ -21,8 +21,8 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.ListGroupsResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig
-import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.common.runtime.GroupType;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -35,8 +35,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(
     serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-      new ClusterConfigProperty(key = CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
@@ -71,11 +69,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           .setGroupId(groupId)
           .setProtocolType("consumer")
           .setGroupState(ClassicGroupState.EMPTY.toString)
-          .setGroupType(Group.GroupType.CLASSIC.toString)
+          .setGroupType(GroupType.CLASSIC.toString)
       ),
       listGroups(
         statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CLASSIC.toString)
+        typesFilter = List(GroupType.CLASSIC.toString)
       )
     )
 
@@ -96,19 +94,17 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           .setGroupId(groupId)
           .setProtocolType("consumer")
           .setGroupState(ConsumerGroupState.STABLE.toString)
-          .setGroupType(Group.GroupType.CONSUMER.toString)
+          .setGroupType(GroupType.CONSUMER.toString)
       ),
       listGroups(
         statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CONSUMER.toString)
+        typesFilter = List(GroupType.CONSUMER.toString)
       )
     )
   }
 
   @ClusterTest(
     serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-      new ClusterConfigProperty(key = CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
@@ -143,11 +139,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           .setGroupId(groupId)
           .setProtocolType("consumer")
           .setGroupState(ClassicGroupState.EMPTY.toString)
-          .setGroupType(Group.GroupType.CONSUMER.toString)
+          .setGroupType(GroupType.CONSUMER.toString)
       ),
       listGroups(
         statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CONSUMER.toString)
+        typesFilter = List(GroupType.CONSUMER.toString)
       )
     )
 
@@ -161,19 +157,17 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           .setGroupId(groupId)
           .setProtocolType("consumer")
           .setGroupState(ClassicGroupState.STABLE.toString)
-          .setGroupType(Group.GroupType.CLASSIC.toString)
+          .setGroupType(GroupType.CLASSIC.toString)
       ),
       listGroups(
         statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CLASSIC.toString)
+        typesFilter = List(GroupType.CLASSIC.toString)
       )
     )
   }
 
   @ClusterTest(
     serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-      new ClusterConfigProperty(key = CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
@@ -209,11 +203,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         new ListGroupsResponseData.ListedGroup()
           .setGroupId(groupId)
           .setGroupState(ClassicGroupState.EMPTY.toString)
-          .setGroupType(Group.GroupType.CLASSIC.toString)
+          .setGroupType(GroupType.CLASSIC.toString)
       ),
       listGroups(
         statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CLASSIC.toString)
+        typesFilter = List(GroupType.CLASSIC.toString)
       )
     )
 
@@ -233,11 +227,11 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           .setGroupId(groupId)
           .setProtocolType("consumer")
           .setGroupState(ConsumerGroupState.STABLE.toString)
-          .setGroupType(Group.GroupType.CONSUMER.toString)
+          .setGroupType(GroupType.CONSUMER.toString)
       ),
       listGroups(
         statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CONSUMER.toString)
+        typesFilter = List(GroupType.CONSUMER.toString)
       )
     )
   }

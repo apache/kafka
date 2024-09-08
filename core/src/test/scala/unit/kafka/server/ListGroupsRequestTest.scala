@@ -22,9 +22,10 @@ import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.ListGroupsResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig
+import org.apache.kafka.coordinator.common.runtime.GroupType
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
-import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
@@ -35,8 +36,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(
     serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-      new ClusterConfigProperty(key = CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
@@ -47,8 +46,6 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-    new ClusterConfigProperty(key = CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
@@ -90,7 +87,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         .setGroupId("grp-1")
         .setProtocolType("consumer")
         .setGroupState(if (version >= 4) ClassicGroupState.STABLE.toString else "")
-        .setGroupType(if (version >= 5) Group.GroupType.CLASSIC.toString else "")
+        .setGroupType(if (version >= 5) GroupType.CLASSIC.toString else "")
 
       // Create grp-2 in old protocol without completing rebalance. Grp-2 is in COMPLETING_REBALANCE state.
       val (memberId1InGroup2, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-2", completeRebalance = false)
@@ -98,7 +95,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         .setGroupId("grp-2")
         .setProtocolType("consumer")
         .setGroupState(if (version >= 4) ClassicGroupState.COMPLETING_REBALANCE.toString else "")
-        .setGroupType(if (version >= 5) Group.GroupType.CLASSIC.toString else "")
+        .setGroupType(if (version >= 5) GroupType.CLASSIC.toString else "")
 
       // Create grp-3 in old protocol and complete a rebalance. Then member 1 leaves grp-3. Grp-3 is in EMPTY state.
       val (memberId1InGroup3, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-3")
@@ -107,7 +104,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         .setGroupId("grp-3")
         .setProtocolType("consumer")
         .setGroupState(if (version >= 4) ClassicGroupState.EMPTY.toString else "")
-        .setGroupType(if (version >= 5) Group.GroupType.CLASSIC.toString else "")
+        .setGroupType(if (version >= 5) GroupType.CLASSIC.toString else "")
 
       var memberId1InGroup4: String = null
       var response4: ListGroupsResponseData.ListedGroup = null
@@ -124,7 +121,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
           .setGroupId("grp-4")
           .setProtocolType("consumer")
           .setGroupState(if (version >= 4) ConsumerGroupState.STABLE.toString else "")
-          .setGroupType(if (version >= 5) Group.GroupType.CONSUMER.toString else "")
+          .setGroupType(if (version >= 5) GroupType.CONSUMER.toString else "")
 
         // Create grp-5 in new protocol. Then member 2 joins grp-5, triggering a rebalance. Grp-5 is in RECONCILING state.
         memberId1InGroup5 = joinConsumerGroup("grp-5", useNewProtocol = true)._1
@@ -133,7 +130,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
           .setGroupId("grp-5")
           .setProtocolType("consumer")
           .setGroupState(if (version >= 4) ConsumerGroupState.RECONCILING.toString else "")
-          .setGroupType(if (version >= 5) Group.GroupType.CONSUMER.toString else "")
+          .setGroupType(if (version >= 5) GroupType.CONSUMER.toString else "")
 
         // Create grp-6 in new protocol. Then member 1 leaves grp-6. Grp-6 is in Empty state.
         memberId1InGroup6 = joinConsumerGroup("grp-6", useNewProtocol = true)._1
@@ -142,7 +139,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
           .setGroupId("grp-6")
           .setProtocolType("consumer")
           .setGroupState(if (version >= 4) ConsumerGroupState.EMPTY.toString else "")
-          .setGroupType(if (version >= 5) Group.GroupType.CONSUMER.toString else "")
+          .setGroupType(if (version >= 5) GroupType.CONSUMER.toString else "")
       }
 
       assertEquals(
@@ -209,7 +206,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
           if (useNewProtocol) List(response4) else List.empty,
           listGroups(
             statesFilter = List(ConsumerGroupState.STABLE.toString),
-            typesFilter = List(Group.GroupType.CONSUMER.toString),
+            typesFilter = List(GroupType.CONSUMER.toString),
             version = version.toShort
           )
         )
@@ -218,7 +215,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
           if (useNewProtocol) List(response4, response5, response6).toSet else Set.empty,
           listGroups(
             statesFilter = List.empty,
-            typesFilter = List(Group.GroupType.CONSUMER.toString),
+            typesFilter = List(GroupType.CONSUMER.toString),
             version = version.toShort
           ).toSet
         )
@@ -227,7 +224,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
           List(response1, response2, response3).toSet,
           listGroups(
             statesFilter = List.empty,
-            typesFilter = List(Group.GroupType.CLASSIC.toString),
+            typesFilter = List(GroupType.CLASSIC.toString),
             version = version.toShort
           ).toSet
         )

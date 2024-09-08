@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.common.runtime.GroupType;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -488,13 +488,13 @@ public class ConsumerGroupTest {
     @Test
     public void testGroupTypeFromString() {
 
-        assertEquals(Group.GroupType.parse("classic"), Group.GroupType.CLASSIC);
+        assertEquals(GroupType.parse("classic"), GroupType.CLASSIC);
 
         // Test case insensitivity.
-        assertEquals(Group.GroupType.parse("Consumer"), Group.GroupType.CONSUMER);
+        assertEquals(GroupType.parse("Consumer"), GroupType.CONSUMER);
 
         // Test with invalid group type.
-        assertEquals(Group.GroupType.parse("Invalid"), Group.GroupType.UNKNOWN);
+        assertEquals(GroupType.parse("Invalid"), GroupType.UNKNOWN);
     }
 
     @Test

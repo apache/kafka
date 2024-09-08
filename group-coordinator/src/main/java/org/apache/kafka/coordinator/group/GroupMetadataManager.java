@@ -64,6 +64,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
+import org.apache.kafka.coordinator.common.runtime.GroupType;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
@@ -144,9 +145,9 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
-import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
-import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
-import static org.apache.kafka.coordinator.group.Group.GroupType.SHARE;
+import static org.apache.kafka.coordinator.common.runtime.GroupType.CLASSIC;
+import static org.apache.kafka.coordinator.common.runtime.GroupType.CONSUMER;
+import static org.apache.kafka.coordinator.common.runtime.GroupType.SHARE;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord;
@@ -624,8 +625,8 @@ public class GroupMetadataManager {
             .collect(Collectors.toSet());
 
         // Converts each type filter string to a value in the GroupType enum while being case-insensitive.
-        Set<Group.GroupType> enumTypesFilter = typesFilter.stream()
-            .map(Group.GroupType::parse)
+        Set<GroupType> enumTypesFilter = typesFilter.stream()
+            .map(GroupType::parse)
             .collect(Collectors.toSet());
 
         Predicate<Group> combinedFilter = group -> {
@@ -790,7 +791,7 @@ public class GroupMetadataManager {
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
-            } else if (createIfNotExists && validateOnlineUpgrade((ClassicGroup) group)) {
+            } else if (createIfNotExists && group.type() == CLASSIC && validateOnlineUpgrade((ClassicGroup) group)) {
                 return convertToConsumerGroup((ClassicGroup) group, records);
             } else {
                 throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
@@ -3863,10 +3864,21 @@ public class GroupMetadataManager {
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         Group group = groups.get(request.groupId(), Long.MAX_VALUE);
-        if (group != null && group.type() == CONSUMER && !group.isEmpty()) {
-            // classicGroupJoinToConsumerGroup takes the join requests to non-empty consumer groups.
-            // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
-            return classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
+        if (group != null) {
+            if (group.type() == CONSUMER && !group.isEmpty()) {
+                // classicGroupJoinToConsumerGroup takes the join requests to non-empty consumer groups.
+                // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
+                return classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
+            } else if (group.type() == CONSUMER || group.type() == CLASSIC) {
+                return classicGroupJoinToClassicGroup(context, request, responseFuture);
+            } else {
+                // Group exists but it's not a consumer group
+                responseFuture.complete(new JoinGroupResponseData()
+                    .setMemberId(UNKNOWN_MEMBER_ID)
+                    .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code())
+                );
+                return EMPTY_RESULT;
+            }
         } else {
             return classicGroupJoinToClassicGroup(context, request, responseFuture);
         }
@@ -5087,8 +5099,12 @@ public class GroupMetadataManager {
 
         if (group.type() == CLASSIC) {
             return classicGroupSyncToClassicGroup((ClassicGroup) group, context, request, responseFuture);
-        } else {
+        } else if (group.type() == CONSUMER) {
             return classicGroupSyncToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
+        } else {
+            responseFuture.complete(new SyncGroupResponseData()
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()));
+            return EMPTY_RESULT;
         }
     }
 
@@ -5355,8 +5371,12 @@ public class GroupMetadataManager {
 
         if (group.type() == CLASSIC) {
             return classicGroupHeartbeatToClassicGroup((ClassicGroup) group, context, request);
-        } else {
+        } else if (group.type() == CONSUMER) {
             return classicGroupHeartbeatToConsumerGroup((ConsumerGroup) group, context, request);
+        } else {
+            throw new UnknownMemberIdException(
+                String.format("Group %s not found.", request.groupId())
+            );
         }
     }
 
@@ -5536,8 +5556,10 @@ public class GroupMetadataManager {
 
         if (group.type() == CLASSIC) {
             return classicGroupLeaveToClassicGroup((ClassicGroup) group, context, request);
-        } else {
+        } else if (group.type() == CONSUMER) {
             return classicGroupLeaveToConsumerGroup((ConsumerGroup) group, context, request);
+        } else {
+            throw new UnknownMemberIdException(String.format("Group %s not found.", request.groupId()));
         }
     }
 

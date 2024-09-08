@@ -25,7 +25,7 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
-import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.common.runtime.GroupType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
@@ -105,14 +105,14 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the classic rebalance protocol.",
-            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CLASSIC.toString())
+            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, GroupType.CLASSIC.toString())
         );
 
         consumerGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the consumer rebalance protocol.",
-            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CONSUMER.toString())
+            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, GroupType.CONSUMER.toString())
         );
 
         consumerGroupCountEmptyMetricName = metrics.metricName(

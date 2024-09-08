@@ -19,55 +19,16 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.GroupType;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Interface common for all groups.
  */
 public interface Group {
-    enum GroupType {
-        CONSUMER("consumer"),
-        CLASSIC("classic"),
-        SHARE("share"),
-        UNKNOWN("unknown");
-
-        private final String name;
-
-        GroupType(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-
-        private static final Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
-            .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));
-
-        /**
-         * Parse a string into the corresponding {@code GroupType} enum value, in a case-insensitive manner.
-         *
-         * @return The {{@link GroupType}} according to the string passed. Unknown group type is returned if
-         * the string doesn't correspond to a valid group type.
-         */
-        public static GroupType parse(String name) {
-            if (name == null) {
-                return UNKNOWN;
-            }
-            GroupType type = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
-
-            return type == null ? UNKNOWN : type;
-        }
-    }
 
     /**
      * @return The {{@link GroupType}}.

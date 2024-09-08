@@ -49,6 +49,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.GroupType;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
@@ -190,7 +191,7 @@ public class OffsetMetadataManagerTest {
         }
 
         public Group getOrMaybeCreateGroup(
-            Group.GroupType groupType,
+            GroupType groupType,
             String groupId
         ) {
             switch (groupType) {
@@ -2418,8 +2419,8 @@ public class OffsetMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Group.GroupType.class, names = {"CLASSIC", "CONSUMER"})
-    public void testDeleteGroupAllOffsets(Group.GroupType groupType) {
+    @EnumSource(value = GroupType.class, names = {"CLASSIC", "CONSUMER"})
+    public void testDeleteGroupAllOffsets(GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.getOrMaybeCreateGroup(groupType, "foo");
 
@@ -2441,8 +2442,8 @@ public class OffsetMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Group.GroupType.class, names = {"CLASSIC", "CONSUMER"})
-    public void testDeleteGroupAllOffsetsWithPendingTransactionalOffsets(Group.GroupType groupType) {
+    @EnumSource(value = GroupType.class, names = {"CLASSIC", "CONSUMER"})
+    public void testDeleteGroupAllOffsetsWithPendingTransactionalOffsets(GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.getOrMaybeCreateGroup(groupType, "foo");
 
