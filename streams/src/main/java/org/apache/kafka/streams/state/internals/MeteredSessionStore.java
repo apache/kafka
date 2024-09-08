@@ -455,7 +455,7 @@ public class MeteredSessionStore<K, V>
                         iteratorDurationSensor,
                         streamsMetrics,
                         serdes::keyFrom,
-                        StoreQueryUtils.getDeserializeValue(serdes, wrapped()),
+                        StoreQueryUtils.deserializeValue(serdes, wrapped()),
                         time,
                         numOpenIterators,
                         openIterators

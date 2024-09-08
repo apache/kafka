@@ -946,7 +946,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 recordContext.offset(),
                 recordContext.headers(),
                 node.name(),
-                id()
+                id(),
+                recordContext.timestamp()
             );
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;

@@ -64,7 +64,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
         public void init(final ProcessorContext<K, Change<V>> context) {
             store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store.getStore(),
+                store.store(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);

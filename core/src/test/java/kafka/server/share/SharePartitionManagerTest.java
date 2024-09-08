@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
@@ -56,6 +57,7 @@ import org.apache.kafka.server.share.ShareSession;
 import org.apache.kafka.server.share.ShareSessionCache;
 import org.apache.kafka.server.share.ShareSessionContext;
 import org.apache.kafka.server.share.ShareSessionKey;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -94,6 +96,7 @@ import java.util.function.Consumer;
 
 import scala.Tuple2;
 
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1357,6 +1360,32 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testCloseShouldCompletePendingFetchRequests() throws Exception {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+            1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        Uuid fooId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder().build();
+
+        // Acquire the fetch lock so fetch requests keep waiting in the queue.
+        assertTrue(sharePartitionManager.acquireProcessFetchQueueLock());
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        // Verify that the fetch request is not completed.
+        assertFalse(future.isDone());
+
+        // Closing the sharePartitionManager closes pending fetch requests in the fetch queue.
+        sharePartitionManager.close();
+        // Verify that the fetch request is now completed.
+        assertTrue(future.isDone());
+        assertFutureThrows(future, BrokerNotAvailableException.class);
+    }
+
+    @Test
     public void testReleaseSessionSuccess() {
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
@@ -1367,9 +1396,9 @@ public class SharePartitionManagerTest {
 
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
-        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId.toString()))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
-        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId.toString()))).thenReturn(CompletableFuture.completedFuture(
-                Optional.of(new InvalidRecordStateException("Unable to release acquired records for the batch"))
+        when(sp1.releaseAcquiredRecords(ArgumentMatchers.eq(memberId.toString()))).thenReturn(CompletableFuture.completedFuture(null));
+        when(sp2.releaseAcquiredRecords(ArgumentMatchers.eq(memberId.toString()))).thenReturn(FutureUtils.failedFuture(
+                new InvalidRecordStateException("Unable to release acquired records for the batch")
         ));
 
         ShareSessionCache cache = mock(ShareSessionCache.class);
@@ -1515,7 +1544,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         SharePartition sp = mock(SharePartition.class);
 
-        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(null));
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp), sp);
@@ -1549,9 +1578,9 @@ public class SharePartitionManagerTest {
         SharePartition sp2 = mock(SharePartition.class);
         SharePartition sp3 = mock(SharePartition.class);
 
-        when(sp1.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
-        when(sp2.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
-        when(sp3.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+        when(sp1.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(sp2.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(sp3.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(null));
 
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp1), sp1);
@@ -1669,8 +1698,8 @@ public class SharePartitionManagerTest {
 
         TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         SharePartition sp = mock(SharePartition.class);
-        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(CompletableFuture.completedFuture(
-                Optional.of(new InvalidRequestException("Member is not the owner of batch record"))
+        when(sp.acknowledge(ArgumentMatchers.eq(memberId), any())).thenReturn(FutureUtils.failedFuture(
+                new InvalidRequestException("Member is not the owner of batch record")
         ));
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp), sp);

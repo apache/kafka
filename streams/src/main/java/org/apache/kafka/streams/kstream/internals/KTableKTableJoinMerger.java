@@ -44,7 +44,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         this.queryableName = queryableName;
     }
 
-    public String getQueryableName() {
+    public String queryableName() {
         return queryableName;
     }
 
@@ -110,7 +110,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
             if (queryableName != null) {
                 store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store.getStore(),
+                    store.store(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);

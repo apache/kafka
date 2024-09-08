@@ -36,8 +36,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
@@ -69,10 +69,10 @@ class AutoTopicCreationManagerTest {
     props.setProperty(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
 
     props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
-    props.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
+    props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
 
     props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
-    props.setProperty(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
+    props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
 
     config = KafkaConfig.fromProps(props)
     val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
@@ -358,7 +358,7 @@ class AutoTopicCreationManagerTest {
         case Topic.GROUP_METADATA_TOPIC_NAME => getNewTopic(topicName,
           numPartitions = config.groupCoordinatorConfig.offsetsTopicPartitions, replicationFactor = config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
         case Topic.TRANSACTION_STATE_TOPIC_NAME => getNewTopic(topicName,
-          numPartitions = config.transactionTopicPartitions, replicationFactor = config.transactionTopicReplicationFactor)
+          numPartitions = config.transactionLogConfig.transactionTopicPartitions, replicationFactor = config.transactionLogConfig.transactionTopicReplicationFactor)
       }
     } else {
       getNewTopic(topicName)

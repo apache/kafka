@@ -14,11 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.common;
 
-public class NewTopicsMetadataUpdateRequestEvent extends ApplicationEvent {
+/**
+ * Convenience case class since (clientId, brokerInfo) pairs are used to create
+ * SyncProducer Request Stats and SimpleConsumer Request and Response Stats.
+ */
+public class ClientIdAndBroker {
+    public final String clientId;
+    public final String brokerHost;
+    public final int brokerPort;
 
-    public NewTopicsMetadataUpdateRequestEvent() {
-        super(Type.NEW_TOPICS_METADATA_UPDATE);
+    public ClientIdAndBroker(String clientId, String brokerHost, int brokerPort) {
+        this.clientId = clientId;
+        this.brokerHost = brokerHost;
+        this.brokerPort = brokerPort;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s-%s-%d", clientId, brokerHost, brokerPort);
     }
 }

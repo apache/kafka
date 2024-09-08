@@ -1113,10 +1113,10 @@ public abstract class Type {
     private static String toHtml() {
         DocumentedType[] types = {
             BOOLEAN, INT8, INT16, INT32, INT64,
-            UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
+            UINT16, UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
-            RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
+            RECORDS, COMPACT_RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");

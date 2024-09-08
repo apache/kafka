@@ -80,7 +80,7 @@ ext {
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
       Math.min(Runtime.runtime.availableProcessors(), 8)
-  userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
+  userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures.toBoolean() : false
 
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
@@ -252,7 +252,7 @@ if (repo != null) {
   rat.enabled = false
 }
 println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
-println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
+println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
 
@@ -470,11 +470,19 @@ subprojects {
   def testsToExclude = ['**/*Suite.class']
 
   test {
+    ext {
+      isGithubActions = System.getenv('GITHUB_ACTIONS') != null
+      hadFailure = false  // Used to track if any tests failed, see afterSuite below
+    }
+
     maxParallelForks = maxTestForks
-    ignoreFailures = userIgnoreFailures
+    ignoreFailures = userIgnoreFailures || ext.isGithubActions
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
+
+    // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
+    systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -494,6 +502,32 @@ subprojects {
       testRetry {
         maxRetries = userMaxTestRetries
         maxFailures = userMaxTestRetryFailures
+      }
+    }
+    
+    // As we process results, check if there were any test failures.
+    afterSuite { desc, result ->
+      if (result.resultType == TestResult.ResultType.FAILURE) {
+        ext.hadFailure = true
+      }
+    }
+
+    // This closure will copy JUnit XML files out of the sub-project's build directory and into
+    // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
+    // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
+    doLast {
+      if (ext.isGithubActions) {
+        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${project.name}").get().asFile
+        println "Copy JUnit XML for ${project.name} to $dest"
+        ant.copy(todir: "$dest") {
+          ant.fileset(dir: "${test.reports.junitXml.entryPoint}")
+        }
+
+        // If there were any test failures, we want to fail the task to prevent the failures
+        // from being cached.
+        if (ext.hadFailure) {
+          throw new GradleException("Failing this task since '${project.name}:${name}' had test failures.")
+        }
       }
     }
   }
@@ -879,6 +913,7 @@ project(':server') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -1363,6 +1398,7 @@ project(':group-coordinator:group-coordinator-api') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -1732,6 +1768,7 @@ project(':clients') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -1897,6 +1934,7 @@ project(':raft') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -1990,6 +2028,7 @@ project(':server-common') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -2048,6 +2087,7 @@ project(':storage:storage-api') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -2138,6 +2178,7 @@ project(':storage') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [
@@ -2232,6 +2273,7 @@ project(':tools:tools-api') {
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
+    outputs.cacheIf { true }
 
     doLast {
       def data = [

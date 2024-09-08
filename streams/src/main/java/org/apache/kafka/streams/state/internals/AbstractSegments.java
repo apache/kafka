@@ -75,7 +75,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public S getSegmentForTimestamp(final long timestamp) {
+    public S segmentForTimestamp(final long timestamp) {
         return segments.get(segmentId(timestamp));
     }
 

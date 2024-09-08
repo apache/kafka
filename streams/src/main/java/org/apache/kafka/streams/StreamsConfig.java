@@ -531,15 +531,33 @@ public class StreamsConfig extends AbstractConfig {
     public static final String DEFAULT_CLIENT_SUPPLIER_CONFIG = "default.client.supplier";
     public static final String DEFAULT_CLIENT_SUPPLIER_DOC = "Client supplier class that implements the <code>org.apache.kafka.streams.KafkaClientSupplier</code> interface.";
 
-    /** {@code default.deserialization.exception.handler} */
+    /**
+     * {@code default.deserialization.exception.handler}
+     * @deprecated since 4.0; use {@link #DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG} instead
+     */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
+    @Deprecated
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
-    /** {@code default.production.exception.handler} */
+    /** {@code deserialization.exception.handler} */
     @SuppressWarnings("WeakerAccess")
+    public static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "deserialization.exception.handler";
+    static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
+
+    /**
+     * {@code default.production.exception.handler}
+     * @deprecated since 4.0; Use {@link #PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG} instead
+     */
+    @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.production.exception.handler";
-    private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
+
+    /** {@code production.exception.handler} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "production.exception.handler";
+    private static final String PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
     /** {@code default.dsl.store} */
     @Deprecated
@@ -818,14 +836,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
 
-    /**
-     * {@code topology.optimization}
-     * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
-     */
-    @Deprecated
-    public static final String TOPOLOGY_OPTIMIZATION = TOPOLOGY_OPTIMIZATION_CONFIG;
-
-
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
         new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
@@ -922,12 +932,7 @@ public class StreamsConfig extends AbstractConfig {
                     Type.CLASS,
                     DefaultProductionExceptionHandler.class.getName(),
                     Importance.MEDIUM,
-                    DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
-            .define(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                    Type.CLASS,
-                    LogAndFailProcessingExceptionHandler.class.getName(),
-                    Importance.MEDIUM,
-                    PROCESSING_EXCEPTION_HANDLER_CLASS_DOC)
+                    PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                     Type.CLASS,
                     FailOnInvalidTimestamp.class.getName(),
@@ -938,6 +943,11 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
+            .define(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                    Type.CLASS,
+                    LogAndFailExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -954,12 +964,22 @@ public class StreamsConfig extends AbstractConfig {
                     1,
                     Importance.MEDIUM,
                     NUM_STREAM_THREADS_DOC)
+            .define(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+                    Type.CLASS,
+                    LogAndFailProcessingExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    PROCESSING_EXCEPTION_HANDLER_CLASS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
                     in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
+            .define(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                    Type.CLASS,
+                    DefaultProductionExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
                     Type.INT,
                     null,
@@ -1261,7 +1281,7 @@ public class StreamsConfig extends AbstractConfig {
         public static boolean stateUpdaterEnabled(final Map<String, Object> configs) {
             return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
         }
-        
+
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
@@ -1910,11 +1930,45 @@ public class StreamsConfig extends AbstractConfig {
         return getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
     }
 
+    public DeserializationExceptionHandler deserializationExceptionHandler() {
+        if (originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG) &&
+            originals().containsKey(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)) {
+            log.warn("Both the deprecated and new config for deserialization exception handler are configured. " +
+                "The deprecated one will be ignored.");
+        }
+        if (originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)) {
+            return getConfiguredInstance(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
+        } else {
+            return defaultDeserializationExceptionHandler();
+        }
+    }
+
+    /**
+     * @deprecated since kafka 4.0; use {@link #deserializationExceptionHandler()} instead
+     */
+    @Deprecated
     @SuppressWarnings("WeakerAccess")
     public DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
         return getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
     }
 
+    public ProductionExceptionHandler productionExceptionHandler() {
+        if (originals().containsKey(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG) &&
+            originals().containsKey(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG)) {
+            log.warn("Both the deprecated and new config for production exception handler are configured. " +
+                "The deprecated one will be ignored.");
+        }
+        if (originals().containsKey(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG)) {
+            return getConfiguredInstance(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
+        } else {
+            return defaultProductionExceptionHandler();
+        }
+    }
+
+    /**
+     * @deprecated since kafka 4.0; use {@link #productionExceptionHandler()} instead
+     */
+    @Deprecated
     @SuppressWarnings("WeakerAccess")
     public ProductionExceptionHandler defaultProductionExceptionHandler() {
         return getConfiguredInstance(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
