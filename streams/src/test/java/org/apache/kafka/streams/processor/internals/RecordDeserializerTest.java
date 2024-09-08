@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -122,7 +123,7 @@ public class RecordDeserializerTest {
                             + "to fail upon a deserialization error. "
                             + "If you would rather have the streaming pipeline "
                             + "continue after a deserialization error, please set the "
-                            + "default.deserialization.exception.handler appropriately."
+                            + DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately."
             );
         }
     }
