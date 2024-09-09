@@ -64,7 +64,7 @@ jobs:
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
         run: |
-          ./gradlew --build-cache --info 
+          ./gradlew --build-cache --info  \
           ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
           check -x test
       - name: Archive check reports
