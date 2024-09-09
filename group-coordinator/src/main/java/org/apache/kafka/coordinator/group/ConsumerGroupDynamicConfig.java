@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.server.share.ShareGroupConfig;
 
 import java.util.Map;
 import java.util.Optional;
@@ -33,22 +31,18 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 
 /**
- * Group configuration related parameters and supporting methods like validation, etc. are
+ * Consumer Group Dynamic configuration related parameters and supporting methods like validation, etc. are
  * defined in this class.
  */
-public class GroupConfig extends AbstractConfig {
+public class ConsumerGroupDynamicConfig extends AbstractConfig {
 
     public static final String CONSUMER_SESSION_TIMEOUT_MS_CONFIG = "consumer.session.timeout.ms";
 
     public static final String CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG = "consumer.heartbeat.interval.ms";
 
-    public static final String SHARE_RECORD_LOCK_DURATION_MS_CONFIG = "share.record.lock.duration.ms";
-
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
-
-    public final int shareRecordLockDurationMs;
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -62,20 +56,13 @@ public class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
             atLeast(1),
             MEDIUM,
-            GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
-        .define(SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
-            INT,
-            ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT,
-            atLeast(1),
-            MEDIUM,
-            ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC);
+            GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DOC);
 
     @SuppressWarnings("this-escape")
-    public GroupConfig(Map<?, ?> props) {
+    public ConsumerGroupDynamicConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
         this.consumerSessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerHeartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
-        this.shareRecordLockDurationMs = getInt(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
     }
 
     public static ConfigDef configDef() {
@@ -90,25 +77,16 @@ public class GroupConfig extends AbstractConfig {
         return CONFIG.names();
     }
 
-    /**
-     * Check that property names are valid
-     */
-    public static void validateNames(Properties props) {
-        Set<String> names = configNames();
-        for (Object name : props.keySet()) {
-            if (!names.contains(name)) {
-                throw new InvalidConfigurationException("Unknown group config name: " + name);
-            }
-        }
+    public static boolean isConsumerGroupConfig(String key) {
+        return configNames().contains(key);
     }
 
     /**
      * Validates the values of the given properties.
      */
-    private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+    private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig) {
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
-        int shareRecordLockDurationMs = (Integer) valueMaps.get(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
         if (consumerHeartbeatInterval < groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equals to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -125,34 +103,25 @@ public class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equals to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
         }
-        if (shareRecordLockDurationMs > shareGroupConfig.shareGroupMaxRecordLockDurationMs()) {
-            throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS_CONFIG + " must be less than or equals to " +
-                ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
-        }
-        if (shareRecordLockDurationMs < shareGroupConfig.shareGroupMinRecordLockDurationMs()) {
-            throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS_CONFIG + " must be greater than or equals to " +
-                ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
-        }
     }
 
     /**
      * Check that the given properties contain only valid consumer group config names and that all values can be
      * parsed and are valid.
      */
-    public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
-        validateNames(props);
+    public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig) {
         Map<?, ?> valueMaps = CONFIG.parse(props);
-        validateValues(valueMaps, groupCoordinatorConfig, shareGroupConfig);
+        validateValues(valueMaps, groupCoordinatorConfig);
     }
 
     /**
      * Create a group config instance using the given properties and defaults.
      */
-    public static GroupConfig fromProps(Map<?, ?> defaults, Properties overrides) {
+    public static ConsumerGroupDynamicConfig fromProps(Map<?, ?> defaults, Properties overrides) {
         Properties props = new Properties();
         props.putAll(defaults);
         props.putAll(overrides);
-        return new GroupConfig(props);
+        return new ConsumerGroupDynamicConfig(props);
     }
 
     /**
@@ -167,12 +136,5 @@ public class GroupConfig extends AbstractConfig {
      */
     public int consumerHeartbeatIntervalMs() {
         return consumerHeartbeatIntervalMs;
-    }
-
-    /**
-     * The share group record lock duration in milliseconds
-     */
-    public int shareRecordLockDurationMs() {
-        return shareRecordLockDurationMs;
     }
 }

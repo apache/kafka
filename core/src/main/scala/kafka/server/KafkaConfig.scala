@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig
 import org.apache.kafka.coordinator.common.runtime.GroupType
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.{DynamicGroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
@@ -151,7 +151,7 @@ object KafkaConfig {
     val maybeSensitive = resourceType match {
       case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
       case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).asScala)
-      case ConfigResource.Type.GROUP => KafkaConfig.maybeSensitive(GroupConfig.configType(name).asScala)
+      case ConfigResource.Type.GROUP => KafkaConfig.maybeSensitive(DynamicGroupConfig.configType(name).asScala)
       case ConfigResource.Type.BROKER_LOGGER => false
       case ConfigResource.Type.CLIENT_METRICS => false
       case _ => true

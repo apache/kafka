@@ -20,6 +20,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.server.share.ShareGroupConfig;
+import org.apache.kafka.server.share.ShareGroupDynamicConfig;
 
 import java.util.Map;
 import java.util.Optional;
@@ -31,13 +32,17 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class GroupConfigManager implements AutoCloseable {
 
-    private final GroupConfig defaultConfig;
+    private final ConsumerGroupDynamicConfig defaultConsumerGroupConfig;
+    private final ShareGroupDynamicConfig defaultShareGroupConfig;
 
-    private final Map<String, GroupConfig> configMap;
+    private final Map<String, ConsumerGroupDynamicConfig> consumerGroupConfigMap;
+    private final Map<String, ShareGroupDynamicConfig> shareGroupConfigMap;
 
-    public GroupConfigManager(Map<?, ?> defaultConfig) {
-        this.configMap = new ConcurrentHashMap<>();
-        this.defaultConfig = new GroupConfig(defaultConfig);
+    public GroupConfigManager(Map<?, ?> defaultConsumerGroupConfig, Map<?, ?> defaultShareGroupConfig) {
+        this.consumerGroupConfigMap = new ConcurrentHashMap<>();
+        this.shareGroupConfigMap = new ConcurrentHashMap<>();
+        this.defaultConsumerGroupConfig = new ConsumerGroupDynamicConfig(defaultConsumerGroupConfig);
+        this.defaultShareGroupConfig = new ShareGroupDynamicConfig(defaultShareGroupConfig);
     }
 
     /**
@@ -50,22 +55,39 @@ public class GroupConfigManager implements AutoCloseable {
         if (null == groupId || groupId.isEmpty()) {
             throw new InvalidRequestException("Group name can't be empty.");
         }
+        Properties consumerGroupDynamicConfig = new Properties();
+        Properties shareGroupDynamicConfig = new Properties();
 
-        final GroupConfig newConfig = GroupConfig.fromProps(
-            defaultConfig.originals(),
-            newGroupConfig
-        );
-        configMap.put(groupId, newConfig);
+        newGroupConfig.forEach((key, value) -> {
+            if (ConsumerGroupDynamicConfig.isConsumerGroupConfig((String) key)) {
+                consumerGroupDynamicConfig.put(key, value);
+            } else {
+                shareGroupDynamicConfig.put(key, value);
+            }
+        });
+
+        updateConsumerGroupConfig(groupId, consumerGroupDynamicConfig);
+        updateShareGroupConfig(groupId, shareGroupDynamicConfig);
     }
 
     /**
-     * Get the group config if it exists, otherwise return None.
+     * Get the consumer group config if it exists, otherwise return None.
      *
      * @param groupId  The group id.
-     * @return The group config.
+     * @return The consumer group config.
      */
-    public Optional<GroupConfig> groupConfig(String groupId) {
-        return Optional.ofNullable(configMap.get(groupId));
+    public Optional<ConsumerGroupDynamicConfig> consumerGroupConfig(String groupId) {
+        return Optional.ofNullable(consumerGroupConfigMap.get(groupId));
+    }
+
+    /**
+     * Get the share group config if it exists, otherwise return None.
+     *
+     * @param groupId  The group id.
+     * @return The share group config.
+     */
+    public Optional<ShareGroupDynamicConfig> shareGroupConfig(String groupId) {
+        return Optional.ofNullable(shareGroupConfigMap.get(groupId));
     }
 
     /**
@@ -73,6 +95,7 @@ public class GroupConfigManager implements AutoCloseable {
      *
      * @param newGroupConfig                 The new group config.
      * @param groupCoordinatorConfig         The group coordinator config.
+     * @param shareGroupConfig               The share coordinator config
      * @throws InvalidConfigurationException If validation fails
      */
     public static void validate(
@@ -81,15 +104,45 @@ public class GroupConfigManager implements AutoCloseable {
         ShareGroupConfig shareGroupConfig
     ) {
         Properties combinedConfigs = new Properties();
-        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
+        combinedConfigs.putAll(groupCoordinatorConfig.extractConsumerGroupConfigMap());
+        combinedConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap());
         combinedConfigs.putAll(newGroupConfig);
-        GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
+        DynamicGroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
     }
 
     /**
      * Remove all group configs.
      */
     public void close() {
-        configMap.clear();
+        consumerGroupConfigMap.clear();
+        shareGroupConfigMap.clear();
+    }
+
+    /**
+     * Update the consumer group configuration of the provided group.
+     *
+     * @param groupId                   The group id.
+     * @param newConsumerGroupConfig    The new consumer group config.
+     */
+    private void updateConsumerGroupConfig(String groupId, Properties newConsumerGroupConfig) {
+        final ConsumerGroupDynamicConfig newConfig = ConsumerGroupDynamicConfig.fromProps(
+            defaultConsumerGroupConfig.originals(),
+            newConsumerGroupConfig
+        );
+        consumerGroupConfigMap.put(groupId, newConfig);
+    }
+
+    /**
+     * Update the share group configuration of the provided group.
+     *
+     * @param groupId                   The group id.
+     * @param newShareGroupConfig       The new share group config.
+     */
+    private void updateShareGroupConfig(String groupId, Properties newShareGroupConfig) {
+        final ShareGroupDynamicConfig newConfig = ShareGroupDynamicConfig.fromProps(
+            defaultShareGroupConfig.originals(),
+            newShareGroupConfig
+        );
+        shareGroupConfigMap.put(groupId, newConfig);
     }
 }

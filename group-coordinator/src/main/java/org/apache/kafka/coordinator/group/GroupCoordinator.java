@@ -48,6 +48,7 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.share.ShareGroupDynamicConfig;
 
 import java.time.Duration;
 import java.util.List;
@@ -408,12 +409,21 @@ public interface GroupCoordinator {
     Properties groupMetadataTopicConfigs();
 
     /**
-     * Return the configuration of the provided group.
+     * Return the configuration of the provided consumer group.
      *
      * @param groupId       The group id.
-     * @return The group config.
+     * @return The consumer group config.
      */
-    Optional<GroupConfig> groupConfig(String groupId);
+    Optional<ConsumerGroupDynamicConfig> consumerGroupConfig(String groupId);
+
+    /**
+     * Return the configuration of the provided share group.
+     *
+     * @param groupId       The group id.
+     * @return The share group config.
+     */
+    Optional<ShareGroupDynamicConfig> shareGroupConfig(String groupId);
+
 
     /**
      * Update the configuration of the provided group.

@@ -22,7 +22,7 @@ import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
-import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.coordinator.group.DynamicGroupConfig
 import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 
 import java.util
@@ -103,7 +103,7 @@ object DynamicConfig {
   }
 
   object Group {
-    private val groupConfigs = GroupConfig.configDef()
+    private val groupConfigs = DynamicGroupConfig.configDef()
 
     def names: util.Set[String] = groupConfigs.names
   }

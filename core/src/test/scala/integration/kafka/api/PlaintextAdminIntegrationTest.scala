@@ -47,7 +47,7 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, GroupType, IsolationLevel, ShareGroupState, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.{ConsumerGroupDynamicConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{QuotaConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
@@ -1014,8 +1014,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Alter group configs
     var groupAlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
+      new AlterConfigOp(new ConfigEntry(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(ConsumerGroupDynamicConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, ""), AlterConfigOp.OpType.DELETE)
     ).asJavaCollection
 
     var alterResult = client.incrementalAlterConfigs(Map(
@@ -1033,14 +1033,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals(1, configs.size)
 
-    assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
-    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
-    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).value)
-    assertEquals(ConfigSource.DEFAULT_CONFIG, configs.get(groupResource).get(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).source)
+    assertEquals("50000", configs.get(groupResource).get(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG, configs.get(groupResource).get(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
+    assertEquals(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString, configs.get(groupResource).get(ConsumerGroupDynamicConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).value)
+    assertEquals(ConfigSource.DEFAULT_CONFIG, configs.get(groupResource).get(ConsumerGroupDynamicConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG).source)
 
     // Alter group with validateOnly=true
     groupAlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "60000"), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "60000"), AlterConfigOp.OpType.SET)
     ).asJava
 
     alterResult = client.incrementalAlterConfigs(Map(
@@ -1052,11 +1052,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     describeResult = client.describeConfigs(Seq(groupResource).asJava)
     configs = describeResult.all.get(15, TimeUnit.SECONDS)
 
-    assertEquals("50000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals("50000", configs.get(groupResource).get(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
 
     // Alter group with validateOnly=true with invalid configs
     groupAlterConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "5"), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "5"), AlterConfigOp.OpType.SET)
     ).asJava
 
     alterResult = client.incrementalAlterConfigs(Map(

@@ -22,6 +22,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig;
 import org.apache.kafka.coordinator.common.runtime.GroupType;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -94,6 +96,15 @@ public class ShareGroupConfig {
         shareGroupMaxRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
         shareGroupMinRecordLockDurationMs = config.getInt(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG);
         validate();
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to consumer group.
+     */
+    public Map<String, Integer> extractShareGroupConfigMap() {
+        Map<String, Integer> groupProps = new HashMap<>();
+        groupProps.put(ShareGroupDynamicConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs());
+        return groupProps;
     }
 
     /** Share group configuration **/

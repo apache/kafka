@@ -5926,8 +5926,8 @@ public class GroupMetadataManager {
      * Get the session timeout of the provided group.
      */
     private int consumerGroupSessionTimeoutMs(String groupId) {
-        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::consumerSessionTimeoutMs)
+        Optional<ConsumerGroupDynamicConfig> groupConfig = groupConfigManager.consumerGroupConfig(groupId);
+        return groupConfig.map(ConsumerGroupDynamicConfig::consumerSessionTimeoutMs)
             .orElse(consumerGroupSessionTimeoutMs);
     }
 
@@ -5935,8 +5935,8 @@ public class GroupMetadataManager {
      * Get the heartbeat interval of the provided group.
      */
     private int consumerGroupHeartbeatIntervalMs(String groupId) {
-        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::consumerHeartbeatIntervalMs)
+        Optional<ConsumerGroupDynamicConfig> groupConfig = groupConfigManager.consumerGroupConfig(groupId);
+        return groupConfig.map(ConsumerGroupDynamicConfig::consumerHeartbeatIntervalMs)
             .orElse(consumerGroupHeartbeatIntervalMs);
     }
 

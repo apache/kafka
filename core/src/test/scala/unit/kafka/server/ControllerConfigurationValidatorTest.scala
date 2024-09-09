@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.common.config.TopicConfig.{REMOTE_LOG_STORAGE_ENABLE_CONFIG, SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
-import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.coordinator.group.ConsumerGroupDynamicConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
@@ -179,8 +179,8 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testValidGroupConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
-    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
-    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000")
+    config.put(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(ConsumerGroupDynamicConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000")
     validator.validate(new ConfigResource(GROUP, "group"), config, emptyMap())
   }
 
@@ -195,8 +195,8 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testNullGroupConfigValue(): Unit = {
     val config = new util.TreeMap[String, String]()
-    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
-    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, null)
+    config.put(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(ConsumerGroupDynamicConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, null)
     assertEquals("Null value not supported for group configs: consumer.heartbeat.interval.ms",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
@@ -205,7 +205,7 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testInvalidGroupConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
-    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
     config.put("foobar", "abc")
     assertEquals("Unknown group config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(

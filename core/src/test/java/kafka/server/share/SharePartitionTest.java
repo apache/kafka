@@ -4734,7 +4734,7 @@ public class SharePartitionTest {
         private int defaultAcquisitionLockTimeoutMs = 30000;
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
-        private GroupConfigManager groupConfigManager = new GroupConfigManager(new HashMap<>());
+        private GroupConfigManager groupConfigManager = new GroupConfigManager(new HashMap<>(), new HashMap<>());
         private Persister persister = NoOpShareStatePersister.getInstance();
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {

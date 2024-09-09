@@ -62,7 +62,7 @@ import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import java.util.Collections.singletonList
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.{WritableTxnMarker, WritableTxnMarkerTopic}
-import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.coordinator.group.ConsumerGroupDynamicConfig
 import org.apache.kafka.metadata.LeaderAndIsr
 import org.junit.jupiter.api.function.Executable
 
@@ -545,7 +545,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   private def incrementalAlterGroupConfigsRequest = {
     val data = new IncrementalAlterConfigsRequestData
-    val alterableConfig = new AlterableConfig().setName(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).
+    val alterableConfig = new AlterableConfig().setName(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).
       setValue("50000").setConfigOperation(AlterConfigOp.OpType.SET.id())
     val alterableConfigSet = new AlterableConfigCollection
     alterableConfigSet.add(alterableConfig)

@@ -1606,8 +1606,8 @@ public class SharePartition {
         // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
         // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
         int recordLockDurationMs;
-        if (groupConfigManager.groupConfig(groupId).isPresent()) {
-            recordLockDurationMs = groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
+        if (groupConfigManager.shareGroupConfig(groupId).isPresent()) {
+            recordLockDurationMs = groupConfigManager.shareGroupConfig(groupId).get().shareRecordLockDurationMs();
         } else {
             recordLockDurationMs = defaultRecordLockDurationMs;
         }

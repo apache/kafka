@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
-import org.apache.kafka.server.share.ShareGroupConfig;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -354,11 +353,10 @@ public class GroupCoordinatorConfig {
     /**
      * Copy the subset of properties that are relevant to consumer group.
      */
-    public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
+    public Map<String, Integer> extractConsumerGroupConfigMap() {
         Map<String, Integer> groupProps = new HashMap<>();
-        groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs());
-        groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
-        groupProps.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupConfig.shareGroupRecordLockDurationMs());
+        groupProps.put(ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs());
+        groupProps.put(ConsumerGroupDynamicConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
         return groupProps;
     }
 

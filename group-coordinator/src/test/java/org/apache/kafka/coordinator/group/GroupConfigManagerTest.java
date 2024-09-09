@@ -18,6 +18,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.server.share.ShareGroupConfig;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,8 +29,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 
-import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.ConsumerGroupDynamicConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.ConsumerGroupDynamicConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.server.share.ShareGroupDynamicConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -59,7 +61,7 @@ public class GroupConfigManagerTest {
 
     @Test
     public void testGetNonExistentGroupConfig() {
-        Optional<GroupConfig> groupConfig = configManager.groupConfig("foo");
+        Optional<ConsumerGroupDynamicConfig> groupConfig = configManager.consumerGroupConfig("foo");
         assertFalse(groupConfig.isPresent());
     }
 
@@ -71,18 +73,21 @@ public class GroupConfigManagerTest {
         props.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, 6000);
         configManager.updateGroupConfig(groupId, props);
 
-        Optional<GroupConfig> configOptional = configManager.groupConfig(groupId);
+        Optional<ConsumerGroupDynamicConfig> configOptional = configManager.consumerGroupConfig(groupId);
         assertTrue(configOptional.isPresent());
 
-        GroupConfig config = configOptional.get();
+        ConsumerGroupDynamicConfig config = configOptional.get();
         assertEquals(50000, config.getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(6000, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
     }
 
     public static GroupConfigManager createConfigManager() {
-        Map<String, String> defaultConfig = new HashMap<>();
-        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
-        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
-        return new GroupConfigManager(defaultConfig);
+        Map<String, String> defaultConsumerGroupConfig = new HashMap<>();
+        defaultConsumerGroupConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
+        defaultConsumerGroupConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
+
+        Map<String, String> defaultShareGroupConfig = new HashMap<>();
+        defaultShareGroupConfig.put(SHARE_RECORD_LOCK_DURATION_MS_CONFIG, String.valueOf(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT));
+        return new GroupConfigManager(defaultConsumerGroupConfig, defaultShareGroupConfig);
     }
 }

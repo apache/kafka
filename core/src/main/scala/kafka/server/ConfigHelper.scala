@@ -33,8 +33,9 @@ import org.apache.kafka.common.requests.{ApiError, DescribeConfigsRequest, Descr
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
-import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.coordinator.group.{ConsumerGroupDynamicConfig, DynamicGroupConfig}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.share.ShareGroupDynamicConfig
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.mutable.ListBuffer
@@ -159,8 +160,13 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               throw new InvalidRequestException("Group name must not be empty")
             } else {
               val groupProps = configRepository.groupConfig(group)
-              val groupConfig = GroupConfig.fromProps(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig), groupProps)
-              createResponseConfig(allConfigs(groupConfig), createGroupConfigEntry(groupConfig, groupProps, includeSynonyms, includeDocumentation))
+              val consumerGroupDynamicConfig = ConsumerGroupDynamicConfig.fromProps(
+                config.groupCoordinatorConfig.extractConsumerGroupConfigMap(), groupProps)
+              val shareGroupDynamicConfig = ShareGroupDynamicConfig.fromProps(
+                config.shareGroupConfig.extractShareGroupConfigMap(), groupProps)
+              val dynamicGroupConfig = new DynamicGroupConfig(consumerGroupDynamicConfig, shareGroupDynamicConfig)
+              val configs: mutable.Map[String, Any] = allConfigs(consumerGroupDynamicConfig) ++ allConfigs(shareGroupDynamicConfig)
+              createResponseConfig(configs, createGroupConfigEntry(dynamicGroupConfig, groupProps, includeSynonyms, includeDocumentation))
             }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
@@ -185,10 +191,10 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     }
   }
 
-  def createGroupConfigEntry(groupConfig: GroupConfig, groupProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
+  def createGroupConfigEntry(dynamicGroupConfig: DynamicGroupConfig, groupProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
     val allNames = brokerSynonyms(name)
-    val configEntryType = GroupConfig.configType(name).asScala
+    val configEntryType = DynamicGroupConfig.configType(name).asScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
@@ -202,7 +208,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     val dataType = configResponseType(configEntryType)
-    val configDocumentation = if (includeDocumentation) groupConfig.documentationOf(name) else null
+    val configDocumentation = if (includeDocumentation) dynamicGroupConfig.documentationOf(name) else null
     new DescribeConfigsResponseData.DescribeConfigsResourceResult()
       .setName(name).setValue(valueAsString).setConfigSource(source)
       .setIsSensitive(isSensitive).setReadOnly(false).setSynonyms(synonyms.asJava)

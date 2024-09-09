@@ -124,7 +124,7 @@ public class SharePartitionManagerTest {
     private static final int MAX_DELIVERY_COUNT = 5;
     private static final short MAX_IN_FLIGHT_MESSAGES = 200;
     private static final int PARTITION_MAX_BYTES = 40000;
-    private static final GroupConfigManager GROUP_CONFIG_MANAGER = new GroupConfigManager(new HashMap<>());
+    private static final GroupConfigManager GROUP_CONFIG_MANAGER = new GroupConfigManager(new HashMap<>(), new HashMap<>());
 
     private static Timer mockTimer;
 

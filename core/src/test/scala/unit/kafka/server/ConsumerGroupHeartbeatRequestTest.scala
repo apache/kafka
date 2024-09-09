@@ -28,7 +28,7 @@ import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, Consu
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.{ConsumerGroupDynamicConfig, GroupCoordinatorConfig}
 import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
 import org.junit.jupiter.api.Timeout
@@ -446,7 +446,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     // Alter consumer heartbeat interval config
     val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
     val op = new AlterConfigOp(
-      new ConfigEntry(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, newHeartbeatIntervalMs.toString),
+      new ConfigEntry(ConsumerGroupDynamicConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, newHeartbeatIntervalMs.toString),
       OpType.SET
     )
     admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get

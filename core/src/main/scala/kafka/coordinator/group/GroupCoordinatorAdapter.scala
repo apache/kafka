@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.share.ShareGroupDynamicConfig
 import org.apache.kafka.server.util.FutureUtils
 
 import java.time.Duration
@@ -624,8 +625,12 @@ private[group] class GroupCoordinatorAdapter(
     coordinator.offsetsTopicConfigs
   }
 
-  override def groupConfig(groupId: String): Optional[group.GroupConfig] = {
-    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support get group config.")
+  override def consumerGroupConfig(groupId: String): Optional[group.ConsumerGroupDynamicConfig] = {
+    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support get consumer group config.")
+  }
+
+  override def shareGroupConfig(groupId: String): Optional[ShareGroupDynamicConfig] = {
+    throw Errors.UNSUPPORTED_VERSION.exception("The old group coordinator does not support get share group config.")
   }
 
   override def updateGroupConfig(

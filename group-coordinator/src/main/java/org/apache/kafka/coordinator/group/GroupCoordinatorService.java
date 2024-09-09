@@ -75,6 +75,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
+import org.apache.kafka.server.share.ShareGroupDynamicConfig;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 
@@ -1160,11 +1161,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#groupConfig(String)}.
+     * See {@link GroupCoordinator#consumerGroupConfig(String)}.
      */
     @Override
-    public Optional<GroupConfig> groupConfig(String groupId) {
-        return groupConfigManager.groupConfig(groupId);
+    public Optional<ConsumerGroupDynamicConfig> consumerGroupConfig(String groupId) {
+        return groupConfigManager.consumerGroupConfig(groupId);
+    }
+
+    /**
+     * See {@link GroupCoordinator#shareGroupConfig(String)}.
+     */
+    @Override
+    public Optional<ShareGroupDynamicConfig> shareGroupConfig(String groupId) {
+        return groupConfigManager.shareGroupConfig(groupId);
     }
 
     /**
