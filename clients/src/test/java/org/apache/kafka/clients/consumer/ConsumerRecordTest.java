@@ -50,7 +50,6 @@ public class ConsumerRecordTest {
         assertEquals(ConsumerRecord.NULL_SIZE, record.serializedValueSize());
         assertEquals(Optional.empty(), record.leaderEpoch());
         assertEquals(Optional.empty(), record.deliveryCount());
-        assertNotNull(record.leaderEpoch());
         assertEquals(new RecordHeaders(), record.headers());
     }
 
@@ -120,7 +119,6 @@ public class ConsumerRecordTest {
                 serializedKeySize, serializedValueSize, key, value, headers, leaderEpoch);
 
         assertEquals(record.leaderEpoch(), leaderEpoch);
-        assertNotNull(record.leaderEpoch());
         leaderEpoch = Optional.of(2);
 
         record = new ConsumerRecord<>(topic, partition, offset, timestamp, timestampType,
