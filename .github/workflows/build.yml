@@ -26,10 +26,6 @@ on:
         description: "Should the Gradle cache be write-only?"
         default: "false"
         type: string
-      github-actions-opt-in:
-        description: "Should we run the opt-in steps?"
-        default: "false"
-        type: string
       is-public-fork:
         description: "Is this CI run from a public fork?"
         default: "true"
@@ -78,8 +74,7 @@ jobs:
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
         # Avoid duplicate annotations, only run on java 21
-        # For now, limit to "gh-" PRs
-        if: ${{ inputs.github-actions-opt-in && failure() && matrix.java == '21' }}
+        if: ${{ failure() && matrix.java == '21' }}
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
@@ -91,7 +86,6 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 17, 11 ]
-    if: ${{ inputs.github-actions-opt-in == 'true' }}
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
