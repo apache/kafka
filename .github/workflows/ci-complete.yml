@@ -83,4 +83,4 @@ jobs:
           url: ${{ steps.publish-build-scan.outputs.build-scan-url }}
           description: 'The build scan was successfully published'
           context: 'Gradle Build Scan / Java ${{ matrix.java }}'
-          status: 'complete'
+          state: 'complete'
