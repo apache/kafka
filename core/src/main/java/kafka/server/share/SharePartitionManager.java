@@ -23,6 +23,9 @@ import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.FencedStateEpochException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -574,14 +577,18 @@ public class SharePartitionManager implements AutoCloseable {
                     shareFetchPartitionData.groupId,
                     topicIdPartition
                 );
-                partitionCacheMap.computeIfAbsent(sharePartitionKey,
-                    k -> {
-                        long start = time.hiResClockMs();
-                        SharePartition partition = new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxInFlightMessages, maxDeliveryCount,
-                            recordLockDurationMs, timer, time, persister, delayedShareFetchPurgatory);
-                        this.shareGroupMetrics.partitionLoadTime(start);
-                        return partition;
-                    });
+                SharePartition sharePartition = fetchSharePartition(sharePartitionKey);
+
+                // The share partition is initialized asynchronously, so we need to wait for it to be initialized.
+                // But if the share partition is already initialized, then the future will be completed immediately.
+                // Hence, it's safe to call the maybeInitialize method and then wait for the future to be completed.
+                // TopicPartitionData list will be populated only if the share partition is already initialized.
+                sharePartition.maybeInitialize().whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        maybeCompleteInitializationWithException(sharePartitionKey, shareFetchPartitionData.future, throwable);
+                        return;
+                    }
+                });
             });
 
             Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
@@ -607,6 +614,56 @@ public class SharePartitionManager implements AutoCloseable {
             if (!fetchQueue.isEmpty())
                 maybeProcessFetchQueue();
         }
+    }
+
+    private SharePartition fetchSharePartition(SharePartitionKey sharePartitionKey) {
+        return partitionCacheMap.computeIfAbsent(sharePartitionKey,
+                k -> {
+                    long start = time.hiResClockMs();
+                    SharePartition partition = new SharePartition(
+                            sharePartitionKey.groupId,
+                            sharePartitionKey.topicIdPartition,
+                            maxInFlightMessages,
+                            maxDeliveryCount,
+                            recordLockDurationMs,
+                            timer,
+                            time,
+                            persister,
+                            delayedShareFetchPurgatory
+                    );
+                    this.shareGroupMetrics.partitionLoadTime(start);
+                    return partition;
+                });
+    }
+
+    private void maybeCompleteInitializationWithException(
+            SharePartitionKey sharePartitionKey,
+            CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
+            Throwable throwable) {
+        if (throwable instanceof LeaderNotAvailableException) {
+            log.debug("The share partition with key {} is not initialized yet", sharePartitionKey);
+            // Do not process the fetch request for this partition as the leader is not initialized yet.
+            // The fetch request will be retried in the next poll.
+            // TODO: Add the request to delayed fetch purgatory.
+            return;
+        }
+
+        if (throwable instanceof NotLeaderOrFollowerException || throwable instanceof FencedStateEpochException) {
+            log.info("The share partition with key {} is fenced: {}", sharePartitionKey, throwable.getMessage());
+            // The share partition is fenced hence remove the partition from map and let the client retry.
+            // But surface the error to the client so client might take some action i.e. re-fetch
+            // the metadata and retry the fetch on new leader.
+            partitionCacheMap.remove(sharePartitionKey);
+            future.completeExceptionally(throwable);
+            return;
+        }
+
+        // The partition initialization failed, so complete the request with the exception.
+        // The server should not be in this state, so log the error on broker and surface the same
+        // to the client. As of now this state is in-recoverable for the broker, and we should
+        // investigate the root cause of the error.
+        log.error("Error initializing share partition with key {}", sharePartitionKey, throwable);
+        future.completeExceptionally(throwable);
     }
 
     // Visible for testing.
