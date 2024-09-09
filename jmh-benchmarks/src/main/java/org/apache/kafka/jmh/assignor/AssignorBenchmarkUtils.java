@@ -34,20 +34,16 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.TopicsImage;
 
-import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
-import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.function.Function;
+
 
 public class AssignorBenchmarkUtils {
     /**
