@@ -23,6 +23,9 @@ import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.FencedStateEpochException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -546,42 +549,49 @@ public class SharePartitionManager implements AutoCloseable {
                     shareFetchPartitionData.groupId,
                     topicIdPartition
                 );
-                SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey,
-                    k -> {
-                        long start = time.hiResClockMs();
-                        SharePartition partition = new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxInFlightMessages, maxDeliveryCount,
-                            recordLockDurationMs, timer, time, persister);
-                        this.shareGroupMetrics.partitionLoadTime(start);
-                        return partition;
-                    });
-                int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
-                // Add the share partition to the list of partitions to be fetched only if we can
-                // acquire the fetch lock on it.
-                if (sharePartition.maybeAcquireFetchLock()) {
-                    // If the share partition is already at capacity, we should not attempt to fetch.
-                    if (sharePartition.canAcquireRecords()) {
-                        topicPartitionData.put(
-                            topicIdPartition,
-                            new FetchRequest.PartitionData(
-                                topicIdPartition.topicId(),
-                                sharePartition.nextFetchOffset(),
-                                0,
-                                partitionMaxBytes,
-                                Optional.empty()
-                            )
-                        );
-                    } else {
-                        sharePartition.releaseFetchLock();
-                        log.info("Record lock partition limit exceeded for SharePartition with key {}, " +
-                            "cannot acquire more records", sharePartitionKey);
+                SharePartition sharePartition = fetchSharePartition(sharePartitionKey);
+
+                // The share partition is initialized asynchronously, so we need to wait for it to be initialized.
+                // But if the share partition is already initialized, then the future will be completed immediately.
+                // Hence, it's safe to call the maybeInitialize method and then wait for the future to be completed.
+                // TopicPartitionData list will be populated only if the share partition is already initialized.
+                sharePartition.maybeInitialize().whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        maybeCompleteInitializationWithException(sharePartitionKey, shareFetchPartitionData.future, throwable);
+                        return;
                     }
-                }
+                    // Fetch messages for the partition only if it is active.
+                    int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
+                    // Add the share partition to the list of partitions to be fetched only if we can
+                    // acquire the fetch lock on it.
+                    if (sharePartition.maybeAcquireFetchLock()) {
+                        // If the share partition is already at capacity, we should not attempt to fetch.
+                        if (sharePartition.canAcquireRecords()) {
+                            topicPartitionData.put(
+                                topicIdPartition,
+                                new FetchRequest.PartitionData(
+                                    topicIdPartition.topicId(),
+                                    sharePartition.nextFetchOffset(),
+                                    0,
+                                    partitionMaxBytes,
+                                    Optional.empty()
+                                )
+                            );
+                        } else {
+                            sharePartition.releaseFetchLock();
+                            log.info("Record lock partition limit exceeded for SharePartition with key {}, " +
+                                "cannot acquire more records", sharePartitionKey);
+                        }
+                    }
+                });
             });
 
             if (topicPartitionData.isEmpty()) {
-                // No locks for share partitions could be acquired, so we complete the request and
-                // will re-fetch for the client in next poll.
-                shareFetchPartitionData.future.complete(Collections.emptyMap());
+                // No locks for share partitions could be acquired, so we complete the request if not
+                // already. The records shall be re-fetched in next poll by the client.
+                if (!shareFetchPartitionData.future.isDone()) {
+                    shareFetchPartitionData.future.complete(Collections.emptyMap());
+                }
                 // Though if no partitions can be locked then there must be some other request which
                 // is in-flight and should release the lock. But it's safe to release the lock as
                 // the lock on share partition already exists which facilitates correct behaviour
@@ -595,30 +605,7 @@ public class SharePartitionManager implements AutoCloseable {
             log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
                 topicPartitionData, shareFetchPartitionData.groupId, shareFetchPartitionData.fetchParams);
 
-            replicaManager.fetchMessages(
-                shareFetchPartitionData.fetchParams,
-                CollectionConverters.asScala(
-                    topicPartitionData.entrySet().stream().map(entry ->
-                        new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
-                ),
-                QuotaFactory.UnboundedQuota$.MODULE$,
-                responsePartitionData -> {
-                    log.trace("Data successfully retrieved by replica manager: {}", responsePartitionData);
-                    List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
-                        responsePartitionData);
-                    processFetchResponse(shareFetchPartitionData, responseData).whenComplete(
-                        (result, throwable) -> {
-                            if (throwable != null) {
-                                log.error("Error processing fetch response for share partitions", throwable);
-                                shareFetchPartitionData.future.completeExceptionally(throwable);
-                            } else {
-                                shareFetchPartitionData.future.complete(result);
-                            }
-                            // Releasing the lock to move ahead with the next request in queue.
-                            releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
-                        });
-                    return BoxedUnit.UNIT;
-                });
+            processReplicaManagerFetch(shareFetchPartitionData, topicPartitionData);
 
             // If there are more requests in the queue, then process them.
             if (!fetchQueue.isEmpty())
@@ -630,6 +617,85 @@ public class SharePartitionManager implements AutoCloseable {
             shareFetchPartitionData.future.completeExceptionally(e);
             releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
         }
+    }
+
+    private SharePartition fetchSharePartition(SharePartitionKey sharePartitionKey) {
+        return partitionCacheMap.computeIfAbsent(sharePartitionKey,
+            k -> {
+                long start = time.hiResClockMs();
+                SharePartition partition = new SharePartition(
+                    sharePartitionKey.groupId,
+                    sharePartitionKey.topicIdPartition,
+                    maxInFlightMessages,
+                    maxDeliveryCount,
+                    recordLockDurationMs,
+                    timer,
+                    time,
+                    persister
+                );
+                this.shareGroupMetrics.partitionLoadTime(start);
+                return partition;
+            });
+    }
+
+    private void maybeCompleteInitializationWithException(
+        SharePartitionKey sharePartitionKey,
+        CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
+        Throwable throwable) {
+        if (throwable instanceof LeaderNotAvailableException) {
+            log.debug("The share partition with key {} is not initialized yet", sharePartitionKey);
+            // Do not process the fetch request for this partition as the leader is not initialized yet.
+            // The fetch request will be retried in the next poll.
+            // TODO: Add the request to delayed fetch purgatory.
+            return;
+        }
+
+        if (throwable instanceof NotLeaderOrFollowerException || throwable instanceof FencedStateEpochException) {
+            log.info("The share partition with key {} is fenced: {}", sharePartitionKey, throwable.getMessage());
+            // The share partition is fenced hence remove the partition from map and let the client retry.
+            // But surface the error to the client so client might take some action i.e. re-fetch
+            // the metadata and retry the fetch on new leader.
+            partitionCacheMap.remove(sharePartitionKey);
+            future.completeExceptionally(throwable);
+            return;
+        }
+
+        // The partition initialization failed, so complete the request with the exception.
+        // The server should not be in this state, so log the error on broker and surface the same
+        // to the client. As of now this state is in-recoverable for the broker, and we should
+        // investigate the root cause of the error.
+        log.error("Error initializing share partition with key {}", sharePartitionKey, throwable);
+        future.completeExceptionally(throwable);
+    }
+
+    private void processReplicaManagerFetch(
+        ShareFetchPartitionData shareFetchPartitionData,
+        Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData
+    ) {
+        replicaManager.fetchMessages(
+            shareFetchPartitionData.fetchParams,
+            CollectionConverters.asScala(
+                topicPartitionData.entrySet().stream().map(entry ->
+                    new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
+            ),
+            QuotaFactory.UnboundedQuota$.MODULE$,
+            responsePartitionData -> {
+                log.trace("Data successfully retrieved by replica manager: {}", responsePartitionData);
+                List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
+                    responsePartitionData);
+                processFetchResponse(shareFetchPartitionData, responseData).whenComplete(
+                    (result, throwable) -> {
+                        if (throwable != null) {
+                            log.error("Error processing fetch response for share partitions", throwable);
+                            shareFetchPartitionData.future.completeExceptionally(throwable);
+                        } else {
+                            shareFetchPartitionData.future.complete(result);
+                        }
+                        // Releasing the lock to move ahead with the next request in queue.
+                        releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
+                    });
+                return BoxedUnit.UNIT;
+            });
     }
 
     // Visible for testing.

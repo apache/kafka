@@ -26,6 +26,10 @@ on:
         description: "Should the Gradle cache be write-only?"
         default: "false"
         type: string
+      is-public-fork:
+        description: "Is this CI run from a public fork?"
+        default: "true"
+        type: string
 
 jobs:
   validate:
@@ -104,7 +108,8 @@ jobs:
         id: junit-test
         run: |
           set +e
-          timeout 180m ./gradlew --build-cache --scan --continue \
+          timeout 180m ./gradlew --build-cache --continue \
+          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
@@ -126,3 +131,9 @@ jobs:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
           GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
+      - name: Archive Build Scan
+        if: ${{ inputs.is-public-fork == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-scan-test-${{ matrix.java }}
+          path: ~/.gradle/build-scan-data
