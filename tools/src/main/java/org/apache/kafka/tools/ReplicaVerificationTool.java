@@ -264,6 +264,7 @@ public class ReplicaVerificationTool {
         private final OptionSpec<String> brokerListOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
         private final OptionSpec<Integer> maxWaitMsOpt;
+        private final OptionSpec<String> topicWhiteListOpt;
         private final OptionSpec<String> topicsIncludeOpt;
         private final OptionSpec<Long> initialOffsetTimeOpt;
         private final OptionSpec<Long> reportIntervalOpt;
@@ -284,6 +285,12 @@ public class ReplicaVerificationTool {
                 .describedAs("ms")
                 .ofType(Integer.class)
                 .defaultsTo(1_000);
+            topicWhiteListOpt = parser.accepts("topic-white-list", "DEPRECATED use --topics-include instead; " +
+                    "ignored if --topics-include specified. List of topics to verify replica consistency.")
+                .withRequiredArg()
+                .describedAs("Java regex (String)")
+                .ofType(String.class)
+                .defaultsTo(".*");
             topicsIncludeOpt = parser.accepts("topics-include", "List of topics to verify replica consistency.")
                 .withRequiredArg()
                 .describedAs("Java regex (String)")
@@ -307,6 +314,7 @@ public class ReplicaVerificationTool {
                 CommandLineUtils.printVersionAndExit();
             }
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
+            CommandLineUtils.checkInvalidArgs(parser, options, topicsIncludeOpt, topicWhiteListOpt);
 
         }
 
@@ -323,7 +331,7 @@ public class ReplicaVerificationTool {
         }
 
         TopicFilter.IncludeList topicsIncludeFilter() {
-            String regex = options.valueOf(topicsIncludeOpt);
+            String regex = options.valueOf(options.has(topicsIncludeOpt) ? topicsIncludeOpt : topicWhiteListOpt);
             try {
                 Pattern.compile(regex);
             } catch (PatternSyntaxException e) {
