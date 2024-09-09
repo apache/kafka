@@ -987,7 +987,7 @@ public class DescribeConsumerGroupTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
-        configs.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "1000");
+        configs.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "500");
 
         configs.putAll(customConfigs);
         return configs;
