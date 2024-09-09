@@ -18,8 +18,14 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+
 
 /**
  * This interface allows user code to inspect the context of a record that has failed processing.
@@ -102,4 +108,31 @@ public interface ErrorHandlerContext {
      * @return the task ID
      */
     TaskId taskId();
+
+    /**
+     * Return the current timestamp.
+     *
+     * <p> If it is triggered while processing a record streamed from the source processor,
+     * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
+     * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
+     * Note, that an upstream {@link Processor} might have set a new timestamp by calling
+     * {@link ProcessorContext#forward(Record) forward(record.withTimestamp(...))}.
+     * In particular, some Kafka Streams DSL operators set result record timestamps explicitly,
+     * to guarantee deterministic results.
+     *
+     * <p> If it is triggered while processing a record generated not from the source processor (for example,
+     * if this method is invoked from the punctuate call):
+     * <ul>
+     *   <li>In case of {@link PunctuationType#STREAM_TIME} timestamp is defined as the current task's stream time,
+     *   which is defined as the largest timestamp of any record processed by the task
+     *   <li>In case of {@link PunctuationType#WALL_CLOCK_TIME} timestamp is defined the current system time
+     * </ul>
+     *
+     * <p> If it is triggered from a deserialization failure, timestamp is defined as the timestamp of the
+     * current rawRecord
+     * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord}
+     *
+     * @return the timestamp
+     */
+    long timestamp();
 }

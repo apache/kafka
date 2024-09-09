@@ -982,9 +982,9 @@ class ZkMigrationIntegrationTest {
       val lisrMap = zkClient.getTopicPartitionStates(partitions)
       lisrMap.size == partitions.size &&
         lisrMap.forall { case (tp, lisr) =>
-          lisr.leaderAndIsr.isr.size == replicationFactor &&
+          lisr.leaderAndIsr.isr.size() == replicationFactor &&
           lisr.leaderAndIsr.leader >= 0 &&
-            topicIdReplicaAssignment.exists(_.assignment(tp).replicas == lisr.leaderAndIsr.isr)
+            topicIdReplicaAssignment.exists(_.assignment(tp).replicas == lisr.leaderAndIsr.isr.asScala.map(_.toInt))
         }
     }, "Unable to find topic partition metadata")
   }

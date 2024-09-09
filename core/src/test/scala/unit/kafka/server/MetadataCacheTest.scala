@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.server.metadata.{KRaftMetadataCache, MetadataSnapshot, ZkMetadataCache}
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition
@@ -31,7 +30,7 @@ import org.apache.kafka.common.requests.{AbstractControlRequest, UpdateMetadataR
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -109,7 +108,7 @@ object MetadataCacheTest {
           val results = new mutable.ArrayBuffer[ApiMessage]()
           results += new TopicRecord().setName(topic.topicName()).setTopicId(topic.topicId())
           topic.partitionStates().forEach { partition =>
-            if (partition.leader() == LeaderAndIsr.LeaderDuringDelete) {
+            if (partition.leader() == LeaderAndIsr.LEADER_DURING_DELETE) {
               results += new RemoveTopicRecord().setTopicId(topic.topicId())
             } else {
               results += new PartitionRecord().

@@ -25,6 +25,7 @@ import org.apache.kafka.metalog.LocalLogManager.LocalRecordBatch;
 import org.apache.kafka.metalog.LocalLogManager.SharedLogData;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 
@@ -71,6 +72,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         private final int numManagers;
         private Optional<RawSnapshotReader> snapshotReader = Optional.empty();
         private Consumer<SharedLogData> sharedLogDataInitializer = __ -> { };
+        private KRaftVersion lastKRaftVersion = KRaftVersion.KRAFT_VERSION_0;
 
         public Builder(int numManagers) {
             this.numManagers = numManagers;
@@ -86,11 +88,20 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Used to mock the latest KRaft version that would be returned from RaftClient.kraftVersion()
+         */
+        public Builder setLastKRaftVersion(KRaftVersion kraftVersion) {
+            this.lastKRaftVersion = kraftVersion;
+            return this;
+        }
+
         public LocalLogManagerTestEnv build() {
             return new LocalLogManagerTestEnv(
                 numManagers,
                 snapshotReader,
-                sharedLogDataInitializer);
+                sharedLogDataInitializer,
+                lastKRaftVersion);
         }
 
         public LocalLogManagerTestEnv buildWithMockListeners() {
@@ -114,7 +125,8 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
     private LocalLogManagerTestEnv(
         int numManagers,
         Optional<RawSnapshotReader> snapshotReader,
-        Consumer<SharedLogData> sharedLogDataInitializer
+        Consumer<SharedLogData> sharedLogDataInitializer,
+        KRaftVersion lastKRaftVersion
     ) {
         clusterId = Uuid.randomUuid().toString();
         dir = TestUtils.tempDirectory();
@@ -127,7 +139,8 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
                     new LogContext(String.format("[LocalLogManager %d] ", nodeId)),
                     nodeId,
                     shared,
-                    String.format("LocalLogManager-%d_", nodeId)));
+                    String.format("LocalLogManager-%d_", nodeId),
+                    lastKRaftVersion));
             }
         } catch (Throwable t) {
             for (LocalLogManager logManager : newLogManagers) {

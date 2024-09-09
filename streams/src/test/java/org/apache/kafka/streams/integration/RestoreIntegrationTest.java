@@ -554,12 +554,12 @@ public class RestoreIntegrationTest {
         final Map<String, Object> kafkaStreams1Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
         final Map<String, Object> kafkaStreams2Configuration = mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2"),
             mkEntry(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2"),
-            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 5)
+            mkEntry(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1)
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -569,7 +569,7 @@ public class RestoreIntegrationTest {
                .toStream()
                .to(outputTopic);
 
-        final List<KeyValue<Integer, Integer>> sampleData = IntStream.range(0, 100)
+        final List<KeyValue<Integer, Integer>> sampleData = IntStream.range(0, 500)
                                                                      .mapToObj(i -> new KeyValue<>(i, i))
                                                                      .collect(Collectors.toList());
 
@@ -599,7 +599,7 @@ public class RestoreIntegrationTest {
                                                                   kafkaStreams2Configuration)) {
 
             waitForCondition(() -> State.RUNNING == kafkaStreams2.state(),
-                             IntegrationTestUtils.DEFAULT_TIMEOUT,
+                             90_000,
                              () -> "kafkaStreams2 never transitioned to a RUNNING state.");
 
             assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationSuspends());

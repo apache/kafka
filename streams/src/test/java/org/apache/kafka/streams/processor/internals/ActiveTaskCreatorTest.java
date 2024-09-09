@@ -483,7 +483,7 @@ public class ActiveTaskCreatorTest {
         when(stateDirectory.getOrCreateDirectoryForTask(task01)).thenReturn(mock(File.class));
         when(stateDirectory.checkpointFileFor(task01)).thenReturn(mock(File.class));
         when(topology.source("topic")).thenReturn(sourceNode);
-        when(sourceNode.getTimestampExtractor()).thenReturn(mock(TimestampExtractor.class));
+        when(sourceNode.timestampExtractor()).thenReturn(mock(TimestampExtractor.class));
         when(topology.sources()).thenReturn(Collections.singleton(sourceNode));
 
         final StreamsConfig config = new StreamsConfig(properties);

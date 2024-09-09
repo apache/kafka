@@ -812,12 +812,6 @@ public class VersionedKeyValueStoreIntegrationTest {
                 return STORE_NAME;
             }
 
-            @Deprecated
-            @Override
-            public void init(final org.apache.kafka.streams.processor.ProcessorContext context, final StateStore root) {
-                throw new UnsupportedOperationException();
-            }
-
             @Override
             public void init(final StateStoreContext context, final StateStore root) {
                 context.register(

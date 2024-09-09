@@ -70,7 +70,7 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
         public void init(final ProcessorContext<KIn, Change<VAgg>> context) {
             store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store.getStore(),
+                store.store(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);

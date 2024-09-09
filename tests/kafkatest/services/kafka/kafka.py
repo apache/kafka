@@ -280,7 +280,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.configured_for_zk_migration = False
         
         # Set use_new_coordinator based on context and arguments.
-        default_use_new_coordinator = False
+        # The new group coordinator is used by default in kraft mode.
+        default_use_new_coordinator = self.quorum_info.using_kraft and version == DEV_BRANCH
        
         if use_new_coordinator is None:
             arg_name = 'use_new_coordinator'

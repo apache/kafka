@@ -29,12 +29,13 @@ import kafka.testkit.TestKitNodes;
 import kafka.zk.EmbeddedZookeeper;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.metadata.storage.FormatterException;
+import org.apache.kafka.server.common.FeatureVersion;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
@@ -42,7 +43,6 @@ import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -246,21 +247,47 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         public void format() throws Exception {
             if (formated.compareAndSet(false, true)) {
-                List<ApiMessageAndVersion> records = new ArrayList<>();
-                records.add(
-                    new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(clusterConfig.metadataVersion().featureLevel()), (short) 0));
+                Map<String, Features> nameToSupportedFeature = new TreeMap<>();
+                Features.PRODUCTION_FEATURES.forEach(feature -> nameToSupportedFeature.put(feature.featureName(), feature));
+                Map<String, Short> newFeatureLevels = new TreeMap<>();
 
-                clusterConfig.features().forEach((feature, version) -> {
-                    records.add(
-                        new ApiMessageAndVersion(new FeatureLevelRecord().
-                            setName(feature.featureName()).
-                            setFeatureLevel(version), (short) 0));
+                // Verify that all specified features are known to us.
+                for (Map.Entry<Features, Short> entry : clusterConfig.features().entrySet()) {
+                    String featureName = entry.getKey().featureName();
+                    short level = entry.getValue();
+                    if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
+                        if (!nameToSupportedFeature.containsKey(featureName)) {
+                            throw new FormatterException("Unsupported feature: " + featureName +
+                                ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
+                        }
+                    }
+                    newFeatureLevels.put(featureName, level);
+                }
+                newFeatureLevels.put(MetadataVersion.FEATURE_NAME, clusterConfig.metadataVersion().featureLevel());
+
+                // Add default values for features that were not specified.
+                Features.PRODUCTION_FEATURES.forEach(supportedFeature -> {
+                    if (!newFeatureLevels.containsKey(supportedFeature.featureName())) {
+                        newFeatureLevels.put(supportedFeature.featureName(),
+                            supportedFeature.defaultValue(clusterConfig.metadataVersion()));
+                    }
                 });
 
+                // Verify that the specified features support the given levels. This requires the full
+                // features map since there may be cross-feature dependencies.
+                for (Map.Entry<String, Short> entry : newFeatureLevels.entrySet()) {
+                    String featureName = entry.getKey();
+                    if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
+                        short level = entry.getValue();
+                        Features supportedFeature = nameToSupportedFeature.get(featureName);
+                        FeatureVersion featureVersion =
+                            supportedFeature.fromFeatureLevel(level, true);
+                        Features.validateVersion(featureVersion, newFeatureLevels);
+                    }
+                }
+
                 TestKitNodes nodes = new TestKitNodes.Builder()
-                        .setBootstrapMetadata(BootstrapMetadata.fromRecords(records, "testkit"))
+                        .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
