@@ -233,7 +233,7 @@ public class RemoteLogManagerTest {
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
         appendRLMConfig(props);
         config = KafkaConfig.fromProps(props);
-        brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig().isRemoteStorageSystemEnabled());
+        brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig().isRemoteStorageSystemEnabled());
 
         remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
@@ -1586,6 +1586,95 @@ public class RemoteLogManagerTest {
         when(mockLog.logEndOffset()).thenReturn(600L);
 
         remoteLogManager.onLeadershipChange(Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+    }
+
+    @Test
+    void testFetchOffsetByTimestampWithTieredStorageDoesNotFetchIndexWhenExistsLocally() throws Exception {
+        TopicPartition tp = new TopicPartition("sample", 0);
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
+        Map<String, Uuid> topicIds = Collections.singletonMap(tp.topic(), tpId.topicId());
+
+        List<EpochEntry> epochEntries = new ArrayList<>();
+        epochEntries.add(new EpochEntry(0, 0L));
+        epochEntries.add(new EpochEntry(1, 20L));
+        epochEntries.add(new EpochEntry(3, 50L));
+        epochEntries.add(new EpochEntry(4, 100L));
+        epochEntries.add(new EpochEntry(5, 200L));
+        checkpoint.write(epochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+
+        long timestamp = time.milliseconds();
+        RemoteLogSegmentMetadata metadata0 = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()),
+                0, 99, timestamp, brokerId, timestamp, 1024, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, truncateAndGetLeaderEpochs(epochEntries, 0L, 99L));
+        RemoteLogSegmentMetadata metadata1 = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()),
+                100, 199, timestamp + 1, brokerId, timestamp + 1, 1024, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, truncateAndGetLeaderEpochs(epochEntries, 100L, 199L));
+        // Note that the metadata2 is in COPY_SEGMENT_STARTED state
+        RemoteLogSegmentMetadata metadata2 = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()),
+                100, 299, timestamp + 2, brokerId, timestamp + 2, 1024, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_STARTED, truncateAndGetLeaderEpochs(epochEntries, 200L, 299L));
+
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(tpId), anyInt()))
+            .thenAnswer(ans -> {
+                int epoch = ans.getArgument(1);
+                if (epoch < 4) {
+                    return Collections.singletonList(metadata0).iterator();
+                } else if (epoch == 4) {
+                    return Arrays.asList(metadata1, metadata2).iterator();
+                } else {
+                    throw new IllegalArgumentException("Unexpected call!");
+                }
+            });
+
+        FileRecords.TimestampAndOffset expectedLocalResult = new FileRecords.TimestampAndOffset(timestamp, 9999, Optional.of(Integer.MAX_VALUE));
+        FileRecords.TimestampAndOffset expectedRemoteResult = new FileRecords.TimestampAndOffset(timestamp, 999, Optional.of(Integer.MAX_VALUE));
+        Partition mockFollowerPartition = mockPartition(tpId);
+
+        LogSegment logSegment = mock(LogSegment.class);
+        mockLogSegment(logSegment, 50L, timestamp + 10, expectedLocalResult);
+        when(mockLog.logSegments()).thenReturn(Collections.singletonList(logSegment));
+        when(mockLog.logEndOffset()).thenReturn(300L);
+
+        remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+                partition -> Optional.of(mockLog),
+                (topicPartition, offset) -> currentLogStartOffset.set(offset),
+                brokerTopicStats, metrics) {
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+            @Override
+            Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset) {
+                return Optional.of(expectedRemoteResult);
+            }
+        };
+        remoteLogManager.startup();
+        remoteLogManager.onLeadershipChange(Collections.emptySet(), Collections.singleton(mockFollowerPartition), topicIds);
+
+        // Read the offset from the remote storage, since the local-log starts from offset 50L and the message with `timestamp` does not exist in the local log
+        assertEquals(Optional.of(expectedRemoteResult), remoteLogManager.findOffsetByTimestamp(tp, timestamp, 0L, cache));
+        // Short-circuits the read from the remote storage since the local-log starts from offset 50L and
+        // the message with (timestamp + 1) exists in the segment with base_offset: 100 which is available locally.
+        assertEquals(Optional.of(expectedLocalResult), remoteLogManager.findOffsetByTimestamp(tp, timestamp + 1, 0L, cache));
+
+        // Move the local-log start offset to 100L, still the read from the remote storage should be short-circuited
+        // as the message with (timestamp + 1) exists in the local log
+        mockLogSegment(logSegment, 100L, timestamp + 10, expectedLocalResult);
+        assertEquals(Optional.of(expectedLocalResult), remoteLogManager.findOffsetByTimestamp(tp, timestamp + 1, 0L, cache));
+
+        // Move the local log start offset to 101L, now message with (timestamp + 1) does not exist in the local log and
+        // the indexes needs to be fetched from the remote storage
+        mockLogSegment(logSegment, 101L, timestamp + 10, expectedLocalResult);
+        assertEquals(Optional.of(expectedRemoteResult), remoteLogManager.findOffsetByTimestamp(tp, timestamp + 1, 0L, cache));
+    }
+
+    private void mockLogSegment(LogSegment logSegment,
+                                long baseOffset,
+                                long largestTimestamp,
+                                FileRecords.TimestampAndOffset timestampAndOffset) throws IOException {
+        when(logSegment.baseOffset()).thenReturn(baseOffset);
+        when(logSegment.largestTimestamp()).thenReturn(largestTimestamp);
+        when(logSegment.findOffsetByTimestamp(anyLong(), anyLong()))
+                .thenReturn(Optional.of(timestampAndOffset));
     }
 
     @Test

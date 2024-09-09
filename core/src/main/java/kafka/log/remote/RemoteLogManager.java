@@ -597,7 +597,7 @@ public class RemoteLogManager implements Closeable {
         return remoteLogMetadataManager.remoteLogSegmentMetadata(new TopicIdPartition(topicId, topicPartition), epochForOffset, offset);
     }
 
-    private Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset)
+    Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset)
             throws RemoteStorageException, IOException {
         int startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset);
 
@@ -674,12 +674,10 @@ public class RemoteLogManager implements Closeable {
         if (topicId == null) {
             throw new KafkaException("Topic id does not exist for topic partition: " + tp);
         }
-
         Optional<UnifiedLog> unifiedLogOptional = fetchLog.apply(tp);
         if (!unifiedLogOptional.isPresent()) {
             throw new KafkaException("UnifiedLog does not exist for topic partition: " + tp);
         }
-
         UnifiedLog unifiedLog = unifiedLogOptional.get();
 
         // Get the respective epoch in which the starting-offset exists.
@@ -688,7 +686,6 @@ public class RemoteLogManager implements Closeable {
         NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
         while (maybeEpoch.isPresent()) {
             int epoch = maybeEpoch.getAsInt();
-
             // KAFKA-15802: Add a new API for RLMM to choose how to implement the predicate.
             // currently, all segments are returned and then iterated, and filtered
             Iterator<RemoteLogSegmentMetadata> iterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
@@ -698,14 +695,24 @@ public class RemoteLogManager implements Closeable {
                     && rlsMetadata.endOffset() >= startingOffset
                     && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
                     && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
-                    return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+                    // cache to avoid race conditions
+                    List<LogSegment> segmentsCopy = new ArrayList<>(unifiedLog.logSegments());
+                    if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
+                        // search in remote-log
+                        return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+                    } else {
+                        // search in local-log
+                        for (LogSegment segment : segmentsCopy) {
+                            if (segment.largestTimestamp() >= timestamp) {
+                                return segment.findOffsetByTimestamp(timestamp, startingOffset);
+                            }
+                        }
+                    }
                 }
             }
-
             // Move to the next epoch if not found with the current epoch.
             maybeEpoch = leaderEpochCache.nextEpoch(epoch);
         }
-
         return Optional.empty();
     }
 
