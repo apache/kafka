@@ -52,9 +52,10 @@ import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
+import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -103,7 +104,7 @@ class ControllerApisTest {
   private val nodeId = 1
   private val brokerRack = "Rack1"
   private val clientID = "Client1"
-  private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
+  private val requestChannelMetrics: RequestChannelMetrics = mock(classOf[RequestChannelMetrics])
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
   private val time = new MockTime
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
@@ -262,7 +263,7 @@ class ControllerApisTest {
     val fetchRequestData = new FetchRequestData()
     val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
     controllerApis = createControllerApis(None, new MockController.Builder().build())
-    controllerApis.handle(request, RequestLocal.NoCaching)
+    controllerApis.handle(request, RequestLocal.noCaching)
 
 
     verify(raftManager).handleRequest(
@@ -1234,7 +1235,7 @@ class ControllerApisTest {
   ): T = {
     val req = buildRequest(request)
 
-    controllerApis.handle(req, RequestLocal.NoCaching)
+    controllerApis.handle(req, RequestLocal.noCaching)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] =
       ArgumentCaptor.forClass(classOf[AbstractResponse])

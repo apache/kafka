@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.TopicImage;
@@ -70,7 +70,7 @@ public class ShareGroupBuilder {
 
         // Add subscription records for members.
         members.forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, member))
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, member))
         );
 
         // Add subscription metadata.
@@ -92,23 +92,23 @@ public class ShareGroupBuilder {
         }
 
         if (!subscriptionMetadata.isEmpty()) {
-            records.add(CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
         }
 
         // Add group epoch record.
-        records.add(CoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->
-            records.add(CoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
         );
 
         // Add target assignment epoch.
-        records.add(CoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
-                records.add(CoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member))
+                records.add(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member))
         );
 
         return records;

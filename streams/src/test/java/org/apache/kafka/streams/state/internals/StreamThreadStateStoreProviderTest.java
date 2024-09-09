@@ -316,7 +316,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() {
         mockThread(true);
-        taskOne.getStore("kv-store").close();
+        taskOne.store("kv-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("kv-store",
                 QueryableStoreTypes.keyValueStore())));
     }
@@ -324,7 +324,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfTsKVStoreClosed() {
         mockThread(true);
-        taskOne.getStore("timestamped-kv-store").close();
+        taskOne.store("timestamped-kv-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("timestamped-kv-store",
                 QueryableStoreTypes.timestampedKeyValueStore())));
     }
@@ -332,7 +332,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() {
         mockThread(true);
-        taskOne.getStore("window-store").close();
+        taskOne.store("window-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("window-store",
                 QueryableStoreTypes.windowStore())));
     }
@@ -340,7 +340,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfTsWindowStoreClosed() {
         mockThread(true);
-        taskOne.getStore("timestamped-window-store").close();
+        taskOne.store("timestamped-window-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("timestamped-window-store",
                 QueryableStoreTypes.timestampedWindowStore())));
     }
@@ -348,7 +348,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfSessionStoreClosed() {
         mockThread(true);
-        taskOne.getStore("session-store").close();
+        taskOne.store("session-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("session-store",
                 QueryableStoreTypes.sessionStore())));
     }
@@ -442,7 +442,7 @@ public class StreamThreadStateStoreProviderTest {
                 logContext,
                 Time.SYSTEM
             ),
-            streamsConfig.defaultProductionExceptionHandler(),
+            streamsConfig.productionExceptionHandler(),
             new MockStreamsMetrics(metrics),
             topology
         );

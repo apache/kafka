@@ -60,6 +60,8 @@ public final class ListOffsetsHandlerTest {
     private final TopicPartition t0p1 = new TopicPartition("t0", 1);
     private final TopicPartition t1p0 = new TopicPartition("t1", 0);
     private final TopicPartition t1p1 = new TopicPartition("t1", 1);
+    private final TopicPartition t2p0 = new TopicPartition("t2", 0);
+    private final TopicPartition t2p1 = new TopicPartition("t2", 1);
 
     private final Node node = new Node(1, "host", 1234);
 
@@ -69,6 +71,8 @@ public final class ListOffsetsHandlerTest {
             put(t0p1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
             put(t1p0, 123L);
             put(t1p1, ListOffsetsRequest.MAX_TIMESTAMP);
+            put(t2p0, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+            put(t2p1, ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
         }
     };
 
@@ -96,14 +100,14 @@ public final class ListOffsetsHandlerTest {
         ListOffsetsRequest request =
             handler.buildBatchedRequest(node.id(), offsetTimestampsByPartition.keySet()).build();
         List<ListOffsetsTopic> topics = request.topics();
-        assertEquals(2, topics.size());
+        assertEquals(3, topics.size());
         Map<TopicPartition, ListOffsetsPartition> partitions = new HashMap<>();
         for (ListOffsetsTopic topic : topics) {
             for (ListOffsetsPartition partition : topic.partitions()) {
                 partitions.put(new TopicPartition(topic.name(), partition.partitionIndex()), partition);
             }
         }
-        assertEquals(4, partitions.size());
+        assertEquals(6, partitions.size());
         for (Map.Entry<TopicPartition, ListOffsetsPartition> entry : partitions.entrySet()) {
             assertExpectedTimestamp(entry.getKey(), entry.getValue().timestamp());
         }
@@ -126,6 +130,12 @@ public final class ListOffsetsHandlerTest {
 
         builder = readCommittedHandler.buildBatchedRequest(node.id(), mkSet(t0p0, t0p1, t1p0, t1p1));
         assertEquals(7, builder.oldestAllowedVersion());
+
+        builder = readCommittedHandler.buildBatchedRequest(node.id(), mkSet(t0p0, t0p1, t1p0, t1p1, t2p0));
+        assertEquals(8, builder.oldestAllowedVersion());
+
+        builder = readCommittedHandler.buildBatchedRequest(node.id(), mkSet(t0p0, t0p1, t1p0, t1p1, t2p0, t2p1));
+        assertEquals(9, builder.oldestAllowedVersion());
     }
 
     @Test

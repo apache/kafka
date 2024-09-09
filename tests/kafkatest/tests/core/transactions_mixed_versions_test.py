@@ -199,6 +199,9 @@ class TransactionsMixedVersionsTest(Test):
         self.kafka.logs["kafka_data_1"]["collect_default"] = True
         self.kafka.logs["kafka_data_2"]["collect_default"] = True
         self.kafka.logs["kafka_operational_logs_debug"]["collect_default"] = False if old_kafka_version == str(LATEST_3_2) else True
+        # The 3.2.3 release does not include KAFKA-14259, which will cause an exception when writing debug messages.
+        # Therefore, changing the log level to INFO can avoid triggering the bug.
+        self.kafka.log_level = "INFO" if old_kafka_version == str(LATEST_3_2) else "DEBUG"
 
         self.setup_topics()
         self.kafka.start()

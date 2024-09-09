@@ -75,7 +75,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 return false;
             }
 
-            switch (UpgradeFromValues.getValueFromString((String) upgradeFrom)) {
+            switch (UpgradeFromValues.fromString((String) upgradeFrom)) {
                 case UPGRADE_FROM_0100:
                 case UPGRADE_FROM_0101:
                 case UPGRADE_FROM_0102:
@@ -107,17 +107,17 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
 
             //7-bit (0x7F) maximum for data version.
-            if (Byte.compare((byte) 0x7F, data.getVersion()) < 0) {
+            if (Byte.compare((byte) 0x7F, data.version()) < 0) {
                 throw new UnsupportedVersionException("SubscriptionWrapper version is larger than maximum supported 0x7F");
             }
 
-            final int version = data.getVersion();
+            final int version = data.version();
             if (upgradeFromV0 || version == 0) {
                 return serializeV0(data);
             } else if (version == 1) {
                 return serializeV1(data);
             } else {
-                throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.getVersion());
+                throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.version());
             }
         }
 
@@ -128,7 +128,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
 
             return  primaryKeySerializer.serialize(
                 primaryKeySerializationPseudoTopic,
-                data.getPrimaryKey()
+                data.primaryKey()
             );
         }
 
@@ -136,7 +136,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             final byte[] primaryKeySerializedData = serializePrimaryKey(data);
             final ByteBuffer buf;
             int dataLength = 2 + primaryKeySerializedData.length + extraLength;
-            if (data.getHash() != null) {
+            if (data.hash() != null) {
                 dataLength += 2 * Long.BYTES;
                 buf = ByteBuffer.allocate(dataLength);
                 buf.put(version);
@@ -145,9 +145,9 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 buf = ByteBuffer.allocate(dataLength);
                 buf.put((byte) (version | (byte) 0x80));
             }
-            buf.put(data.getInstruction().getValue());
-            final long[] elem = data.getHash();
-            if (data.getHash() != null) {
+            buf.put(data.instruction().value());
+            final long[] elem = data.hash();
+            if (data.hash() != null) {
                 buf.putLong(elem[0]);
                 buf.putLong(elem[1]);
             }
@@ -160,8 +160,8 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         }
 
         private byte[] serializeV1(final SubscriptionWrapper<K> data) {
-            final ByteBuffer buf = serializeCommon(data, data.getVersion(), Integer.BYTES);
-            buf.putInt(data.getPrimaryPartition());
+            final ByteBuffer buf = serializeCommon(data, data.version(), Integer.BYTES);
+            buf.putInt(data.primaryPartition());
             return buf.array();
         }
     }

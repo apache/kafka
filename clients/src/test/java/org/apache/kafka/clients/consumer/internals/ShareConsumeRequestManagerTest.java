@@ -366,20 +366,29 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
-        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
-        acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.acknowledgeOnClose(Collections.singletonMap(tip0, acknowledgements),
+        // Piggyback acknowledgements
+        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, acknowledgements));
+
+        // Remaining acknowledgements sent with close().
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements2.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.acknowledgeOnClose(Collections.singletonMap(tip0, acknowledgements2),
                 calculateDeadlineMs(time.timer(100)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
-        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+        assertEquals(1, completedAcknowledgements.size());
 
-        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
-        completedAcknowledgements.clear();
+        Acknowledgements mergedAcks = acknowledgements.merge(acknowledgements2);
+        mergedAcks.setAcknowledgeErrorCode(Errors.NONE);
+        // Verifying that all 3 offsets were acknowledged as part of the final ShareAcknowledge on close.
+        assertEquals(mergedAcks.getAcknowledgementsTypeMap(), completedAcknowledgements.get(0).get(tip0).getAcknowledgementsTypeMap());
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
     }
 
     @Test

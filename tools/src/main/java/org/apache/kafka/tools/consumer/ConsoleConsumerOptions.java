@@ -114,6 +114,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                             " print.timestamp=true|false\n" +
                             " print.key=true|false\n" +
                             " print.offset=true|false\n" +
+                            " print.epoch=true|false\n" +
                             " print.partition=true|false\n" +
                             " print.headers=true|false\n" +
                             " print.value=true|false\n" +

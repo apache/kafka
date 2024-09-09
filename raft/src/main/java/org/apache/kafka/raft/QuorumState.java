@@ -577,6 +577,7 @@ public class QuorumState {
     }
 
     private void durableTransitionTo(EpochState newState) {
+        log.info("Attempting durable transition to {} from {}", newState, state);
         store.writeElectionState(newState.election(), partitionState.lastKraftVersion());
         memoryTransitionTo(newState);
     }

@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -565,12 +565,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return pendingRequests.unsentOffsetFetches;
     }
 
-    private void handleCoordinatorDisconnect(Throwable exception, long currentTimeMs) {
-        if (exception instanceof DisconnectException) {
-            coordinatorRequestManager.markCoordinatorUnknown(exception.getMessage(), currentTimeMs);
-        }
-    }
-
     /**
      * Update latest member ID and epoch used by the member.
      *
@@ -883,7 +877,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 } else {
                     log.debug("{} completed with error", requestDescription(), error);
                     onFailedAttempt(requestCompletionTimeMs);
-                    handleCoordinatorDisconnect(error, requestCompletionTimeMs);
+                    coordinatorRequestManager.handleCoordinatorDisconnect(error, requestCompletionTimeMs);
                     future().completeExceptionally(error);
                 }
             } catch (Throwable t) {
@@ -988,26 +982,28 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                final Errors responseError) {
             log.debug("Offset fetch failed: {}", responseError.message());
             onFailedAttempt(currentTimeMs);
+            ApiException exception = responseError.exception();
             if (responseError == COORDINATOR_LOAD_IN_PROGRESS) {
-                future.completeExceptionally(responseError.exception());
+                future.completeExceptionally(exception);
             } else if (responseError == Errors.UNKNOWN_MEMBER_ID) {
                 log.error("OffsetFetch failed with {} because the member is not part of the group" +
                     " anymore.", responseError);
-                future.completeExceptionally(responseError.exception());
+                future.completeExceptionally(exception);
             } else if (responseError == Errors.STALE_MEMBER_EPOCH) {
                 log.error("OffsetFetch failed with {} and the consumer is not part " +
                     "of the group anymore (it probably left the group, got fenced" +
                     " or failed). The request cannot be retried and will fail.", responseError);
-                future.completeExceptionally(responseError.exception());
+                future.completeExceptionally(exception);
             } else if (responseError == Errors.NOT_COORDINATOR || responseError == Errors.COORDINATOR_NOT_AVAILABLE) {
                 // Re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
-                future.completeExceptionally(responseError.exception());
+                future.completeExceptionally(exception);
+            } else if (exception instanceof RetriableException) {
+                future.completeExceptionally(exception);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
             } else {
-                // Fail with a non-retriable KafkaException for all unexpected errors (even if
-                // they are retriable)
+                // Fail with a non-retriable KafkaException for all unexpected errors
                 future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
             }
         }
@@ -1195,8 +1191,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     unsentOffsetFetches.stream()
                             .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
 
-            failAndRemoveExpiredFetchRequests();
-
             // Add all sendable offset fetch requests to the unsentRequests list and to the inflightOffsetFetches list
             for (OffsetFetchRequestState request : partitionedBySendability.get(true)) {
                 request.onSendAttempt(currentTimeMs);
@@ -1218,15 +1212,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         private void failAndRemoveExpiredCommitRequests() {
             Queue<OffsetCommitRequestState> requestsToPurge = new LinkedList<>(unsentOffsetCommits);
-            requestsToPurge.forEach(RetriableRequestState::maybeExpire);
-        }
-
-        /**
-         * Find the unsent fetch requests that have expired, remove them and complete their
-         * futures with a TimeoutException.
-         */
-        private void failAndRemoveExpiredFetchRequests() {
-            Queue<OffsetFetchRequestState> requestsToPurge = new LinkedList<>(unsentOffsetFetches);
             requestsToPurge.forEach(RetriableRequestState::maybeExpire);
         }
 

@@ -210,7 +210,7 @@ public final class RecordsIteratorTest {
     @Test
     public void testControlRecordIterationWithKraftVersion1() {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
-        VoterSet voterSet = new VoterSet(
+        VoterSet voterSet = VoterSet.fromMap(
             VoterSetTest.voterMap(IntStream.of(1, 2, 3), true)
         );
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()

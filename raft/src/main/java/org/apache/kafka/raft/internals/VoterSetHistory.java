@@ -29,10 +29,10 @@ import java.util.OptionalLong;
  * evaluating the latest set of voters.
  */
 public final class VoterSetHistory {
-    private final Optional<VoterSet> staticVoterSet;
+    private final VoterSet staticVoterSet;
     private final LogHistory<VoterSet> votersHistory = new TreeMapLogHistory<>();
 
-    VoterSetHistory(Optional<VoterSet> staticVoterSet) {
+    VoterSetHistory(VoterSet staticVoterSet) {
         this.staticVoterSet = staticVoterSet;
     }
 
@@ -85,13 +85,9 @@ public final class VoterSetHistory {
      * Returns the latest set of voters.
      */
     public VoterSet lastValue() {
-        Optional<LogHistory.Entry<VoterSet>> result = votersHistory.lastEntry();
-        if (result.isPresent()) {
-            return result.get().value();
-        }
-
-        return staticVoterSet
-            .orElseThrow(() -> new IllegalStateException("No voter set found"));
+        return votersHistory.lastEntry()
+            .map(LogHistory.Entry::value)
+            .orElse(staticVoterSet);
     }
 
     /**

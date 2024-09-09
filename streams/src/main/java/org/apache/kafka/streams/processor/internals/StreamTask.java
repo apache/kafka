@@ -497,7 +497,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 // If there's processor metadata to be committed. We need to commit them to all
                 // input partitions
-                final Set<TopicPartition> partitionsNeedCommit = processorContext.getProcessorMetadata().needsCommit() ?
+                final Set<TopicPartition> partitionsNeedCommit = processorContext.processorMetadata().needsCommit() ?
                     inputPartitions() : consumedOffsets.keySet();
                 committableOffsets = new HashMap<>(partitionsNeedCommit.size());
 
@@ -505,7 +505,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     final Long offset = findOffset(partition);
                     final long partitionTime = partitionTimes.get(partition);
                     committableOffsets.put(partition, new OffsetAndMetadata(offset,
-                        new TopicPartitionMetadata(partitionTime, processorContext.getProcessorMetadata()).encode()));
+                        new TopicPartitionMetadata(partitionTime, processorContext.processorMetadata()).encode()));
                 }
                 break;
 
@@ -558,7 +558,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         commitNeeded = false;
         commitRequested = false;
         hasPendingTxCommit = false;
-        processorContext.getProcessorMetadata().setNeedsCommit(false);
+        processorContext.processorMetadata().setNeedsCommit(false);
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
@@ -590,7 +590,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
         super.updateInputPartitions(topicPartitions, allTopologyNodesToSourceTopics);
         partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
-        processorContext.getProcessorMetadata().setNeedsCommit(true);
+        processorContext.processorMetadata().setNeedsCommit(true);
     }
 
     @Override
@@ -946,7 +946,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 recordContext.offset(),
                 recordContext.headers(),
                 node.name(),
-                id()
+                id(),
+                recordContext.timestamp()
             );
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;
@@ -1407,7 +1408,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 );
             }
 
-            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
+            final TimestampExtractor sourceTimestampExtractor = source.timestampExtractor();
             final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
             return new RecordQueue(
                     partition,

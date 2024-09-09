@@ -53,5 +53,7 @@ class ZkConfigRepositoryTest {
       assertThrows(classOf[IllegalArgumentException], () => zkConfigRepository.config(new ConfigResource(value, value.toString))))
     // Validate exception for CLIENT_METRICS.
     assertThrows(classOf[InvalidRequestException], () => zkConfigRepository.config(new ConfigResource(Type.CLIENT_METRICS, Type.CLIENT_METRICS.toString)))
+    // Validate exception for GROUP.
+    assertThrows(classOf[InvalidRequestException], () => zkConfigRepository.config(new ConfigResource(Type.GROUP, Type.GROUP.toString)))
   }
 }

@@ -133,16 +133,6 @@ public class CachingPersistentWindowStoreTest {
         cachingStore.close();
     }
 
-    @SuppressWarnings({"deprecation", "unchecked"})
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
-        final CachingWindowStore outer = new CachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
-        when(inner.name()).thenReturn("store");
-        outer.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-        verify(inner).init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-    }
-
     @SuppressWarnings("unchecked")
     @Test
     public void shouldDelegateInit() {

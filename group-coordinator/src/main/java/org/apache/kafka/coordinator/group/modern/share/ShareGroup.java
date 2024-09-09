@@ -17,11 +17,12 @@
 package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.image.TopicsImage;
@@ -184,7 +185,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         boolean isTransactional,
         short apiVersion
     ) {
-        throw new UnsupportedOperationException("validateOffsetCommit is not supported for Share Groups.");
+        throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }
 
     @Override
@@ -193,12 +194,12 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         int memberEpoch,
         long lastCommittedOffset
     ) {
-        throw new UnsupportedOperationException("validateOffsetFetch is not supported for Share Groups.");
+        throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }
 
     @Override
     public void validateOffsetDelete() {
-        throw new UnsupportedOperationException("validateOffsetDelete is not supported for Share Groups.");
+        throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }
 
     /**
@@ -219,20 +220,20 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord(groupId(), memberId))
         );
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(CoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
-            records.add(CoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(CoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId()));
-        records.add(CoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId()));
     }
 
     @Override

@@ -21,7 +21,6 @@ import kafka.log.LogManager;
 import kafka.log.remote.RemoteLogManager;
 import kafka.server.AddPartitionsToTxnManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.BrokerTopicStats;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
 import kafka.server.DelayedFetch;
@@ -39,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.DirectoryEventHandler;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Collections;
 import java.util.Optional;
