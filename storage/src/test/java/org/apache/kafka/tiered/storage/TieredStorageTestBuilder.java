@@ -263,13 +263,12 @@ public final class TieredStorageTestBuilder {
         return this;
     }
 
-    public TieredStorageTestBuilder expectListOffsets(int brokerId,
-                                                      String topic,
+    public TieredStorageTestBuilder expectListOffsets(String topic,
                                                       Integer partition,
                                                       OffsetSpec offsetSpec,
                                                       EpochEntry epochEntry) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
-        actions.add(new ExpectListOffsetsAction(brokerId, topicPartition, offsetSpec, epochEntry));
+        actions.add(new ExpectListOffsetsAction(topicPartition, offsetSpec, epochEntry));
         return this;
     }
 

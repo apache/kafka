@@ -301,6 +301,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
                 .orElseThrow(() -> new IllegalArgumentException("No remote storage manager found for broker " + brokerId));
     }
 
+    // unused now, but it can be reused later as this is an utility method.
     public Optional<LeaderEpochFileCache> leaderEpochFileCache(int brokerId, TopicPartition partition) {
         Optional<UnifiedLog> unifiedLogOpt = log(brokerId, partition);
         if (unifiedLogOpt.isPresent() && unifiedLogOpt.get().leaderEpochCache().isDefined()) {

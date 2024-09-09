@@ -23,6 +23,8 @@ import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -37,6 +39,18 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
     @Override
     public int brokerCount() {
         return 2;
+    }
+
+    /**
+     * We are running this test only for the Kraft mode, since ZK mode is deprecated now. Note that:
+     * 1. In ZK mode, the leader-epoch gets bumped during reassignment (0 -> 1 -> 2) and leader-election (2 -> 3).
+     * 2. In Kraft mode, the leader-epoch gets bumped only for leader-election (0 -> 1) and not for reassignment.
+     * @param quorum The quorum to use for the test.
+     */
+    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ValueSource(strings = {"kraft"})
+    public void executeTieredStorageTest(String quorum) {
+        super.executeTieredStorageTest(quorum);
     }
 
     @Override
@@ -63,6 +77,7 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
 
                 // switch leader and send more records to partition 0 and expect the second segment to be offloaded.
                 .reassignReplica(topicA, p0, Arrays.asList(broker1, broker0))
+                // After leader election, the partition's leader-epoch gets bumped from 0 -> 1
                 .expectLeader(topicA, p0, broker1, true)
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 4L)
 
@@ -77,34 +92,34 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
 
                 // LIST_OFFSETS requests can list the offsets from least-loaded (any) node.
                 // List offset for special timestamps
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliest(), new EpochEntry(0, 0))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(Integer.MAX_VALUE, 4))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(Integer.MAX_VALUE, 3))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.latest(), new EpochEntry(Integer.MAX_VALUE, 6))
+                .expectListOffsets(topicA, p0, OffsetSpec.earliest(), new EpochEntry(0, 0))
+                .expectListOffsets(topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(1, 4))
+                .expectListOffsets(topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(1, 3))
+                .expectListOffsets(topicA, p0, OffsetSpec.latest(), new EpochEntry(1, 6))
 
                 // fetch offset using timestamp from the local disk
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 6), new EpochEntry(NO_PARTITION_LEADER_EPOCH, -1))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 5), new EpochEntry(Integer.MAX_VALUE, 5))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 4), new EpochEntry(Integer.MAX_VALUE, 4))
+                .expectListOffsets(topicA, p0, OffsetSpec.forTimestamp(timestamp + 6), new EpochEntry(NO_PARTITION_LEADER_EPOCH, -1))
+                .expectListOffsets(topicA, p0, OffsetSpec.forTimestamp(timestamp + 5), new EpochEntry(1, 5))
+                .expectListOffsets(topicA, p0, OffsetSpec.forTimestamp(timestamp + 4), new EpochEntry(1, 4))
 
                 // fetch offset using timestamp from the remote disk
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp - 1), new EpochEntry(0, 0))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp), new EpochEntry(0, 0))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 1), new EpochEntry(0, 1))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 3), new EpochEntry(Integer.MAX_VALUE, 3))
+                .expectListOffsets(topicA, p0, OffsetSpec.forTimestamp(timestamp - 1), new EpochEntry(0, 0))
+                .expectListOffsets(topicA, p0, OffsetSpec.forTimestamp(timestamp), new EpochEntry(0, 0))
+                .expectListOffsets(topicA, p0, OffsetSpec.forTimestamp(timestamp + 1), new EpochEntry(0, 1))
+                .expectListOffsets(topicA, p0, OffsetSpec.forTimestamp(timestamp + 3), new EpochEntry(1, 3))
 
                 // delete some records and check whether the earliest_offset gets updated.
                 .expectDeletionInRemoteStorage(broker1, topicA, p0, DELETE_SEGMENT, 1)
                 .deleteRecords(topicA, p0, 3L)
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliest(), new EpochEntry(Integer.MAX_VALUE, 3))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(Integer.MAX_VALUE, 4))
+                .expectListOffsets(topicA, p0, OffsetSpec.earliest(), new EpochEntry(1, 3))
+                .expectListOffsets(topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(1, 4))
 
                 // delete all the records in remote layer and expect that earliest and earliest_local offsets are same
                 .expectDeletionInRemoteStorage(broker1, topicA, p0, DELETE_SEGMENT, 1)
                 .deleteRecords(topicA, p0, 4L)
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliest(), new EpochEntry(Integer.MAX_VALUE, 4))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(Integer.MAX_VALUE, 4))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(NO_PARTITION_LEADER_EPOCH, 3))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.latest(), new EpochEntry(Integer.MAX_VALUE, 6));
+                .expectListOffsets(topicA, p0, OffsetSpec.earliest(), new EpochEntry(1, 4))
+                .expectListOffsets(topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(1, 4))
+                .expectListOffsets(topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(NO_PARTITION_LEADER_EPOCH, 3))
+                .expectListOffsets(topicA, p0, OffsetSpec.latest(), new EpochEntry(1, 6));
     }
 }
