@@ -32,12 +32,12 @@ public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
     
     private static final Logger log = LoggerFactory.getLogger(StreamsThreadDelegatingMetricsReporter.class);
     private static final String THREAD_ID_TAG = "thread-id";
-    private Consumer<?, ?> consumer;
+    private Consumer<byte[], byte[]> consumer;
     private final String threadId;
     private final String stateUpdaterThreadId;
 
 
-    public StreamsThreadDelegatingMetricsReporter(final Consumer<?, ?> consumer, final String threadId, final String stateUpdaterThreadId) {
+    public StreamsThreadDelegatingMetricsReporter(final Consumer<byte[], byte[]> consumer, final String threadId, final String stateUpdaterThreadId) {
         this.consumer = Objects.requireNonNull(consumer);
         this.threadId = Objects.requireNonNull(threadId);
         this.stateUpdaterThreadId = Objects.requireNonNull(stateUpdaterThreadId);
