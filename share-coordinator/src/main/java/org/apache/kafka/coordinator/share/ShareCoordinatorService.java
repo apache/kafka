@@ -454,7 +454,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
             List<ReadShareGroupStateResponseData.ReadStateResult> readStateResult = new ArrayList<>(futureMap.size());
             futureMap.forEach(
                 (topicId, topicEntry) -> {
-                    List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>(futureMap.get(topicId).size());
+                    List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>(topicEntry.size());
                     topicEntry.forEach(
                         (partitionId, responseFut) -> {
                             // responseFut would already be completed by now since we have used
