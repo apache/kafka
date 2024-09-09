@@ -69,7 +69,7 @@ public final class BrokerServerMetricsTest {
         Metrics metrics = new Metrics();
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric offsetMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordOffsetName());
-            assertEquals(-1L, (long) offsetMetric.metricValue());
+            assertEquals((double) -1L, offsetMetric.metricValue());
 
             // Update metric value and check
             long expectedValue = 1000;
@@ -77,7 +77,7 @@ public final class BrokerServerMetricsTest {
                     expectedValue,
                     brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
                     brokerMetrics.lastAppliedTimestamp()));
-            assertEquals(expectedValue, (long) offsetMetric.metricValue());
+            assertEquals((double) expectedValue, offsetMetric.metricValue());
         }
     }
 
@@ -90,8 +90,8 @@ public final class BrokerServerMetricsTest {
             KafkaMetric timestampMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordTimestampName());
             KafkaMetric lagMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordLagMsName());
 
-            assertEquals(-1L, (long) timestampMetric.metricValue());
-            assertEquals(time.milliseconds() + 1, (long) lagMetric.metricValue());
+            assertEquals((double) -1L, timestampMetric.metricValue());
+            assertEquals((double) time.milliseconds() + 1, lagMetric.metricValue());
 
             // Update metric value and check
             long timestamp = 500L;
@@ -100,8 +100,8 @@ public final class BrokerServerMetricsTest {
                     brokerMetrics.lastAppliedOffset(),
                     brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
                     timestamp));
-            assertEquals(timestamp, (long) timestampMetric.metricValue());
-            assertEquals(time.milliseconds() - timestamp, (long) lagMetric.metricValue());
+            assertEquals((double) timestamp, timestampMetric.metricValue());
+            assertEquals((double) time.milliseconds() - timestamp, lagMetric.metricValue());
         }
     }
 
@@ -112,12 +112,12 @@ public final class BrokerServerMetricsTest {
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric metadataLoadErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataLoadErrorCountName());
 
-            assertEquals(0L, (long) metadataLoadErrorCountMetric.metricValue());
+            assertEquals((double) 0L, metadataLoadErrorCountMetric.metricValue());
 
             // Update metric value and check
             long errorCount = 100;
             brokerMetrics.metadataLoadErrorCount().set(errorCount);
-            assertEquals(errorCount, (long) metadataLoadErrorCountMetric.metricValue());
+            assertEquals((double) errorCount, metadataLoadErrorCountMetric.metricValue());
         }
     }
 
@@ -128,12 +128,12 @@ public final class BrokerServerMetricsTest {
         try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
             KafkaMetric metadataApplyErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataApplyErrorCountName());
 
-            assertEquals(0L, (long) metadataApplyErrorCountMetric.metricValue());
+            assertEquals((double) 0L, metadataApplyErrorCountMetric.metricValue());
 
             // Update metric value and check
             long errorCount = 100;
             brokerMetrics.metadataApplyErrorCount().set(errorCount);
-            assertEquals(errorCount, (long) metadataApplyErrorCountMetric.metricValue());
+            assertEquals((double) errorCount, metadataApplyErrorCountMetric.metricValue());
         }
     }
 }

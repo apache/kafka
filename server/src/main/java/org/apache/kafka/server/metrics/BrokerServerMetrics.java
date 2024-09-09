@@ -17,8 +17,6 @@
 package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.image.MetadataProvenance;
 
@@ -27,7 +25,6 @@ import com.yammer.metrics.core.Histogram;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -93,11 +90,11 @@ public final class BrokerServerMetrics implements AutoCloseable {
                 "The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta."
         );
 
-        addMetric(metrics, lastAppliedRecordOffsetName, ignored -> lastAppliedImageProvenance.get().lastContainedOffset());
-        addMetric(metrics, lastAppliedRecordTimestampName, ignored -> lastAppliedImageProvenance.get().lastContainedLogTimeMs());
-        addMetric(metrics, lastAppliedRecordLagMsName, now -> now - lastAppliedImageProvenance.get().lastContainedLogTimeMs());
-        addMetric(metrics, metadataLoadErrorCountName, ignored -> metadataLoadErrorCount.get());
-        addMetric(metrics, metadataApplyErrorCountName, ignored -> metadataApplyErrorCount.get());
+        metrics.addMetric(lastAppliedRecordOffsetName, (config, now) -> lastAppliedImageProvenance.get().lastContainedOffset());
+        metrics.addMetric(lastAppliedRecordTimestampName, (config, now) -> lastAppliedImageProvenance.get().lastContainedLogTimeMs());
+        metrics.addMetric(lastAppliedRecordLagMsName, (config, now) -> now - lastAppliedImageProvenance.get().lastContainedLogTimeMs());
+        metrics.addMetric(metadataLoadErrorCountName, (config, now) -> metadataLoadErrorCount.get());
+        metrics.addMetric(metadataApplyErrorCountName, (config, now) -> metadataApplyErrorCount.get());
     }
 
     @Override
@@ -163,22 +160,5 @@ public final class BrokerServerMetrics implements AutoCloseable {
 
     long lastAppliedTimestamp() {
         return lastAppliedImageProvenance.get().lastContainedLogTimeMs();
-    }
-
-    private static <T> void addMetric(Metrics metrics, MetricName name, Function<Long, T> func) {
-        metrics.addMetric(name, new FuncGauge<>(func));
-    }
-
-    private static final class FuncGauge<T> implements Gauge<T> {
-        private final Function<Long, T> func;
-
-        FuncGauge(Function<Long, T> func) {
-            this.func = func;
-        }
-
-        @Override
-        public T value(MetricConfig config, long now) {
-            return func.apply(now);
-        }
     }
 }
