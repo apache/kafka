@@ -562,11 +562,11 @@ public class KafkaAdminClient extends AdminClient {
                 time,
                 1,
                 (int) TimeUnit.HOURS.toMillis(1),
-                null,
+        null,
                 metadataManager.updater(),
                 (hostResolver == null) ? new DefaultHostResolver() : hostResolver,
-                    null,
-                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
+ null,
+                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext, clientTelemetryReporter);
         } catch (Throwable exc) {

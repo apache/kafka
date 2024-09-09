@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class StreamsThreadDelegatingMetricsReporterTest {
 
-    private MockConsumer<?, ?> mockConsumer;
+    private MockConsumer<byte[], byte[]> mockConsumer;
     private StreamsThreadDelegatingMetricsReporter streamsThreadDelegatingMetricsReporter;
 
     private KafkaMetric kafkaMetricOneHasThreadIdTag;
