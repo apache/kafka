@@ -30,6 +30,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 
 public class ListOffsetsTest extends TieredStorageTestHarness {
@@ -53,30 +54,28 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
                 // send records to partition 0 and expect the first segment to be offloaded
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 2L)
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0,
-                        new KeyValueSpec("k1", "v1", timestamp),
-                        new KeyValueSpec("k2", "v2", timestamp + 1))
+                        new KeyValueSpec("k0", "v0", timestamp),
+                        new KeyValueSpec("k1", "v1", timestamp + 1))
                 .produceWithTimestamp(topicA, p0,
-                        new KeyValueSpec("k1", "v1", timestamp),
-                        new KeyValueSpec("k2", "v2", timestamp + 1),
-                        new KeyValueSpec("k3", "v3", timestamp + 2))
+                        new KeyValueSpec("k0", "v0", timestamp),
+                        new KeyValueSpec("k1", "v1", timestamp + 1),
+                        new KeyValueSpec("k2", "v2", timestamp + 2))
 
                 // switch leader and send more records to partition 0 and expect the second segment to be offloaded.
-                // On reassignment, leader-epoch gets bumped from 0 -> 1 -> 2
                 .reassignReplica(topicA, p0, Arrays.asList(broker1, broker0))
-                // On leader election, leader-epoch gets bumped from 2 -> 3
                 .expectLeader(topicA, p0, broker1, true)
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 4L)
 
-                // NOTE that the (k3, v3) message was sent in the previous producer so we cannot expect that event in
+                // NOTE that the (k2, v2) message was sent in the previous producer so we cannot expect that event in
                 // the segment to be offloaded. We can only expect the new messages.
                 .expectSegmentToBeOffloaded(broker1, topicA, p0, 2,
-                        new KeyValueSpec("k4", "v4", timestamp + 3))
+                        new KeyValueSpec("k3", "v3", timestamp + 3))
                 .produceWithTimestamp(topicA, p0,
-                        new KeyValueSpec("k4", "v4", timestamp + 3),
-                        new KeyValueSpec("k5", "v5", timestamp + 4),
-                        new KeyValueSpec("k6", "v6", timestamp + 5))
+                        new KeyValueSpec("k3", "v3", timestamp + 3),
+                        new KeyValueSpec("k4", "v4", timestamp + 4),
+                        new KeyValueSpec("k5", "v5", timestamp + 5))
 
-                // LIST_OFFSETS requests can list the offset from any node.
+                // LIST_OFFSETS requests can list the offsets from least-loaded (any) node.
                 // List offset for special timestamps
                 .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliest(), new EpochEntry(0, 0))
                 .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(Integer.MAX_VALUE, 4))
@@ -84,7 +83,7 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
                 .expectListOffsets(broker1, topicA, p0, OffsetSpec.latest(), new EpochEntry(Integer.MAX_VALUE, 6))
 
                 // fetch offset using timestamp from the local disk
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 6), new EpochEntry(-1, -1))
+                .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 6), new EpochEntry(NO_PARTITION_LEADER_EPOCH, -1))
                 .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 5), new EpochEntry(Integer.MAX_VALUE, 5))
                 .expectListOffsets(broker1, topicA, p0, OffsetSpec.forTimestamp(timestamp + 4), new EpochEntry(Integer.MAX_VALUE, 4))
 
@@ -105,7 +104,7 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
                 .deleteRecords(topicA, p0, 4L)
                 .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliest(), new EpochEntry(Integer.MAX_VALUE, 4))
                 .expectListOffsets(broker1, topicA, p0, OffsetSpec.earliestLocal(), new EpochEntry(Integer.MAX_VALUE, 4))
-                .expectListOffsets(broker1, topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(-1, 3))
+                .expectListOffsets(broker1, topicA, p0, OffsetSpec.latestTiered(), new EpochEntry(NO_PARTITION_LEADER_EPOCH, 3))
                 .expectListOffsets(broker1, topicA, p0, OffsetSpec.latest(), new EpochEntry(Integer.MAX_VALUE, 6));
     }
 }
