@@ -30,7 +30,9 @@ import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrParti
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach , TestInfo, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -66,9 +68,10 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     super.tearDown()
   }
 
-  @Test
-  def testCreateDeleteTopics(): Unit = {
-    client = Admin.create(createConfig)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCreateDeleteTopics(quorum: String): Unit = {
+    client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
@@ -159,9 +162,10 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     waitForTopics(client, List(), topics)
   }
 
-  @Test
-  def testAuthorizedOperations(): Unit = {
-    client = Admin.create(createConfig)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAuthorizedOperations(quorum: String): Unit = {
+    client = createAdminClient
 
     // without includeAuthorizedOperations flag
     var result = client.describeCluster
@@ -224,10 +228,15 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
-    val securityProps: util.Map[Object, Object] =
-      adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
+    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     config
+  }
+
+  def createAdminClient: Admin = {
+    val props = new Properties()
+    props.putAll(createConfig)
+    val client = createAdminClient(configOverrides = props)
+    client
   }
 
   def waitForTopics(client: Admin, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {

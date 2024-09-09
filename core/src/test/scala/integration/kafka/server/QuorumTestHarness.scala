@@ -26,11 +26,13 @@ import javax.security.auth.login.Configuration
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
 import org.apache.kafka.clients.consumer.GroupProtocol
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
@@ -343,10 +345,12 @@ abstract class QuorumTestHarness extends Logging {
 
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
-    props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
+    props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:$proto")
     props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    props.setProperty(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:0")
+    // Setting the configuration to the same value set on the brokers via TestUtils to keep KRaft based and Zk based controller configs are consistent.
+    props.setProperty(ServerTopicConfigSynonyms.serverSynonym(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG), "1000")
     val config = new KafkaConfig(props)
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
     val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().
