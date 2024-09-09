@@ -566,7 +566,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
             }
 
-            metricsManager.recordLatency(resp.requestLatencyMs());
+            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
         } finally {
             log.debug("Removing pending request for node {} - success", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
@@ -630,7 +630,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     closeFuture.complete(null);
                 }
 
-                metricsManager.recordLatency(resp.requestLatencyMs());
+                metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
             } else {
                 if (!acknowledgeRequestState.sessionHandler.handleResponse(response, resp.requestHeader().apiVersion())) {
                     // Received a response-level error code.
@@ -646,7 +646,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                     metadata.topicNames().get(shareAcknowledgeTopicResponse.topicId()));
 
                             acknowledgeRequestState.handleAcknowledgeErrorCode(tip, response.error());
-                            metricsManager.recordLatency(resp.requestLatencyMs());
+                            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
                         }));
                         acknowledgeRequestState.processingComplete();
                     }
@@ -678,7 +678,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         acknowledgeRequestState.onSuccessfulAttempt(responseCompletionTimeMs);
                     }
                     acknowledgeRequestState.processingComplete();
-                    metricsManager.recordLatency(resp.requestLatencyMs());
+                    metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
                 }
             }
         } finally {

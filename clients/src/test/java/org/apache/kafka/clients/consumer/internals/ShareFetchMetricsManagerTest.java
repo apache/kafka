@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
@@ -55,12 +59,39 @@ class ShareFetchMetricsManagerTest {
 
     @Test
     public void testLatency() {
-        shareFetchMetricsManager.recordLatency(101);
+        shareFetchMetricsManager.recordLatency("", 101);
         time.sleep(metrics.config().timeWindowMs() + 1);
-        shareFetchMetricsManager.recordLatency(155);
+        shareFetchMetricsManager.recordLatency("", 155);
 
         assertEquals(155, (double) getMetric(shareFetchMetricsRegistry.fetchLatencyMax).metricValue(), EPSILON);
         assertEquals(128, (double) getMetric(shareFetchMetricsRegistry.fetchLatencyAvg).metricValue(), EPSILON);
+    }
+
+    @Test
+    public void testNodeLatency() {
+        String connectionId = "0";
+        MetricName nodeLatencyAvg = metrics.metricName("request-latency-avg", "group");
+        MetricName nodeLatencyMax = metrics.metricName("request-latency-max", "group");
+        registerNodeLatencyMetric(connectionId, nodeLatencyAvg, nodeLatencyMax);
+
+        shareFetchMetricsManager.recordLatency(connectionId, 123);
+        time.sleep(metrics.config().timeWindowMs() + 1);
+        shareFetchMetricsManager.recordLatency(connectionId, 456);
+
+        assertEquals(289.5, metricValue(shareFetchMetricsRegistry.fetchLatencyAvg), EPSILON);
+        assertEquals(456, metricValue(shareFetchMetricsRegistry.fetchLatencyMax), EPSILON);
+
+        assertEquals(289.5, metricValue(nodeLatencyAvg), EPSILON);
+        assertEquals(456, metricValue(nodeLatencyMax), EPSILON);
+
+        // Record metric against another node.
+        shareFetchMetricsManager.recordLatency("1", 501);
+
+        assertEquals(360, metricValue(shareFetchMetricsRegistry.fetchLatencyAvg), EPSILON);
+        assertEquals(501, metricValue(shareFetchMetricsRegistry.fetchLatencyMax), EPSILON);
+        // Node specific metric should not be affected.
+        assertEquals(289.5, metricValue(nodeLatencyAvg), EPSILON);
+        assertEquals(456, metricValue(nodeLatencyMax), EPSILON);
     }
 
     @Test
@@ -85,5 +116,22 @@ class ShareFetchMetricsManagerTest {
 
     private KafkaMetric getMetric(MetricNameTemplate name) {
         return metrics.metric(metrics.metricInstance(name));
+    }
+
+    private void registerNodeLatencyMetric(String connectionId, MetricName nodeLatencyAvg, MetricName nodeLatencyMax) {
+        String nodeTimeName = "node-" + connectionId + ".latency";
+        Sensor nodeRequestTime = metrics.sensor(nodeTimeName);
+        nodeRequestTime.add(nodeLatencyAvg, new Avg());
+        nodeRequestTime.add(nodeLatencyMax, new Max());
+    }
+
+    private double metricValue(MetricNameTemplate name) {
+        MetricName metricName = metrics.metricInstance(name);
+        return metricValue(metricName);
+    }
+
+    private double metricValue(MetricName metricName) {
+        KafkaMetric metric = metrics.metric(metricName);
+        return (Double) metric.metricValue();
     }
 }
