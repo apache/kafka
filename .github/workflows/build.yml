@@ -120,9 +120,10 @@ jobs:
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
           -PcommitId=xxxxxxxxxxxxxxxx \
-          test
+          :metadata:test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+          exit 1
       - name: Archive JUnit reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
