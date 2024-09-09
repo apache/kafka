@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.RecordBatch;
 
 import org.slf4j.Logger;
@@ -110,6 +111,12 @@ public class ProducerInterceptors<K, V> implements Closeable {
         for (ProducerInterceptor<K, V> interceptor : this.interceptors) {
             try {
                 Headers headers = record != null ? record.headers() : null;
+                if (headers instanceof RecordHeaders) {
+                    // make a copy of the headers to make sure it is read-only
+                    RecordHeaders recordHeaders = (RecordHeaders) headers;
+                    headers = new RecordHeaders(recordHeaders);
+                    ((RecordHeaders) headers).setReadOnly();
+                }
                 if (record == null && interceptTopicPartition == null) {
                     interceptor.onAcknowledgement(null, exception, headers);
                 } else {

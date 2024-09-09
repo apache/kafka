@@ -108,7 +108,7 @@ public interface ProducerInterceptor<K, V> extends Configurable, AutoCloseable {
      *                If an error occurred, the metadata will contain only the topic  and possibly the partition.
 
       *                If the partition was not assigned yet due to an error,
- *                 it will be set to {@link org.apache.kafka.clients.producer.RecordMetadata#NO_PARTITION}.
+ *                 it will be set to {@link org.apache.kafka.clients.producer.RecordMetadata#UNKNOWN_PARTITION}.
      *                 before partition gets assigned, then partition will be set to RecordMetadata.NO_PARTITION.
      *                 The metadata may be null if the client passed null record to
      *                 {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)}.
