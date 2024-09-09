@@ -33,7 +33,7 @@ public class Trie<T>  {
      * Creates an empty tree.
      */
     public Trie() {
-        clear();
+        root = Node.makeRoot();;
     }
 
     /**
