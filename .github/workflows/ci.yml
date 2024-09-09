@@ -35,7 +35,6 @@ jobs:
     with:
       gradle-cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
       gradle-cache-write-only: ${{ github.ref == 'refs/heads/trunk' }}
-      github-actions-opt-in: ${{ github.ref == 'refs/heads/trunk' || contains(github.head_ref, 'gh-') }}
       is-public-fork: ${{ github.event.pull_request.head.repo.full_name != 'apache/kafka' }}
     secrets:
       inherit
