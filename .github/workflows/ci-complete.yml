@@ -82,7 +82,6 @@ jobs:
           SCAN_URL=$(grep '^https://.*$' gradle.out)
           echo "Published build scan to $SCAN_URL"
           echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
-          exit 1
       - name: Handle failed publish
         if: ${{ steps.publish-build-scan.outcome == 'failure' }}
         uses: ./.github/actions/gh-api-update-status
