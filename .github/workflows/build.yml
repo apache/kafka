@@ -52,6 +52,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Clear Status Check
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          commit_sha: ${{ github.event.pull_request.head.sha }}
+          url: ${{ steps.publish-build-scan.outputs.build-scan-url }}
+          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          state: 'pending'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
