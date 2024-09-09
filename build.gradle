@@ -121,6 +121,19 @@ ext {
     // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
     if (name == "compileTestJava" || name == "compileTestScala")
       options.compilerArgs << "-parameters"
+    
+    options.compilerArgs << "-Xlint:delayedinit-select"
+    options.compilerArgs << "-Xlint:doc-detached"
+    options.compilerArgs << "-Xlint:missing-interpolator"
+    options.compilerArgs << "-Xlint:nullary-unit"
+    options.compilerArgs << "-Xlint:nullary-unit"
+    options.compilerArgs << "-Xlint:option-implicit"
+    options.compilerArgs << "-Xlint:package-object-classes"
+    options.compilerArgs << "-Xlint:poly-implicit-overload"
+    options.compilerArgs << "-Xlint:private-shadow"
+    options.compilerArgs << "-Xlint:stars-align"
+    options.compilerArgs << "-Xlint:type-parameter-shadow"
+    options.compilerArgs << "-Xlint:unused"
   }
 }
 
@@ -669,20 +682,6 @@ subprojects {
   tasks.withType(ScalaCompile) {
 
     scalaCompileOptions.keepAliveMode = userKeepAliveMode
-    scalaCompileOptions.forkOptions.jvmArgs = [
-      "-Xlint:constant",
-      "-Xlint:delayedinit-select",
-      "-Xlint:doc-detached",
-      "-Xlint:missing-interpolator",
-      "-Xlint:nullary-unit",
-      "-Xlint:option-implicit",
-      "-Xlint:package-object-classes",
-      "-Xlint:poly-implicit-overload",
-      "-Xlint:private-shadow",
-      "-Xlint:stars-align",
-      "-Xlint:type-parameter-shadow",
-      "-Xlint:unused"
-    ]
     
     scalaCompileOptions.additionalParameters = [
       "-deprecation:false",
