@@ -17,6 +17,7 @@
 package kafka.server.share;
 
 import kafka.server.DelayedOperation;
+import kafka.server.DelayedOperationPurgatory;
 import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -52,17 +53,20 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap;
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete = new LinkedHashMap<>();
+    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
 
     private static final Logger log = LoggerFactory.getLogger(DelayedShareFetch.class);
 
     DelayedShareFetch(
             SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData,
             ReplicaManager replicaManager,
-            Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap) {
+            Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap,
+            DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
         super(shareFetchPartitionData.fetchParams().maxWaitMs, Option.empty());
         this.shareFetchPartitionData = shareFetchPartitionData;
         this.replicaManager = replicaManager;
         this.partitionCacheMap = partitionCacheMap;
+        this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
     }
 
     @Override
@@ -128,6 +132,10 @@ public class DelayedShareFetch extends DelayedOperation {
                     }
                     // Releasing the lock to move ahead with the next request in queue.
                     releasePartitionsLock(shareFetchPartitionData.groupId(), topicPartitionData.keySet());
+                    // If we have a fetch request completed for a topic-partition, it means  the HWM has advanced,
+                    // then we should check if there is a pending share fetch request for the topic-partition and complete it.
+                    result.keySet().forEach(topicIdPartition -> delayedShareFetchPurgatory.checkAndComplete(
+                            new DelayedShareFetchKey(topicIdPartition, shareFetchPartitionData.groupId())));
                 });
 
         } catch (Exception e) {

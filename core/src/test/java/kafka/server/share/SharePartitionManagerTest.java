@@ -1738,7 +1738,7 @@ public class SharePartitionManagerTest {
         partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
-            new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
+            new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
 
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
@@ -1833,7 +1833,7 @@ public class SharePartitionManagerTest {
         partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
-                new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
+                new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
 
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
@@ -1918,7 +1918,7 @@ public class SharePartitionManagerTest {
         partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
-                new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
+                new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
 
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());
@@ -2017,7 +2017,7 @@ public class SharePartitionManagerTest {
         partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
-                new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
+                new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
 
         // Since acquisition lock for sp1 and sp2 cannot be acquired, we should have 2 watched keys.
         assertEquals(2, delayedShareFetchPurgatory.watched());

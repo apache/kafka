@@ -590,7 +590,7 @@ public class SharePartitionManager implements AutoCloseable {
                     new DelayedShareFetchKey(topicIdPartition, shareFetchPartitionData.groupId)));
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
-            addDelayedShareFetch(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap),
+            addDelayedShareFetch(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory),
                 delayedShareFetchWatchKeys);
 
             // Release the lock so that other threads can process the queue.
