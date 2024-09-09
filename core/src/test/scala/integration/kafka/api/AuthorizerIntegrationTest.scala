@@ -1799,7 +1799,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterGroupConfigsWithAlterAcl(quorum: String): Unit = {
     addAndVerifyAcls(groupAlterConfigsAcl(groupResource), groupResource)
 
@@ -1809,7 +1809,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterGroupConfigsWithOperationAll(quorum: String): Unit = {
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
@@ -1820,7 +1820,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterGroupConfigsWithoutAlterAcl(quorum: String): Unit = {
     removeAllClientAcls()
 
@@ -1830,7 +1830,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeGroupConfigsWithDescribeAcl(quorum: String): Unit = {
     addAndVerifyAcls(groupDescribeConfigsAcl(groupResource), groupResource)
 
@@ -1840,7 +1840,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeGroupConfigsWithOperationAll(quorum: String): Unit = {
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
@@ -1851,7 +1851,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testDescribeGroupConfigsWithoutDescribeAcl(quorum: String): Unit = {
     removeAllClientAcls()
 

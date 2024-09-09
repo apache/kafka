@@ -17,12 +17,13 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.{ActionQueue, ReplicaManager, RequestLocal, defaultError, genericError}
+import kafka.server.{ActionQueue, ReplicaManager, defaultError, genericError}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 
 import java.util.concurrent.CompletableFuture
@@ -145,7 +146,7 @@ class CoordinatorPartitionWriter(
       origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = Map(tp -> records),
       responseCallback = results => appendResults = results,
-      requestLocal = RequestLocal.NoCaching,
+      requestLocal = RequestLocal.noCaching,
       verificationGuards = Map(tp -> verificationGuard),
       delayedProduceLock = None,
       // We can directly complete the purgatories here because we don't hold
