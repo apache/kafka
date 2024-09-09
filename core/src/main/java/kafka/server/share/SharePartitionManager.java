@@ -149,9 +149,9 @@ public class SharePartitionManager implements AutoCloseable {
         int recordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
+        int shareFetchPurgatoryPurgeIntervalRequests,
         Persister persister,
-        Metrics metrics,
-        int shareFetchPurgatoryPurgeIntervalRequests
+        Metrics metrics
     ) {
         this(replicaManager,
             time,
@@ -160,9 +160,9 @@ public class SharePartitionManager implements AutoCloseable {
             recordLockDurationMs,
             maxDeliveryCount,
             maxInFlightMessages,
+            shareFetchPurgatoryPurgeIntervalRequests,
             persister,
-            metrics,
-            shareFetchPurgatoryPurgeIntervalRequests
+            metrics
         );
     }
 
@@ -174,9 +174,9 @@ public class SharePartitionManager implements AutoCloseable {
         int recordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
+        int shareFetchPurgatoryPurgeIntervalRequests,
         Persister persister,
-        Metrics metrics,
-        int shareFetchPurgatoryPurgeIntervalRequests
+        Metrics metrics
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -286,7 +286,7 @@ public class SharePartitionManager implements AutoCloseable {
 
                 // If we have an acknowledgement completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
-                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(topicIdPartition, groupId);
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
                 delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
 
                 futures.put(topicIdPartition, future);
@@ -355,7 +355,7 @@ public class SharePartitionManager implements AutoCloseable {
                 });
                 // If we have a release acquired request completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
-                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(topicIdPartition, groupId);
+                DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
                 delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
 
                 futuresMap.put(topicIdPartition, future);
@@ -587,7 +587,7 @@ public class SharePartitionManager implements AutoCloseable {
             Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
             shareFetchPartitionData.partitionMaxBytes.keySet().forEach(
                 topicIdPartition -> delayedShareFetchWatchKeys.add(
-                    new DelayedShareFetchKey(topicIdPartition, shareFetchPartitionData.groupId)));
+                    new DelayedShareFetchKey(shareFetchPartitionData.groupId, topicIdPartition)));
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
             addDelayedShareFetch(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory),
@@ -603,6 +603,9 @@ public class SharePartitionManager implements AutoCloseable {
             // In case exception occurs then release the locks so queue can be further processed.
             log.error("Error processing fetch queue for share partitions", e);
             releaseProcessFetchQueueLock();
+            // If there are more requests in the queue, then process them.
+            if (!fetchQueue.isEmpty())
+                maybeProcessFetchQueue();
         }
     }
 

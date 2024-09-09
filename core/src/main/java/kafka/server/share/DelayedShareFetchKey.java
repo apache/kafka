@@ -26,12 +26,12 @@ import java.util.Objects;
  * A key for delayed operations that fetch data for share consumers.
  */
 public class DelayedShareFetchKey implements DelayedOperationKey {
-    private final TopicIdPartition topicIdPartition;
     private final String groupId;
+    private final TopicIdPartition topicIdPartition;
 
-    DelayedShareFetchKey(TopicIdPartition topicIdPartition, String groupId) {
-        this.topicIdPartition = topicIdPartition;
+    DelayedShareFetchKey(String groupId, TopicIdPartition topicIdPartition) {
         this.groupId = groupId;
+        this.topicIdPartition = topicIdPartition;
     }
 
     @Override
@@ -49,8 +49,8 @@ public class DelayedShareFetchKey implements DelayedOperationKey {
 
     @Override
     public String toString() {
-        return "SharePartitionOperationKey(topicIdPartition=" + topicIdPartition +
-                ", groupId=" + groupId +
+        return "DelayedShareFetchKey(groupId=" + groupId +
+                ", topicIdPartition=" + topicIdPartition +
                 ")";
     }
 

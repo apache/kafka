@@ -38,11 +38,11 @@ public class DelayedShareFetchKeyTest {
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic2", 0));
 
         Map<String, DelayedShareFetchKey> keyMap = new HashMap<>();
-        keyMap.put("key0", new DelayedShareFetchKey(tp0, "grp"));
-        keyMap.put("key1", new DelayedShareFetchKey(tp1, "grp"));
-        keyMap.put("key2", new DelayedShareFetchKey(tp2, "grp"));
-        keyMap.put("key3", new DelayedShareFetchKey(tp0, "grp2"));
-        keyMap.put("key4", new DelayedShareFetchKey(tp1, "grp2"));
+        keyMap.put("key0", new DelayedShareFetchKey("grp", tp0));
+        keyMap.put("key1", new DelayedShareFetchKey("grp", tp1));
+        keyMap.put("key2", new DelayedShareFetchKey("grp", tp2));
+        keyMap.put("key3", new DelayedShareFetchKey("grp2", tp0));
+        keyMap.put("key4", new DelayedShareFetchKey("grp2", tp1));
 
         keyMap.forEach((key1, value1) -> keyMap.forEach((key2, value2) -> {
             if (key1.equals(key2)) {

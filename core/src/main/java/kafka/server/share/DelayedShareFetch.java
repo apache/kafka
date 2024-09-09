@@ -45,8 +45,7 @@ import scala.jdk.javaapi.CollectionConverters;
 import scala.runtime.BoxedUnit;
 
 /**
- * A delayed share fetch operation has been introduced in case there is no share partition for which we can acquire records. We will try to wait
- * for MaxWaitMs for records to be released else complete the share fetch request.
+ * A delayed share fetch operation has been introduced in case there is a share fetch request which cannot be completed instantaneously.
  */
 public class DelayedShareFetch extends DelayedOperation {
     private final SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData;
@@ -131,18 +130,18 @@ public class DelayedShareFetch extends DelayedOperation {
                         shareFetchPartitionData.future().complete(result);
                     }
                     // Releasing the lock to move ahead with the next request in queue.
-                    releasePartitionsLock(shareFetchPartitionData.groupId(), topicPartitionData.keySet());
+                    releasePartitionLocks(shareFetchPartitionData.groupId(), topicPartitionData.keySet());
                     // If we have a fetch request completed for a topic-partition, it means  the HWM has advanced,
                     // then we should check if there is a pending share fetch request for the topic-partition and complete it.
                     result.keySet().forEach(topicIdPartition -> delayedShareFetchPurgatory.checkAndComplete(
-                            new DelayedShareFetchKey(topicIdPartition, shareFetchPartitionData.groupId())));
+                            new DelayedShareFetchKey(shareFetchPartitionData.groupId(), topicIdPartition)));
                 });
 
         } catch (Exception e) {
             // Release the locks acquired for the partitions in the share fetch request in case there is an exception
             log.error("Error processing delayed share fetch request", e);
             shareFetchPartitionData.future().completeExceptionally(e);
-            releasePartitionsLock(shareFetchPartitionData.groupId(), topicPartitionData.keySet());
+            releasePartitionLocks(shareFetchPartitionData.groupId(), topicPartitionData.keySet());
         }
     }
 
@@ -203,7 +202,7 @@ public class DelayedShareFetch extends DelayedOperation {
         return topicPartitionData;
     }
 
-    private void releasePartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
+    private void releasePartitionLocks(String groupId, Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> partitionCacheMap.get(new
                 SharePartitionManager.SharePartitionKey(groupId, tp)).releaseFetchLock());
     }

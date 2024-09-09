@@ -1735,7 +1735,7 @@ public class SharePartitionManagerTest {
         when(sp2.canAcquireRecords()).thenReturn(false);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
             new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
@@ -1830,7 +1830,7 @@ public class SharePartitionManagerTest {
         when(sp3.canAcquireRecords()).thenReturn(false);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
                 new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
@@ -1915,7 +1915,7 @@ public class SharePartitionManagerTest {
         when(sp2.canAcquireRecords()).thenReturn(false);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
                 new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());
@@ -2014,7 +2014,7 @@ public class SharePartitionManagerTest {
         when(sp3.canAcquireRecords()).thenReturn(false);
 
         Set<Object> delayedShareFetchWatchKeys = new HashSet<>();
-        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(topicIdPartition, groupId)));
+        partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchKey(groupId, topicIdPartition)));
 
         delayedShareFetchPurgatory.tryCompleteElseWatch(
                 new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedShareFetchPurgatory), CollectionConverters.asScala(delayedShareFetchWatchKeys).toSeq());

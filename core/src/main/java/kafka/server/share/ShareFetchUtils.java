@@ -70,7 +70,7 @@ public class ShareFetchUtils {
                         }
 
                         if (fetchPartitionData.error.code() == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                            // In case we get OFFSET_OUT_OF_RANGE error, that's because the LSO is later than the fetch offset.
+                            // In case we get OFFSET_OUT_OF_RANGE error, that's because the Log Start Offset is later than the fetch offset.
                             // So, we would update the start and end offset of the share partition and still return an empty
                             // response and let the client retry the fetch. This way we do not lose out on the data that
                             // would be returned for other share partitions in the fetch request.
