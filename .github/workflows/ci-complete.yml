@@ -57,7 +57,7 @@ jobs:
         run: |
           ./gradlew --info buildScanPublishPrevious > gradle.out
           SCAN_URL = $(grep '^https://.*$' gradle.out)
-          echo "scan-url=SCAN_URL" >> $GITHUB_OUTPUT
+          echo "scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
       - run: |
           echo "Finished publishing"
           echo "Build scan url is: ${{ steps.publish-scan.outputs.scan-url }}"
