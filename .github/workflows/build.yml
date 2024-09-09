@@ -123,7 +123,6 @@ jobs:
           :metadata:test
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
-          exit 1
       - name: Archive JUnit reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
