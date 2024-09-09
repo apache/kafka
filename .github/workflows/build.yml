@@ -62,8 +62,12 @@ jobs:
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
-        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
-        run: ./gradlew --build-cache --info --scan check -x test
+        # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
+        # --no-scan:      For public fork PRs, we won't attempt to publish the scan
+        run: |
+          ./gradlew --build-cache --info  \
+          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
+          check -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -85,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 17, 11 ]
+        java: [ 17, 11 ]  # If we change these, make sure to adjust ci-complete.yml
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
