@@ -711,12 +711,12 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizationWithTopicExisting(quorum: String): Unit = {
     //First create the topic so we have a valid topic ID
     sendRequests(mutable.Map(ApiKeys.CREATE_TOPICS -> createTopicsRequest))
 
-    var requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
       ApiKeys.PRODUCE -> createProduceRequest,
       ApiKeys.FETCH -> createFetchRequest,
@@ -756,12 +756,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       requestKeyToRequest += ApiKeys.STOP_REPLICA -> stopReplicaRequest
       requestKeyToRequest += ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest
     }
-
-    if (isNewGroupCoordinatorEnabled()) {
-      requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-        ApiKeys.CONSUMER_GROUP_HEARTBEAT -> consumerGroupHeartbeatRequest,
-        ApiKeys.CONSUMER_GROUP_DESCRIBE -> consumerGroupDescribeRequest
-      )
+    if (isKRaftTest()) {
+      requestKeyToRequest += ApiKeys.CONSUMER_GROUP_HEARTBEAT -> consumerGroupHeartbeatRequest
+      requestKeyToRequest += ApiKeys.CONSUMER_GROUP_DESCRIBE -> consumerGroupDescribeRequest
     }
     // Delete the topic last
     requestKeyToRequest += ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
@@ -2531,7 +2528,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testConsumerGroupHeartbeatWithReadAcl(quorum: String): Unit = {
     addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
 
@@ -2541,7 +2538,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testConsumerGroupHeartbeatWithOperationAll(quorum: String): Unit = {
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
@@ -2552,7 +2549,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testConsumerGroupHeartbeatWithoutReadAcl(quorum: String): Unit = {
     removeAllClientAcls()
 
@@ -2562,7 +2559,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testConsumerGroupDescribeWithDescribeAcl(quorum: String): Unit = {
     addAndVerifyAcls(groupDescribeAcl(groupResource), groupResource)
 
@@ -2572,7 +2569,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testConsumerGroupDescribeWithOperationAll(quorum: String): Unit = {
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
@@ -2583,7 +2580,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
+  @ValueSource(strings = Array("kraft"))
   def testConsumerGroupDescribeWithoutDescribeAcl(quorum: String): Unit = {
     removeAllClientAcls()
 
