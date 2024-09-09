@@ -92,7 +92,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private String inputTopicOnePartition;
     private String outputTopicOnePartition;
     private final List<Properties> streamsConfigurations = new ArrayList<>();
-    private static final List<MetricsInterceptingConsumer<?, ?>> INTERCEPTING_CONSUMERS = new ArrayList<>();
+    private static final List<MetricsInterceptingConsumer<byte[], byte[]>> INTERCEPTING_CONSUMERS = new ArrayList<>();
+    private static final List<AdminClient> INTERCEPTING_ADMIN_CLIENTS = new ArrayList<>();
     private static final int FIRST_INSTANCE_CONSUMER = 0;
     private static final int SECOND_INSTANCE_CONSUMER = 1;
 
@@ -376,7 +377,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
         @Override
         public Admin getAdmin(final Map<String, Object> config) {
-            return AdminClient.create(config);
+            final TestingMetricsInterceptingAdminClient adminClient = new TestingMetricsInterceptingAdminClient(config);
+            INTERCEPTING_ADMIN_CLIENTS.add(adminClient);
+            return adminClient;
         }
     }
 
@@ -412,4 +415,5 @@ public class KafkaStreamsTelemetryIntegrationTest {
             super.unregisterMetric(metric);
         }
     }
+
 }
