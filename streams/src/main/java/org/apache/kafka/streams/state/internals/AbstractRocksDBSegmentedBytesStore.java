@@ -239,7 +239,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public void remove(final Bytes key) {
         final long timestamp = keySchema.segmentTimestamp(key);
         observedStreamTime = Math.max(observedStreamTime, timestamp);
-        final S segment = segments.getSegmentForTimestamp(timestamp);
+        final S segment = segments.segmentForTimestamp(timestamp);
         if (segment == null) {
             return;
         }
@@ -249,7 +249,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public void remove(final Bytes key, final long timestamp) {
         final Bytes keyBytes = keySchema.toStoreBinaryKeyPrefix(key, timestamp);
-        final S segment = segments.getSegmentForTimestamp(timestamp);
+        final S segment = segments.segmentForTimestamp(timestamp);
         if (segment != null) {
             segment.deleteRange(keyBytes, keyBytes);
         }
@@ -281,7 +281,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                     key.toString(), timestampFromKey, observedStreamTime - retentionPeriod + 1);
             return null;
         }
-        final S segment = segments.getSegmentForTimestamp(timestampFromKey);
+        final S segment = segments.segmentForTimestamp(timestampFromKey);
         if (segment == null) {
             return null;
         }

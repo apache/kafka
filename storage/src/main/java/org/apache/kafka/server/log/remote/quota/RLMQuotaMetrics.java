@@ -14,18 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote.quota;
-
-import kafka.server.SensorAccess;
+package org.apache.kafka.server.log.remote.quota;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.server.quota.SensorAccess;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import scala.runtime.BoxedUnit;
 
 public class RLMQuotaMetrics {
 
@@ -37,7 +34,6 @@ public class RLMQuotaMetrics {
         this.sensor = sensorAccess.getOrCreate(name, expirationTime, s -> {
             s.add(metrics.metricName(name + "-avg", group, String.format(descriptionFormat, "average")), new Avg());
             s.add(metrics.metricName(name + "-max", group, String.format(descriptionFormat, "maximum")), new Max());
-            return BoxedUnit.UNIT;
         });
     }
 

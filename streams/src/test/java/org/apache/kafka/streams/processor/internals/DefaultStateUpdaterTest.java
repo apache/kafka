@@ -1480,7 +1480,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask2);
         stateUpdater.add(standbyTask3);
 
-        verifyTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
+        verifyGetTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
     }
 
     @Test
@@ -1500,7 +1500,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask3);
         verifyUpdatingTasks(activeTask1, activeTask2, standbyTask1, standbyTask2, standbyTask3);
 
-        verifyTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
+        verifyGetTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
     }
 
     @Test
@@ -1514,11 +1514,11 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask2);
         verifyRestoredActiveTasks(activeTask1, activeTask2);
 
-        verifyTasks(mkSet(activeTask1, activeTask2), mkSet());
+        verifyGetTasks(mkSet(activeTask1, activeTask2), mkSet());
 
         stateUpdater.drainRestoredActiveTasks(Duration.ofMinutes(1));
 
-        verifyTasks(mkSet(), mkSet());
+        verifyGetTasks(mkSet(), mkSet());
     }
 
     @Test
@@ -1548,11 +1548,11 @@ class DefaultStateUpdaterTest {
         final ExceptionAndTask expectedExceptionAndTasks3 = new ExceptionAndTask(streamsException, activeTask1);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks1, expectedExceptionAndTasks2, expectedExceptionAndTasks3);
 
-        verifyTasks(mkSet(activeTask1), mkSet(standbyTask1, standbyTask2));
+        verifyGetTasks(mkSet(activeTask1), mkSet(standbyTask1, standbyTask2));
 
         stateUpdater.drainExceptionsAndFailedTasks();
 
-        verifyTasks(mkSet(), mkSet());
+        verifyGetTasks(mkSet(), mkSet());
     }
 
     @Test
@@ -1568,7 +1568,7 @@ class DefaultStateUpdaterTest {
 
         verifyPausedTasks(activeTask, standbyTask);
 
-        verifyTasks(mkSet(activeTask), mkSet(standbyTask));
+        verifyGetTasks(mkSet(activeTask), mkSet(standbyTask));
     }
 
     @Test
@@ -1681,8 +1681,8 @@ class DefaultStateUpdaterTest {
         assertThat((T) metrics.metrics().get(metricName).metricValue(), matcher);
     }
 
-    private void verifyTasks(final Set<StreamTask> expectedActiveTasks,
-                             final Set<StandbyTask> expectedStandbyTasks) {
+    private void verifyGetTasks(final Set<StreamTask> expectedActiveTasks,
+                                final Set<StandbyTask> expectedStandbyTasks) {
         final Set<Task> tasks = stateUpdater.tasks();
 
         assertEquals(expectedActiveTasks.size() + expectedStandbyTasks.size(), tasks.size());

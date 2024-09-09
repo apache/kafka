@@ -90,7 +90,7 @@ versions += [
   // gradle/resources/dependencycheck-suppressions.xml
   checkstyle: "8.36.2",
   commonsCli: "1.4",
-  commonsValidator: "1.7",
+  commonsValidator: "1.9.0",
   classgraph: "4.8.173",
   dropwizardMetrics: "4.1.12.1",
   gradle: "8.10",

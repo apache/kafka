@@ -34,11 +34,13 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * An {@link EventProcessor} that is created and executes in the {@link ConsumerNetworkThread network thread}
@@ -79,10 +81,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
             case FETCH_COMMITTED_OFFSETS:
                 process((FetchCommittedOffsetsEvent) event);
-                return;
-
-            case NEW_TOPICS_METADATA_UPDATE:
-                process((NewTopicsMetadataUpdateRequestEvent) event);
                 return;
 
             case ASSIGNMENT_CHANGE:
@@ -194,21 +192,26 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         future.whenComplete(complete(event.future()));
     }
 
-    private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
-        metadata.requestUpdateForNewTopics();
-    }
-
     /**
      * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
      * that will not be retried if the commit request fails.
      */
     private void process(final AssignmentChangeEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            return;
+        if (requestManagers.commitRequestManager.isPresent()) {
+            CommitRequestManager manager = requestManagers.commitRequestManager.get();
+            manager.updateAutoCommitTimer(event.currentTimeMs());
+            manager.maybeAutoCommitAsync();
         }
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.updateAutoCommitTimer(event.currentTimeMs());
-        manager.maybeAutoCommitAsync();
+
+        log.info("Assigned to partition(s): {}", event.partitions().stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+        try {
+            if (subscriptions.assignFromUser(new HashSet<>(event.partitions())))
+                metadata.requestUpdateForNewTopics();
+
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 
     /**

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
@@ -45,13 +44,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,6 +66,7 @@ public class ApplicationEventProcessorTest {
     private final ConsumerHeartbeatRequestManager heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
     private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
     private final SubscriptionState subscriptionState = mock(SubscriptionState.class);
+    private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private ApplicationEventProcessor processor;
 
     private void setupProcessor(boolean withGroupId) {
@@ -76,7 +82,7 @@ public class ApplicationEventProcessorTest {
         processor = new ApplicationEventProcessor(
                 new LogContext(),
                 requestManagers,
-                mock(ConsumerMetadata.class),
+                metadata,
                 subscriptionState
         );
     }
@@ -115,17 +121,14 @@ public class ApplicationEventProcessorTest {
     }
 
     private static Stream<Arguments> applicationEvents() {
-        Map<TopicPartition, OffsetAndMetadata> offset = new HashMap<>();
-        final long currentTimeMs = 12345;
         return Stream.of(
                 Arguments.of(new PollEvent(100)),
-                Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
                 Arguments.of(new ResetPositionsEvent(500)),
                 Arguments.of(new ValidatePositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
-                Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
+                Arguments.of(new AssignmentChangeEvent(12345, 12345, Collections.emptyList())));
     }
 
     @ParameterizedTest
@@ -144,6 +147,40 @@ public class ApplicationEventProcessorTest {
         ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
         applicationEventProcessor.process(event);
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testAssignmentChangeEvent(boolean withGroupId) {
+        final long currentTimeMs = 12345;
+        TopicPartition tp = new TopicPartition("topic", 0);
+        AssignmentChangeEvent event = new AssignmentChangeEvent(currentTimeMs, 12345, Collections.singleton(tp));
+
+        setupProcessor(withGroupId);
+        doReturn(true).when(subscriptionState).assignFromUser(Collections.singleton(tp));
+        processor.process(event);
+        if (withGroupId) {
+            verify(commitRequestManager).updateAutoCommitTimer(currentTimeMs);
+            verify(commitRequestManager).maybeAutoCommitAsync();
+        } else {
+            verify(commitRequestManager, never()).updateAutoCommitTimer(currentTimeMs);
+            verify(commitRequestManager, never()).maybeAutoCommitAsync();
+        }
+        verify(metadata).requestUpdateForNewTopics();
+        verify(subscriptionState).assignFromUser(Collections.singleton(tp));
+        assertDoesNotThrow(() -> event.future().get());
+    }
+
+    @Test
+    public void testAssignmentChangeEventWithException() {
+        AssignmentChangeEvent event = new AssignmentChangeEvent(12345, 12345, Collections.emptyList());
+
+        setupProcessor(false);
+        doThrow(new IllegalStateException()).when(subscriptionState).assignFromUser(any());
+        processor.process(event);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
+        assertInstanceOf(IllegalStateException.class, e.getCause());
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {

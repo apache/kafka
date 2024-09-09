@@ -170,9 +170,9 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
         protected abstract TimestampedKeyAndJoinSide<K> makeOtherKey(final K key, final long timestamp);
 
-        protected abstract VThis getThisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
+        protected abstract VThis thisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
-        protected abstract VOther getOtherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
+        protected abstract VOther otherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
         private void emitNonJoinedOuterRecords(final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> store,
                                                final Record<K, VThis> record) {
@@ -207,7 +207,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                 while (it.hasNext()) {
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> nextKeyValue = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
-                    sharedTimeTracker.minTime = timestampedKeyAndJoinSide.getTimestamp();
+                    sharedTimeTracker.minTime = timestampedKeyAndJoinSide.timestamp();
                     if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
                         // if windows are open for both joinSides we can break since there are no more candidates to emit
                         break;
@@ -250,10 +250,10 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         private void forwardNonJoinedOuterRecords(final Record<K, VThis> record,
                                                   final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide,
                                                   final LeftOrRightValue<VLeft, VRight> leftOrRightValue) {
-            final K key = timestampedKeyAndJoinSide.getKey();
-            final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
-            final VThis thisValue = getThisValue(leftOrRightValue);
-            final VOther otherValue = getOtherValue(leftOrRightValue);
+            final K key = timestampedKeyAndJoinSide.key();
+            final long timestamp = timestampedKeyAndJoinSide.timestamp();
+            final VThis thisValue = thisValue(leftOrRightValue);
+            final VOther otherValue = otherValue(leftOrRightValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);
             context().forward(
                     record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)

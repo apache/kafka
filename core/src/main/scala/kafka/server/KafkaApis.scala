@@ -72,7 +72,7 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{GroupVersion, MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_11_0_IV0, IBP_2_3_IV0}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareAcknowledgementBatch, ShareFetchContext}
@@ -88,7 +88,7 @@ import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.{Collections, Optional, OptionalInt}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq, Set, mutable}
+import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -1104,35 +1104,43 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseTopics = authorizedRequestInfo.map { topic =>
       val responsePartitions = topic.partitions.asScala.map { partition =>
-        val topicPartition = new TopicPartition(topic.name, partition.partitionIndex)
-
-        try {
-          val offsets = replicaManager.legacyFetchOffsetsForTimestamp(
-            topicPartition = topicPartition,
-            timestamp = partition.timestamp,
-            maxNumOffsets = partition.maxNumOffsets,
-            isFromConsumer = offsetRequest.replicaId == ListOffsetsRequest.CONSUMER_REPLICA_ID,
-            fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetsRequest.DEBUGGING_REPLICA_ID)
+        if (partition.timestamp() < ListOffsetsRequest.EARLIEST_TIMESTAMP) {
+          // Negative timestamps are reserved for some functions.
+          // For v0 requests, negative timestamps only support LATEST_TIMESTAMP (-1) and EARLIEST_TIMESTAMP (-2).
           new ListOffsetsPartitionResponse()
             .setPartitionIndex(partition.partitionIndex)
-            .setErrorCode(Errors.NONE.code)
-            .setOldStyleOffsets(offsets.map(JLong.valueOf).asJava)
-        } catch {
-          // NOTE: UnknownTopicOrPartitionException and NotLeaderOrFollowerException are special cases since these error messages
-          // are typically transient and there is no value in logging the entire stack trace for the same
-          case e @ (_ : UnknownTopicOrPartitionException |
-                    _ : NotLeaderOrFollowerException |
-                    _ : KafkaStorageException) =>
-            debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
-              correlationId, clientId, topicPartition, e.getMessage))
+            .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+        } else {
+          val topicPartition = new TopicPartition(topic.name, partition.partitionIndex)
+
+          try {
+            val offsets = replicaManager.legacyFetchOffsetsForTimestamp(
+              topicPartition = topicPartition,
+              timestamp = partition.timestamp,
+              maxNumOffsets = partition.maxNumOffsets,
+              isFromConsumer = offsetRequest.replicaId == ListOffsetsRequest.CONSUMER_REPLICA_ID,
+              fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetsRequest.DEBUGGING_REPLICA_ID)
             new ListOffsetsPartitionResponse()
               .setPartitionIndex(partition.partitionIndex)
-              .setErrorCode(Errors.forException(e).code)
-          case e: Throwable =>
-            error("Error while responding to offset request", e)
-            new ListOffsetsPartitionResponse()
-              .setPartitionIndex(partition.partitionIndex)
-              .setErrorCode(Errors.forException(e).code)
+              .setErrorCode(Errors.NONE.code)
+              .setOldStyleOffsets(offsets.map(JLong.valueOf).asJava)
+          } catch {
+            // NOTE: UnknownTopicOrPartitionException and NotLeaderOrFollowerException are special cases since these error messages
+            // are typically transient and there is no value in logging the entire stack trace for the same
+            case e @ (_ : UnknownTopicOrPartitionException |
+                      _ : NotLeaderOrFollowerException |
+                      _ : KafkaStorageException) =>
+              debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
+                correlationId, clientId, topicPartition, e.getMessage))
+              new ListOffsetsPartitionResponse()
+                .setPartitionIndex(partition.partitionIndex)
+                .setErrorCode(Errors.forException(e).code)
+            case e: Throwable =>
+              error("Error while responding to offset request", e)
+              new ListOffsetsPartitionResponse()
+                .setPartitionIndex(partition.partitionIndex)
+                .setErrorCode(Errors.forException(e).code)
+          }
         }
       }
       new ListOffsetsTopicResponse().setName(topic.name).setPartitions(responsePartitions.asJava)
@@ -1145,6 +1153,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetsRequest]
     val version = request.header.apiVersion
+    val timestampMinSupportedVersion = immutable.Map[Long, Short](
+      ListOffsetsRequest.EARLIEST_TIMESTAMP -> 1.toShort,
+      ListOffsetsRequest.LATEST_TIMESTAMP -> 1.toShort,
+      ListOffsetsRequest.MAX_TIMESTAMP -> 7.toShort,
+      ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP -> 8.toShort,
+      ListOffsetsRequest.LATEST_TIERED_TIMESTAMP -> 9.toShort
+    )
 
     def buildErrorResponse(e: Errors, partition: ListOffsetsPartition): ListOffsetsPartitionResponse = {
       new ListOffsetsPartitionResponse()
@@ -1171,6 +1186,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
               s"failed because the partition is duplicated in the request.")
           buildErrorResponse(Errors.INVALID_REQUEST, partition)
+        } else if (partition.timestamp() < 0 &&
+          (!timestampMinSupportedVersion.contains(partition.timestamp()) || version < timestampMinSupportedVersion(partition.timestamp()))) {
+          buildErrorResponse(Errors.UNSUPPORTED_VERSION, partition)
         } else {
           try {
             val fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetsRequest.DEBUGGING_REPLICA_ID
@@ -3809,8 +3827,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       )
   }
 
-  private def isConsumerGroupProtocolEnabled(): Boolean = {
-    groupCoordinator.isNewGroupCoordinator && config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER)
+  private def groupVersion(): GroupVersion = {
+    GroupVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(GroupVersion.FEATURE_NAME, 0.toShort))
+  }
+
+  def isConsumerGroupProtocolEnabled(): Boolean = {
+    groupCoordinator.isNewGroupCoordinator &&
+      config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) &&
+      groupVersion().isConsumerRebalanceProtocolSupported
   }
 
   def handleConsumerGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {

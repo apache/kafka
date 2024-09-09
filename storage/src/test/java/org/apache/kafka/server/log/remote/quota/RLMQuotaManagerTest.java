@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote.quota;
-
-import kafka.server.QuotaType;
+package org.apache.kafka.server.log.remote.quota;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -24,6 +22,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.server.quota.QuotaType;
 
 import org.junit.jupiter.api.Test;
 
@@ -39,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RLMQuotaManagerTest {
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time);
-    private static final QuotaType QUOTA_TYPE = QuotaType.RLMFetch$.MODULE$;
+    private static final QuotaType QUOTA_TYPE = QuotaType.RLM_FETCH;
     private static final String DESCRIPTION = "Tracking byte rate";
 
     @Test

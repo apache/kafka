@@ -294,10 +294,10 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
         leaderNode.metrics.removeSensor(s"${quotaType}ThrottleTime-$sensorSuffix")
         leaderNode.metrics.removeSensor(s"$quotaType-$sensorSuffix")
       }
-      removeSensors(QuotaType.Produce, producerClientId)
-      removeSensors(QuotaType.Fetch, consumerClientId)
-      removeSensors(QuotaType.Request, producerClientId)
-      removeSensors(QuotaType.Request, consumerClientId)
+      removeSensors(QuotaType.PRODUCE, producerClientId)
+      removeSensors(QuotaType.FETCH, consumerClientId)
+      removeSensors(QuotaType.REQUEST, producerClientId)
+      removeSensors(QuotaType.REQUEST, consumerClientId)
     }
 
     private def quotaEntityName(userGroup: String): String = s"${userGroup}_"

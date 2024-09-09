@@ -57,7 +57,7 @@ public class SubscriptionWrapper<K> {
             this.value = value;
         }
 
-        public byte getValue() {
+        public byte value() {
             return value;
         }
 
@@ -89,23 +89,23 @@ public class SubscriptionWrapper<K> {
         this.primaryPartition = primaryPartition;
     }
 
-    public Instruction getInstruction() {
+    public Instruction instruction() {
         return instruction;
     }
 
-    public long[] getHash() {
+    public long[] hash() {
         return hash;
     }
 
-    public K getPrimaryKey() {
+    public K primaryKey() {
         return primaryKey;
     }
 
-    public byte getVersion() {
+    public byte version() {
         return version;
     }
 
-    public Integer getPrimaryPartition() {
+    public Integer primaryPartition() {
         return primaryPartition;
     }
 
