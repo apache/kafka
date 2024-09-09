@@ -75,9 +75,8 @@ jobs:
           echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
       - name: Update Status Check
         uses: ./.github/actions/gh-api-update-status
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
           #PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           repository: ${{ github.event.workflow_run.head_repository.full_name }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
