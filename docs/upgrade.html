@@ -33,7 +33,8 @@
                 <a href="/{{version}}/javadoc/org/apache/kafka/tools/api/RecordReader.html"><code>org.apache.kafka.tools.api.RecordReader</code></a>
                 interface to build custom readers for the <code>kafka-console-producer</code> tool.
             </li>
-            <li> Remove <code>use.incremental.alter.configs</code>. The modified behavior is identical to the previous <code>required</code> configuration </li>
+            <li> Remove <code>use.incremental.alter.configs</code>. The modified behavior is identical to the previous <code>required</code> configuration,
+                therefore users should ensure that target broker is at least 2.3.0</li>
         </ul>
     </ul>
 
