@@ -33,7 +33,7 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 # them to ge.apache.org.
 #
 # If we need to do things like comment on, label, or otherwise modify PRs from public forks. This
-# workflow is the place to do it.
+# workflow is the place to do it. PR number is ${{ github.event.workflow_run.pull_requests[0].number }}
 
 jobs:
   upload-build-scan:
@@ -73,11 +73,21 @@ jobs:
           SCAN_URL=$(grep '^https://.*$' gradle.out)
           echo "Published build scan to $SCAN_URL"
           echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
+          exit 1
+      - name: Handle failed publish
+        if: failed()
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          description: 'The build scan could not be published'
+          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          state: 'error'
       - name: Update Status Check
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
-          #PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           repository: ${{ github.event.workflow_run.head_repository.full_name }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: ${{ steps.publish-build-scan.outputs.build-scan-url }}
