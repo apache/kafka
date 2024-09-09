@@ -226,9 +226,7 @@ public class RequestMetrics {
 
         @Override
         public int hashCode() {
-            int result = version;
-            result = 31 * result + (clientInformation != null ? clientInformation.hashCode() : 0);
-            return result;
+            return Objects.hash(version, clientInformation);
         }
     }
 }
