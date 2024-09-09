@@ -31,6 +31,9 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 17, 11 ]
+    outputs:
+      build-scan-url-11: ${{ steps.publish-scan.scan-url-11 }}
+      build-scan-url-17: ${{ steps.publish-scan.scan-url-17 }}
     steps:
       - name: Env
         run: printenv
@@ -57,12 +60,20 @@ jobs:
         run: |
           ./gradlew --info buildScanPublishPrevious > gradle.out
           SCAN_URL=$(grep '^https://.*$' gradle.out)
-          echo "scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
+          echo "Published build scan to $SCAN_URL"
+          echo "scan-url-${{ matrix.java }}=$SCAN_URL" >> $GITHUB_OUTPUT
+
+  update-pr-comment:
+    needs: upload-build-scan
+    runs-on: ubuntu-latest
+    steps:
       - name: Update PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
-          echo "Finished publishing"
-          echo "Build scan url is: ${{ steps.publish-scan.outputs.scan-url }}"
-          gh pr comment $PR_NUMBER --body "Published scan ${{ steps.publish-scan.outputs.scan-url }} for workflow run ${{ github.event.workflow_run.html_url }} "
+          echo "Build scans published for workflow ${{ github.event.workflow_run.html_url }}\n" >> pr-comment.txt
+          echo "Java 11: ${{ needs.upload-build-scan.outputs.build-scan-url-11 }} >> pr-comment.txt
+          echo "Java 17: ${{ needs.upload-build-scan.outputs.build-scan-url-17 }} >> pr-comment.txt
+          cat pr-comment.txt
+          gh pr comment $PR_NUMBER --body-file pr-comment.txt
