@@ -60,7 +60,10 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
-      - uses: actions/download-artifact@v4
+      - name: Download build scan archive
+        id: download-build-scan
+        uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
@@ -68,13 +71,15 @@ jobs:
           path: ~/.gradle/build-scan-data  # This is where Gradle buffers unpublished build scan data when --no-scan is given
       - name: Publish Scan
         id: publish-build-scan
+        continue-on-error: true
+        if: ${{ steps.download-build-scan.outcome == 'success' }}
         run: |
           ./gradlew --info buildScanPublishPrevious > gradle.out
           SCAN_URL=$(grep '^https://.*$' gradle.out)
           echo "Published build scan to $SCAN_URL"
           echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
       - name: Handle failed publish
-        if: failure()
+        if: ${{ steps.publish-build-scan.outcome == 'failure' }}
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
@@ -85,6 +90,7 @@ jobs:
           context: 'Gradle Build Scan / Java ${{ matrix.java }}'
           state: 'error'
       - name: Update Status Check
+        if: ${{ steps.publish-build-scan.outcome == 'success' }}
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
