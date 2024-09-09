@@ -72,8 +72,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
-          echo "Build scans published for workflow ${{ github.event.workflow_run.html_url }}\n" >> pr-comment.txt
-          echo "Java 11: ${{ needs.upload-build-scan.outputs.build-scan-url-11 }} >> pr-comment.txt
-          echo "Java 17: ${{ needs.upload-build-scan.outputs.build-scan-url-17 }} >> pr-comment.txt
+          echo "Build scans published for workflow ${{ github.event.workflow_run.html_url }}" >> pr-comment.txt
+          echo "Java 11: ${{ needs.upload-build-scan.outputs.build-scan-url-11 }}" >> pr-comment.txt
+          echo "Java 17: ${{ needs.upload-build-scan.outputs.build-scan-url-17 }}" >> pr-comment.txt
           cat pr-comment.txt
           gh pr comment $PR_NUMBER --body-file pr-comment.txt
