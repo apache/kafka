@@ -32,8 +32,8 @@ jobs:
       matrix:
         java: [ 17, 11 ]
     outputs:
-      build-scan-url-11: ${{ steps.publish-scan.scan-url-11 }}
-      build-scan-url-17: ${{ steps.publish-scan.scan-url-17 }}
+      build-scan-url-11: ${{ steps.publish-build-scan.outputs.build-scan-url-11 }}
+      build-scan-url-17: ${{ steps.publish-build-scan.outputs.build-scan-url-17 }}
     steps:
       - name: Env
         run: printenv
@@ -56,14 +56,14 @@ jobs:
           name: build-scan-test-${{ matrix.java }}
           path: ~/.gradle/build-scan-data
       - name: Publish scan
-        id: publish-scan
+        id: publish-build-scan
         run: |
           ./gradlew --info buildScanPublishPrevious > gradle.out
           SCAN_URL=$(grep '^https://.*$' gradle.out)
           echo "Published build scan to $SCAN_URL"
           echo "build-scan-url-${{ matrix.java }}=$SCAN_URL" >> $GITHUB_OUTPUT
 
-  update-pr-comment:
+  update-pr:
     needs: upload-build-scan
     runs-on: ubuntu-latest
     steps:
