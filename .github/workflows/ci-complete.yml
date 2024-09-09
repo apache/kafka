@@ -21,6 +21,8 @@ on:
     types:
       - completed
 
+run-name: Build Scan for ${{ github.event.workflow_run.display_title}}
+
 jobs:
   upload-build-scan:
     if: ${{ github.event.workflow_run.head_repository.full_name != 'apache/kafka' }}
@@ -28,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 21, 17, 11, 8 ]
+        java: [ 17, 11 ]
     steps:
       - name: Env
         run: printenv
@@ -51,4 +53,11 @@ jobs:
           name: build-scan-test-${{ matrix.java }}
           path: ~/.gradle/build-scan-data
       - name: Publish scan
-        run: ./gradlew --info buildScanPublishPrevious
+        id: publish-scan
+        run: |
+          ./gradlew --info buildScanPublishPrevious > gradle.out
+          SCAN_URL = $(grep '^https://.*$' gradle.out)
+          echo "scan-url=SCAN_URL" >> $GITHUB_OUTPUT
+      - run: |
+          echo "Finished publishing"
+          echo "Build scan url is: ${{ steps.publish-scan.outputs.scan-url }}"
