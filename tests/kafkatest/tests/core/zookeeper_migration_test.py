@@ -22,7 +22,7 @@ from ducktape.mark.resource import cluster
 from ducktape.errors import TimeoutError
 
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, config_property
 from kafkatest.services.kafka.config_property import CLUSTER_ID
 from kafkatest.services.kafka.quorum import isolated_kraft, ServiceQuorumInfo, zk
 from kafkatest.services.verifiable_producer import VerifiableProducer
@@ -90,15 +90,19 @@ class TestMigration(ProduceConsumeValidateTest):
     def test_online_migration(self, roll_controller, from_kafka_version):
         zk_quorum = partial(ServiceQuorumInfo, zk)
         self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
+
+        server_prop_overrides = [["zookeeper.metadata.migration.enable", "false"]]
+
+        if from_kafka_version != str(DEV_BRANCH):
+            server_prop_overrides.append([config_property.INTER_BROKER_PROTOCOL_VERSION, "3.7"])
+
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
                                   zk=self.zk,
                                   version=DEV_BRANCH,
                                   quorum_info_provider=zk_quorum,
                                   allow_zk_with_kraft=True,
-                                  server_prop_overrides=[
-                                      ["zookeeper.metadata.migration.enable", "false"],
-                                  ])
+                                  server_prop_overrides=server_prop_overrides)
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = "PLAINTEXT"
         self.zk.start()
