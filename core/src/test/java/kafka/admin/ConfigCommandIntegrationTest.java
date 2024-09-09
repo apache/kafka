@@ -143,7 +143,7 @@ public class ConfigCommandIntegrationTest {
                         "--alter", "--add-config", "metrics=org.apache")),
                 errOut -> assertTrue(errOut.contains("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
 
-        // Test for the --group alias
+        // Test for the --client-metrics alias
         assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
                         "--client-metrics", "cm",
                         "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
@@ -187,7 +187,7 @@ public class ConfigCommandIntegrationTest {
         String message = captureStandardMsg(run(command));
         assertTrue(StringUtils.isBlank(message), message);
 
-        // Test for the --group alias
+        // Test for the --client-metrics alias
         command = Stream.concat(quorumArgs(), Stream.of(
                 "--client-metrics", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
@@ -364,7 +364,7 @@ public class ConfigCommandIntegrationTest {
         alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "client-metrics", "--alter");
         verifyClientMetricsConfigUpdate();
 
-        // Test for the --group alias
+        // Test for the --client-metrics alias
         alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--client-metrics", "--alter");
         verifyClientMetricsConfigUpdate();
     }
