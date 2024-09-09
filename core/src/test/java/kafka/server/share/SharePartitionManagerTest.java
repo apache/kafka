@@ -26,9 +26,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
@@ -1299,6 +1303,7 @@ public class SharePartitionManagerTest {
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(false);
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
 
@@ -1329,6 +1334,7 @@ public class SharePartitionManagerTest {
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
         Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
 
@@ -1890,6 +1896,122 @@ public class SharePartitionManagerTest {
 
         // Verifying that the second item in the fetchQueue is processed, even though the first item is empty.
         verify(replicaManager, times(1)).fetchMessages(any(), any(), any(ReplicaQuota.class), any());
+    }
+
+    @Test
+    public void testPendingInitializationShouldCompleteFetchRequest() throws Exception {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+            1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        Uuid fooId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+
+        SharePartition sp0 = mock(SharePartition.class);
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
+
+        // Keep the initialization future pending, so fetch request is stuck.
+        CompletableFuture<Void> pendingInitializationFuture = new CompletableFuture<>();
+        when(sp0.maybeInitialize()).thenReturn(pendingInitializationFuture);
+
+        // Mock replica manager to verify no calls are made to fetchMessages.
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap).withReplicaManager(replicaManager).build();
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        // Verify that the fetch request is completed.
+        assertTrue(future.isDone());
+        assertTrue(future.join().isEmpty());
+        // Verify that replica manager fetch is not called.
+        Mockito.verify(replicaManager, times(0)).fetchMessages(
+            any(), any(), any(ReplicaQuota.class), any());
+        // Complete the pending initialization future.
+        pendingInitializationFuture.complete(null);
+    }
+
+    @Test
+    public void testSharePartitionInitializationExceptions() throws Exception {
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        FetchParams fetchParams = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, 0,
+            1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+        Uuid fooId = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
+        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+
+        SharePartition sp0 = mock(SharePartition.class);
+        Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
+
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap).build();
+
+        // Return LeaderNotAvailableException to simulate initialization failure.
+        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new LeaderNotAvailableException("Leader not available")));
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        assertTrue(future.isDone());
+        // Exception for client should not occur for LeaderNotAvailableException, this exception is to communicate
+        // between SharePartitionManager and SharePartition to retry the request as SharePartition is not yet ready.
+        assertFalse(future.isCompletedExceptionally());
+        assertTrue(future.join().isEmpty());
+
+        // Return IllegalStateException to simulate initialization failure.
+        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new IllegalStateException("Illegal state")));
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        assertTrue(future.isDone());
+        assertTrue(future.isCompletedExceptionally());
+        assertFutureThrows(future, IllegalStateException.class);
+
+        // Return CoordinatorNotAvailableException to simulate initialization failure.
+        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new CoordinatorNotAvailableException("Coordinator not available")));
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        assertTrue(future.isDone());
+        assertTrue(future.isCompletedExceptionally());
+        assertFutureThrows(future, CoordinatorNotAvailableException.class);
+
+        // Return InvalidRequestException to simulate initialization failure.
+        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new InvalidRequestException("Invalid request")));
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        assertTrue(future.isDone());
+        assertTrue(future.isCompletedExceptionally());
+        assertFutureThrows(future, InvalidRequestException.class);
+
+        // Return FencedStateEpochException to simulate initialization failure.
+        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new FencedStateEpochException("Fenced state epoch")));
+        // Assert that partitionCacheMap contains instance before the fetch request.
+        assertEquals(1, partitionCacheMap.size());
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        assertTrue(future.isDone());
+        assertTrue(future.isCompletedExceptionally());
+        assertFutureThrows(future, FencedStateEpochException.class);
+        // Verify that the share partition is removed from the cache.
+        assertTrue(partitionCacheMap.isEmpty());
+
+        // The last exception removes the share partition from the cache hence re-add the share partition to cache.
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
+        // Return NotLeaderOrFollowerException to simulate initialization failure.
+        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new NotLeaderOrFollowerException("Not leader or follower")));
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        assertTrue(future.isDone());
+        assertTrue(future.isCompletedExceptionally());
+        assertFutureThrows(future, NotLeaderOrFollowerException.class);
+        // Verify that the share partition is removed from the cache.
+        assertTrue(partitionCacheMap.isEmpty());
+
+        // The last exception removes the share partition from the cache hence re-add the share partition to cache.
+        partitionCacheMap.put(new SharePartitionManager.SharePartitionKey(groupId, tp0), sp0);
+        // Return RuntimeException to simulate initialization failure.
+        when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new RuntimeException("Runtime exception")));
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
+        assertTrue(future.isDone());
+        assertTrue(future.isCompletedExceptionally());
+        assertFutureThrows(future, RuntimeException.class);
     }
 
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {
