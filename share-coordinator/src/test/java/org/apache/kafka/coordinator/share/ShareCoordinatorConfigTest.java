@@ -38,7 +38,7 @@ public class ShareCoordinatorConfigTest {
         return createConfig(testConfigMap());
     }
 
-    public static Map<String, String> testConfigMap() {
+    private static Map<String, String> testConfigMapRaw() {
         Map<String, String> configs = new HashMap<>();
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, "1");
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
@@ -50,6 +50,16 @@ public class ShareCoordinatorConfigTest {
         configs.put(ShareCoordinatorConfig.LOAD_BUFFER_SIZE_CONFIG, "555");
         configs.put(ShareCoordinatorConfig.APPEND_LINGER_MS_CONFIG, "10");
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_COMPRESSION_CODEC_CONFIG, String.valueOf(CompressionType.NONE.id));
+        return configs;
+    }
+
+    public static Map<String, String> testConfigMap() {
+        return Collections.unmodifiableMap(testConfigMapRaw());
+    }
+
+    public static Map<String, String> testConfigMap(Map<String, String> overrides) {
+        Map<String, String> configs = testConfigMapRaw();
+        configs.putAll(overrides);
         return Collections.unmodifiableMap(configs);
     }
 

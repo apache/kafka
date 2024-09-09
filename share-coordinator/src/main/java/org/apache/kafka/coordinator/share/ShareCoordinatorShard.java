@@ -547,7 +547,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * as the batches in 2nd collection. It then creates a final list of batches which contains the
      * former result and all the batches in the 2nd collection. In set notation (A - B) U B (we prefer batches in B
      * which have same first and last offset in A).
-     * Finally, it removes any batches where the firstOffset is < startOffset, if the startOffset > -1.
+     * Finally, it removes any batches where the lastOffset < startOffset, if the startOffset > -1.
      * @param currentBatch - collection containing current soft state of batches
      * @param newBatch - collection containing batches in incoming request
      * @param startOffset - startOffset to consider when removing old batches.
@@ -561,8 +561,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         currentBatch.removeAll(newBatch);
         List<PersisterOffsetsStateBatch> batchesToAdd = new LinkedList<>(currentBatch);
         batchesToAdd.addAll(newBatch);
+        // Any batches where the last offset is < the current start offset
+        // are now expired. We should remove them from the persister.
         if (startOffset != -1) {
-            batchesToAdd.removeIf(batch -> batch.firstOffset() < startOffset);
+            batchesToAdd.removeIf(batch -> batch.lastOffset() < startOffset);
         }
         return batchesToAdd;
     }

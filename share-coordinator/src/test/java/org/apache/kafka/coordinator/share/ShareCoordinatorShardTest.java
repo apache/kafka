@@ -45,8 +45,11 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -55,6 +58,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -71,11 +75,12 @@ class ShareCoordinatorShardTest {
         private CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage = null;
+        private Map<String, String> configOverrides = new HashMap<>();
 
         ShareCoordinatorShard build() {
             if (metadataImage == null) metadataImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
             if (config == null) {
-                config = ShareCoordinatorConfigTest.createConfig(ShareCoordinatorConfigTest.testConfigMap());
+                config = ShareCoordinatorConfigTest.createConfig(ShareCoordinatorConfigTest.testConfigMap(configOverrides));
             }
 
             ShareCoordinatorShard shard = new ShareCoordinatorShard(
@@ -89,6 +94,11 @@ class ShareCoordinatorShardTest {
             when(metadataImage.topics().getPartition(any(), anyInt())).thenReturn(mock(PartitionRegistration.class));
             shard.onLoaded(metadataImage);
             return shard;
+        }
+
+        public ShareCoordinatorShardBuilder setConfigOverrides(Map<String, String> configOverrides) {
+            this.configOverrides = configOverrides;
+            return this;
         }
     }
 
@@ -630,6 +640,155 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedData, result);
 
         assertEquals(leaderEpoch, shard.getLeaderMapValue(shareCoordinatorKey));
+    }
+
+    @Test
+    public void testNonSequentialBatchUpdates() {
+        //        startOffset: 100
+        //        Batch1 {
+        //            firstOffset: 100
+        //            lastOffset: 109
+        //            deliverState: Acquired
+        //            deliverCount: 1
+        //        }
+        //        Batch2 {
+        //            firstOffset: 110
+        //            lastOffset: 119
+        //            deliverState: Acquired
+        //            deliverCount: 2
+        //        }
+        //        Batch3 {
+        //            firstOffset: 120
+        //            lastOffset: 129
+        //            deliverState: Acquired
+        //            deliverCount: 0
+        //        }
+        //
+        //        -Share leader acks batch 1 and sends the state of batch 1 to Share Coordinator.
+        //        -Share leader advances startOffset to 110.
+        //        -Share leader acks batch 3 and sends the new startOffset and the state of batch 3 to share coordinator.
+        //        -Share coordinator writes the snapshot with startOffset 110 and batch 3.
+        //        -batch2 should NOT be lost
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder()
+            .setConfigOverrides(Collections.singletonMap(ShareCoordinatorConfig.SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, "0"))
+            .build();
+
+        SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
+
+        // set initial state
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(100)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(Arrays.asList(
+                        new WriteShareGroupStateRequestData.StateBatch()    //b1
+                            .setFirstOffset(100)
+                            .setLastOffset(109)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 1),   //acquired
+                        new WriteShareGroupStateRequestData.StateBatch()    //b2
+                            .setFirstOffset(110)
+                            .setLastOffset(119)
+                            .setDeliveryCount((short) 2)
+                            .setDeliveryState((byte) 1),   //acquired
+                        new WriteShareGroupStateRequestData.StateBatch()    //b3
+                            .setFirstOffset(120)
+                            .setLastOffset(129)
+                            .setDeliveryCount((short) 0)
+                            .setDeliveryState((byte) 1)))   //acquired
+                ))
+            ));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> result = shard.writeState(request);
+
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedData = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+        ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+        ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
+        assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
+        verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
+
+        // acknowledge b1
+        WriteShareGroupStateRequestData requestUpdateB1 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(-1)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(Collections.singletonList(
+                        new WriteShareGroupStateRequestData.StateBatch()    //b1
+                            .setFirstOffset(100)
+                            .setLastOffset(109)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 2)))   // acked
+                ))
+            ));
+
+        result = shard.writeState(requestUpdateB1);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        // ack batch 3 and move start offset
+        WriteShareGroupStateRequestData requestUpdateStartOffsetAndB3 = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(110)    // 100 -> 110
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(Collections.singletonList(
+                        new WriteShareGroupStateRequestData.StateBatch()    //b3
+                            .setFirstOffset(120)
+                            .setLastOffset(129)
+                            .setDeliveryCount((short) 1)
+                            .setDeliveryState((byte) 2)))   //acked
+                ))
+            ));
+
+        result = shard.writeState(requestUpdateStartOffsetAndB3);
+        shard.replay(0L, 0L, (short) 0, result.records().get(0));
+
+        WriteShareGroupStateResponseData expectedDataFinal = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        ShareGroupOffset offsetFinal = new ShareGroupOffset.Builder()
+            .setStartOffset(110)
+            .setLeaderEpoch(0)
+            .setStateEpoch(0)
+            .setSnapshotEpoch(2)    // since 2nd share snapshot
+            .setStateBatches(Arrays.asList(
+                new PersisterOffsetsStateBatch(110, 119, (byte) 1, (short) 2),  //  b2 not lost
+                new PersisterOffsetsStateBatch(120, 129, (byte) 2, (short) 1)
+            ))
+            .build();
+        List<CoordinatorRecord> expectedRecordsFinal = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, offsetFinal
+        ));
+
+        assertEquals(expectedDataFinal, result.response());
+        assertEquals(expectedRecordsFinal, result.records());
+
+        assertEquals(groupOffset(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, PARTITION, offsetFinal
+        ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
+        assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
+        verify(shard.getMetricsShard(), times(3)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
     }
 
     private static ShareGroupOffset groupOffset(ApiMessage record) {
