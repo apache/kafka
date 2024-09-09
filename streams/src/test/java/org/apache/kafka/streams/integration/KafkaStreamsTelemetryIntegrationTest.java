@@ -148,7 +148,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ParameterizedTest
     @MethodSource("singleAndMultiTaskParameters")
     @DisplayName("Streams metrics should get passed to Consumer")
-    void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws InterruptedException {
+    public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws InterruptedException {
         final Properties properties = props(stateUpdaterEnabled);
         final Topology topology = topologyType.equals("simple") ? simpleTopology() : complexTopology();
         /*
@@ -173,7 +173,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ParameterizedTest
     @MethodSource("multiTaskParameters")
     @DisplayName("Correct streams metrics should get passed with dynamic membership")
-    void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled) throws InterruptedException {
+    public void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled) throws InterruptedException {
         final Properties properties1 = props(stateUpdaterEnabled);
         properties1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
         properties1.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
@@ -223,39 +223,55 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
                 final List<MetricName> streamsOneTaskMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
                         .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
+                final List<MetricName> streamsOneStateMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
+                        .filter(metricName -> metricName.group().equals("stream-state-metrics")).collect(Collectors.toList());
                 
                 final List<MetricName> consumerOnePassedTaskMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CONSUMER)
                         .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
+                final List<MetricName> consumerOnePassedStateMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CONSUMER)
+                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).collect(Collectors.toList());
 
                 final List<MetricName> streamsTwoTaskMetrics = streamsTwo.metrics().values().stream().map(Metric::metricName)
                         .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
+                final List<MetricName> streamsTwoStateMetrics = streamsTwo.metrics().values().stream().map(Metric::metricName)
+                        .filter(metricName -> metricName.group().equals("stream-state-metrics")).collect(Collectors.toList());
                 
                 final List<MetricName> consumerTwoPassedTaskMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CONSUMER)
                         .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
+                final List<MetricName> consumerTwoPassedStateMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CONSUMER)
+                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).collect(Collectors.toList());
                 /*
                  Confirm pre-existing KafkaStreams instance one only passes metrics for its tasks and has no metrics for previous tasks
                  */
                 final long consumerOneStreamOneTaskCount = consumerOnePassedTaskMetrics.stream().filter(metricName -> streamOneTaskIds.contains(metricName.tags().get("task-id"))).count();
+                final long consumerOneStateMetricCount = consumerOnePassedStateMetrics.stream().filter(metricName -> streamOneTaskIds.contains(metricName.tags().get("task-id"))).count();
                 final long consumerOneTaskTwoMetricCount = consumerOnePassedTaskMetrics.stream().filter(metricName -> streamTwoTasksIds.contains(metricName.tags().get("task-id"))).count();
+                final long consumerOneStateTwoMetricCount = consumerOnePassedStateMetrics.stream().filter(metricName -> streamTwoTasksIds.contains(metricName.tags().get("task-id"))).count();
 
                 /*
                   Confirm new KafkaStreams instance only passes metrics for the newly assigned tasks
                  */
                 final long consumerTwoStreamTwoTaskCount = consumerTwoPassedTaskMetrics.stream().filter(metricName -> streamTwoTasksIds.contains(metricName.tags().get("task-id"))).count();
+                final long consumerTwoStateMetricCount = consumerTwoPassedStateMetrics.stream().filter(metricName -> streamTwoTasksIds.contains(metricName.tags().get("task-id"))).count();
                 final long consumerTwoTaskOneMetricCount = consumerTwoPassedTaskMetrics.stream().filter(metricName -> streamOneTaskIds.contains(metricName.tags().get("task-id"))).count();
+                final long consumerTwoStateMetricOneCount = consumerTwoPassedStateMetrics.stream().filter(metricName -> streamOneTaskIds.contains(metricName.tags().get("task-id"))).count();
 
                 assertEquals(streamsOneTaskMetrics.size(), consumerOneStreamOneTaskCount);
+                assertEquals(streamsOneStateMetrics.size(), consumerOneStateMetricCount);
                 assertEquals(0, consumerOneTaskTwoMetricCount);
+                assertEquals(0, consumerOneStateTwoMetricCount);
 
                 assertEquals(streamsTwoTaskMetrics.size(), consumerTwoStreamTwoTaskCount);
+                assertEquals(streamsTwoStateMetrics.size(), consumerTwoStateMetricCount);
                 assertEquals(0, consumerTwoTaskOneMetricCount);
+                assertEquals(0, consumerTwoStateMetricOneCount);
             }
         }
     }
 
     @Test
     @DisplayName("Streams metrics should not be visible in consumer metrics")
-    void passedMetricsShouldNotLeakIntoConsumerMetrics() throws InterruptedException {
+    public void passedMetricsShouldNotLeakIntoConsumerMetrics() throws InterruptedException {
         final Properties properties = props(true);
         final Topology topology =  complexTopology();
 

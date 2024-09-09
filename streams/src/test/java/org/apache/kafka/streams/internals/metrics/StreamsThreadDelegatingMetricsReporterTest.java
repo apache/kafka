@@ -51,7 +51,7 @@ class StreamsThreadDelegatingMetricsReporterTest {
 
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         final Map<String, String> threadIdTagMap = new HashMap<>();
         final String threadId = "abcxyz-StreamThread-1";
         threadIdTagMap.put("thread-id", threadId);
@@ -78,14 +78,14 @@ class StreamsThreadDelegatingMetricsReporterTest {
     }
 
     @AfterEach
-    void tearDown() {
+    public void tearDown() {
         mockConsumer.close();
     }
 
 
     @Test
     @DisplayName("Init method should register metrics it receives as parameters")
-    void shouldInitMetrics() {
+    public void shouldInitMetrics() {
         final List<KafkaMetric> allMetrics = Arrays.asList(kafkaMetricOneHasThreadIdTag, kafkaMetricTwoHasThreadIdTag, kafkaMetricThreeHasThreadIdTag);
         final List<KafkaMetric> expectedMetrics = Arrays.asList(kafkaMetricOneHasThreadIdTag, kafkaMetricTwoHasThreadIdTag, kafkaMetricThreeHasThreadIdTag);
         streamsThreadDelegatingMetricsReporter.init(allMetrics);
@@ -94,14 +94,14 @@ class StreamsThreadDelegatingMetricsReporterTest {
 
     @Test
     @DisplayName("Should register metrics with thread-id in tag map")
-    void shouldRegisterMetrics() {
+    public void shouldRegisterMetrics() {
         streamsThreadDelegatingMetricsReporter.metricChange(kafkaMetricOneHasThreadIdTag);
         assertEquals(kafkaMetricOneHasThreadIdTag, mockConsumer.addedMetrics().get(0));
     }
 
     @Test
     @DisplayName("Should remove metrics")
-    void shouldRemoveMetrics() {
+    public void shouldRemoveMetrics() {
         streamsThreadDelegatingMetricsReporter.metricChange(kafkaMetricOneHasThreadIdTag);
         streamsThreadDelegatingMetricsReporter.metricChange(kafkaMetricTwoHasThreadIdTag);
         streamsThreadDelegatingMetricsReporter.metricChange(kafkaMetricThreeHasThreadIdTag);
@@ -114,7 +114,7 @@ class StreamsThreadDelegatingMetricsReporterTest {
 
     @Test
     @DisplayName("Should not register metrics without thread-id tag")
-    void shouldNotRegisterMetricsWithoutThreadIdTag() {
+    public void shouldNotRegisterMetricsWithoutThreadIdTag() {
         streamsThreadDelegatingMetricsReporter.metricChange(kafkaMetricWithoutThreadIdTag);
         assertEquals(0, mockConsumer.addedMetrics().size());
     }

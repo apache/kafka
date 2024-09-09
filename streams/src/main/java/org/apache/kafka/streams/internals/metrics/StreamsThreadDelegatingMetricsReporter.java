@@ -32,7 +32,7 @@ public class StreamsThreadDelegatingMetricsReporter implements MetricsReporter {
     
     private static final Logger log = LoggerFactory.getLogger(StreamsThreadDelegatingMetricsReporter.class);
     private static final String THREAD_ID_TAG = "thread-id";
-    private Consumer<byte[], byte[]> consumer;
+    private final Consumer<byte[], byte[]> consumer;
     private final String threadId;
     private final String stateUpdaterThreadId;
 
