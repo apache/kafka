@@ -23,8 +23,22 @@ on:
 
 run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 
+# This workflow runs after the completion of the CI workflow triggered on a "pull_request" event.
+# The "pull_request" event type is run in an unprivileged context without access to the repository
+# secrets. This means that PRs from public forks cannot publish Gradle Build Scans or modify the
+# PR contents.
+#
+# This "workflow_run" triggered workflow is run in a privileged context and so does have access to
+# the repository secrets. Here we can download the build scan files produced by a PR and publish
+# them to ge.apache.org.
+#
+# If we need to do things like comment on, label, or otherwise modify PRs from public forks. This
+# workflow is the place to do it.
+
 jobs:
   upload-build-scan:
+    # Skip this workflow if CI was run for anything other than "pull_request" (like "push").
+    # Also skip this workflow if the PR was from apache/kafka. Those will have already published the build scan in CI.
     if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.full_name != 'apache/kafka' }}
     runs-on: ubuntu-latest
     strategy:
@@ -54,7 +68,7 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
           name: build-scan-test-${{ matrix.java }}
-          path: ~/.gradle/build-scan-data
+          path: ~/.gradle/build-scan-data  # This is where Gradle buffers unpublished build scan data when --no-scan is given
       - name: Publish scan
         id: publish-build-scan
         run: |
@@ -74,10 +88,16 @@ jobs:
           REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          echo "Build scans published for workflow ${{ github.event.workflow_run.html_url }}"
-          echo "Java 11: ${{ needs.upload-build-scan.outputs.build-scan-url-11 }}"
-          echo "Java 17: ${{ needs.upload-build-scan.outputs.build-scan-url-17 }}"
+          echo "Build scans published for workflow ${{ github.event.workflow_run.html_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "Java 11: ${{ needs.upload-build-scan.outputs.build-scan-url-11 }}" >> $GITHUB_STEP_SUMMARY
+          echo "Java 17: ${{ needs.upload-build-scan.outputs.build-scan-url-17 }}" >> $GITHUB_STEP_SUMMARY
           gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
           /repos/${{ env.REPO }}/statuses/${{ env.SHA }} \
           -f "state=success" -f "target_url=${{ needs.upload-build-scan.outputs.build-scan-url-11 }}" \
-          -f "description=The build scan was successfully published" -f "context=gradle-build-scan/java-11"
+          -f "description=The build scan was successfully published" \
+          -f "context=Gradle Build Scan / Java 11"
+          gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+          /repos/${{ env.REPO }}/statuses/${{ env.SHA }} \
+          -f "state=success" -f "target_url=${{ needs.upload-build-scan.outputs.build-scan-url-17 }}" \
+          -f "description=The build scan was successfully published" \
+          -f "context=Gradle Build Scan / Java 17"
