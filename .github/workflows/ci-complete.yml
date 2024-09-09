@@ -65,4 +65,4 @@ jobs:
         run: |
           echo "Finished publishing"
           echo "Build scan url is: ${{ steps.publish-scan.outputs.scan-url }}"
-          gh pr comment $PR_NUMBER --edit-last --body "Hello from Github Actions!"
+          gh pr comment $PR_NUMBER --body "Published scan ${{ steps.publish-scan.outputs.scan-url }} for workflow run ${{ github.event.workflow_run.html_url }} "
