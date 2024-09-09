@@ -52,7 +52,6 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ReplicaManager replicaManager;
     private final Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap;
     private Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionDataFromTryComplete = new LinkedHashMap<>();
-    private boolean isTryingForFirstTime;
 
     private static final Logger log = LoggerFactory.getLogger(DelayedShareFetch.class);
 
@@ -64,7 +63,6 @@ public class DelayedShareFetch extends DelayedOperation {
         this.shareFetchPartitionData = shareFetchPartitionData;
         this.replicaManager = replicaManager;
         this.partitionCacheMap = partitionCacheMap;
-        this.isTryingForFirstTime = true;
     }
 
     @Override
@@ -148,14 +146,6 @@ public class DelayedShareFetch extends DelayedOperation {
         log.trace("Try to complete the delayed share fetch request for group {}, member {}, topic partitions {}",
                 shareFetchPartitionData.groupId(), shareFetchPartitionData.memberId(),
                 shareFetchPartitionData.partitionMaxBytes().keySet());
-
-        // If this is the first time we are trying to complete the fetch request, we should not try to acquire the
-        // partitions lock since we have already tried to acquire the lock while processing the fetch queue in
-        // SharePartitionManager and failed.
-        if (isTryingForFirstTime) {
-            isTryingForFirstTime = false;
-            return false;
-        }
 
         topicPartitionDataFromTryComplete = acquirablePartitions();
 
