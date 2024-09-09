@@ -69,6 +69,10 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           name: build-scan-test-${{ matrix.java }}
           path: ~/.gradle/build-scan-data  # This is where Gradle buffers unpublished build scan data when --no-scan is given
+      - name: Handle missing scan
+        if: ${{ steps.download-build-scan.outcome == 'failure' }}
+        run: |
+          echo "Could not download build scans from ${{ github.event.workflow_run.html_url }} " >> $GITHUB_STEP_SUMMARY
       - name: Publish Scan
         id: publish-build-scan
         continue-on-error: true
