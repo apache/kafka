@@ -205,8 +205,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       )
     }),
     ApiKeys.CONSUMER_GROUP_HEARTBEAT -> ((resp: ConsumerGroupHeartbeatResponse) => Errors.forCode(resp.data.errorCode)),
-    ApiKeys.CONSUMER_GROUP_DESCRIBE -> ((resp: ConsumerGroupDescribeResponse) => Errors.forCode(
-      resp.data.groups.get(0).errorCode))
+    ApiKeys.CONSUMER_GROUP_DESCRIBE -> ((resp: ConsumerGroupDescribeResponse) =>
+      Errors.forCode(resp.data.groups.asScala.find(g => group == g.groupId).head.errorCode))
   )
 
   def findErrorForTopicId(id: Uuid, response: AbstractResponse): Errors = {
@@ -749,16 +749,15 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       ApiKeys.DESCRIBE_TRANSACTIONS -> describeTransactionsRequest,
       ApiKeys.WRITE_TXN_MARKERS -> writeTxnMarkersRequest,
     )
-    if (!isKRaftTest()) {
+    if (isKRaftTest()) {
+      requestKeyToRequest += ApiKeys.CONSUMER_GROUP_HEARTBEAT -> consumerGroupHeartbeatRequest
+      requestKeyToRequest += ApiKeys.CONSUMER_GROUP_DESCRIBE -> consumerGroupDescribeRequest
+    } else {
       // Inter-broker APIs use an invalid broker epoch, so does not affect the test case
       requestKeyToRequest += ApiKeys.UPDATE_METADATA -> createUpdateMetadataRequest
       requestKeyToRequest += ApiKeys.LEADER_AND_ISR -> leaderAndIsrRequest
       requestKeyToRequest += ApiKeys.STOP_REPLICA -> stopReplicaRequest
       requestKeyToRequest += ApiKeys.CONTROLLED_SHUTDOWN -> controlledShutdownRequest
-    }
-    if (isKRaftTest()) {
-      requestKeyToRequest += ApiKeys.CONSUMER_GROUP_HEARTBEAT -> consumerGroupHeartbeatRequest
-      requestKeyToRequest += ApiKeys.CONSUMER_GROUP_DESCRIBE -> consumerGroupDescribeRequest
     }
     // Delete the topic last
     requestKeyToRequest += ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
