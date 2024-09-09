@@ -1307,8 +1307,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * This metric will be added to this client's metrics
      * that are available for subscription and sent as
      * telemetry data to the broker.
+     * The provided metric must map to an OTLP metric data point
+     * type in the OpenTelemetry v1 metrics protobuf message types.
+     * Specifically, the metric should be one of the following:
+     * - `Sum`: Monotonic total count meter (Counter). Suitable for metrics like total number of X, e.g., total bytes sent.
+     * - `Gauge`: Non-monotonic current value meter (UpDownCounter). Suitable for metrics like current value of Y, e.g., current queue count.
+     * Metrics not matching these types are silently ignored.
+     * Executing this method for a previously registered metric is a benign operation and results in updating that metrics entry.
      *
-     * @param metric, the application metric to register
+     * @param metric The application metric to register
      */
     @Override
     public void registerMetricForSubscription(KafkaMetric metric) {
@@ -1319,11 +1326,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * An application metric to be removed from subscription.
+     * An application to be removed from subscription.
      * This metric is removed from this client's metrics
-     * and will not be available for subscription.
+     * and will not be available for subscription any longer.
+     * Executing this method with a metric that has not been registered is a
+     * benign operation and does not result in any action taken (no-op)
      *
-     * @param metric, the application metric to remove
+     * @param metric The application metric to remove
      */
     @Override
     public void unregisterMetricFromSubscription(KafkaMetric metric) {

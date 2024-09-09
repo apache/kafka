@@ -27,10 +27,13 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -58,6 +61,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -70,6 +74,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -119,6 +124,24 @@ public class KafkaStreamsTelemetryIntegrationTest {
         INTERCEPTING_CONSUMERS.clear();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
         streamsConfigurations.clear();
+    }
+
+    @Test
+    @DisplayName("Calling unregisterMetric on metrics not registered should not cause an error")
+    void shouldNotThrowExceptionWhenRemovingNonExistingMetrics() throws InterruptedException {
+        final Properties properties = props(true);
+        final Topology topology = complexTopology();
+        try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
+            streams.start();
+            waitForCondition(() -> KafkaStreams.State.RUNNING == streams.state(),
+                    IntegrationTestUtils.DEFAULT_TIMEOUT,
+                    () -> "Kafka Streams never transitioned to a RUNNING state.");
+
+            final Consumer<?, ?> embeddedConsumer = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CONSUMER);
+            final MetricName metricName = new MetricName("fakeMetric", "fakeGroup", "It's a fake metric", new HashMap<>());
+            final KafkaMetric nonExitingMetric = new KafkaMetric(new Object(), metricName, (Measurable) (m, now) -> 1.0, new MetricConfig(), Time.SYSTEM);
+            assertDoesNotThrow(() -> embeddedConsumer.unregisterMetric(nonExitingMetric));
+        }
     }
 
 
