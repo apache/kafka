@@ -53,7 +53,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -294,7 +293,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         // be looping over the keys below and constructing new WriteShareGroupStateRequestData objects to pass
         // onto the shard method.
         Map<Uuid, Map<Integer, CompletableFuture<WriteShareGroupStateResponseData>>> futureMap = new HashMap<>();
-        long startTime = time.hiResClockMs();
+        long nowMs = time.hiResClockMs();
 
         request.topics().forEach(topicData -> {
             Map<Integer, CompletableFuture<WriteShareGroupStateResponseData>> partitionFut =
@@ -335,6 +334,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(futureMap.values().stream()
             .flatMap(partMap -> partMap.values().stream()).toArray(CompletableFuture[]::new));
 
+        // time taken for write
+        // at this point all futures are completed written above.
+        shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME,
+            time.hiResClockMs() - nowMs);
+
         // topicId -> {partitionId -> responseFuture}
         return combinedFuture.thenApply(v -> {
             List<WriteShareGroupStateResponseData.WriteStateResult> writeStateResults = new ArrayList<>(futureMap.size());
@@ -356,9 +360,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 }
             );
 
-            // time taken for write
-            shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME,
-                time.hiResClockMs() - startTime);
             return new WriteShareGroupStateResponseData()
                 .setResults(writeStateResults);
         });
@@ -450,10 +451,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         // Transform the combined CompletableFuture<Void> into CompletableFuture<ReadShareGroupStateResponseData>
         return combinedFuture.thenApply(v -> {
-            List<ReadShareGroupStateResponseData.ReadStateResult> readStateResult = new LinkedList<>();
+            List<ReadShareGroupStateResponseData.ReadStateResult> readStateResult = new ArrayList<>(futureMap.size());
             futureMap.forEach(
                 (topicId, topicEntry) -> {
-                    List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new LinkedList<>();
+                    List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>(futureMap.get(topicId).size());
                     topicEntry.forEach(
                         (partitionId, responseFut) -> {
                             // responseFut would already be completed by now since we have used

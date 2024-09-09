@@ -69,6 +69,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final CoordinatorMetrics coordinatorMetrics;
     private final CoordinatorMetricsShard metricsShard;
     private final TimelineHashMap<SharePartitionKey, ShareGroupOffset> shareStateMap;  // coord key -> ShareGroupOffset
+    // leaderEpochMap can be updated by writeState call
+    // or if a newer leader makes a readState call.
     private final TimelineHashMap<SharePartitionKey, Integer> leaderEpochMap;
     private final TimelineHashMap<SharePartitionKey, Integer> snapshotUpdateCount;
     private final TimelineHashMap<SharePartitionKey, Integer> stateEpochMap;
