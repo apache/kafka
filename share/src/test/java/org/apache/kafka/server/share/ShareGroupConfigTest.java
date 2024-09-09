@@ -18,8 +18,9 @@ package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorCommonConfig;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -41,12 +42,13 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationsMs);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupMinRecordLockDurationMs);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupMaxRecordLockDurationMs);
+        configs.put(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share");
 
         return createConfig(configs);
     }
 
     private static ShareGroupConfig createConfig(Map<String, Object> configs) {
         return new ShareGroupConfig(
-            new AbstractConfig(Utils.mergeConfigs(Collections.singletonList(ShareGroupConfig.CONFIG_DEF)), configs, false));
+            new AbstractConfig(Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, CoordinatorCommonConfig.COMMON_GROUP_COORDINATOR_CONFIG_DEF)), configs, false));
     }
 }

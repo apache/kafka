@@ -615,7 +615,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     try {
       val resource = new ConfigResource(ConfigResource.Type.GROUP, shareGroupId)
       val op = new AlterConfigOp(
-        new ConfigEntry(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, newRecordLockDurationMs.toString),
+        new ConfigEntry(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, newRecordLockDurationMs.toString),
         OpType.SET
       )
       admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get

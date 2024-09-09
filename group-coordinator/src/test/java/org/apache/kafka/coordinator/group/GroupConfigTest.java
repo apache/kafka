@@ -39,7 +39,7 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
-            } else if (GroupConfig.SHARE_RECORD_LOCK_DURATION_MS.equals(name)) {
+            } else if (GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-1");
@@ -80,7 +80,7 @@ public class GroupConfigTest {
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
         props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
-        props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, recordLockDurationMs);
+        props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, recordLockDurationMs);
         assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
@@ -89,7 +89,7 @@ public class GroupConfigTest {
         Map<String, String> defaultValue = new HashMap<>();
         defaultValue.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
-        defaultValue.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS, "30000");
+        defaultValue.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "30000");
 
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
@@ -97,7 +97,7 @@ public class GroupConfigTest {
 
         assertEquals(10, config.getInt(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
         assertEquals(20, config.getInt(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
-        assertEquals(30000, config.getInt(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS));
+        assertEquals(30000, config.getInt(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG));
     }
 
     @Test
