@@ -293,7 +293,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         // be looping over the keys below and constructing new WriteShareGroupStateRequestData objects to pass
         // onto the shard method.
         Map<Uuid, Map<Integer, CompletableFuture<WriteShareGroupStateResponseData>>> futureMap = new HashMap<>();
-        long nowMs = time.hiResClockMs();
+        long startTimeMs = time.hiResClockMs();
 
         request.topics().forEach(topicData -> {
             Map<Integer, CompletableFuture<WriteShareGroupStateResponseData>> partitionFut =
@@ -358,7 +358,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
             // time taken for write
             // at this point all futures are completed written above.
             shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME,
-                time.hiResClockMs() - nowMs);
+                time.hiResClockMs() - startTimeMs);
 
             return new WriteShareGroupStateResponseData()
                 .setResults(writeStateResults);
