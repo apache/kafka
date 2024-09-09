@@ -21,7 +21,7 @@ on:
     types:
       - completed
 
-run-name: Build Scan for ${{ github.event.workflow_run.display_title}}
+run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 
 jobs:
   upload-build-scan:
@@ -61,7 +61,7 @@ jobs:
           ./gradlew --info buildScanPublishPrevious > gradle.out
           SCAN_URL=$(grep '^https://.*$' gradle.out)
           echo "Published build scan to $SCAN_URL"
-          echo "scan-url-${{ matrix.java }}=$SCAN_URL" >> $GITHUB_OUTPUT
+          echo "build-scan-url-${{ matrix.java }}=$SCAN_URL" >> $GITHUB_OUTPUT
 
   update-pr-comment:
     needs: upload-build-scan
@@ -71,9 +71,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          echo "Build scans published for workflow ${{ github.event.workflow_run.html_url }}" >> pr-comment.txt
-          echo "Java 11: ${{ needs.upload-build-scan.outputs.build-scan-url-11 }}" >> pr-comment.txt
-          echo "Java 17: ${{ needs.upload-build-scan.outputs.build-scan-url-17 }}" >> pr-comment.txt
-          cat pr-comment.txt
-          gh pr comment $PR_NUMBER --body-file pr-comment.txt
+          echo "Build scans published for workflow ${{ github.event.workflow_run.html_url }}"
+          echo "Java 11: ${{ needs.upload-build-scan.outputs.build-scan-url-11 }}"
+          echo "Java 17: ${{ needs.upload-build-scan.outputs.build-scan-url-17 }}"
+          gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+          /repos/${{ env.REPO }}/statuses/${{ env.SHA }} \
+          -f "state=success" -f "target_url=${{ needs.upload-build-scan.outputs.build-scan-url-11 }}" \
+          -f "description=The build scan was successfully published" -f "context=gradle-build-scan/java-11"
