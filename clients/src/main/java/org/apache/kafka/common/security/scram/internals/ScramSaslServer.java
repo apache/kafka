@@ -149,6 +149,9 @@ public class ScramSaslServer implements SaslServer {
                 case RECEIVE_CLIENT_FINAL_MESSAGE:
                     try {
                         ClientFinalMessage clientFinalMessage = new ClientFinalMessage(response);
+                        if (!clientFinalMessage.nonce().endsWith(serverFirstMessage.nonce())) {
+                            throw new SaslException("Invalid client nonce in the final client message.");
+                        }
                         verifyClientProof(clientFinalMessage);
                         byte[] serverKey = scramCredential.serverKey();
                         byte[] serverSignature = formatter.serverSignature(serverKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
@@ -222,7 +225,8 @@ public class ScramSaslServer implements SaslServer {
         this.state = state;
     }
 
-    private void verifyClientProof(ClientFinalMessage clientFinalMessage) throws SaslException {
+    // Visible for testing
+    void verifyClientProof(ClientFinalMessage clientFinalMessage) throws SaslException {
         try {
             byte[] expectedStoredKey = scramCredential.storedKey();
             byte[] clientSignature = formatter.clientSignature(expectedStoredKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
