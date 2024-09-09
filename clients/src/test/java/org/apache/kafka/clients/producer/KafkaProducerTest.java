@@ -1088,7 +1088,7 @@ public class KafkaProducerTest {
 
         //ensure headers can be mutated pre send.
         record.headers().add(new RecordHeader("test", "header2".getBytes()));
-        producer.send(record, (recordMetadata, exception) -> { });
+        producer.send(record, null);
 
         //ensure headers are closed and cannot be mutated post send
         RecordHeaders recordHeaders = (RecordHeaders) record.headers();
