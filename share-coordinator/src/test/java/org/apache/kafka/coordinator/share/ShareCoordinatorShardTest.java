@@ -875,6 +875,21 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
+                "New set batch is contained in cur set => result list contains batches from both sets (we do not add gaps).",
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
+                )),
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(105, 108, (byte) 0, (short) 2)
+                )),
+                Arrays.asList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterOffsetsStateBatch(105, 108, (byte) 0, (short) 2)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
                 "Sets have overlapping batches => batches in new set are preferred. " +
                     "Overlap means cur.firstOffset == new.firstOffset && cur.lastOffset == new.lastOffset",
                 new LinkedHashSet<>(Arrays.asList(
@@ -912,7 +927,7 @@ class ShareCoordinatorShardTest {
             new TestAttributes(
                 "StartOffset is -1 => no batches are considered old but overlaps are still removed preferring the new set.",
                 new LinkedHashSet<>(Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),  // should be removed
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),  // should not be removed as start offset is -1
                     new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1),
                     new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1)
                 )),
