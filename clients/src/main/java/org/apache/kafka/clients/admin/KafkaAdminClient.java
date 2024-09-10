@@ -3894,7 +3894,7 @@ public class KafkaAdminClient extends AdminClient {
 
         final long now = time.milliseconds();
         Call call = new Call("alterPartitionReassignments", calcDeadlineMs(now, options.timeoutMs()),
-                new ControllerNodeProvider()) {
+                new ControllerNodeProvider(true)) {
 
             @Override
             public AlterPartitionReassignmentsRequest.Builder createRequest(int timeoutMs) {
@@ -4029,7 +4029,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         runnable.call(new Call("listPartitionReassignments", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
+            new ControllerNodeProvider(true)) {
 
             @Override
             ListPartitionReassignmentsRequest.Builder createRequest(int timeoutMs) {

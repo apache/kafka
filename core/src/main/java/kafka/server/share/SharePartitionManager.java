@@ -23,6 +23,9 @@ import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.FencedStateEpochException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -47,6 +50,7 @@ import org.apache.kafka.server.share.ShareSession;
 import org.apache.kafka.server.share.ShareSessionCache;
 import org.apache.kafka.server.share.ShareSessionContext;
 import org.apache.kafka.server.share.ShareSessionKey;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -271,14 +275,14 @@ public class SharePartitionManager implements AutoCloseable {
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
             SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
             if (sharePartition != null) {
-                CompletableFuture<Errors> future = sharePartition.acknowledge(memberId, acknowledgePartitionBatches).thenApply(throwable -> {
-                    if (throwable.isPresent()) {
-                        return Errors.forException(throwable.get());
+                CompletableFuture<Errors> future = new CompletableFuture<>();
+                sharePartition.acknowledge(memberId, acknowledgePartitionBatches).whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        future.complete(Errors.forException(throwable));
+                        return;
                     }
-                    acknowledgePartitionBatches.forEach(batch -> {
-                        batch.acknowledgeTypes().forEach(this.shareGroupMetrics::recordAcknowledgement);
-                    });
-                    return Errors.NONE;
+                    acknowledgePartitionBatches.forEach(batch -> batch.acknowledgeTypes().forEach(this.shareGroupMetrics::recordAcknowledgement));
+                    future.complete(Errors.NONE);
                 });
                 futures.put(topicIdPartition, future);
             } else {
@@ -298,7 +302,8 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     /**
-     * The release acquired records method is used to release the acquired records for the specified topic-partitions.
+     * The release session method is used to release the session for the memberId of respective group.
+     * The method post removing session also releases acquired records for the respective member.
      * The method returns a future that will be completed with the release response.
      *
      * @param groupId The group id, this is used to identify the share group.
@@ -306,13 +311,24 @@ public class SharePartitionManager implements AutoCloseable {
      *
      * @return A future that will be completed with the release response.
      */
-    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseAcquiredRecords(
+    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> releaseSession(
         String groupId,
         String memberId
     ) {
-        log.trace("Release acquired records request for groupId: {}, memberId: {}", groupId, memberId);
+        log.trace("Release session request for groupId: {}, memberId: {}", groupId, memberId);
+        Uuid memberIdUuid = Uuid.fromString(memberId);
         List<TopicIdPartition> topicIdPartitions = cachedTopicIdPartitionsInShareSession(
-            groupId, Uuid.fromString(memberId));
+            groupId, memberIdUuid);
+        // Remove the share session from the cache.
+        ShareSessionKey key = shareSessionKey(groupId, memberIdUuid);
+        if (cache.remove(key) == null) {
+            log.error("Share session error for {}: no such share session found", key);
+            return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
+        } else {
+            log.debug("Removed share session with key " + key);
+        }
+
+        // Additionally release the acquired records for the respective member.
         if (topicIdPartitions.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
@@ -324,18 +340,20 @@ public class SharePartitionManager implements AutoCloseable {
                 log.error("No share partition found for groupId {} topicPartition {} while releasing acquired topic partitions", groupId, topicIdPartition);
                 futuresMap.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
             } else {
-                CompletableFuture<Errors> future = sharePartition.releaseAcquiredRecords(memberId).thenApply(throwable -> {
-                    if (throwable.isPresent()) {
-                        return Errors.forException(throwable.get());
+                CompletableFuture<Errors> future = new CompletableFuture<>();
+                sharePartition.releaseAcquiredRecords(memberId).whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        future.complete(Errors.forException(throwable));
+                        return;
                     }
-                    return Errors.NONE;
+                    future.complete(Errors.NONE);
                 });
                 futuresMap.put(topicIdPartition, future);
             }
         });
 
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-                futuresMap.values().toArray(new CompletableFuture[futuresMap.size()]));
+            futuresMap.values().toArray(new CompletableFuture[0]));
         return allFutures.thenApply(v -> {
             Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
             futuresMap.forEach((topicIdPartition, future) -> result.put(topicIdPartition, new ShareAcknowledgeResponseData.PartitionData()
@@ -371,11 +389,9 @@ public class SharePartitionManager implements AutoCloseable {
                 if (!shareFetchDataWithMaxBytes.isEmpty()) {
                     throw Errors.INVALID_REQUEST.exception();
                 }
-                if (cache.remove(key) == null) {
+                if (cache.get(key) == null) {
                     log.error("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
-                } else {
-                    log.debug("Removed share session with key " + key);
                 }
                 context = new FinalContext();
             } else {
@@ -442,14 +458,6 @@ public class SharePartitionManager implements AutoCloseable {
         if (reqMetadata.epoch() == ShareRequestMetadata.INITIAL_EPOCH) {
             // ShareAcknowledge Request cannot have epoch as INITIAL_EPOCH (0)
             throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
-        } else if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
-            ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
-            if (cache.remove(key) == null) {
-                log.error("Share session error for {}: no such share session found", key);
-                throw Errors.SHARE_SESSION_NOT_FOUND.exception();
-            } else {
-                log.debug("Removed share session with key " + key);
-            }
         } else {
             synchronized (cache) {
                 ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
@@ -457,16 +465,18 @@ public class SharePartitionManager implements AutoCloseable {
                 if (shareSession == null) {
                     log.debug("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
-                } else {
-                    if (shareSession.epoch != reqMetadata.epoch()) {
-                        log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
-                                shareSession.epoch, reqMetadata.epoch());
-                        throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
-                    } else {
-                        cache.touch(shareSession, time.milliseconds());
-                        shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
-                    }
                 }
+
+                if (reqMetadata.epoch() == ShareRequestMetadata.FINAL_EPOCH) {
+                    // If the epoch is FINAL_EPOCH, then return. Do not update the cache.
+                    return;
+                } else if (shareSession.epoch != reqMetadata.epoch()) {
+                    log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
+                            shareSession.epoch, reqMetadata.epoch());
+                    throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+                }
+                cache.touch(shareSession, time.milliseconds());
+                shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
         }
     }
@@ -497,6 +507,12 @@ public class SharePartitionManager implements AutoCloseable {
     public void close() throws Exception {
         this.timer.close();
         this.persister.stop();
+        if (!fetchQueue.isEmpty()) {
+            log.warn("Closing SharePartitionManager with pending fetch requests count: {}", fetchQueue.size());
+            fetchQueue.forEach(shareFetchPartitionData -> shareFetchPartitionData.future.completeExceptionally(
+                Errors.BROKER_NOT_AVAILABLE.exception()));
+            fetchQueue.clear();
+        }
     }
 
     private ShareSessionKey shareSessionKey(String groupId, Uuid memberId) {
@@ -512,7 +528,7 @@ public class SharePartitionManager implements AutoCloseable {
      */
     // Visible for testing.
     void maybeProcessFetchQueue() {
-        if (!processFetchQueueLock.compareAndSet(false, true)) {
+        if (!acquireProcessFetchQueueLock()) {
             // The queue is already being processed hence avoid re-triggering.
             return;
         }
@@ -533,42 +549,49 @@ public class SharePartitionManager implements AutoCloseable {
                     shareFetchPartitionData.groupId,
                     topicIdPartition
                 );
-                SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey,
-                    k -> {
-                        long start = time.hiResClockMs();
-                        SharePartition partition = new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, maxInFlightMessages, maxDeliveryCount,
-                            recordLockDurationMs, timer, time, persister);
-                        this.shareGroupMetrics.partitionLoadTime(start);
-                        return partition;
-                    });
-                int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
-                // Add the share partition to the list of partitions to be fetched only if we can
-                // acquire the fetch lock on it.
-                if (sharePartition.maybeAcquireFetchLock()) {
-                    // If the share partition is already at capacity, we should not attempt to fetch.
-                    if (sharePartition.canAcquireRecords()) {
-                        topicPartitionData.put(
-                            topicIdPartition,
-                            new FetchRequest.PartitionData(
-                                topicIdPartition.topicId(),
-                                sharePartition.nextFetchOffset(),
-                                0,
-                                partitionMaxBytes,
-                                Optional.empty()
-                            )
-                        );
-                    } else {
-                        sharePartition.releaseFetchLock();
-                        log.info("Record lock partition limit exceeded for SharePartition with key {}, " +
-                            "cannot acquire more records", sharePartitionKey);
+                SharePartition sharePartition = fetchSharePartition(sharePartitionKey);
+
+                // The share partition is initialized asynchronously, so we need to wait for it to be initialized.
+                // But if the share partition is already initialized, then the future will be completed immediately.
+                // Hence, it's safe to call the maybeInitialize method and then wait for the future to be completed.
+                // TopicPartitionData list will be populated only if the share partition is already initialized.
+                sharePartition.maybeInitialize().whenComplete((result, throwable) -> {
+                    if (throwable != null) {
+                        maybeCompleteInitializationWithException(sharePartitionKey, shareFetchPartitionData.future, throwable);
+                        return;
                     }
-                }
+                    // Fetch messages for the partition only if it is active.
+                    int partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
+                    // Add the share partition to the list of partitions to be fetched only if we can
+                    // acquire the fetch lock on it.
+                    if (sharePartition.maybeAcquireFetchLock()) {
+                        // If the share partition is already at capacity, we should not attempt to fetch.
+                        if (sharePartition.canAcquireRecords()) {
+                            topicPartitionData.put(
+                                topicIdPartition,
+                                new FetchRequest.PartitionData(
+                                    topicIdPartition.topicId(),
+                                    sharePartition.nextFetchOffset(),
+                                    0,
+                                    partitionMaxBytes,
+                                    Optional.empty()
+                                )
+                            );
+                        } else {
+                            sharePartition.releaseFetchLock();
+                            log.info("Record lock partition limit exceeded for SharePartition with key {}, " +
+                                "cannot acquire more records", sharePartitionKey);
+                        }
+                    }
+                });
             });
 
             if (topicPartitionData.isEmpty()) {
-                // No locks for share partitions could be acquired, so we complete the request and
-                // will re-fetch for the client in next poll.
-                shareFetchPartitionData.future.complete(Collections.emptyMap());
+                // No locks for share partitions could be acquired, so we complete the request if not
+                // already. The records shall be re-fetched in next poll by the client.
+                if (!shareFetchPartitionData.future.isDone()) {
+                    shareFetchPartitionData.future.complete(Collections.emptyMap());
+                }
                 // Though if no partitions can be locked then there must be some other request which
                 // is in-flight and should release the lock. But it's safe to release the lock as
                 // the lock on share partition already exists which facilitates correct behaviour
@@ -582,30 +605,7 @@ public class SharePartitionManager implements AutoCloseable {
             log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
                 topicPartitionData, shareFetchPartitionData.groupId, shareFetchPartitionData.fetchParams);
 
-            replicaManager.fetchMessages(
-                shareFetchPartitionData.fetchParams,
-                CollectionConverters.asScala(
-                    topicPartitionData.entrySet().stream().map(entry ->
-                        new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
-                ),
-                QuotaFactory.UnboundedQuota$.MODULE$,
-                responsePartitionData -> {
-                    log.trace("Data successfully retrieved by replica manager: {}", responsePartitionData);
-                    List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
-                        responsePartitionData);
-                    processFetchResponse(shareFetchPartitionData, responseData).whenComplete(
-                        (result, throwable) -> {
-                            if (throwable != null) {
-                                log.error("Error processing fetch response for share partitions", throwable);
-                                shareFetchPartitionData.future.completeExceptionally(throwable);
-                            } else {
-                                shareFetchPartitionData.future.complete(result);
-                            }
-                            // Releasing the lock to move ahead with the next request in queue.
-                            releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
-                        });
-                    return BoxedUnit.UNIT;
-                });
+            processReplicaManagerFetch(shareFetchPartitionData, topicPartitionData);
 
             // If there are more requests in the queue, then process them.
             if (!fetchQueue.isEmpty())
@@ -617,6 +617,85 @@ public class SharePartitionManager implements AutoCloseable {
             shareFetchPartitionData.future.completeExceptionally(e);
             releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
         }
+    }
+
+    private SharePartition fetchSharePartition(SharePartitionKey sharePartitionKey) {
+        return partitionCacheMap.computeIfAbsent(sharePartitionKey,
+            k -> {
+                long start = time.hiResClockMs();
+                SharePartition partition = new SharePartition(
+                    sharePartitionKey.groupId,
+                    sharePartitionKey.topicIdPartition,
+                    maxInFlightMessages,
+                    maxDeliveryCount,
+                    recordLockDurationMs,
+                    timer,
+                    time,
+                    persister
+                );
+                this.shareGroupMetrics.partitionLoadTime(start);
+                return partition;
+            });
+    }
+
+    private void maybeCompleteInitializationWithException(
+        SharePartitionKey sharePartitionKey,
+        CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
+        Throwable throwable) {
+        if (throwable instanceof LeaderNotAvailableException) {
+            log.debug("The share partition with key {} is not initialized yet", sharePartitionKey);
+            // Do not process the fetch request for this partition as the leader is not initialized yet.
+            // The fetch request will be retried in the next poll.
+            // TODO: Add the request to delayed fetch purgatory.
+            return;
+        }
+
+        if (throwable instanceof NotLeaderOrFollowerException || throwable instanceof FencedStateEpochException) {
+            log.info("The share partition with key {} is fenced: {}", sharePartitionKey, throwable.getMessage());
+            // The share partition is fenced hence remove the partition from map and let the client retry.
+            // But surface the error to the client so client might take some action i.e. re-fetch
+            // the metadata and retry the fetch on new leader.
+            partitionCacheMap.remove(sharePartitionKey);
+            future.completeExceptionally(throwable);
+            return;
+        }
+
+        // The partition initialization failed, so complete the request with the exception.
+        // The server should not be in this state, so log the error on broker and surface the same
+        // to the client. As of now this state is in-recoverable for the broker, and we should
+        // investigate the root cause of the error.
+        log.error("Error initializing share partition with key {}", sharePartitionKey, throwable);
+        future.completeExceptionally(throwable);
+    }
+
+    private void processReplicaManagerFetch(
+        ShareFetchPartitionData shareFetchPartitionData,
+        Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData
+    ) {
+        replicaManager.fetchMessages(
+            shareFetchPartitionData.fetchParams,
+            CollectionConverters.asScala(
+                topicPartitionData.entrySet().stream().map(entry ->
+                    new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
+            ),
+            QuotaFactory.UnboundedQuota$.MODULE$,
+            responsePartitionData -> {
+                log.trace("Data successfully retrieved by replica manager: {}", responsePartitionData);
+                List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
+                    responsePartitionData);
+                processFetchResponse(shareFetchPartitionData, responseData).whenComplete(
+                    (result, throwable) -> {
+                        if (throwable != null) {
+                            log.error("Error processing fetch response for share partitions", throwable);
+                            shareFetchPartitionData.future.completeExceptionally(throwable);
+                        } else {
+                            shareFetchPartitionData.future.complete(result);
+                        }
+                        // Releasing the lock to move ahead with the next request in queue.
+                        releaseFetchQueueAndPartitionsLock(shareFetchPartitionData.groupId, topicPartitionData.keySet());
+                    });
+                return BoxedUnit.UNIT;
+            });
     }
 
     // Visible for testing.
@@ -681,6 +760,11 @@ public class SharePartitionManager implements AutoCloseable {
     void releaseFetchQueueAndPartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> partitionCacheMap.get(sharePartitionKey(groupId, tp)).releaseFetchLock());
         releaseProcessFetchQueueLock();
+    }
+
+    // Visible for testing.
+    boolean acquireProcessFetchQueueLock() {
+        return processFetchQueueLock.compareAndSet(false, true);
     }
 
     private void releaseProcessFetchQueueLock() {

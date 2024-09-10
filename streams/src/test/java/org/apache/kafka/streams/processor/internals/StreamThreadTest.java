@@ -2065,8 +2065,8 @@ public class StreamThreadTest {
         assertEquals(task1, standbyTask1.id());
         assertEquals(task3, standbyTask2.id());
 
-        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
-        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.store(storeName1);
+        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.store(storeName2);
 
         assertEquals(0L, store1.approximateNumEntries());
         assertEquals(0L, store2.approximateNumEntries());
@@ -2189,10 +2189,10 @@ public class StreamThreadTest {
         assertEquals(task1, standbyTask1.id());
         assertEquals(task3, standbyTask2.id());
 
-        final KeyValueStore<Object, Long> activeStore = (KeyValueStore<Object, Long>) activeTask1.getStore(storeName1);
+        final KeyValueStore<Object, Long> activeStore = (KeyValueStore<Object, Long>) activeTask1.store(storeName1);
 
-        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
-        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.store(storeName1);
+        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.store(storeName2);
 
         assertEquals(0L, activeStore.approximateNumEntries());
         assertEquals(0L, store1.approximateNumEntries());
@@ -2552,13 +2552,13 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @MethodSource("data")
     public void shouldLogAndRecordSkippedMetricForDeserializationException(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final Properties properties = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
         properties.setProperty(
-            StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+            StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
             LogAndContinueExceptionHandler.class.getName()
         );
         properties.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());

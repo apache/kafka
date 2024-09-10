@@ -53,15 +53,16 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, FetchIsolation, FetchParams, LogAppendInfo, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -438,7 +439,7 @@ class PartitionTest extends AbstractPartitionTest {
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
           log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "", None, time.scheduler)
         val maxTransactionTimeoutMs = 5 * 60 * 1000
-        val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
+        val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,
@@ -3354,7 +3355,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     listener1.verify()
@@ -3367,7 +3368,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k2".getBytes, "v2".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(
@@ -3385,7 +3386,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(
@@ -3443,7 +3444,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     listener.verify()
@@ -3540,7 +3541,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = records,
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     listener.verify()
@@ -3564,7 +3565,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(

@@ -154,17 +154,16 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
+            if (groupRebalanceConfig.groupId != null && groupRebalanceConfig.groupId.isEmpty()) {
+                throw new InvalidGroupIdException("The configured " + ConsumerConfig.GROUP_ID_CONFIG
+                        + " should not be an empty string or whitespace.");
+            }
 
             this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
             boolean enableAutoCommit = config.getBoolean(ENABLE_AUTO_COMMIT_CONFIG);
-            groupId.ifPresent(groupIdStr -> {
-                if (groupIdStr.isEmpty()) {
-                    log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
-                }
-            });
 
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);

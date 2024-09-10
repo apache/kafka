@@ -99,7 +99,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         return children;
     }
 
-    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> child(final String childName) {
         return childByName.get(childName);
     }
 
@@ -211,7 +211,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 internalProcessorContext.offset(),
                 internalProcessorContext.headers(),
                 internalProcessorContext.currentNode().name(),
-                internalProcessorContext.taskId());
+                internalProcessorContext.taskId(),
+                internalProcessorContext.timestamp());
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;
             try {

@@ -170,6 +170,11 @@ public class AssignmentsManagerTest {
             }
         }
 
+        @Override
+        public long getTimeoutMs() {
+            return 0L;
+        }
+
         void completeCallback(Function<AssignReplicasToDirsRequestData, Optional<ClientResponse>> completionist) throws InterruptedException {
             Map.Entry<AssignReplicasToDirsRequestData, ControllerRequestCompletionHandler> entry = callbacks.take();
             Optional<ClientResponse> clientResponse = completionist.apply(entry.getKey());

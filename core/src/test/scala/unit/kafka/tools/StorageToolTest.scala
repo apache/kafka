@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.raft.QuorumConfig
@@ -321,7 +321,7 @@ Found problem:
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq("--feature", "metadata.version=20")))
-    assertTrue(stream.toString().contains("3.9-IV0"),
+    assertTrue(stream.toString().contains("4.0-IV0"),
       "Failed to find content in output: " + stream.toString())
   }
 
@@ -433,5 +433,97 @@ Found problem:
       contains("Formatting dynamic metadata voter directory %s".format(availableDirs.head)),
       "Failed to find content in output: " + stream.toString())
   }
-}
 
+  private def runVersionMappingCommand(
+    stream: ByteArrayOutputStream,
+    releaseVersion: String
+  ): Int = {
+    val tempDir = TestUtils.tempDir()
+    try {
+      // Prepare the arguments list
+      val arguments = ListBuffer[String]("version-mapping")
+
+      // Add the release version argument
+      if (releaseVersion != null) {
+        arguments += "--release-version"
+        arguments += releaseVersion
+      }
+
+      // Execute the StorageTool with the arguments
+      StorageTool.execute(arguments.toArray, new PrintStream(stream))
+
+    } finally {
+      Utils.delete(tempDir)
+    }
+  }
+
+  @Test
+  def testVersionMappingWithValidReleaseVersion(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    // Test with a valid release version
+    assertEquals(0, runVersionMappingCommand(stream, "3.3-IV3"))
+
+    val output = stream.toString()
+    val metadataVersion = MetadataVersion.IBP_3_3_IV3
+    // Check that the metadata version is correctly included in the output
+    assertTrue(output.contains(s"metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})"),
+      s"Output did not contain expected Metadata Version: $output"
+    )
+
+    for (feature <- Features.values()) {
+      val featureLevel = feature.defaultValue(metadataVersion)
+      assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
+        s"Output did not contain expected feature mapping: $output"
+      )
+    }
+  }
+
+  @Test
+  def testVersionMappingWithNoReleaseVersion(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runVersionMappingCommand(stream, null))
+
+    val output = stream.toString
+    val metadataVersion = MetadataVersion.latestProduction()
+    // Check that the metadata version is correctly included in the output
+    assertTrue(output.contains(s"metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})"),
+      s"Output did not contain expected Metadata Version: $output"
+    )
+
+    for (feature <- Features.values()) {
+      val featureLevel = feature.defaultValue(metadataVersion)
+      assertTrue(output.contains(s"${feature.featureName()}=$featureLevel"),
+        s"Output did not contain expected feature mapping: $output"
+      )
+    }
+  }
+
+  @Test
+  def testVersionMappingWithInvalidReleaseVersion(): Unit = {
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+
+    val stream = new ByteArrayOutputStream()
+    // Test with an invalid release version
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runVersionMappingCommand(stream, "2.9-IV2")
+    })
+
+    assertEquals("Unsupported release version '2.9-IV2'." +
+      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
+    )
+
+    val exception2 = assertThrows(classOf[TerseFailure], () => {
+      runVersionMappingCommand(stream, "invalid")
+    })
+
+    assertEquals("Unsupported release version 'invalid'." +
+      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
+    )
+  }
+}
