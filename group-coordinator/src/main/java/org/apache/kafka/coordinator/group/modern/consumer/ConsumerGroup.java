@@ -222,11 +222,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      *                          created if it does not exist.
      *
      * @return A ConsumerGroupMember.
+     * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
     public ConsumerGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
-    ) {
+    ) throws UnknownMemberIdException {
         ConsumerGroupMember member = members.get(memberId);
         if (member != null) return member;
 

@@ -38,6 +38,8 @@ import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
+import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
+import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
 import org.apache.kafka.security.CredentialProvider
@@ -122,6 +124,8 @@ class BrokerServer(
   var groupConfigManager: GroupConfigManager = _
 
   var transactionCoordinator: TransactionCoordinator = _
+
+  var shareCoordinator: Option[ShareCoordinator] = _
 
   var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
@@ -343,6 +347,8 @@ class BrokerServer(
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
       tokenManager.startup()
 
+      shareCoordinator = createShareCoordinator()
+
       groupCoordinator = createGroupCoordinator()
 
       val producerIdManagerSupplier = () => ProducerIdManager.rpc(
@@ -360,7 +366,7 @@ class BrokerServer(
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, Some(clientToControllerChannelManager), None, None,
-        groupCoordinator, transactionCoordinator)
+        groupCoordinator, transactionCoordinator, shareCoordinator)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
@@ -430,6 +436,7 @@ class BrokerServer(
         replicaManager = replicaManager,
         groupCoordinator = groupCoordinator,
         txnCoordinator = transactionCoordinator,
+        shareCoordinator = shareCoordinator,
         autoTopicCreationManager = autoTopicCreationManager,
         brokerId = config.nodeId,
         config = config,
@@ -476,6 +483,7 @@ class BrokerServer(
         replicaManager,
         groupCoordinator,
         transactionCoordinator,
+        shareCoordinator,
         new DynamicConfigPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
@@ -631,6 +639,36 @@ class BrokerServer(
     }
   }
 
+  private def createShareCoordinator(): Option[ShareCoordinator] = {
+    if (!config.shareGroupConfig.isShareGroupEnabled) {
+      return None
+    }
+    val time = Time.SYSTEM
+    val timer = new SystemTimerReaper(
+      "share-coordinator-reaper",
+      new SystemTimer("share-coordinator")
+    )
+
+    val serde = new ShareCoordinatorRecordSerde
+    val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
+      time,
+      replicaManager,
+      serde,
+      config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
+    )
+    val writer = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+    Some(new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
+      .withTimer(timer)
+      .withTime(time)
+      .withLoader(loader)
+      .withWriter(writer)
+      .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
+      .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
+      .build())
+  }
+
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
@@ -698,6 +736,8 @@ class BrokerServer(
         CoreUtils.swallow(transactionCoordinator.shutdown(), this)
       if (groupCoordinator != null)
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
+      if (shareCoordinator.isDefined)
+        CoreUtils.swallow(shareCoordinator.get.shutdown(), this)
 
       if (tokenManager != null)
         CoreUtils.swallow(tokenManager.shutdown(), this)

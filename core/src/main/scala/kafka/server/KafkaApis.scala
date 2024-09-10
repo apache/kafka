@@ -35,7 +35,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
+import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.{AddPartitionsToTxnResult, AddPartitionsToTxnResultCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
@@ -71,6 +71,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.GroupType
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, MetadataVersion, RequestLocal}
@@ -101,6 +102,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
+                val shareCoordinator: Option[ShareCoordinator],
                 val autoTopicCreationManager: AutoTopicCreationManager,
                 val brokerId: Int,
                 val config: KafkaConfig,
@@ -1696,10 +1698,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       (Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, Node.noNode)
     else if (keyType == CoordinatorType.SHARE.id && request.context.apiVersion < 6)
       (Errors.INVALID_REQUEST, Node.noNode)
-    else if (keyType == CoordinatorType.SHARE.id &&
-        !authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME))
-      (Errors.CLUSTER_AUTHORIZATION_FAILED, Node.noNode)
     else {
+      if (keyType == CoordinatorType.SHARE.id) {
+        authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+        if (shareCoordinator.isEmpty) {
+          return (Errors.INVALID_REQUEST, Node.noNode)
+        }
+      }
       val (partition, internalTopicName) = CoordinatorType.forId(keyType) match {
         case CoordinatorType.GROUP =>
           (groupCoordinator.partitionFor(key), GROUP_METADATA_TOPIC_NAME)
@@ -1708,8 +1713,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           (txnCoordinator.partitionFor(key), TRANSACTION_STATE_TOPIC_NAME)
 
         case CoordinatorType.SHARE =>
-          // When share coordinator support is implemented in KIP-932, a proper check will go here
-          return (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+          // None check already done above
+          (shareCoordinator.get.partitionFor(key), SHARE_GROUP_STATE_TOPIC_NAME)
       }
 
       val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName), request.context.listenerName)
@@ -4463,18 +4468,46 @@ class KafkaApis(val requestChannel: RequestChannel,
     CompletableFuture.completedFuture[Unit](())
   }
 
-  def handleReadShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+  def handleReadShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val readShareGroupStateRequest = request.body[ReadShareGroupStateRequest]
-    // TODO: Implement the ReadShareGroupStateRequest handling
-    requestHelper.sendMaybeThrottle(request, readShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        readShareGroupStateRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
+      case Some(coordinator) => coordinator.readState(request.context, readShareGroupStateRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, readShareGroupStateRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateResponse(response))
+          }
+        }
+    }
   }
 
-  def handleWriteShareGroupStateRequest(request: RequestChannel.Request): Unit = {
-    val writeShareGroupStateRequest = request.body[WriteShareGroupStateRequest]
-    // TODO: Implement the WriteShareGroupStateRequest handling
-    requestHelper.sendMaybeThrottle(request, writeShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+  def handleWriteShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val writeShareRequest = request.body[WriteShareGroupStateRequest]
+
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        writeShareRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
+      case Some(coordinator) => coordinator.writeState(request.context, writeShareRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, writeShareRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new WriteShareGroupStateResponse(response))
+          }
+        }
+    }
   }
 
   def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): Unit = {

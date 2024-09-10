@@ -1024,6 +1024,7 @@ project(':core') {
     implementation project(':server')
     implementation project(':coordinator-common')
     implementation project(':share')
+    implementation project(':share-coordinator')
 
     implementation libs.argparse4j
     implementation libs.commonsValidator
@@ -1058,6 +1059,7 @@ project(':core') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator').sourceSets.test.output
+    testImplementation project(':share-coordinator').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1592,6 +1594,7 @@ project(':coordinator-common') {
     implementation project(':storage')
     implementation libs.slf4jApi
     implementation libs.metrics
+    implementation libs.hdrHistogram
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1638,7 +1641,10 @@ project(':share-coordinator') {
     implementation project(':clients')
     implementation project(':coordinator-common')
     implementation project(':metadata')
+    implementation project(':server')
     implementation project(':server-common')
+    implementation libs.slf4jApi
+    implementation libs.metrics
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
