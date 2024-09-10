@@ -103,7 +103,6 @@ public class StateManagerUtilTest {
         when(topology.stateStores()).thenReturn(singletonList(new MockKeyValueStore("store", false)));
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(false);
-        when(stateDirectory.lock(taskId)).thenReturn(false);
 
         assertDoesNotThrow(() -> StateManagerUtil.registerStateStores(logger, "logPrefix:",
                         topology, stateManager, stateDirectory, processorContext));
