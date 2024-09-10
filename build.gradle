@@ -119,21 +119,15 @@ ext {
   addParametersForTests = { name, options ->
     // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
     // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
-    if (name == "compileTestJava" || name == "compileTestScala")
+    if (name == "compileTestJava") {
       options.compilerArgs << "-parameters"
-    
-    options.compilerArgs << "-Xlint:delayedinit-select"
-    options.compilerArgs << "-Xlint:doc-detached"
-    options.compilerArgs << "-Xlint:missing-interpolator"
-    options.compilerArgs << "-Xlint:nullary-unit"
-    options.compilerArgs << "-Xlint:nullary-unit"
-    options.compilerArgs << "-Xlint:option-implicit"
-    options.compilerArgs << "-Xlint:package-object-classes"
-    options.compilerArgs << "-Xlint:poly-implicit-overload"
-    options.compilerArgs << "-Xlint:private-shadow"
-    options.compilerArgs << "-Xlint:stars-align"
-    options.compilerArgs << "-Xlint:type-parameter-shadow"
-    options.compilerArgs << "-Xlint:unused"
+      options.compilerArgs << "-Xlint:deprecation"
+      options.compilerArgs << "-encoding" << "UTF-8"
+      options.compilerArgs << "-Xlint:deprecation"
+      options.compilerArgs << "-Xlint:unchecked"
+    } else if (name == "compileTestScala") {
+      options.compilerArgs << "-parameters"
+    }
   }
 }
 
