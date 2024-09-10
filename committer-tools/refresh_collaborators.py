@@ -37,7 +37,7 @@ from github.Repository import Repository
 from ruamel.yaml import YAML
 
 logging.basicConfig(
-    format='{"timestamp":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}',
+    format="%(asctime)s %(levelname)s %(message)s",
     level=logging.INFO,
 )
 
