@@ -817,7 +817,7 @@ class ShareCoordinatorShardTest {
 
         List<TestAttributes> tests = Arrays.asList(
             new TestAttributes(
-                "both cur and new set empty => empty result list",
+                "Both cur and new set empty => empty result list.",
                 new LinkedHashSet<>(),
                 new LinkedHashSet<>(),
                 new LinkedList<>(),
@@ -825,7 +825,7 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
-                "if new set is empty => result list only contains cur set batches",
+                "New set is empty => result list only contains cur set batches.",
                 new LinkedHashSet<>(Collections.singletonList(
                     new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
                 )),
@@ -835,7 +835,7 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
-                "if cur set is empty => result list only contains new set batches",
+                "Cur set is empty => result list only contains new set batches.",
                 new LinkedHashSet<>(),
                 new LinkedHashSet<>(Collections.singletonList(
                     new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
@@ -845,7 +845,7 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
-                "if sets have no overlap => result list contains batches from both sets",
+                "Sets have no overlap => result list contains batches from both sets.",
                 new LinkedHashSet<>(Collections.singletonList(
                     new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
                 )),
@@ -860,7 +860,7 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
-                "if sets have partial overlap => result list contains batches from both sets (we do not add gaps)",
+                "Sets have partial overlap => result list contains batches from both sets (we do not add gaps).",
                 new LinkedHashSet<>(Collections.singletonList(
                     new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
                 )),
@@ -875,8 +875,8 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
-                "if sets have overlapping batches => batches in new set are preferred. " +
-                    "Overlap is check based on cur.firstOffset == new.firstOffset && cur.lastOffset == new.lastOffset",
+                "Sets have overlapping batches => batches in new set are preferred. " +
+                    "Overlap means cur.firstOffset == new.firstOffset && cur.lastOffset == new.lastOffset",
                 new LinkedHashSet<>(Arrays.asList(
                     new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
                     new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1)
@@ -894,8 +894,8 @@ class ShareCoordinatorShardTest {
             // batches which are older than start offset are removed
             //
             new TestAttributes(
-                "batches which are older than start offset are removed " +
-                    "old => batch.lastOffset < startOffset",
+                "Batches which are older than start offset are removed. " +
+                    "Old means batch.lastOffset < startOffset",
                 new LinkedHashSet<>(Arrays.asList(
                     new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),  // should be removed
                     new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1),
@@ -912,7 +912,7 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
-                "if startOffset is -1, no batches are considered old but overlaps are still removed preferring the new set",
+                "StartOffset is -1 => no batches are considered old but overlaps are still removed preferring the new set.",
                 new LinkedHashSet<>(Arrays.asList(
                     new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),  // should be removed
                     new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1),
