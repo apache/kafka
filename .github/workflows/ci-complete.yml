@@ -35,9 +35,6 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 # If we need to do things like comment on, label, or otherwise modify PRs from public forks. This
 # workflow is the place to do it. PR number is ${{ github.event.workflow_run.pull_requests[0].number }}
 
-permissions:
-  statuses: write
-
 jobs:
   upload-build-scan:
     # Skip this workflow if CI was run for anything other than "pull_request" (like "push").
@@ -81,7 +78,6 @@ jobs:
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
           description: 'Could not find build scan'
@@ -102,7 +98,6 @@ jobs:
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
           description: 'The build scan failed to be published'
@@ -113,7 +108,6 @@ jobs:
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: ${{ steps.publish-build-scan.outputs.build-scan-url }}
           description: 'The build scan was successfully published'
