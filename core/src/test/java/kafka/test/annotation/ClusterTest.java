@@ -18,7 +18,6 @@
 package kafka.test.annotation;
 
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Tag;
