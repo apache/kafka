@@ -16,7 +16,6 @@
  */
 package kafka.server.share;
 
-import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 
@@ -81,7 +80,10 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        DelayedShareFetch delayedShareFetch = new DelayedShareFetch(shareFetchPartitionData, mock(ReplicaManager.class), partitionCacheMap, mock(DelayedOperationPurgatory.class));
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchPartitionData(shareFetchPartitionData)
+            .withPartitionCacheMap(partitionCacheMap)
+            .build();
 
         // Since there is no partition that can be acquired, tryComplete should return false.
         assertFalse(delayedShareFetch.tryComplete());
@@ -115,7 +117,10 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        DelayedShareFetch delayedShareFetch = new DelayedShareFetch(shareFetchPartitionData, mock(ReplicaManager.class), partitionCacheMap, mock(DelayedOperationPurgatory.class));
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchPartitionData(shareFetchPartitionData)
+            .withPartitionCacheMap(partitionCacheMap)
+            .build();
         assertFalse(delayedShareFetch.isCompleted());
 
         // Since sp1 can be acquired, tryComplete should return true.
@@ -151,7 +156,11 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        DelayedShareFetch delayedShareFetch = new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, mock(DelayedOperationPurgatory.class));
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchPartitionData(shareFetchPartitionData)
+            .withReplicaManager(replicaManager)
+            .withPartitionCacheMap(partitionCacheMap)
+            .build();
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
 
@@ -190,7 +199,11 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
-        DelayedShareFetch delayedShareFetch = new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, mock(DelayedOperationPurgatory.class));
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchPartitionData(shareFetchPartitionData)
+            .withReplicaManager(replicaManager)
+            .withPartitionCacheMap(partitionCacheMap)
+            .build();
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
 
@@ -222,7 +235,11 @@ public class DelayedShareFetchTest {
                         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
                 future, partitionMaxBytes);
 
-        DelayedShareFetch delayedShareFetch = spy(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, mock(DelayedOperationPurgatory.class)));
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
+            .withShareFetchPartitionData(shareFetchPartitionData)
+            .withReplicaManager(replicaManager)
+            .withPartitionCacheMap(partitionCacheMap)
+            .build());
         assertFalse(delayedShareFetch.isCompleted());
 
         // Completing the future before calling forceComplete which can happen in a real world scenario where the future
@@ -232,5 +249,37 @@ public class DelayedShareFetchTest {
         assertTrue(delayedShareFetch.isCompleted());
         // Verifying that forceComplete does not call topicPartitionDataForAcquirablePartitions method in DelayedShareFetch.
         Mockito.verify(delayedShareFetch, times(0)).acquirablePartitions();
+    }
+
+    static class DelayedShareFetchBuilder {
+        SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData = mock(SharePartitionManager.ShareFetchPartitionData.class);
+        private ReplicaManager replicaManager = mock(ReplicaManager.class);
+        private Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+
+        DelayedShareFetchBuilder withShareFetchPartitionData(SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData) {
+            this.shareFetchPartitionData = shareFetchPartitionData;
+            return this;
+        }
+
+        DelayedShareFetchBuilder withReplicaManager(ReplicaManager replicaManager) {
+            this.replicaManager = replicaManager;
+            return this;
+        }
+
+        DelayedShareFetchBuilder withPartitionCacheMap(Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap) {
+            this.partitionCacheMap = partitionCacheMap;
+            return this;
+        }
+
+        public static DelayedShareFetchBuilder builder() {
+            return new DelayedShareFetchBuilder();
+        }
+
+        public DelayedShareFetch build() {
+            return new DelayedShareFetch(
+                    shareFetchPartitionData,
+                    replicaManager,
+                    partitionCacheMap);
+        }
     }
 }

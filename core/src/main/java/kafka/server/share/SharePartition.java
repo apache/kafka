@@ -1004,6 +1004,9 @@ public class SharePartition {
      * @return A boolean which indicates whether the fetch lock is acquired.
      */
     boolean maybeAcquireFetchLock() {
+        if (partitionState() != SharePartitionState.ACTIVE) {
+            return false;
+        }
         return fetchLock.compareAndSet(false, true);
     }
 

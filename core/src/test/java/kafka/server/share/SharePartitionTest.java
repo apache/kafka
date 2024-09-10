@@ -728,6 +728,7 @@ public class SharePartitionTest {
     @Test
     public void testMaybeAcquireAndReleaseFetchLock() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        sharePartition.maybeInitialize();
         assertTrue(sharePartition.maybeAcquireFetchLock());
         // Lock cannot be acquired again, as already acquired.
         assertFalse(sharePartition.maybeAcquireFetchLock());
