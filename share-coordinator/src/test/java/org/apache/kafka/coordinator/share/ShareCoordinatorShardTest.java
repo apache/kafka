@@ -890,9 +890,7 @@ class ShareCoordinatorShardTest {
                 ),
                 -1
             ),
-
-            // batches which are older than start offset are removed
-            //
+            
             new TestAttributes(
                 "Batches which are older than start offset are removed. " +
                     "Old means batch.lastOffset < startOffset",
