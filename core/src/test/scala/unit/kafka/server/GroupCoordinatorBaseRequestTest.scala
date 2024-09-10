@@ -26,10 +26,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
 import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData}
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse}
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
@@ -45,10 +43,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   private def brokers(): Seq[KafkaBroker] = cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).asScala.toSeq
 
   private def controllerServers(): Seq[ControllerServer] = cluster.controllers().values().asScala.toSeq
-
-  protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
-
-  protected def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
 
   protected var producer: KafkaProducer[String, String] = _
 
@@ -107,14 +101,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     cluster.brokers.values().stream().collect(Collectors.toList[KafkaBroker]).toSeq
   }
 
-  protected def brokerSocketServer(brokerId: Int): SocketServer = {
-    getBrokers.find { broker =>
-      broker.config.brokerId == brokerId
-    }.map(_.socketServer).getOrElse(throw new IllegalStateException(s"Could not find broker with id $brokerId"))
-  }
-
-  protected def bootstrapServers(listenerName: ListenerName = listenerName): String = {
-    TestUtils.bootstrapServers(getBrokers, listenerName)
+  protected def bootstrapServers(): String = {
+    TestUtils.plaintextBootstrapServers(getBrokers)
   }
 
   protected def initProducer(): Unit = {
@@ -712,7 +700,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     )
   }
 
-  def connectAndReceive[T <: AbstractResponse](
+  protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest,
     destination: Int
   )(implicit classTag: ClassTag[T]): T = {
@@ -721,5 +709,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       brokerSocketServer(destination),
       cluster.clientListener()
     )
+  }
+
+  private def brokerSocketServer(brokerId: Int): SocketServer = {
+    getBrokers.find { broker =>
+      broker.config.brokerId == brokerId
+    }.map(_.socketServer).getOrElse(throw new IllegalStateException(s"Could not find broker with id $brokerId"))
   }
 }

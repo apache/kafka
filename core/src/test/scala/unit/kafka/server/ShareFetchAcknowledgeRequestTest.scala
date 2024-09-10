@@ -90,7 +90,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     ),
     brokers = 2
   )
-  def testShareFetchRequestToNonReplica(): Unit = {
+  def testShareFetchRequestToNonLeaderReplica(): Unit = {
     val groupId: String = "group"
     val metadata: ShareRequestMetadata = new ShareRequestMetadata(Uuid.randomUuid(), ShareRequestMetadata.INITIAL_EPOCH)
 
@@ -163,7 +163,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(partitionData, expectedPartitionData)
+    compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
   @ClusterTest(
@@ -227,9 +227,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData.responses().get(0).partitions().foreach(partitionData => {
       partitionData.partitionIndex() match {
-        case 0 => compareFetchResponsePartitions(partitionData, expectedPartitionData1)
-        case 1 => compareFetchResponsePartitions(partitionData, expectedPartitionData2)
-        case 2 => compareFetchResponsePartitions(partitionData, expectedPartitionData3)
+        case 0 => compareFetchResponsePartitions(expectedPartitionData1, partitionData)
+        case 1 => compareFetchResponsePartitions(expectedPartitionData2, partitionData)
+        case 2 => compareFetchResponsePartitions(expectedPartitionData3, partitionData)
       }
     })
   }
@@ -321,9 +321,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    compareFetchResponsePartitions(partitionData1, expectedPartitionData1)
-    compareFetchResponsePartitions(partitionData2, expectedPartitionData2)
-    compareFetchResponsePartitions(partitionData3, expectedPartitionData3)
+    compareFetchResponsePartitions(expectedPartitionData1, partitionData1)
+    compareFetchResponsePartitions(expectedPartitionData2, partitionData2)
+    compareFetchResponsePartitions(expectedPartitionData3, partitionData3)
   }
 
   @ClusterTest(
@@ -372,7 +372,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
@@ -396,7 +396,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setErrorCode(Errors.NONE.code())
 
     val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
-    compareAcknowledgeResponsePartitions(acknowledgePartitionData, expectedAcknowledgePartitionData)
+    compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Producing 10 more records to the topic
     produceData(topicIdPartition, 10)
@@ -420,7 +420,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // Only the records from offset 10 onwards should be fetched because records at offsets 0-9 have been acknowledged
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
   @ClusterTest(
@@ -469,7 +469,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
     produceData(topicIdPartition, 10)
@@ -497,7 +497,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // The records at offsets 0 to 9 will not be re fetched because they have been acknowledged
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic
     produceData(topicIdPartition, 10)
@@ -521,7 +521,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(20), Collections.singletonList(29), Collections.singletonList(1))) // Only the records from offset 20 onwards should be fetched because records at offsets 0-9 have been acknowledged before and 10 to 19 are currently acquired
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
   @ClusterTest(
@@ -570,7 +570,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
@@ -594,7 +594,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setErrorCode(Errors.NONE.code())
 
     val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
-    compareAcknowledgeResponsePartitions(acknowledgePartitionData, expectedAcknowledgePartitionData)
+    compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Sending a second share fetch request to check if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
@@ -615,7 +615,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(2))) // Records at offsets 0 to 9 should be fetched again because they were released with delivery count as 2
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
   @ClusterTest(
@@ -664,7 +664,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
     produceData(topicIdPartition, 10)
@@ -694,7 +694,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // they are re delivered, and records from 10 to 19 will have delivery count as 1 because they are newly acquired
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
   @ClusterTest(
@@ -743,7 +743,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
@@ -767,7 +767,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setErrorCode(Errors.NONE.code())
 
     val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
-    compareAcknowledgeResponsePartitions(acknowledgePartitionData, expectedAcknowledgePartitionData)
+    compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Producing 10 more records to the topic
     produceData(topicIdPartition, 10)
@@ -791,7 +791,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // Only the records from offset 10 onwards should be fetched because records at offsets 0-9 have been rejected
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
   @ClusterTest(
@@ -840,7 +840,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
     produceData(topicIdPartition, 10)
@@ -868,7 +868,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // The records at offsets 0 to 9 will not be re fetched because they have been rejected
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic
     produceData(topicIdPartition, 10)
@@ -892,7 +892,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(20), Collections.singletonList(29), Collections.singletonList(1))) // Only the records from offset 20 onwards should be fetched because records at offsets 0-9 have been rejected before and 10 to 19 are currently acquired
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
   @ClusterTest(
@@ -942,7 +942,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
@@ -966,7 +966,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setErrorCode(Errors.NONE.code())
 
     var acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
-    compareAcknowledgeResponsePartitions(acknowledgePartitionData, expectedAcknowledgePartitionData)
+    compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Sending a second share fetch request to check if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
@@ -987,7 +987,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(2))) // Records at offsets 0 to 9 should be fetched again because they were released with delivery count as 2
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Send a Share Acknowledge request to acknowledge the fetched records
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
@@ -1010,7 +1010,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setErrorCode(Errors.NONE.code())
 
     acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
-    compareAcknowledgeResponsePartitions(acknowledgePartitionData, expectedAcknowledgePartitionData)
+    compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
 
     // Producing 10 new records to the topic
     produceData(topicIdPartition, 10)
@@ -1034,7 +1034,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // Only new records from offset 10 to 19 will be fetched, records at offsets 0 to 9 have been archived because delivery count limit has been exceeded
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
   }
 
   @ClusterTest(
@@ -1088,7 +1088,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // the max partition bytes limit
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(partitionData, expectedPartitionData)
+    compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
   @ClusterTest(
@@ -1293,7 +1293,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
     produceData(topicIdPartition, 10)
@@ -1321,7 +1321,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // The records at offsets 0 to 9 will not be re fetched because they have been acknowledged
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Sending a final fetch request to close the session
     shareSessionEpoch = ShareRequestMetadata.FINAL_EPOCH
@@ -1384,7 +1384,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
     produceData(topicIdPartition, 10)
@@ -1412,7 +1412,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1))) // The records at offsets 0 to 9 will not be re fetched because they have been acknowledged
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(fetchPartitionData, expectedFetchPartitionData)
+    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Sending a Share Acknowledge request to close the session
     shareSessionEpoch = ShareRequestMetadata.FINAL_EPOCH
@@ -1436,7 +1436,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setErrorCode(Errors.NONE.code())
 
     val acknowledgePartitionData = shareAcknowledgeResponseData.responses().get(0).partitions().get(0)
-    compareAcknowledgeResponsePartitions(acknowledgePartitionData, expectedAcknowledgePartitionData)
+    compareAcknowledgeResponsePartitions(expectedAcknowledgePartitionData, acknowledgePartitionData)
   }
 
   @ClusterTest(
@@ -1558,7 +1558,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(partitionData, expectedPartitionData)
+    compareFetchResponsePartitions(expectedPartitionData, partitionData)
 
     // Sending Share Fetch request with invalid share session epoch
     metadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)))
@@ -1613,7 +1613,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(partitionData, expectedPartitionData)
+    compareFetchResponsePartitions(expectedPartitionData, partitionData)
 
     // Sending Share Acknowledge request with invalid share session epoch
     metadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)))
@@ -1674,7 +1674,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(partitionData, expectedPartitionData)
+    compareFetchResponsePartitions(expectedPartitionData, partitionData)
 
     // Sending a Share Fetch request with wrong member Id
     metadata = new ShareRequestMetadata(wrongMemberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
@@ -1730,7 +1730,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(partitionData, expectedPartitionData)
+    compareFetchResponsePartitions(expectedPartitionData, partitionData)
 
     // Sending a Share Acknowledge request with wrong member Id
     metadata = new ShareRequestMetadata(wrongMemberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
@@ -1810,7 +1810,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(10), Collections.singletonList(19), Collections.singletonList(1)))
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(partitionData, expectedPartitionData)
+    compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
   private def expectedAcquiredRecords(firstOffsets: util.List[Long], lastOffsets: util.List[Long], deliveryCounts: util.List[Int]): util.List[AcquiredRecords] = {
@@ -1824,8 +1824,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     acquiredRecordsList
   }
 
-  private def compareFetchResponsePartitions(actualResponse: ShareFetchResponseData.PartitionData,
-                                        expectedResponse: ShareFetchResponseData.PartitionData): Unit = {
+  private def compareFetchResponsePartitions(expectedResponse: ShareFetchResponseData.PartitionData,
+                                             actualResponse: ShareFetchResponseData.PartitionData): Unit = {
     assertEquals(actualResponse.partitionIndex(), expectedResponse.partitionIndex())
     assertEquals(actualResponse.errorCode, expectedResponse.errorCode)
     assertEquals(actualResponse.errorCode(), expectedResponse.errorCode())
@@ -1833,8 +1833,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(actualResponse.acquiredRecords(), expectedResponse.acquiredRecords())
   }
 
-  private def compareAcknowledgeResponsePartitions(actualResponse: ShareAcknowledgeResponseData.PartitionData,
-                                             expectedResponse: ShareAcknowledgeResponseData.PartitionData): Unit = {
+  private def compareAcknowledgeResponsePartitions(expectedResponse: ShareAcknowledgeResponseData.PartitionData,
+                                                   actualResponse: ShareAcknowledgeResponseData.PartitionData): Unit = {
     assertEquals(actualResponse.partitionIndex(), expectedResponse.partitionIndex())
     assertEquals(actualResponse.errorCode(), expectedResponse.errorCode())
   }
