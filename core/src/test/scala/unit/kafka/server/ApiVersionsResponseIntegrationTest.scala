@@ -73,7 +73,7 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
     assertEquals(expectedMinVersion, key.minVersion())
   }
 
-  def assertFeatureMissing(
+  private def assertFeatureMissing(
     name: String,
     coll: SupportedFeatureKeyCollection,
   ): Unit = {
