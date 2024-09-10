@@ -676,7 +676,7 @@ subprojects {
   tasks.withType(ScalaCompile) {
 
     scalaCompileOptions.keepAliveMode = userKeepAliveMode
-    
+
     scalaCompileOptions.additionalParameters = [
       "-deprecation:false",
       "-unchecked",
