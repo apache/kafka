@@ -21,11 +21,13 @@ import kafka.test.{ClusterConfig, ClusterInstance}
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTemplate, ClusterTest, Type}
+import kafka.test.annotation.{ClusterConfigProperty, ClusterFeature, ClusterTemplate, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
+
 import scala.jdk.CollectionConverters._
 
 object ApiVersionsRequestTest {
@@ -48,6 +50,10 @@ object ApiVersionsRequestTest {
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setServerProperties(serverProperties)
       .setMetadataVersion(MetadataVersion.latestTesting())
+      .setFeatures(Utils.mkMap(
+        Utils.mkEntry(Features.KRAFT_VERSION, 0.toShort),
+        Utils.mkEntry(Features.TRANSACTION_VERSION, 2.toShort),
+        Utils.mkEntry(Features.GROUP_VERSION, 1.toShort)))
       .build()).asJava
   }
 
@@ -83,10 +89,14 @@ object ApiVersionsRequestTest {
 class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @ClusterTemplate("testApiVersionsRequestTemplate")
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
-    new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true")
-  ))
+  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
+      new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true")),
+    features = Array(
+      new ClusterFeature(feature = Features.KRAFT_VERSION, version = 0),
+      new ClusterFeature(feature = Features.TRANSACTION_VERSION, version = 2),
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)))
   def testApiVersionsRequest(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
@@ -95,9 +105,12 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
 
   @ClusterTemplate("testApiVersionsRequestIncludesUnreleasedApisTemplate")
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
-    new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true"),
-  ))
+      new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
+      new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true")),
+    features = Array(
+      new ClusterFeature(feature = Features.KRAFT_VERSION, version = 0),
+      new ClusterFeature(feature = Features.TRANSACTION_VERSION, version = 2),
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)))
   def testApiVersionsRequestIncludesUnreleasedApis(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
@@ -111,7 +124,10 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
     validateApiVersionsResponse(apiVersionsResponse, cluster.controlPlaneListenerName().get(), true)
   }
 
-  @ClusterTest(types = Array(Type.KRAFT))
+  @ClusterTest(types = Array(Type.KRAFT), features = Array(
+    new ClusterFeature(feature = Features.KRAFT_VERSION, version = 0),
+    new ClusterFeature(feature = Features.TRANSACTION_VERSION, version = 2),
+    new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)))
   def testApiVersionsRequestThroughControllerListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
     val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controllerListenerName.get())
