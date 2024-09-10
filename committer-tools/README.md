@@ -32,7 +32,7 @@ pip3 --version
 ```bash
 python3 -m venv venv
 
- # For Linux/macOS
+# For Linux/macOS
 source venv/bin/activate
 
 # On Windows:
