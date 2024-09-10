@@ -3776,7 +3776,7 @@ customized state stores; for built-in state stores, currently we have:
 
   <p>A Kafka admin will typically select 3 or 5 servers for this role, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. A majority of the controllers must be alive in order to maintain availability. With 3 controllers, the cluster can tolerate 1 controller failure; with 5 controllers, the cluster can tolerate 2 controller failures.</p>
 
-  <p>All of the servers in a Kafka cluster discover the active controller using the <code>controller.quorum.bootrtrap.servers</code> property. All the controllers should be enumerated in this property. Each controller is identified with their <code>host</code> and <code>port</code> information. For example:</p>
+  <p>All of the servers in a Kafka cluster discover the active controller using the <code>controller.quorum.bootstrap.servers</code> property. All the controllers should be enumerated in this property. Each controller is identified with their <code>host</code> and <code>port</code> information. For example:</p>
 
   <pre><code class="language-bash">controller.quorum.bootstrap.servers=host1:port1,host2:port2,host3:port3</code></pre>
 
@@ -3796,34 +3796,31 @@ controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.exa
   <p>This is different from how Kafka has operated in the past. Previously, Kafka would format blank storage directories automatically, and also generate a new cluster ID automatically. One reason for the change is that auto-formatting can sometimes obscure an error condition. This is particularly important for the metadata log maintained by the controller and broker servers. If a majority of the controllers were able to start with an empty log directory, a leader might be able to be elected with missing committed data.</p>
 
   <h5 class="anchor-heading"><a id="kraft_storage_standalone" class="anchor-link"></a><a href="#kraft_storage_standalone">Bootstrap a Standalone Controller</a></h5>
-  The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dyncamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. This can be done with the following CLI command:
+  The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dynamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. Bootstrapping the first controller can be done with the following CLI command:
 
   <pre><code class="language-bash">kafka-storage format --cluster-id <cluster-id> --standalone --config controller.properties</code></pre>
 
   This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum.
 
-  <h5 class="anchor-heading"><a id="kraft_storage_voters" class="anchor-link"></a><a href="#kraft_storage_voters">Bootstrap with Multiple Controller</a></h5>
+  <h5 class="anchor-heading"><a id="kraft_storage_voters" class="anchor-link"></a><a href="#kraft_storage_voters">Bootstrap with Multiple Controllers</a></h5>
   The KRaft cluster metadata partition can also be bootstrapped with more than one voter. This can be done by using the --initial-controllers flag:
 
-  <pre><code class="language-bash">kafka-storage format --cluster-id <cluster-id> --initial-controller 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA,1@controller-1:1234:L3rJBUUegA3Db5QLSqSZie,2@controller-2:1234:UegA3Db5QLSqSZieL3rJBU --config controller.properties</code></pre>
-
-This command is similar to the standalone version but the snapshot at 00000000000000000000-0000000000.checkpoint will instead contain a VotersRecord that includes information for all of the controllers specified in --initial-controllers. Just like the controller.quorum.voters properties, it is important that the set of voters is equal in all of the controllers with the same cluster id.
-
-In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the replica id, 3Db5QLSqSZieL3rJBUUegA is the replica directory id, controller-0 is the replica's host and 1234 is the replica's port.
-
-To generate a random UUID the user can execute the kafka-storage random-uuid command.
-
-  <pre><code class="language-bash">controller-0-uuid=$(kafka-storage random-uuid)
+  <pre><code class="language-bash">cluster-id=$(kafka-storage random-uuid)
+controller-0-uuid=$(kafka-storage random-uuid)
 controller-1-uuid=$(kafka-storage random-uuid)
 controller-2-uuid=$(kafka-storage random-uuid)
 
 # In each controller execute
-kafka-storage format --cluster-id <cluster-id> \
-                     --controller-quorum-voters "0@controller-0:1234:${controller-0-uuid},1@controller-1:1234:${controller-1-uuid},2@controller-2:1234:${controller-2-uuid} \
+kafka-storage format --cluster-id ${cluster-id} \
+                     --initial-controllers "0@controller-0:1234:${controller-0-uuid},1@controller-1:1234:${controller-1-uuid},2@controller-2:1234:${controller-2-uuid}" \
                      --config controller.properties</code></pre>
 
+This command is similar to the standalone version but the snapshot at 00000000000000000000-0000000000.checkpoint will instead contain a VotersRecord that includes information for all of the controllers specified in --initial-controllers. It is important that the value of this flag is the same in all of the controllers with the same cluster id.
+
+In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the replica id, 3Db5QLSqSZieL3rJBUUegA is the replica directory id, controller-0 is the replica's host and 1234 is the replica's port.
+
   <h5 class="anchor-heading"><a id="kraft_storage_observers" class="anchor-link"></a><a href="#kraft_storage_observers">Formatting Brokers and New Controllers</a></h5>
-  When provisioning new brokers nodes and new controller nodes joining an existing Kafka cluster use the <code>kafka-storage.sh format</code> command without the --standalone or --initial-controllers flags.
+  When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the <code>kafka-storage.sh format</code> command without the --standalone or --initial-controllers flags.
 
   <pre><code class="language-bash">kafka-storage format --cluster-id <cluster-id> --config server.properties</code></pre>
 
@@ -3832,14 +3829,22 @@ kafka-storage format --cluster-id <cluster-id> \
   <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
   If the KRaft Controller cluster already exist, the cluster can be expanded by first provisioning a new controller using the <a href="#kraft_storage_observers">kafka-storage tool</a> and starting the controller.
 
-  After sarting the controller, the replication to the new controller can be monitored using the <code>kafka-metadata-quorum describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>kafka-metadata-quorum add-controller</code> command.
+  After starting the controller, the replication to the new controller can be monitored using the <code>kafka-metadata-quorum describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>kafka-metadata-quorum add-controller</code> command.
 
+  When using broker endpoints use the --bootstrap-server flag:
   <pre><code class="language-bash">kafka-metadata-quorum --command-config controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
 
-  <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
-  If the KRaft Controller cluster already exist, the cluster can be shrunk using the <code>kafka-metadata-quorum remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and release, it is recommended to shutdown the controller that will be removed.
+  When using controller endpoints use the --bootstrap-controller flag:
+  <pre><code class="language-bash">kafka-metadata-quorum --command-config controller.properties --bootstrap-controller localhost:9092 add-controller</code></pre>
 
+  <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
+  If the KRaft Controller cluster already exist, the cluster can be shrunk using the <code>kafka-metadata-quorum remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
+
+  When using broker endpoints use the --bootstrap-server flag:
   <pre><code class="language-bash">kafka-metadata-quorum --bootstrap-server localhost:9092 remove-controller --controller-id <id> --controller-directory-id <directory-id></code></pre>
+
+  When using controller endpoints use the --bootstrap-controller flag:
+  <pre><code class="language-bash">kafka-metadata-quorum --bootstrap-controller localhost:9092 remove-controller --controller-id <id> --controller-directory-id <directory-id></code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_debug" class="anchor-link"></a><a href="#kraft_debug">Debugging</a></h4>
 
