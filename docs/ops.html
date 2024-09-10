@@ -3785,7 +3785,8 @@ customized state stores; for built-in state stores, currently we have:
   <pre><code class="language-bash">process.roles=controller
 node.id=1
 listeners=CONTROLLER://controller1.example.com:9093
-controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.example.com:9093,controller3.example.com:9093</code></pre>
+controller.quorum.bootstrap.servers=controller1.example.com:9093,controller2.example.com:9093,controller3.example.com:9093
+controller.listener.names=CONTROLLER</code></pre>
 
   <p>Every broker and controller must set the <code>controller.quorum.bootstrap.servers</code> property.
 
