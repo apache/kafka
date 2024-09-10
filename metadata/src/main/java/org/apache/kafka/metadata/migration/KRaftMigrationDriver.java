@@ -523,7 +523,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             String metadataType = isSnapshot ? "snapshot" : "delta";
 
             if (EnumSet.of(MigrationDriverState.UNINITIALIZED, MigrationDriverState.INACTIVE).contains(migrationState)) {
-                // No need to log anything if this node is not the active controller
+                // No need to log anything if this node is not the active controller or the driver has not initialized
                 completionHandler.accept(null);
                 return;
             }
