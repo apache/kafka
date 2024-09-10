@@ -135,7 +135,7 @@ class ZkMigrationFailoverTest extends Logging {
     future.get(10, TimeUnit.SECONDS)
   }
 
-  @RepeatedTest(10)
+  @RepeatedTest(40)
   def testControllerFailoverZkRace(): Unit = {
     val zookeeper = new EmbeddedZookeeper()
     var zkClient: KafkaZkClient = null
@@ -288,7 +288,7 @@ class ZkMigrationFailoverTest extends Logging {
     }
   }
 
-  @RepeatedTest(10)
+  @RepeatedTest(40)
   def testDriverSkipsEventsFromOlderEpoch(): Unit = {
     val zookeeper = new EmbeddedZookeeper()
     var zkClient: KafkaZkClient = null
