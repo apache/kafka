@@ -25,7 +25,6 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -103,7 +102,7 @@ public class ShareGroupOffset {
                 .collect(Collectors.toList()));
     }
 
-    public Set<PersisterOffsetsStateBatch> stateBatchAsSet() {
+    public LinkedHashSet<PersisterOffsetsStateBatch> stateBatchAsSet() {
         return new LinkedHashSet<>(stateBatches);
     }
 

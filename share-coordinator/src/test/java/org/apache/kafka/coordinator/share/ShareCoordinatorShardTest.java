@@ -48,6 +48,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -789,6 +791,149 @@ class ShareCoordinatorShardTest {
         ).value().message()), shard.getShareStateMapValue(shareCoordinatorKey));
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
         verify(shard.getMetricsShard(), times(3)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
+    }
+
+    @Test
+    public void testStateBatchCombine() {
+        class TestAttributes {
+            final String testName;
+            final LinkedHashSet<PersisterOffsetsStateBatch> curSet;
+            final LinkedHashSet<PersisterOffsetsStateBatch> newSet;
+            final List<PersisterOffsetsStateBatch> expectedResult;
+            final long startOffset;
+
+            TestAttributes(String testName,
+                           LinkedHashSet<PersisterOffsetsStateBatch> curSet,
+                           LinkedHashSet<PersisterOffsetsStateBatch> newSet,
+                           List<PersisterOffsetsStateBatch> expectedResult,
+                           long startOffset) {
+                this.testName = testName;
+                this.curSet = curSet;
+                this.newSet = newSet;
+                this.expectedResult = expectedResult;
+                this.startOffset = startOffset;
+            }
+        }
+
+        List<TestAttributes> tests = Arrays.asList(
+            new TestAttributes(
+                "both cur and new set empty => empty result list",
+                new LinkedHashSet<>(),
+                new LinkedHashSet<>(),
+                new LinkedList<>(),
+                -1
+            ),
+
+            new TestAttributes(
+                "if new set is empty => result list only contains cur set batches",
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
+                )),
+                new LinkedHashSet<>(),
+                Collections.singletonList(new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)),
+                -1
+            ),
+
+            new TestAttributes(
+                "if cur set is empty => result list only contains new set batches",
+                new LinkedHashSet<>(),
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
+                )),
+                Collections.singletonList(new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)),
+                -1
+            ),
+
+            new TestAttributes(
+                "if sets have no overlap => result list contains batches from both sets",
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
+                )),
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(120, 130, (byte) 0, (short) 1)
+                )),
+                Arrays.asList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterOffsetsStateBatch(120, 130, (byte) 0, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "if sets have partial overlap => result list contains batches from both sets (we do not add gaps)",
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
+                )),
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(105, 130, (byte) 0, (short) 1)
+                )),
+                Arrays.asList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterOffsetsStateBatch(105, 130, (byte) 0, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "if sets have overlapping batches => batches in new set are preferred. " +
+                    "Overlap is check based on cur.firstOffset == new.firstOffset && cur.lastOffset == new.lastOffset",
+                new LinkedHashSet<>(Arrays.asList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1)
+                )),
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // overlap
+                )),
+                Arrays.asList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // batch from new set
+                ),
+                -1
+            ),
+
+            // batches which are older than start offset are removed
+            //
+            new TestAttributes(
+                "batches which are older than start offset are removed " +
+                    "old => batch.lastOffset < startOffset",
+                new LinkedHashSet<>(Arrays.asList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),  // should be removed
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1),
+                    new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1)
+                )),
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // overlap
+                )),
+                Arrays.asList(
+                    new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1),  // offset values are higher but this arrived first - order is valid
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // batch from new set
+                ),
+                111
+            ),
+
+            new TestAttributes(
+                "if startOffset is -1, no batches are considered old but overlaps are still removed preferring the new set",
+                new LinkedHashSet<>(Arrays.asList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),  // should be removed
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1),
+                    new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1)
+                )),
+                new LinkedHashSet<>(Collections.singletonList(
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // overlap
+                )),
+                Arrays.asList(
+                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1),  // offset values are higher but this arrived first - order is valid
+                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // batch from new set
+                ),
+                -1
+            )
+        );
+
+        for (TestAttributes attrs : tests) {
+            assertEquals(attrs.expectedResult, ShareCoordinatorShard.combineStateBatches(attrs.curSet, attrs.newSet, attrs.startOffset),
+                attrs.testName);
+        }
     }
 
     private static ShareGroupOffset groupOffset(ApiMessage record) {

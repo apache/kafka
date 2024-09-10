@@ -54,13 +54,11 @@ import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.slf4j.Logger;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
@@ -527,7 +525,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private static ShareGroupOffset merge(ShareGroupOffset soFar, ShareUpdateValue newData) {
         // snapshot epoch should be same as last share snapshot
         // state epoch is not present
-        Set<PersisterOffsetsStateBatch> currentBatches = soFar.stateBatchAsSet();
+        LinkedHashSet<PersisterOffsetsStateBatch> currentBatches = soFar.stateBatchAsSet();
         long newStartOffset = newData.startOffset() == -1 ? soFar.startOffset() : newData.startOffset();
         int newLeaderEpoch = newData.leaderEpoch() == -1 ? soFar.leaderEpoch() : newData.leaderEpoch();
 
@@ -555,9 +553,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param startOffset - startOffset to consider when removing old batches.
      * @return List containing combined batches
      */
-    private static List<PersisterOffsetsStateBatch> combineStateBatches(
-        Collection<PersisterOffsetsStateBatch> currentBatch,
-        Collection<PersisterOffsetsStateBatch> newBatch,
+    // visibility for testing
+    static List<PersisterOffsetsStateBatch> combineStateBatches(
+        LinkedHashSet<PersisterOffsetsStateBatch> currentBatch,
+        LinkedHashSet<PersisterOffsetsStateBatch> newBatch,
         long startOffset
     ) {
         currentBatch.removeAll(newBatch);
