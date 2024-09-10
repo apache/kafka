@@ -69,6 +69,16 @@ public class WriteShareGroupStateResponse extends AbstractResponse {
         );
     }
 
+    public static WriteShareGroupStateResponseData toResponseData(Uuid topicId, int partitionId) {
+        return new WriteShareGroupStateResponseData()
+                .setResults(Collections.singletonList(
+                        new WriteShareGroupStateResponseData.WriteStateResult()
+                                .setTopicId(topicId)
+                                .setPartitions(Collections.singletonList(
+                                        new WriteShareGroupStateResponseData.PartitionResult()
+                                                .setPartition(partitionId)))));
+    }
+
     public static WriteShareGroupStateResponseData toErrorResponseData(Uuid topicId, int partitionId, Errors error, String errorMessage) {
         WriteShareGroupStateResponseData responseData = new WriteShareGroupStateResponseData();
         responseData.setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
@@ -91,5 +101,10 @@ public class WriteShareGroupStateResponse extends AbstractResponse {
         return new WriteShareGroupStateResponseData.WriteStateResult()
                 .setTopicId(topicId)
                 .setPartitions(partitionResults);
+    }
+
+    public static WriteShareGroupStateResponseData.PartitionResult toResponsePartitionResult(int partitionId) {
+        return new WriteShareGroupStateResponseData.PartitionResult()
+                .setPartition(partitionId);
     }
 }

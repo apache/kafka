@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.metrics;
+package org.apache.kafka.coordinator.common.runtime;
 
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;

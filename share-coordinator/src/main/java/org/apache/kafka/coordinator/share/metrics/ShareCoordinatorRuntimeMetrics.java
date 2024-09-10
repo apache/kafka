@@ -14,15 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.metrics;
+package org.apache.kafka.coordinator.share.metrics;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl;
 
-public class GroupCoordinatorRuntimeMetrics extends CoordinatorRuntimeMetricsImpl {
-    public static final String METRICS_GROUP = "group-coordinator-metrics";
+public class ShareCoordinatorRuntimeMetrics extends CoordinatorRuntimeMetricsImpl {
+    /**
+     * The metrics group.
+     */
+    public static final String METRICS_GROUP = "share-coordinator-metrics";
 
-    public GroupCoordinatorRuntimeMetrics(Metrics metrics) {
+    public ShareCoordinatorRuntimeMetrics(Metrics metrics) {
         super(metrics, METRICS_GROUP);
     }
 }
