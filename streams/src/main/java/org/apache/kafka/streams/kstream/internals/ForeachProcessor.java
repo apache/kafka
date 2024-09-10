@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 
-// deprecated since 4.0.
-@Deprecated
 public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
 
     private final ForeachAction<K, V> action;
