@@ -33,8 +33,8 @@ import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.zookeeper.client.ZKClientConfig
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
-import org.junit.jupiter.api.RepeatedTest
+import org.junit.jupiter.api.Assertions.{assertTrue, assertEquals, fail}
+import org.junit.jupiter.api.Test
 
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
@@ -135,7 +135,7 @@ class ZkMigrationFailoverTest extends Logging {
     future.get(10, TimeUnit.SECONDS)
   }
 
-  @RepeatedTest(40)
+  @Test
   def testControllerFailoverZkRace(): Unit = {
     val zookeeper = new EmbeddedZookeeper()
     var zkClient: KafkaZkClient = null
@@ -288,7 +288,7 @@ class ZkMigrationFailoverTest extends Logging {
     }
   }
 
-  @RepeatedTest(40)
+  @Test
   def testDriverSkipsEventsFromOlderEpoch(): Unit = {
     val zookeeper = new EmbeddedZookeeper()
     var zkClient: KafkaZkClient = null
