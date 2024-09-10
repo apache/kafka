@@ -47,7 +47,7 @@
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name":  "SupportedFeatures", "type": "[]SupportedFeatureKey", "ignorable": true,
       "versions":  "3+", "tag": 0, "taggedVersions": "3+",
-      "about": "Features supported by the broker. Note: in v0-v3, features with MinSupportedVersion = 0 show up with MinSupportedVersion = 1.",
+      "about": "Features supported by the broker. Note: in v0-v3, features with MinSupportedVersion = 0 are omitted.",
       "fields":  [
         { "name": "Name", "type": "string", "versions": "3+", "mapKey": true,
           "about": "The name of the feature." },

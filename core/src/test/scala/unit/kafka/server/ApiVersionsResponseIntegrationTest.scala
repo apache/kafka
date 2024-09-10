@@ -18,7 +18,7 @@ import org.apache.kafka.common.requests.ApiVersionsRequest
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -44,7 +44,7 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
     val response = sendApiVersionsRequest(3)
     if (quorum.equals("kraft")) {
       assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), 1)
-      assertFeatureHasMinVersion("kraft.version", response.data().supportedFeatures(), 1)
+      assertFeatureMissing("kraft.version", response.data().supportedFeatures())
     } else {
       assertEquals(0, response.data().supportedFeatures().size())
     }
@@ -71,5 +71,13 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
     assertNotNull(key)
     assertEquals(name, key.name())
     assertEquals(expectedMinVersion, key.minVersion())
+  }
+
+  private def assertFeatureMissing(
+    name: String,
+    coll: SupportedFeatureKeyCollection,
+  ): Unit = {
+    val key = coll.find(name)
+    assertNull(key)
   }
 }

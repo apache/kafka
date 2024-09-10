@@ -48,7 +48,7 @@
     ]
     },
     { "name": "Features", "type": "[]Feature",
-      "about": "The features on this broker. Note: in v0-v3, features with MinSupportedVersion = 0 show up with MinSupportedVersion = 1.", "versions": "0+", "fields": [
+      "about": "The features on this broker. Note: in v0-v3, features with MinSupportedVersion = 0 are omitted.", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
         "about": "The feature name." },
       { "name": "MinSupportedVersion", "type": "int16", "versions": "0+",
