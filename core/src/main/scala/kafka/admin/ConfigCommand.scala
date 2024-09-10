@@ -981,7 +981,7 @@ object ConfigCommand extends Logging {
         }
       }
 
-      if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
+      if (options.has(describeOpt) && (entityTypeVals.contains(BrokerLoggerConfigType) || entityTypeVals.contains(ConfigType.GROUP)) && !hasEntityName)
         throw new IllegalArgumentException(s"an entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
 
       if (options.has(alterOpt)) {

@@ -475,7 +475,6 @@ public class ConfigCommandTest {
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.emptyList(), connectOpts, "--entity-type", "topics");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.emptyList(), connectOpts, "--entity-type", "ips");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS), Collections.emptyList(), connectOpts, "--entity-type", "client-metrics");
-            testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.emptyList(), connectOpts, "--entity-type", "groups");
         }
 
         testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER), Collections.singletonList("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
@@ -2045,13 +2044,10 @@ public class ConfigCommandTest {
     public void shouldDescribeGroupConfigWithoutEntityName() {
         ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "groups",
-            "--entity-name", "group",
             "--describe"));
-        verifyDescribeGroupConfig(describeOpts, "group");
 
-        // Test for the --group alias
-        describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092", "--group", "groupUsingAlias", "--describe"));
-        verifyDescribeGroupConfig(describeOpts, "groupUsingAlias");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
+        assertEquals("an entity name must be specified with --describe of groups", exception.getMessage());
     }
 
     private void verifyDescribeGroupConfig(ConfigCommand.ConfigCommandOptions describeOpts, String resourceName) {

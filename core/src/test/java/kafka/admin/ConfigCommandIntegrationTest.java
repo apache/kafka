@@ -378,9 +378,7 @@ public class ConfigCommandIntegrationTest {
             alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs);
 
             // Delete config
-            configs.put("metrics", "*");
-            configs.put("interval.ms", "5000");
-            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs);
+            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet());
 
             // Unknown config configured should fail
             assertThrows(ExecutionException.class,
@@ -701,12 +699,12 @@ public class ConfigCommandIntegrationTest {
 
     private void deleteAndVerifyClientMetricsConfigValue(Admin client,
                                                          String clientMetricsName,
-                                                         Map<String, String> defaultConfigs) throws Exception {
+                                                         Set<String> defaultConfigs) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
             new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", clientMetricsName),
-                asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
+                asList("--delete-config", String.join(",", defaultConfigs))));
         ConfigCommand.alterConfig(client, deleteOpts);
-        // There are no default configs for client metrics
+        // There are no default configs returned for client metrics
         verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
     }
 
