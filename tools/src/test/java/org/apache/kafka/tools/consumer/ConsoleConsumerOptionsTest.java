@@ -648,15 +648,15 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void testParseDeprecatedFormatter() throws Exception {
-        String[] deprecatedDefaultMessageFormatter = generateArgsForFormatter("kafka.tools.DefaultMessageFormatter");
-        assertInstanceOf(DefaultMessageFormatter.class, new ConsoleConsumerOptions(deprecatedDefaultMessageFormatter).formatter());
+    public void testParseFormatter() throws Exception {
+        String[] defaultMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.DefaultMessageFormatter");
+        assertInstanceOf(DefaultMessageFormatter.class, new ConsoleConsumerOptions(defaultMessageFormatter).formatter());
 
-        String[] deprecatedLoggingMessageFormatter = generateArgsForFormatter("kafka.tools.LoggingMessageFormatter");
-        assertInstanceOf(LoggingMessageFormatter.class, new ConsoleConsumerOptions(deprecatedLoggingMessageFormatter).formatter());
+        String[] loggingMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.LoggingMessageFormatter");
+        assertInstanceOf(LoggingMessageFormatter.class, new ConsoleConsumerOptions(loggingMessageFormatter).formatter());
 
-        String[] deprecatedNoOpMessageFormatter = generateArgsForFormatter("kafka.tools.NoOpMessageFormatter");
-        assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(deprecatedNoOpMessageFormatter).formatter());
+        String[] noOpMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.NoOpMessageFormatter");
+        assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(noOpMessageFormatter).formatter());
     }
 
     @SuppressWarnings("deprecation")
