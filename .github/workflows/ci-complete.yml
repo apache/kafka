@@ -41,8 +41,12 @@ permissions:
 jobs:
   upload-build-scan:
     # Skip this workflow if CI was run for anything other than "pull_request" (like "push").
-    # Also skip this workflow if the PR was from apache/kafka. Those will have already published the build scan in CI.
-    if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.full_name != 'apache/kafka' }}
+    # Skip this workflow if the PR was from apache/kafka. Those will have already published the build scan in CI.
+    # Skip this workflow if the run was skipped or cancelled
+    if: |
+      github.event.workflow_run.event == 'pull_request' && 
+      github.event.workflow_run.head_repository.full_name != 'apache/kafka' &&
+       (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -74,8 +78,15 @@ jobs:
           path: ~/.gradle/build-scan-data  # This is where Gradle buffers unpublished build scan data when --no-scan is given
       - name: Handle missing scan
         if: ${{ steps.download-build-scan.outcome == 'failure' }}
-        run: |
-          echo "Could not download build scans from ${{ github.event.workflow_run.html_url }} " >> $GITHUB_STEP_SUMMARY
+        uses: ./.github/actions/gh-api-update-status
+        with:
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
+          description: 'Could not find build scan'
+          context: 'Gradle Build Scan / Java ${{ matrix.java }}'
+          state: 'error'
       - name: Publish Scan
         id: publish-build-scan
         continue-on-error: true
@@ -94,7 +105,7 @@ jobs:
           repository: ${{ github.event.workflow_run.head_repository.full_name }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
-          description: 'The build scan could not be published'
+          description: 'The build scan failed to be published'
           context: 'Gradle Build Scan / Java ${{ matrix.java }}'
           state: 'error'
       - name: Update Status Check
