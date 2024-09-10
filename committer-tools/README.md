@@ -55,6 +55,8 @@ generate it, this can be done by setting the GITHUB_TOKEN environment variable.
 ```bash
 # For Linux/macOS
 export GITHUB_TOKEN="your_github_token"
+# Or if you use GitHub CLI
+export GITHUB_TOKEN="$(gh auth token)"
 
 # On Windows:
 # .\venv\Scripts\activate
