@@ -36,10 +36,8 @@ import org.apache.kafka.storage.internals.log.FetchPartitionData;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -48,7 +46,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import scala.Option;
-import scala.Tuple2;
 
 import static kafka.server.share.SharePartitionManagerTest.PARTITION_MAX_BYTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -113,13 +110,13 @@ public class ShareFetchUtilsTest {
                 new SimpleRecord("2".getBytes(), "v".getBytes()),
                 new SimpleRecord(null, "value".getBytes()));
 
-        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = new ArrayList<>();
-        responseData.add(new Tuple2<>(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+        Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
+        responseData.put(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false)));
-        responseData.add(new Tuple2<>(tp1, new FetchPartitionData(Errors.NONE, 0L, 100L,
+                OptionalInt.empty(), false));
+        responseData.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 100L,
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false)));
+                OptionalInt.empty(), false));
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result =
                 ShareFetchUtils.processFetchResponse(shareFetchPartitionData, responseData, partitionCacheMap, mock(ReplicaManager.class));
 
@@ -172,13 +169,13 @@ public class ShareFetchUtilsTest {
                         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, memberId,
                 new CompletableFuture<>(), partitionMaxBytes);
 
-        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = new ArrayList<>();
-        responseData.add(new Tuple2<>(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+        Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
+        responseData.put(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false)));
-        responseData.add(new Tuple2<>(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                OptionalInt.empty(), false));
+        responseData.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false)));
+                OptionalInt.empty(), false));
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result =
                 ShareFetchUtils.processFetchResponse(shareFetchPartitionData, responseData, partitionCacheMap, mock(ReplicaManager.class));
 
@@ -245,13 +242,13 @@ public class ShareFetchUtilsTest {
                 new SimpleRecord("2".getBytes(), "v".getBytes()),
                 new SimpleRecord(null, "value".getBytes()));
 
-        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData1 = new ArrayList<>();
-        responseData1.add(new Tuple2<>(tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
+        Map<TopicIdPartition, FetchPartitionData> responseData1 = new HashMap<>();
+        responseData1.put(tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false)));
-        responseData1.add(new Tuple2<>(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                OptionalInt.empty(), false));
+        responseData1.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false)));
+                OptionalInt.empty(), false));
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result1 =
                 ShareFetchUtils.processFetchResponse(shareFetchPartitionData, responseData1, partitionCacheMap, replicaManager);
 
@@ -276,13 +273,13 @@ public class ShareFetchUtilsTest {
                 new SimpleRecord("2".getBytes(), "v".getBytes()),
                 new SimpleRecord(null, "value".getBytes()));
 
-        List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData2 = new ArrayList<>();
-        responseData2.add(new Tuple2<>(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+        Map<TopicIdPartition, FetchPartitionData> responseData2 = new HashMap<>();
+        responseData2.put(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records2, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false)));
-        responseData2.add(new Tuple2<>(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                OptionalInt.empty(), false));
+        responseData2.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false)));
+                OptionalInt.empty(), false));
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> result2 =
                 ShareFetchUtils.processFetchResponse(shareFetchPartitionData, responseData2, partitionCacheMap, replicaManager);
 

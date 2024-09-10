@@ -29,10 +29,9 @@ import org.apache.kafka.storage.internals.log.FetchPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -111,12 +110,12 @@ public class DelayedShareFetch extends DelayedOperation {
                 QuotaFactory.UnboundedQuota$.MODULE$,
                 true);
 
-            List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = new ArrayList<>();
+            Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
             responseLogResult.foreach(tpLogResult -> {
                 TopicIdPartition topicIdPartition = tpLogResult._1();
                 LogReadResult logResult = tpLogResult._2();
                 FetchPartitionData fetchPartitionData = logResult.toFetchPartitionData(false);
-                responseData.add(new Tuple2<>(topicIdPartition, fetchPartitionData));
+                responseData.put(topicIdPartition, fetchPartitionData);
                 return BoxedUnit.UNIT;
             });
 
@@ -131,7 +130,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     }
                     // Releasing the lock to move ahead with the next request in queue.
                     releasePartitionLocks(shareFetchPartitionData.groupId(), topicPartitionData.keySet());
-                    // If we have a fetch request completed for a topic-partition, it means  the HWM has advanced,
+                    // If we have a fetch request completed for a topic-partition, we release the locks for that partition,
                     // then we should check if there is a pending share fetch request for the topic-partition and complete it.
                     result.keySet().forEach(topicIdPartition -> delayedShareFetchPurgatory.checkAndComplete(
                             new DelayedShareFetchKey(shareFetchPartitionData.groupId(), topicIdPartition)));

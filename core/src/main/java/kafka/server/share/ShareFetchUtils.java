@@ -30,13 +30,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import scala.Option;
-import scala.Tuple2;
 
 /**
  * Utility class for post-processing of share fetch operations.
@@ -44,16 +42,15 @@ import scala.Tuple2;
 public class ShareFetchUtils {
     private static final Logger log = LoggerFactory.getLogger(ShareFetchUtils.class);
 
+    // Process the replica manager fetch response to update share partitions and futures.
     static CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> processFetchResponse(
             SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData,
-            List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData,
+            Map<TopicIdPartition, FetchPartitionData> responseData,
             Map<SharePartitionManager.SharePartitionKey, SharePartition> partitionCacheMap,
             ReplicaManager replicaManager
     ) {
         Map<TopicIdPartition, CompletableFuture<ShareFetchResponseData.PartitionData>> futures = new HashMap<>();
-        responseData.forEach(data -> {
-            TopicIdPartition topicIdPartition = data._1;
-            FetchPartitionData fetchPartitionData = data._2;
+        responseData.forEach((topicIdPartition, fetchPartitionData) -> {
 
             SharePartition sharePartition = partitionCacheMap.get(new SharePartitionManager.SharePartitionKey(
                     shareFetchPartitionData.groupId(), topicIdPartition));
@@ -75,8 +72,7 @@ public class ShareFetchUtils {
                             // response and let the client retry the fetch. This way we do not lose out on the data that
                             // would be returned for other share partitions in the fetch request.
                             sharePartition.updateCacheAndOffsets(offsetForEarliestTimestamp(topicIdPartition, replicaManager));
-                            partitionData
-                                    .setPartitionIndex(topicIdPartition.partition())
+                            partitionData.setPartitionIndex(topicIdPartition.partition())
                                     .setRecords(null)
                                     .setErrorCode(Errors.NONE.code())
                                     .setAcquiredRecords(Collections.emptyList())
@@ -87,8 +83,7 @@ public class ShareFetchUtils {
                         // Maybe, in the future, check if no records are acquired, and we want to retry
                         // replica manager fetch. Depends on the share partition manager implementation,
                         // if we want parallel requests for the same share partition or not.
-                        partitionData
-                                .setPartitionIndex(topicIdPartition.partition())
+                        partitionData.setPartitionIndex(topicIdPartition.partition())
                                 .setRecords(fetchPartitionData.records)
                                 .setErrorCode(fetchPartitionData.error.code())
                                 .setAcquiredRecords(acquiredRecords)
