@@ -94,7 +94,7 @@ class TestMigration(ProduceConsumeValidateTest):
         server_prop_overrides = [["zookeeper.metadata.migration.enable", "false"]]
 
         if from_kafka_version != str(DEV_BRANCH):
-            server_prop_overrides.append([config_property.INTER_BROKER_PROTOCOL_VERSION, str(from_kafka_version)])
+            server_prop_overrides.append([config_property.INTER_BROKER_PROTOCOL_VERSION, from_kafka_version])
 
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
