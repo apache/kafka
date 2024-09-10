@@ -1443,8 +1443,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param metric The application metric to register
      */
     @Override
-    public void registerMetric(KafkaMetric metric) {
-        delegate.registerMetric(metric);
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        delegate.registerMetricForSubscription(metric);
     }
 
     /**
@@ -1457,8 +1457,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param metric The application metric to remove
      */
     @Override
-    public void unregisterMetric(KafkaMetric metric) {
-        delegate.unregisterMetric(metric);
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        delegate.unregisterMetricFromSubscription(metric);
     }
 
     /**

@@ -48,7 +48,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
-import org.apache.kafka.streams.internals.metrics.StreamsThreadDelegatingMetricsReporter;
+import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
@@ -475,7 +475,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         referenceContainer.mainConsumer = mainConsumer;
 
         final String stateUpdaterId = stateUpdaterEnabled ? threadId.replace("-StreamThread-", "-StateUpdater-") : "NA";
-        final StreamsThreadDelegatingMetricsReporter reporter = new StreamsThreadDelegatingMetricsReporter(mainConsumer, threadId, stateUpdaterId);
+        final StreamsThreadMetricsDelegatingReporter reporter = new StreamsThreadMetricsDelegatingReporter(mainConsumer, threadId, stateUpdaterId);
         streamsMetrics.metricsRegistry().addReporter(reporter);
 
         final StreamThread streamThread = new StreamThread(

@@ -420,12 +420,14 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
 
     @Override
     public void registerMetricForSubscription(final KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
+        passedMetrics.add(metric);
+        adminDelegate.registerMetricForSubscription(metric);
     }
 
     @Override
     public void unregisterMetricFromSubscription(final KafkaMetric metric) {
-        throw new UnsupportedOperationException("not implemented");
+        passedMetrics.remove(metric);
+        adminDelegate.unregisterMetricFromSubscription(metric);
     }
 
     @Override
