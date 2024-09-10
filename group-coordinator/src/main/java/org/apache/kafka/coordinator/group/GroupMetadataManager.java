@@ -846,7 +846,7 @@ public class GroupMetadataManager {
     ConsumerGroup getOrMaybeCreatePersistedConsumerGroup(
         String groupId,
         boolean createIfNotExists
-    ) throws IllegalStateException {
+    ) throws GroupIdNotFoundException, IllegalStateException {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
