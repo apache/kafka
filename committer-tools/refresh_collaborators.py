@@ -18,8 +18,8 @@
 """
 This script automates the process of fetching contributor data from GitHub
 repositories, filtering top contributors who are not part of the existing
-committers, and updating a configuration file (.asf.yaml) in the repository to
-include these new contributors.
+committers, and updating a local configuration file (.asf.yaml) to include these
+new contributors.
 """
 
 import io
@@ -29,11 +29,11 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 
 from bs4 import BeautifulSoup
-from github import Github, GithubException
-from github.ContentFile import ContentFile
-from github.Repository import Repository
-from github.PaginatedList import PaginatedList
+from github import Github
 from github.Commit import Commit
+from github.ContentFile import ContentFile
+from github.PaginatedList import PaginatedList
+from github.Repository import Repository
 from ruamel.yaml import YAML
 
 logging.basicConfig(
@@ -44,16 +44,7 @@ logging.basicConfig(
 GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN")
 REPO_KAFKA_SITE: str = "apache/kafka-site"
 REPO_KAFKA: str = "apache/kafka"
-ASF_YAML_PATH: str = ".asf.yaml"
-BRANCH_NAME: str = "update-asf-yaml-github-whitelist-and-collaborators"
-COMMIT_MESSAGE: str = (
-    "MINOR: Update .asf.yaml file with refreshed github_whitelist and collaborators"
-)
-PR_TITLE: str = COMMIT_MESSAGE
-PR_BODY: str = (
-    "This pull request updates the github_whitelist and collaborators lists "
-    "in .asf.yaml."
-)
+ASF_YAML_PATH: str = "../.asf.yaml"
 TOP_N_CONTRIBUTORS: int = 10
 
 
@@ -111,54 +102,26 @@ def get_top_contributors(repo: Repository, committers: List[str]) -> List[str]:
     return top_contributors
 
 
-def update_yaml_content(repo: Repository, collaborators: List[str]) -> Tuple[str, str]:
+def update_local_yaml_content(yaml_file_path: str, collaborators: List[str]) -> None:
     """
-    Update the .asf.yaml file with refreshed GitHub whitelist and collaborators.
+    Update the local .asf.yaml file with refreshed GitHub whitelist and
+    collaborators.
     """
     logging.info(
-        f"Updating {ASF_YAML_PATH} with {len(collaborators)} new collaborators"
+        f"Updating {yaml_file_path} with {len(collaborators)} new collaborators"
     )
-    yaml: YAML = YAML()
-    file = repo.get_contents(ASF_YAML_PATH)
-    yaml_content: dict = yaml.load(file.decoded_content)
+
+    with open(yaml_file_path, "r", encoding="utf-8") as file:
+        yaml: YAML = YAML()
+        yaml_content: dict = yaml.load(file)
 
     yaml_content["jenkins"]["github_whitelist"] = collaborators
     yaml_content["github"]["collaborators"] = collaborators.copy()
 
-    updated_yaml: io.StringIO = io.StringIO()
-    yaml.dump(yaml_content, updated_yaml)
+    with open(yaml_file_path, "w", encoding="utf-8") as file:
+        yaml.dump(yaml_content, file)
 
-    logging.info(f"File {ASF_YAML_PATH} updated successfully")
-    return updated_yaml.getvalue(), file.sha
-
-
-def create_or_update_branch_and_pr(
-    repo: Repository, file_sha: str, updated_yaml_content: str
-) -> None:
-    """
-    Create or update a GitHub branch and open a pull request.
-    """
-    try:
-        repo.get_branch(branch=BRANCH_NAME)
-        logging.info(f"Branch {BRANCH_NAME} exists, updating it")
-    except GithubException:
-        default_branch = repo.get_branch(repo.default_branch)
-        repo.create_git_ref(f"refs/heads/{BRANCH_NAME}", default_branch.commit.sha)
-        logging.info(f"Created new branch {BRANCH_NAME}")
-
-    repo.update_file(
-        ASF_YAML_PATH,
-        COMMIT_MESSAGE,
-        updated_yaml_content,
-        file_sha,
-        branch=BRANCH_NAME,
-    )
-    logging.info(f"Committed changes to {BRANCH_NAME}")
-
-    repo.create_pull(
-        title=PR_TITLE, body=PR_BODY, base=repo.default_branch, head=BRANCH_NAME
-    )
-    logging.info(f"Pull request created successfully with title: {PR_TITLE}")
+    logging.info(f"Local file {yaml_file_path} updated successfully")
 
 
 def main() -> None:
@@ -170,12 +133,11 @@ def main() -> None:
     kafka_repo: Repository = github_client.get_repo(REPO_KAFKA)
     top_contributors: List[str] = get_top_contributors(kafka_repo, committers)
 
-    updated_yaml_content, file_sha = update_yaml_content(kafka_repo, top_contributors)
-    create_or_update_branch_and_pr(kafka_repo, file_sha, updated_yaml_content)
+    update_local_yaml_content(ASF_YAML_PATH, top_contributors)
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"Error: {e}")
+        logging.error(f"Error: {e}")
