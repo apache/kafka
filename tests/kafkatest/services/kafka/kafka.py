@@ -1034,7 +1034,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             security_protocol_to_use = kafka_security_protocol
         if use_controller_bootstrap:
-            bootstrap = "--bootstrap-controller {}".format(self.bootstrap_controllers(f"CONTROLLER_{security_protocol_to_use}"))
+            bootstrap = "--bootstrap-controller {}".format(
+                self.bootstrap_controllers("CONTROLLER_{}".format(security_protocol_to_use)))
         else:
             bootstrap = "--bootstrap-server {}".format(self.bootstrap_servers(security_protocol_to_use))
         kafka_metadata_script = self.path.script("kafka-metadata-quorum.sh", node)
