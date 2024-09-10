@@ -53,17 +53,14 @@ jobs:
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Test
         timeout-minutes: 60
-        id: junit-test
         run: |
-          set +e
           ./gradlew --info --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PignoreFailures=true -PmaxParallelForks=2 \
           -Pkafka.cluster.test.repeat=${{ inputs.test-repeat }} \
           ${{ inputs.test-module }}:test --tests ${{ inputs.test-pattern }}
-          exitcode="$?"
-          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports
+        if: always()
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
@@ -72,8 +69,8 @@ jobs:
             **/build/reports/tests/test/*
           if-no-files-found: ignore
       - name: Parse JUnit tests
+        if: always()
         run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
-          GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
