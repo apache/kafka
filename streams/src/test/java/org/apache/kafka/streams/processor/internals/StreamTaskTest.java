@@ -316,7 +316,7 @@ public class StreamTaskTest {
         // Clean up state directory created as part of setup
         stateDirectory.close();
         stateDirectory = mock(StateDirectory.class);
-        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(false);
+        when(stateDirectory.canTryLock(any(), anyLong())).thenReturn(true);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         task = createStatefulTask(createConfig("100"), false);
