@@ -470,10 +470,8 @@ class ControllerServer(
       // smoother transition.
       sharedServer.ensureNotRaftLeader()
       incarnationId = null
-      if (registrationManager != null) {
-        CoreUtils.swallow(registrationManager.close(), this)
-        registrationManager = null
-      }
+      Utils.closeQuietly(registrationManager, "registration manager")
+      registrationManager = null
       if (registrationChannelManager != null) {
         CoreUtils.swallow(registrationChannelManager.shutdown(), this)
         registrationChannelManager = null
@@ -483,18 +481,12 @@ class ControllerServer(
       if (metadataCache != null) {
         metadataCache = null
       }
-      if (metadataCachePublisher != null) {
-        metadataCachePublisher.close()
-        metadataCachePublisher = null
-      }
-      if (featuresPublisher != null) {
-        featuresPublisher.close()
-        featuresPublisher = null
-      }
-      if (registrationsPublisher != null) {
-        registrationsPublisher.close()
-        registrationsPublisher = null
-      }
+      Utils.closeQuietly(metadataCachePublisher, "metadata cache publisher")
+      metadataCachePublisher = null
+      Utils.closeQuietly(featuresPublisher, "features publisher")
+      featuresPublisher = null
+      Utils.closeQuietly(registrationsPublisher, "registrations publisher")
+      registrationsPublisher = null
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       migrationSupport.foreach(_.shutdown(this))
@@ -508,10 +500,8 @@ class ControllerServer(
         CoreUtils.swallow(controllerApis.close(), this)
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
-      if (controller != null)
-        controller.close()
-      if (quorumControllerMetrics != null)
-        CoreUtils.swallow(quorumControllerMetrics.close(), this)
+      Utils.closeQuietly(controller, "controller")
+      Utils.closeQuietly(quorumControllerMetrics, "quorum controller metrics")
       authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
       createTopicPolicy.foreach(policy => Utils.closeQuietly(policy, "topic policy"))
       alterConfigPolicy.foreach(policy => Utils.closeQuietly(policy, "alter config policy"))

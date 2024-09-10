@@ -765,14 +765,13 @@ class BrokerServer(
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (brokerTopicStats != null)
         CoreUtils.swallow(brokerTopicStats.close(), this)
-      if (sharePartitionManager != null)
-        CoreUtils.swallow(sharePartitionManager.close(), this)
+      Utils.closeQuietly(sharePartitionManager, "share partition manager")
 
       isShuttingDown.set(false)
 
       CoreUtils.swallow(lifecycleManager.close(), this)
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
-      CoreUtils.swallow(clientMetricsManager.close(), this)
+      Utils.closeQuietly(clientMetricsManager, "client metrics manager")
       sharedServer.stopForBroker()
       info("shut down completed")
     } catch {

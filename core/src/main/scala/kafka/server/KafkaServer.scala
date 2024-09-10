@@ -1051,13 +1051,12 @@ class KafkaServer(
         // Close remote log manager before stopping processing requests, to give a chance to any
         // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
         // to close gracefully.
-        CoreUtils.swallow(remoteLogManagerOpt.foreach(_.close()), this)
+        remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager option"))
 
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)
 
-        if (zkClient != null)
-          CoreUtils.swallow(zkClient.close(), this)
+        Utils.closeQuietly(zkClient, "zk client")
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)
@@ -1068,8 +1067,7 @@ class KafkaServer(
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown(), this)
         unregisterCurrentControllerIdMetric()
-        if (metrics != null)
-          CoreUtils.swallow(metrics.close(), this)
+        Utils.closeQuietly(metrics, "metrics")
         if (brokerTopicStats != null)
           CoreUtils.swallow(brokerTopicStats.close(), this)
 
