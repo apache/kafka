@@ -93,9 +93,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
 /**
  * The group coordinator service.
@@ -336,7 +337,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             exception,
             (error, message) -> new ConsumerGroupHeartbeatResponseData()
                 .setErrorCode(error.code())
-                .setErrorMessage(message)
+                .setErrorMessage(message),
+            log
         ));
     }
 
@@ -365,7 +367,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             exception,
             (error, message) -> new ShareGroupHeartbeatResponseData()
                 .setErrorCode(error.code())
-                .setErrorMessage(message)
+                .setErrorMessage(message),
+            log
         ));
     }
 
@@ -413,7 +416,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "classic-group-join",
                     request,
                     exception,
-                    (error, __) -> new JoinGroupResponseData().setErrorCode(error.code())
+                    (error, __) -> new JoinGroupResponseData().setErrorCode(error.code()),
+                    log
                 ));
             }
             return null;
@@ -456,7 +460,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "classic-group-sync",
                     request,
                     exception,
-                    (error, __) -> new SyncGroupResponseData().setErrorCode(error.code())
+                    (error, __) -> new SyncGroupResponseData().setErrorCode(error.code()),
+                    log
                 ));
             }
             return null;
@@ -503,7 +508,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     return new HeartbeatResponseData()
                         .setErrorCode(error.code());
                 }
-            }
+            },
+            log
         ));
     }
 
@@ -551,7 +557,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     return new LeaveGroupResponseData()
                         .setErrorCode(error.code());
                 }
-            }
+            },
+            log
         ));
     }
 
@@ -595,7 +602,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 "list-groups",
                 request,
                 exception,
-                (error, __) -> new ListGroupsResponseData().setErrorCode(error.code())
+                (error, __) -> new ListGroupsResponseData().setErrorCode(error.code()),
+                log
             ));
     }
 
@@ -641,7 +649,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "consumer-group-describe",
                     groupList,
                     exception,
-                    (error, __) -> ConsumerGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
+                    (error, __) -> ConsumerGroupDescribeRequest.getErrorDescribedGroupList(groupList, error),
+                    log
                 ));
 
             futures.add(future);
@@ -691,7 +700,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "share-group-describe",
                     groupList,
                     exception,
-                    (error, __) -> ShareGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
+                    (error, __) -> ShareGroupDescribeRequest.getErrorDescribedGroupList(groupList, error),
+                    log
                 ));
 
             futures.add(future);
@@ -744,7 +754,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "describe-groups",
                     groupList,
                     exception,
-                    (error, __) -> DescribeGroupsRequest.getErrorDescribedGroupList(groupList, error)
+                    (error, __) -> DescribeGroupsRequest.getErrorDescribedGroupList(groupList, error),
+                    log
                 ));
 
             futures.add(future);
@@ -799,7 +810,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "delete-groups",
                     groupList,
                     exception,
-                    (error, __) -> DeleteGroupsRequest.getErrorResultCollection(groupList, error)
+                    (error, __) -> DeleteGroupsRequest.getErrorResultCollection(groupList, error),
+                    log
                 ));
 
             futures.add(future);
@@ -954,7 +966,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "commit-offset",
             request,
             exception,
-            (error, __) -> OffsetCommitRequest.getErrorResponse(request, error)
+            (error, __) -> OffsetCommitRequest.getErrorResponse(request, error),
+            log
         ));
     }
 
@@ -994,7 +1007,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "txn-commit-offset",
             request,
             exception,
-            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(request, error)
+            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(request, error),
+            log
         ));
     }
 
@@ -1028,7 +1042,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "delete-offsets",
             request,
             exception,
-            (error, __) -> new OffsetDeleteResponseData().setErrorCode(error.code())
+            (error, __) -> new OffsetDeleteResponseData().setErrorCode(error.code()),
+            log
         ));
     }
 
@@ -1216,61 +1231,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * This is the handler commonly used by all the operations that requires to convert errors to
-     * coordinator errors. The handler also handles and log unexpected errors.
-     *
-     * @param operationName     The name of the operation.
-     * @param operationInput    The operation's input for logging purposes.
-     * @param exception         The exception to handle.
-     * @param handler           A function which takes an Errors and a String and builds the expected
-     *                          output. The String can be null. Note that the function could further
-     *                          transform the error depending on the context.
-     * @return The output built by the handler.
-     * @param <IN> The type of the operation input. It must be a toString'able object.
-     * @param <OUT> The type of the value returned by handler.
-     */
-    private <IN, OUT> OUT handleOperationException(
-        String operationName,
-        IN operationInput,
-        Throwable exception,
-        BiFunction<Errors, String, OUT> handler
-    ) {
-        ApiError apiError = ApiError.fromThrowable(exception);
-
-        switch (apiError.error()) {
-            case UNKNOWN_SERVER_ERROR:
-                log.error("Operation {} with {} hit an unexpected exception: {}.",
-                    operationName, operationInput, exception.getMessage(), exception);
-                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
-
-            case NETWORK_EXCEPTION:
-                // When committing offsets transactionally, we now verify the transaction with the
-                // transaction coordinator. Verification can fail with `NETWORK_EXCEPTION`, a
-                // retriable error which older clients may not expect and retry correctly. We
-                // translate the error to `COORDINATOR_LOAD_IN_PROGRESS` because it causes clients
-                // to retry the request without an unnecessary coordinator lookup.
-                return handler.apply(Errors.COORDINATOR_LOAD_IN_PROGRESS, null);
-
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case NOT_ENOUGH_REPLICAS:
-            case REQUEST_TIMED_OUT:
-                return handler.apply(Errors.COORDINATOR_NOT_AVAILABLE, null);
-
-            case NOT_LEADER_OR_FOLLOWER:
-            case KAFKA_STORAGE_ERROR:
-                return handler.apply(Errors.NOT_COORDINATOR, null);
-
-            case MESSAGE_TOO_LARGE:
-            case RECORD_LIST_TOO_LARGE:
-            case INVALID_FETCH_SIZE:
-                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
-
-            default:
-                return handler.apply(apiError.error(), apiError.message());
-        }
-    }
-
-    /**
      * This is the handler used by offset fetch operations to convert errors to coordinator errors.
      * The handler also handles and log unexpected errors.
      *
@@ -1310,7 +1270,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     exception,
                     (error, __) -> new OffsetFetchResponseData.OffsetFetchResponseGroup()
                         .setGroupId(request.groupId())
-                        .setErrorCode(error.code())
+                        .setErrorCode(error.code()),
+                    log
                 );
         }
     }
