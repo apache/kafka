@@ -662,6 +662,8 @@ public class ConfigCommandIntegrationTest {
             Map<String, String> current = getConfigEntryStream(client, configResource)
                     .filter(configEntry -> Objects.nonNull(configEntry.value()))
                     .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
+            if (config.isEmpty())
+                return current.isEmpty();
             return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
         }, 10000, config + " are not updated");
     }
