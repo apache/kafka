@@ -41,8 +41,12 @@ permissions:
 jobs:
   upload-build-scan:
     # Skip this workflow if CI was run for anything other than "pull_request" (like "push").
-    # Also skip this workflow if the PR was from apache/kafka. Those will have already published the build scan in CI.
-    if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.full_name != 'apache/kafka' }}
+    # Skip this workflow if the PR was from apache/kafka. Those will have already published the build scan in CI.
+    # Skip this workflow if the run was skipped or cancelled
+    if: |
+      github.event.workflow_run.event == 'pull_request' && 
+      github.event.workflow_run.head_repository.full_name != 'apache/kafka' &&
+       (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
