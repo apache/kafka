@@ -1,4 +1,4 @@
-# GitHub Contributor Automator
+# Refresh Collaborators Script
 
 The Refresh Collaborators script automates the process of fetching contributor
 data from GitHub repositories, filtering top contributors who are not part of
