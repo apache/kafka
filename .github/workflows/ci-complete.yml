@@ -35,6 +35,9 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 # If we need to do things like comment on, label, or otherwise modify PRs from public forks. This
 # workflow is the place to do it. PR number is ${{ github.event.workflow_run.pull_requests[0].number }}
 
+permissions:
+  statuses: write
+
 jobs:
   upload-build-scan:
     # Skip this workflow if CI was run for anything other than "pull_request" (like "push").
