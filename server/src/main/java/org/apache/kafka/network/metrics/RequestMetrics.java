@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -213,6 +214,19 @@ public class RequestMetrics {
         private DeprecatedRequestRateKey(short version, ClientInformation clientInformation) {
             this.version = version;
             this.clientInformation = clientInformation;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DeprecatedRequestRateKey that = (DeprecatedRequestRateKey) o;
+            return version == that.version && Objects.equals(clientInformation, that.clientInformation);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(version, clientInformation);
         }
     }
 }
