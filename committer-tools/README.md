@@ -50,7 +50,8 @@ pip3 install -r requirements.txt
 ### 1. Set up the environment variable for GitHub Token
 
 You need to set up a valid GitHub token to access the repository. After you
-generate it, this can be done by setting the GITHUB_TOKEN environment variable.
+generate it (or authenticate via GitHub CLI), this can be done by setting the
+GITHUB_TOKEN environment variable.
 
 ```bash
 # For Linux/macOS
