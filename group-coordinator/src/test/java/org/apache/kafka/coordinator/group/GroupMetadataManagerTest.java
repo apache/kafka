@@ -14312,10 +14312,12 @@ public class GroupMetadataManagerTest {
         // ConsumerGroupMemberMetadata tombstone should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord("foo", 10));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.consumerGroup("foo").getOrMaybeCreateMember("m1", false));
 
         // The group may not exist at all. Replaying the ConsumerGroupMemberMetadata tombstone
         // should a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("bar"));
     }
 
     @Test
@@ -14336,6 +14338,7 @@ public class GroupMetadataManagerTest {
         // The group may not exist at all. Replaying the ConsumerGroupMetadata tombstone
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
     }
 
     @Test
@@ -14361,6 +14364,7 @@ public class GroupMetadataManagerTest {
         // The group may not exist at all. Replaying the ConsumerGroupPartitionMetadata tombstone
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
     }
 
     @Test
@@ -14385,6 +14389,7 @@ public class GroupMetadataManagerTest {
         // The group may not exist at all. Replaying the ConsumerGroupTargetAssignmentMember tombstone
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
     }
 
     @Test
@@ -14405,6 +14410,7 @@ public class GroupMetadataManagerTest {
         // The group may not exist at all. Replaying the ConsumerGroupTargetAssignmentMetadata tombstone
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("foo"));
     }
 
     @Test
@@ -14434,11 +14440,12 @@ public class GroupMetadataManagerTest {
         // ConsumerGroupCurrentMemberAssignment tombstone should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord("foo", 10));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
-
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.consumerGroup("foo").getOrMaybeCreateMember("m1", false));
 
         // The group may not exist at all. Replaying the ConsumerGroupCurrentMemberAssignment tombstone
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("bar"));
     }
 
     @Test
