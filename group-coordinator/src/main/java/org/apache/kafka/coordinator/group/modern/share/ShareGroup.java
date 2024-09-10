@@ -132,11 +132,12 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      *                          created if it does not exist.
      *
      * @return A ShareGroupMember.
+     * @throws UnknownMemberIdException when the member does not exist and createIfNotExists is false.
      */
     public ShareGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
-    ) {
+    ) throws UnknownMemberIdException {
         ShareGroupMember member = members.get(memberId);
         if (member != null) return member;
 

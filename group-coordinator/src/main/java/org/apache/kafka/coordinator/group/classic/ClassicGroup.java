@@ -293,6 +293,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * @return True if the group is a simple group.
+     */
+    public boolean isSimpleGroup() {
+        return !protocolType.isPresent() && isEmpty() && pendingJoinMembers.isEmpty();
+    }
+
+    /**
      * @return the current group state.
      */
     public ClassicGroupState currentState() {
