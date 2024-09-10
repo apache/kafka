@@ -89,7 +89,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Timeout(1200)
+@Timeout(600)
 @Tag("integration")
 @SuppressWarnings("deprecation")
 public class ShareConsumerTest {
@@ -1639,13 +1639,16 @@ public class ShareConsumerTest {
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-        producer.send(record).get(1000, TimeUnit.MILLISECONDS);
         KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "warmupgroup1");
         Set<String> subscription = Collections.singleton(warmupTp.topic());
-        shareConsumer.subscribe(subscription);
-        TestUtils.waitForCondition(
-                () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, DEFAULT_MAX_WAIT_MS, 200L, () -> "warmup record not received");
-        producer.close();
-        shareConsumer.close();
+        try {
+            producer.send(record).get(1000, TimeUnit.MILLISECONDS);
+            shareConsumer.subscribe(subscription);
+            TestUtils.waitForCondition(
+                    () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, DEFAULT_MAX_WAIT_MS, 200L, () -> "warmup record not received");
+        } finally {
+            producer.close();
+            shareConsumer.close();
+        }
     }
 }
