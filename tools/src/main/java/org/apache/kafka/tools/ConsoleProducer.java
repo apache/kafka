@@ -277,6 +277,10 @@ public class ConsoleProducer {
                 ToolsUtils.printUsageAndExit(parser, e.getMessage());
             }
 
+            checkArgs();
+        }
+
+        void checkArgs() {
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from standard input and publish it to Kafka.");
 
             CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);

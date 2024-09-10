@@ -93,6 +93,11 @@ public class ConsoleProducerTest {
         "--bootstrap-server", "localhost:1002",
         "--topic", "t3"
     };
+    private static final String[] TEST_RECORD_READER = new String[]{
+        "--bootstrap-server", "localhost:1002",
+        "--topic", "t3",
+        "--line-reader", TestRecordReader.class.getName()
+    };
 
     @Test
     public void testValidConfigsBrokerList() throws IOException {
@@ -214,34 +219,21 @@ public class ConsoleProducerTest {
 
     @Test
     public void testNewReader() throws Exception {
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:1002",
-            "--topic", "t3",
-            "--line-reader", TestRecordReader.class.getName()
-        };
-        ConsoleProducerConfig config = new ConsoleProducerConfig(args);
         ConsoleProducer producer = new ConsoleProducer();
+        TestRecordReader reader = (TestRecordReader) producer.messageReader(new ConsoleProducerConfig(TEST_RECORD_READER));
 
-        TestRecordReader reader1 = (TestRecordReader) producer.messageReader(config);
-        assertEquals(1, reader1.configureCount());
-        assertEquals(0, reader1.closeCount());
+        assertEquals(1, reader.configureCount());
+        assertEquals(0, reader.closeCount());
 
-        reader1.close();
-        assertEquals(1, reader1.closeCount());
+        reader.close();
+        assertEquals(1, reader.closeCount());
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void testLoopReader() throws Exception {
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:1002",
-            "--topic", "t3",
-            "--line-reader", TestRecordReader.class.getName()
-        };
-        ConsoleProducerConfig config = new ConsoleProducerConfig(args);
         ConsoleProducer producer = new ConsoleProducer();
-
-        TestRecordReader reader = (TestRecordReader) producer.messageReader(config);
+        TestRecordReader reader = (TestRecordReader) producer.messageReader(new ConsoleProducerConfig(TEST_RECORD_READER));
 
         producer.loopReader(Mockito.mock(Producer.class), reader, false);
 
