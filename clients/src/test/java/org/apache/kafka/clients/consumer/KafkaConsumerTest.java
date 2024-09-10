@@ -397,6 +397,23 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
+    public void testConstructorInvalidMetricReporters(GroupProtocol groupProtocol) {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testConstructorInvalidMetricReporters");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "an.invalid.class");
+
+        KafkaException e = assertThrows(
+                KafkaException.class,
+                () -> newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
+
+        assertEquals("Failed to construct kafka consumer", e.getMessage());
+        assertEquals("Class an.invalid.class cannot be found", e.getCause().getMessage());
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
     public void testOsDefaultSocketBufferSizes(GroupProtocol groupProtocol) {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
@@ -3280,9 +3297,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testClientInstanceId() {
+    public void testClientInstanceId(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
 
         ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
         clientTelemetryReporter.configure(any());
@@ -3303,9 +3321,11 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testClientInstanceIdInvalidTimeout() {
+    public void testClientInstanceIdInvalidTimeout(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+
 
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         Exception exception = assertThrows(IllegalArgumentException.class, () -> consumer.clientInstanceId(Duration.ofMillis(-1)));
@@ -3314,10 +3334,11 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testClientInstanceIdNoTelemetryReporterRegistered() {
+    public void testClientInstanceIdNoTelemetryReporterRegistered(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
 
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         Exception exception = assertThrows(IllegalStateException.class, () -> consumer.clientInstanceId(Duration.ofMillis(0)));
