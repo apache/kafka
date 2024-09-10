@@ -359,6 +359,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     @Override
     public void onControllerChange(LeaderAndEpoch newLeaderAndEpoch) {
         curLeaderAndEpoch = newLeaderAndEpoch;
+        if (migrationState.equals(MigrationDriverState.UNINITIALIZED)) {
+            eventQueue.append(new RecoverMigrationStateFromZKEvent());
+        }
         eventQueue.append(new KRaftLeaderEvent(newLeaderAndEpoch));
     }
 
