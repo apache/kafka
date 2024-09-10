@@ -200,17 +200,17 @@ public class LineMessageReader implements RecordReader {
                 }).toArray(Header[]::new);
     }
 
-    // VisibleForTesting
+    // Visible for testing
     String keySeparator() {
         return keySeparator;
     }
 
-    // VisibleForTesting
+    // Visible for testing
     boolean parseKey() {
         return parseKey;
     }
 
-    // VisibleForTesting
+    // Visible for testing
     boolean parseHeaders() {
         return parseHeaders;
     }

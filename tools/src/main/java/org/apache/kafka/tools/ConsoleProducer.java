@@ -62,13 +62,13 @@ public class ConsoleProducer {
 
     void start(String[] args) {
         try {
-            ConsoleProducerConfig config = new ConsoleProducerConfig(args);
-            RecordReader reader = messageReader(config);
-            KafkaProducer<byte[], byte[]> producer = kafkaProducer(config.producerProps());
+            ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+            RecordReader reader = messageReader(opts);
+            KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(opts.producerProps());
 
             Exit.addShutdownHook("producer-shutdown-hook", producer::close);
 
-            loopReader(producer, reader, config.sync());
+            loopReader(producer, reader, opts.sync());
         } catch (OptionException e) {
             System.err.println(e.getMessage());
             Exit.exit(1);
@@ -79,18 +79,13 @@ public class ConsoleProducer {
         Exit.exit(0);
     }
 
-    // VisibleForTesting
-    KafkaProducer<byte[], byte[]> kafkaProducer(Properties props) {
-        return new KafkaProducer<>(props);
-    }
-
-    // VisibleForTesting
-    RecordReader messageReader(ConsoleProducerConfig config) throws Exception {
-        Object objReader = Class.forName(config.readerClass()).getDeclaredConstructor().newInstance();
+    // Visible for testing
+    RecordReader messageReader(ConsoleProducerOptions opts) throws Exception {
+        Object objReader = Class.forName(opts.readerClass()).getDeclaredConstructor().newInstance();
 
         if (objReader instanceof RecordReader) {
             RecordReader reader = (RecordReader) objReader;
-            reader.configure(config.readerProps());
+            reader.configure(opts.readerProps());
 
             return reader;
         }
@@ -98,7 +93,7 @@ public class ConsoleProducer {
         throw new IllegalArgumentException("The reader must implement " + RecordReader.class.getName() + " interface");
     }
 
-    // VisibleForTesting
+    // Visible for testing
     void loopReader(Producer<byte[], byte[]> producer, RecordReader reader, boolean sync) throws Exception {
         Iterator<ProducerRecord<byte[], byte[]>> iter = reader.readRecords(System.in);
         try {
@@ -118,7 +113,7 @@ public class ConsoleProducer {
         }
     }
 
-    public static class ConsoleProducerConfig extends CommandDefaultOptions {
+    static final class ConsoleProducerOptions extends CommandDefaultOptions {
         private final OptionSpec<String> topicOpt;
         private final OptionSpec<String> brokerListOpt;
         private final OptionSpec<String> bootstrapServerOpt;
@@ -141,7 +136,7 @@ public class ConsoleProducer {
         private final OptionSpec<String> producerPropertyOpt;
         private final OptionSpec<String> producerConfigOpt;
 
-        public ConsoleProducerConfig(String[] args) {
+        public ConsoleProducerOptions(String[] args) {
             super(args);
             topicOpt = parser.accepts("topic", "REQUIRED: The topic id to produce messages to.")
                     .withRequiredArg()
@@ -239,7 +234,7 @@ public class ConsoleProducer {
                     .defaultsTo(1024 * 100);
             propertyOpt = parser.accepts("property",
                             "A mechanism to pass user-defined properties in the form key=value to the message reader. This allows custom configuration for a user-defined message reader." +
-                                    "Default properties include:" +
+                                    "\nDefault properties include:" +
                                     "\n parse.key=false" +
                                     "\n parse.headers=false" +
                                     "\n ignore.error=false" +

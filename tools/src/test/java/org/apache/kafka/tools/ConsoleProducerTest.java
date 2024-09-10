@@ -22,7 +22,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.tools.ConsoleProducer.ConsoleProducerConfig;
+import org.apache.kafka.tools.ConsoleProducer.ConsoleProducerOptions;
 import org.apache.kafka.tools.api.RecordReader;
 
 import org.junit.jupiter.api.Test;
@@ -101,16 +101,16 @@ public class ConsoleProducerTest {
 
     @Test
     public void testValidConfigsBrokerList() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BROKER_LIST_VALID_ARGS);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BROKER_LIST_VALID_ARGS);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals(asList("localhost:1001", "localhost:1002"), producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
     }
 
     @Test
     public void testValidConfigsBootstrapServer() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BOOTSTRAP_SERVER_VALID_ARGS);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals(asList("localhost:1003", "localhost:1004"), producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
     }
@@ -121,7 +121,7 @@ public class ConsoleProducerTest {
             throw new IllegalArgumentException(message);
         });
         try {
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerConfig(INVALID_ARGS));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(INVALID_ARGS));
         } finally {
             Exit.resetExitProcedure();
         }
@@ -129,9 +129,9 @@ public class ConsoleProducerTest {
 
     @Test
     public void testParseKeyProp() throws ReflectiveOperationException, IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BROKER_LIST_VALID_ARGS);
-        LineMessageReader reader = (LineMessageReader) Class.forName(config.readerClass()).getDeclaredConstructor().newInstance();
-        reader.configure(config.readerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BROKER_LIST_VALID_ARGS);
+        LineMessageReader reader = (LineMessageReader) Class.forName(opts.readerClass()).getDeclaredConstructor().newInstance();
+        reader.configure(opts.readerProps());
 
         assertEquals("#", reader.keySeparator());
         assertTrue(reader.parseKey());
@@ -152,9 +152,9 @@ public class ConsoleProducerTest {
             "--property", "parse.headers=true",
             "--reader-config", propsFile.getAbsolutePath()
         };
-        ConsoleProducerConfig config = new ConsoleProducerConfig(args);
-        LineMessageReader reader = (LineMessageReader) Class.forName(config.readerClass()).getDeclaredConstructor().newInstance();
-        reader.configure(config.readerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        LineMessageReader reader = (LineMessageReader) Class.forName(opts.readerClass()).getDeclaredConstructor().newInstance();
+        reader.configure(opts.readerProps());
 
         assertEquals(";", reader.keySeparator());
         assertTrue(reader.parseKey());
@@ -163,56 +163,56 @@ public class ConsoleProducerTest {
 
     @Test
     public void testBootstrapServerOverride() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BOOTSTRAP_SERVER_OVERRIDE);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_OVERRIDE);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals(Collections.singletonList("localhost:1002"), producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
     }
 
     @Test
     public void testClientIdOverride() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(CLIENT_ID_OVERRIDE);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(CLIENT_ID_OVERRIDE);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals("producer-1", producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG));
     }
 
     @Test
     public void testDefaultClientId() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BROKER_LIST_VALID_ARGS);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BROKER_LIST_VALID_ARGS);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals("console-producer", producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG));
     }
 
     @Test
     public void testBatchSizeOverriddenByMaxPartitionMemoryBytesValue() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BATCH_SIZE_OVERRIDDEN_BY_MAX_PARTITION_MEMORY_BYTES_VALUE);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BATCH_SIZE_OVERRIDDEN_BY_MAX_PARTITION_MEMORY_BYTES_VALUE);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals(456, producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
     }
 
     @Test
     public void testBatchSizeSetAndMaxPartitionMemoryBytesNotSet() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BTCH_SIZE_SET_AND_MAX_PARTITION_MEMORY_BYTES_NOT_SET);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BTCH_SIZE_SET_AND_MAX_PARTITION_MEMORY_BYTES_NOT_SET);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals(123, producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
     }
 
     @Test
     public void testDefaultBatchSize() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BATCH_SIZE_DEFAULT);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BATCH_SIZE_DEFAULT);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals(16 * 1024, producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
     }
 
     @Test
     public void testBatchSizeNotSetAndMaxPartitionMemoryBytesSet() throws IOException {
-        ConsoleProducerConfig config = new ConsoleProducerConfig(BATCH_SIZE_NOT_SET_AND_MAX_PARTITION_MEMORY_BYTES_SET);
-        ProducerConfig producerConfig = new ProducerConfig(config.producerProps());
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(BATCH_SIZE_NOT_SET_AND_MAX_PARTITION_MEMORY_BYTES_SET);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals(456, producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
     }
@@ -220,7 +220,7 @@ public class ConsoleProducerTest {
     @Test
     public void testNewReader() throws Exception {
         ConsoleProducer producer = new ConsoleProducer();
-        TestRecordReader reader = (TestRecordReader) producer.messageReader(new ConsoleProducerConfig(TEST_RECORD_READER));
+        TestRecordReader reader = (TestRecordReader) producer.messageReader(new ConsoleProducerOptions(TEST_RECORD_READER));
 
         assertEquals(1, reader.configureCount());
         assertEquals(0, reader.closeCount());
@@ -233,7 +233,7 @@ public class ConsoleProducerTest {
     @SuppressWarnings("unchecked")
     public void testLoopReader() throws Exception {
         ConsoleProducer producer = new ConsoleProducer();
-        TestRecordReader reader = (TestRecordReader) producer.messageReader(new ConsoleProducerConfig(TEST_RECORD_READER));
+        TestRecordReader reader = (TestRecordReader) producer.messageReader(new ConsoleProducerOptions(TEST_RECORD_READER));
 
         producer.loopReader(Mockito.mock(Producer.class), reader, false);
 
