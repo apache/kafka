@@ -197,7 +197,12 @@ object StorageTool extends Logging {
     } else {
       Features.values().find(_.featureName == featureName) match {
         case Some(feature) =>
-          val featureVersion = feature.fromFeatureLevel(featureLevel, true)
+          val featureVersion = try {
+            feature.fromFeatureLevel(featureLevel, true)
+          } catch {
+            case _: IllegalArgumentException =>
+              throw new TerseFailure(s"Feature level $featureLevel is not supported for feature $featureName")
+          }
           val dependencies = featureVersion.dependencies().asScala
 
           if (dependencies.isEmpty) {

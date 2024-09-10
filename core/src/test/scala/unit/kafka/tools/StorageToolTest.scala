@@ -588,11 +588,11 @@ Found problem:
     properties.putAll(defaultStaticQuorumProperties)
 
     val stream = new ByteArrayOutputStream()
-    val exception = assertThrows(classOf[IllegalArgumentException], () => {
+    val exception = assertThrows(classOf[TerseFailure], () => {
       runFeatureDependenciesCommand(stream, properties, "transaction.version=1000")
     })
 
-    assertEquals("No feature:transaction.version with feature level 1000", exception.getMessage)
+    assertEquals("Feature level 1000 is not supported for feature transaction.version", exception.getMessage)
   }
 
   @Test
