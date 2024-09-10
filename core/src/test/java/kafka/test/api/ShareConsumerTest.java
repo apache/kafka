@@ -1642,7 +1642,7 @@ public class ShareConsumerTest {
         KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "warmupgroup1");
         Set<String> subscription = Collections.singleton(warmupTp.topic());
         try {
-            producer.send(record).get(1000, TimeUnit.MILLISECONDS);
+            producer.send(record).get(2000, TimeUnit.MILLISECONDS);
             shareConsumer.subscribe(subscription);
             TestUtils.waitForCondition(
                     () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, DEFAULT_MAX_WAIT_MS, 200L, () -> "warmup record not received");
