@@ -136,7 +136,7 @@ jobs:
           REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
           GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
       - name: Archive Build Scan
-        if: ${{ inputs.is-public-fork == 'true' }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-scan-test-${{ matrix.java }}
