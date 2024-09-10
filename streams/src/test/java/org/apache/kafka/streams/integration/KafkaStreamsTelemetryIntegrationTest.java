@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -93,7 +92,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private String outputTopicOnePartition;
     private final List<Properties> streamsConfigurations = new ArrayList<>();
     private static final List<MetricsInterceptingConsumer<byte[], byte[]>> INTERCEPTING_CONSUMERS = new ArrayList<>();
-    private static final List<AdminClient> INTERCEPTING_ADMIN_CLIENTS = new ArrayList<>();
+    private static final List<TestingMetricsInterceptingAdminClient> INTERCEPTING_ADMIN_CLIENTS = new ArrayList<>();
     private static final int FIRST_INSTANCE_CONSUMER = 0;
     private static final int SECOND_INSTANCE_CONSUMER = 1;
 
@@ -123,13 +122,14 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @AfterEach
     public void tearDown() throws Exception {
         INTERCEPTING_CONSUMERS.clear();
+        INTERCEPTING_ADMIN_CLIENTS.clear();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
         streamsConfigurations.clear();
     }
 
     @Test
     @DisplayName("Calling unregisterMetric on metrics not registered should not cause an error")
-    void shouldNotThrowExceptionWhenRemovingNonExistingMetrics() throws InterruptedException {
+    public void shouldNotThrowExceptionWhenRemovingNonExistingMetrics() throws InterruptedException {
         final Properties properties = props(true);
         final Topology topology = complexTopology();
         try (final KafkaStreams streams = new KafkaStreams(topology, properties)) {
@@ -141,7 +141,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             final Consumer<?, ?> embeddedConsumer = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CONSUMER);
             final MetricName metricName = new MetricName("fakeMetric", "fakeGroup", "It's a fake metric", new HashMap<>());
             final KafkaMetric nonExitingMetric = new KafkaMetric(new Object(), metricName, (Measurable) (m, now) -> 1.0, new MetricConfig(), Time.SYSTEM);
-            assertDoesNotThrow(() -> embeddedConsumer.unregisterMetric(nonExitingMetric));
+            assertDoesNotThrow(() -> embeddedConsumer.unregisterMetricFromSubscription(nonExitingMetric));
         }
     }
 
@@ -164,10 +164,20 @@ public class KafkaStreamsTelemetryIntegrationTest {
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("thread-id")).collect(Collectors.toList());
 
-            final List<MetricName> consumerPassedStreamMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CONSUMER).passedMetrics.stream().map(KafkaMetric::metricName).collect(Collectors.toList());
+            final List<MetricName> streamsClientMetrics = streams.metrics().values().stream().map(Metric::metricName)
+                    .filter(metricName -> metricName.group().equals("stream-metrics")).collect(Collectors.toList());
 
-            assertEquals(streamsThreadMetrics.size(), consumerPassedStreamMetricNames.size());
-            consumerPassedStreamMetricNames.forEach(metricName -> assertTrue(streamsThreadMetrics.contains(metricName), "Streams metrics doesn't contain " + metricName));
+
+
+            final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CONSUMER).passedMetrics.stream().map(KafkaMetric::metricName).collect(Collectors.toList());
+            final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CONSUMER).passedMetrics.stream().map(KafkaMetric::metricName).collect(Collectors.toList());
+
+
+            assertEquals(streamsThreadMetrics.size(), consumerPassedStreamThreadMetricNames.size());
+            consumerPassedStreamThreadMetricNames.forEach(metricName -> assertTrue(streamsThreadMetrics.contains(metricName), "Streams metrics doesn't contain " + metricName));
+
+            assertEquals(streamsClientMetrics.size(), adminPassedStreamClientMetricNames.size());
+            adminPassedStreamClientMetricNames.forEach(metricName -> assertTrue(streamsClientMetrics.contains(metricName), "Client metrics doesn't contain " + metricName));
         }
     }
 
@@ -404,15 +414,15 @@ public class KafkaStreamsTelemetryIntegrationTest {
         }
 
         @Override
-        public void registerMetric(final KafkaMetric metric) {
+        public void registerMetricForSubscription(final KafkaMetric metric) {
             passedMetrics.add(metric);
-            super.registerMetric(metric);
+            super.registerMetricForSubscription(metric);
         }
 
         @Override
-        public void unregisterMetric(final KafkaMetric metric) {
+        public void unregisterMetricFromSubscription(final KafkaMetric metric) {
             passedMetrics.remove(metric);
-            super.unregisterMetric(metric);
+            super.unregisterMetricFromSubscription(metric);
         }
     }
 

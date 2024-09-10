@@ -4156,7 +4156,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public void unregisterMetricForSubscription(KafkaMetric metric) {
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
         if (clientTelemetryReporter.isPresent()) {
             ClientTelemetryReporter reporter = clientTelemetryReporter.get();
             reporter.metricRemoval(metric);

@@ -429,7 +429,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
 
     @Override
-    public void registerMetric(KafkaMetric metric) {
+    public void registerMetricForSubscription(KafkaMetric metric) {
         if (clientTelemetryReporter.isPresent()) {
             ClientTelemetryReporter reporter = clientTelemetryReporter.get();
             reporter.metricChange(metric);
@@ -437,7 +437,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
-    public void unregisterMetric(KafkaMetric metric) {
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
         if (clientTelemetryReporter.isPresent()) {
             ClientTelemetryReporter reporter = clientTelemetryReporter.get();
             reporter.metricRemoval(metric);
