@@ -1371,9 +1371,8 @@ public class TopicCommandTest {
                                           Boolean verifyLeaderDistribution,
                                           Boolean verifyReplicasDistribution) {
         // always verify that no broker will be assigned for more than one replica
-        assignment.entrySet().stream()
-                .forEach(entry -> assertEquals(new HashSet<>(entry.getValue()).size(), entry.getValue().size(),
-                        "More than one replica is assigned to same broker for the same partition"));
+        assignment.forEach((partition, assignedNodes) -> assertEquals(new HashSet<>(assignedNodes).size(), assignedNodes.size(),
+                "More than one replica is assigned to same broker for the same partition"));
 
         ReplicaDistributions distribution = getReplicaDistribution(assignment, brokerRackMapping);
 
@@ -1432,12 +1431,10 @@ public class TopicCommandTest {
         Map<Integer, Integer> partitionCount = new HashMap<>();
         Map<Integer, List<String>>  partitionRackMap = new HashMap<>();
 
-        assignment.entrySet().stream().forEach(entry -> {
-            Integer partitionId = entry.getKey();
-            List<Integer> replicaList = entry.getValue();
+        assignment.forEach((partitionId, replicaList) -> {
             Integer leader = replicaList.get(0);
             leaderCount.put(leader, leaderCount.getOrDefault(leader, 0) + 1);
-            replicaList.stream().forEach(brokerId -> {
+            replicaList.forEach(brokerId -> {
                 partitionCount.put(brokerId, partitionCount.getOrDefault(brokerId, 0) + 1);
                 String rack;
                 if (brokerRackMapping.containsKey(brokerId)) {
