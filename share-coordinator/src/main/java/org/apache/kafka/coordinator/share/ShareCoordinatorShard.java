@@ -56,6 +56,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -560,8 +561,25 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<PersisterStateBatch> newBatches,
         long startOffset
     ) {
-        Queue<PersisterStateBatch> batchQueue = new LinkedList<>(batchesSoFar);
-        for (PersisterStateBatch batch : newBatches) {
+        // will take care of overlapping batches
+        Queue<PersisterStateBatch> batchQueue = new LinkedList<>(
+            mergeBatches(
+                pruneBatches(
+                    sortedList(batchesSoFar),
+                    startOffset
+                )
+            ));
+
+        // will take care of overlapping batches
+        List<PersisterStateBatch> modifiedNewBatches = new ArrayList<>(
+            mergeBatches(
+                pruneBatches(
+                    sortedList(newBatches),
+                    startOffset
+                )
+            ));
+
+        for (PersisterStateBatch batch : modifiedNewBatches) {
             for (int i = 0; i < batchQueue.size(); i++) {
                 PersisterStateBatch cur = batchQueue.poll();
                 // cur batch under inspection has no overlap with the new one
@@ -631,36 +649,16 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             batchQueue.add(batch);
         }
 
-        // the queuing process above must have moved the intervals
-        // around, lets sort it so that we can do faster manipulations on them.
-        List<PersisterStateBatch> finalList = sortedListFromQueue(batchQueue);
-
-        // Any batches where the last offset is < the current start offset
-        // are now expired. We should remove them from the persister.
-        if (startOffset != -1) {
-            List<PersisterStateBatch> prunedList = new ArrayList<>();
-            finalList.forEach(batch -> {
-                if (batch.firstOffset() >= startOffset) {
-                    // covers
-                    //   ______
-                    // | -> start offset
-                    prunedList.add(batch);
-                } else if (batch.lastOffset() >= startOffset) {
-                    // covers
-                    //  ________
-                    //       | -> start offset
-                    prunedList.add(new PersisterStateBatch(startOffset, batch.lastOffset(), batch.deliveryState(), batch.deliveryCount()));
-                }
-                // all other cases, the interval need not be touched.
-            });
-            finalList = prunedList;
-        }
-
-        // merge same state intervals
-        return mergeIntervals(finalList);
+        // sort, prune and merge intervals
+        return mergeBatches(
+            pruneBatches(
+                sortedList(batchQueue),
+                startOffset
+            )
+        );
     }
 
-    private static List<PersisterStateBatch> sortedListFromQueue(Queue<PersisterStateBatch> queue) {
+    private static List<PersisterStateBatch> sortedList(Collection<PersisterStateBatch> queue) {
         List<PersisterStateBatch> finalList = new ArrayList<>(queue);
         finalList.sort((b1, b2) -> {
             int deltaFirst = (int) (b1.firstOffset() - b2.firstOffset());
@@ -672,14 +670,14 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return finalList;
     }
 
-    private static List<PersisterStateBatch> mergeIntervals(List<PersisterStateBatch> batches) {
+    private static List<PersisterStateBatch> mergeBatches(List<PersisterStateBatch> batches) {
         if (batches.size() < 2) {
             return batches;
         }
         List<PersisterStateBatch> mergedList = new ArrayList<>();
         PersisterStateBatch cur = batches.get(0);
         for (int i = 1; i < batches.size(); i++) {
-            if (cur.lastOffset() + 1 == batches.get(i).firstOffset() &&
+            if (cur.lastOffset() + 1 >= batches.get(i).firstOffset() && // the +1 will take care of fo = lo + 1 case
                 cur.deliveryState() == batches.get(i).deliveryState() &&
                 cur.deliveryCount() == batches.get(i).deliveryCount()) {
                 cur = new PersisterStateBatch(
@@ -695,6 +693,30 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
         mergedList.add(cur);
         return mergedList;
+    }
+
+    // Any batches where the last offset is < the current start offset
+    // are now expired. We should remove them from the persister.
+    private static List<PersisterStateBatch> pruneBatches(List<PersisterStateBatch> batches, long startOffset) {
+        if (startOffset != -1) {
+            List<PersisterStateBatch> prunedList = new ArrayList<>();
+            batches.forEach(batch -> {
+                if (batch.firstOffset() >= startOffset) {
+                    // covers
+                    //   ______
+                    // | -> start offset
+                    prunedList.add(batch);
+                } else if (batch.lastOffset() >= startOffset) {
+                    // covers
+                    //  ________
+                    //       | -> start offset
+                    prunedList.add(new PersisterStateBatch(startOffset, batch.lastOffset(), batch.deliveryState(), batch.deliveryCount()));
+                }
+                // all other cases, the interval need not be touched.
+            });
+            return prunedList;
+        }
+        return batches;
     }
 
     private static PersisterStateBatch toPersisterStateBatch(ShareUpdateValue.StateBatch batch) {

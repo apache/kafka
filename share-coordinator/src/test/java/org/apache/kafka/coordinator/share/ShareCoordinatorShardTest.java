@@ -1034,6 +1034,43 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
+                "Handle overlapping batches within each list.",
+                Arrays.asList(
+                    new PersisterStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterStateBatch(121, 130, (byte) 0, (short) 1),
+                    new PersisterStateBatch(105, 115, (byte) 0, (short) 1) // overlap with 1st batch
+                ),  //[(100-115, 0, 1), (121-130, 0, 1)]
+                Arrays.asList(
+                    new PersisterStateBatch(111, 119, (byte) 2, (short) 2),
+                    new PersisterStateBatch(116, 123, (byte) 2, (short) 2)  // overlap with first batch
+                ),  //[(111-123, 2, 2)]
+                Arrays.asList(
+                    new PersisterStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterStateBatch(111, 123, (byte) 2, (short) 2),
+                    new PersisterStateBatch(124, 130, (byte) 0, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "Handle overlapping batches within each list with pruning.",
+                Arrays.asList(
+                    new PersisterStateBatch(100, 110, (byte) 0, (short) 1),
+                    new PersisterStateBatch(121, 130, (byte) 0, (short) 1),
+                    new PersisterStateBatch(105, 115, (byte) 0, (short) 1) // overlap with 1st batch
+                ),  //[(100-115, 0, 1), (121-130, 0, 1)]
+                Arrays.asList(
+                    new PersisterStateBatch(111, 119, (byte) 2, (short) 2),
+                    new PersisterStateBatch(116, 123, (byte) 2, (short) 2)  // overlap with first batch
+                ),  //[(111-123, 2, 2)]
+                Arrays.asList(
+                    new PersisterStateBatch(120, 123, (byte) 2, (short) 2),
+                    new PersisterStateBatch(124, 130, (byte) 0, (short) 1)
+                ),
+                120
+            ),
+
+            new TestAttributes(
                 "Batches with start offset midway are pruned.",
                 Collections.singletonList(
                     new PersisterStateBatch(100, 130, (byte) 0, (short) 1)
