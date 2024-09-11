@@ -981,8 +981,17 @@ object ConfigCommand extends Logging {
         }
       }
 
-      if (options.has(describeOpt) && (entityTypeVals.contains(BrokerLoggerConfigType) || entityTypeVals.contains(ConfigType.GROUP)) && !hasEntityName)
-        throw new IllegalArgumentException(s"an entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
+      if (options.has(describeOpt)) {
+        if (!(entityTypeVals.contains(ConfigType.USER) ||
+          entityTypeVals.contains(ConfigType.CLIENT) ||
+          entityTypeVals.contains(ConfigType.BROKER) ||
+          entityTypeVals.contains(ConfigType.IP)) && options.has(entityDefault)) {
+          throw new IllegalArgumentException(s"--entity-default must not be specified with --describe of ${entityTypeVals.mkString(",")}")
+        }
+
+        if (entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
+          throw new IllegalArgumentException(s"An entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
+      }
 
       if (options.has(alterOpt)) {
         if (entityTypeVals.contains(ConfigType.USER) ||
@@ -990,9 +999,9 @@ object ConfigCommand extends Logging {
             entityTypeVals.contains(ConfigType.BROKER) ||
             entityTypeVals.contains(ConfigType.IP)) {
           if (!hasEntityName && !hasEntityDefault)
-            throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients, brokers or ips")
+            throw new IllegalArgumentException("An entity-name or default entity must be specified with --alter of users, clients, brokers or ips")
         } else if (!hasEntityName)
-          throw new IllegalArgumentException(s"an entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
+          throw new IllegalArgumentException(s"An entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
 
         val isAddConfigPresent = options.has(addConfig)
         val isAddConfigFilePresent = options.has(addConfigFile)

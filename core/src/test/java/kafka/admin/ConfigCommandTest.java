@@ -417,6 +417,65 @@ public class ConfigCommandTest {
     }
 
     @Test
+    public void testEntityDefaultForType() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "topics",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "clients",
+            "--describe"
+        ));
+        createOpts.checkArgs();
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "users",
+            "--describe"
+        ));
+        createOpts.checkArgs();
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "brokers",
+            "--describe"
+        ));
+        createOpts.checkArgs();
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "broker-loggers",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "ips",
+            "--describe"
+        ));
+        createOpts.checkArgs();
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "client-metrics",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-default",
+            "--entity-type", "groups",
+            "--describe"
+        ));
+        assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
+    }
+
+    @Test
     public void testParseConfigsToBeAddedForAddConfigFile() throws IOException {
         String fileContents =
             "a=b\n" +
@@ -474,6 +533,7 @@ public class ConfigCommandTest {
                 "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.emptyList(), connectOpts, "--entity-type", "topics");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.emptyList(), connectOpts, "--entity-type", "ips");
+            testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.emptyList(), connectOpts, "--entity-type", "groups");
             testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS), Collections.emptyList(), connectOpts, "--entity-type", "client-metrics");
         }
 
@@ -1909,7 +1969,7 @@ public class ConfigCommandTest {
             "--add-config", "interval.ms=1000"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
-        assertEquals("an entity name must be specified with --alter of client-metrics", exception.getMessage());
+        assertEquals("An entity name must be specified with --alter of client-metrics", exception.getMessage());
     }
 
     @Test
@@ -2046,8 +2106,7 @@ public class ConfigCommandTest {
             "--entity-type", "groups",
             "--describe"));
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, describeOpts::checkArgs);
-        assertEquals("an entity name must be specified with --describe of groups", exception.getMessage());
+        verifyDescribeGroupConfig(describeOpts, "group");
     }
 
     private void verifyDescribeGroupConfig(ConfigCommand.ConfigCommandOptions describeOpts, String resourceName) {
@@ -2084,7 +2143,7 @@ public class ConfigCommandTest {
             "--add-config", "consumer.heartbeat.interval.ms=6000"));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, alterOpts::checkArgs);
-        assertEquals("an entity name must be specified with --alter of groups", exception.getMessage());
+        assertEquals("An entity name must be specified with --alter of groups", exception.getMessage());
     }
 
     @Test
