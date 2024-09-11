@@ -575,8 +575,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 // from the current one such that they do not
                 // overlap with the new one.
                 // Following cases will not produce any new records so need not be handled.
-                // cur:  ____      ______     ______
-                // new: ________   ______    _________
+                // cur:     ____      ______     ______       _____
+                // new: ________      ______     _________  _________
                 
                 
                 // covers
