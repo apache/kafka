@@ -100,3 +100,18 @@ Usage:
 ```bash
 python3 approve-workflows.py
 ```
+
+## Find Hanging Tests
+
+This script is used to infer hanging tests from the Gradle output. It looks for
+tests that were STARTED but do not have a corresponding FINISHED or FAILED.
+
+Usage:
+
+```bash
+python2 find-unfinished-test.py ~/Downloads/logs_28218821016/5_build\ _\ JUnit\ tests\ Java\ 11.txt
+
+Found tests that were started, but not finished:
+
+2024-09-10T20:31:26.6830206Z Gradle Test Run :streams:test > Gradle Test Executor 47 > StreamThreadTest > shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean, boolean) > "shouldReturnErrorIfProducerInstanceIdNotInitialized(boolean, boolean).stateUpdaterEnabled=true, processingThreadsEnabled=true" STARTED
+```
