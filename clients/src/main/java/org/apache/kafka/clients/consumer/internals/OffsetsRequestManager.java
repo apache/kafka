@@ -284,7 +284,11 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
         CompletableFuture<Void> updatePositions;
         if (commitRequestManager != null) {
-            updatePositions = initWithCommittedOffsetsIfNeeded(deadlineMs);
+            CompletableFuture<Void> refreshWithCommittedOffsets = initWithCommittedOffsetsIfNeeded(deadlineMs);
+
+            // Reset positions for all partitions that may still require it (or that are awaiting reset)
+            updatePositions = refreshWithCommittedOffsets.thenCompose(__ -> initWithPartitionOffsetsIfNeeded());
+
         } else {
             updatePositions = initWithPartitionOffsetsIfNeeded();
         }
@@ -412,15 +416,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
             refreshCommittedOffsets(offsetsToApply, metadata, subscriptionState);
 
-            // There may still be positions needing a position. Attempt to set them using the partition offsets
-            CompletableFuture<Void> resetMissingPositions = initWithPartitionOffsetsIfNeeded();
-            resetMissingPositions.whenComplete((__, resetError) -> {
-                if (resetError == null) {
-                    result.complete(null);
-                } else {
-                    result.completeExceptionally(resetError);
-                }
-            });
+            result.complete(null);
 
         } else {
             log.error("Error fetching committed offsets to update positions", error);
