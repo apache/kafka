@@ -384,17 +384,16 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
 
     clean_node_enabled = True
 
-    def __init__(self, test_context, kafka, processing_guarantee, command):
+    def __init__(self, test_context, kafka, command):
         super(StreamsEosTestBaseService, self).__init__(test_context,
                                                         kafka,
                                                         "org.apache.kafka.streams.tests.StreamsEosTest",
                                                         command)
-        self.PROCESSING_GUARANTEE = processing_guarantee
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
-                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
+                      streams_property.PROCESSING_GUARANTEE: "exactly_once_v2",
                       "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
                       "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
                       }
@@ -440,24 +439,24 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "not-required", "run")
+        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run")
 
 class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, processing_guarantee):
-        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, processing_guarantee, "process")
+    def __init__(self, test_context, kafka):
+        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
 class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, processing_guarantee):
-        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, processing_guarantee, "process-complex")
+    def __init__(self, test_context, kafka):
+        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
 
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "not-required", "verify")
+        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify")
 
 
 class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
-        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "not-required", "verify-complex")
+        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex")
 
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
