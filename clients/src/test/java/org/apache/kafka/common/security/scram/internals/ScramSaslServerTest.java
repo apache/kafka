@@ -20,14 +20,23 @@ package org.apache.kafka.common.security.scram.internals;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirstMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
+import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 
+import javax.security.sasl.SaslException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -67,10 +76,69 @@ public class ScramSaslServerTest {
         assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B)));
     }
 
+    /**
+     * Validate that server responds with client's nonce as prefix of its nonce in the
+     * server first message.
+     * <br>
+     * In addition, it checks that the client final message has nonce that it sent in its
+     * first message.
+     */
+    @Test
+    public void validateNonceExchange() throws SaslException {
+        ScramSaslServer spySaslServer = Mockito.spy(saslServer);
+        byte[] clientFirstMsgBytes = clientFirstMessage(USER_A, USER_A);
+        ClientFirstMessage clientFirstMessage = new ClientFirstMessage(clientFirstMsgBytes);
+
+        byte[] serverFirstMsgBytes = spySaslServer.evaluateResponse(clientFirstMsgBytes);
+        ServerFirstMessage serverFirstMessage = new ServerFirstMessage(serverFirstMsgBytes);
+        assertTrue(serverFirstMessage.nonce().startsWith(clientFirstMessage.nonce()),
+            "Nonce in server message should start with client first message's nonce");
+
+        byte[] clientFinalMessage = clientFinalMessage(serverFirstMessage.nonce());
+        Mockito.doNothing()
+            .when(spySaslServer).verifyClientProof(Mockito.any(ScramMessages.ClientFinalMessage.class));
+        byte[] serverFinalMsgBytes = spySaslServer.evaluateResponse(clientFinalMessage);
+        ServerFinalMessage serverFinalMessage = new ServerFinalMessage(serverFinalMsgBytes);
+        assertNull(serverFinalMessage.error(), "Server final message should not contain error");
+    }
+
+    @Test
+    public void validateFailedNonceExchange() throws SaslException {
+        ScramSaslServer spySaslServer = Mockito.spy(saslServer);
+        byte[] clientFirstMsgBytes = clientFirstMessage(USER_A, USER_A);
+        ClientFirstMessage clientFirstMessage = new ClientFirstMessage(clientFirstMsgBytes);
+
+        byte[] serverFirstMsgBytes = spySaslServer.evaluateResponse(clientFirstMsgBytes);
+        ServerFirstMessage serverFirstMessage = new ServerFirstMessage(serverFirstMsgBytes);
+        assertTrue(serverFirstMessage.nonce().startsWith(clientFirstMessage.nonce()),
+            "Nonce in server message should start with client first message's nonce");
+
+        byte[] clientFinalMessage = clientFinalMessage(formatter.secureRandomString());
+        Mockito.doNothing()
+            .when(spySaslServer).verifyClientProof(Mockito.any(ScramMessages.ClientFinalMessage.class));
+        SaslException saslException = assertThrows(SaslException.class,
+            () -> spySaslServer.evaluateResponse(clientFinalMessage));
+        assertEquals("Invalid client nonce in the final client message.",
+            saslException.getMessage(),
+            "Failure message: " + saslException.getMessage());
+    }
+
     private byte[] clientFirstMessage(String userName, String authorizationId) {
         String nonce = formatter.secureRandomString();
         String authorizationField = authorizationId != null ? "a=" + authorizationId : "";
         String firstMessage = String.format("n,%s,n=%s,r=%s", authorizationField, userName, nonce);
         return firstMessage.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private byte[] clientFinalMessage(String nonce) {
+        String channelBinding = randomBytesAsString();
+        String proof = randomBytesAsString();
+
+        String message = String.format("c=%s,r=%s,p=%s", channelBinding, nonce, proof);
+        return message.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private String randomBytesAsString() {
+        return Base64.getEncoder().encodeToString(formatter.secureRandomBytes());
     }
 }
