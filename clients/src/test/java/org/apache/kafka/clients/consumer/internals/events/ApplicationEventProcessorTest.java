@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMembershipManager;
@@ -53,6 +54,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -169,6 +172,36 @@ public class ApplicationEventProcessorTest {
 
         setupProcessor(false);
         doThrow(new IllegalStateException()).when(subscriptionState).assignFromUser(any());
+        processor.process(event);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
+        assertInstanceOf(IllegalStateException.class, e.getCause());
+    }
+
+    @Test
+    public void testSeekUnvalidatedEvent() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                0, Optional.empty(), Metadata.LeaderAndEpoch.noLeaderOrEpoch());
+        SeekUnvalidatedEvent event = new SeekUnvalidatedEvent(12345, tp, 0, Optional.empty());
+
+        setupProcessor(false);
+        doReturn(Metadata.LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(tp);
+        doNothing().when(subscriptionState).seekUnvalidated(eq(tp), any());
+        processor.process(event);
+        verify(metadata).currentLeader(tp);
+        verify(subscriptionState).seekUnvalidated(tp, position);
+        assertDoesNotThrow(() -> event.future().get());
+    }
+
+    @Test
+    public void testSeekUnvalidatedEventWithException() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        SeekUnvalidatedEvent event = new SeekUnvalidatedEvent(12345, tp, 0, Optional.empty());
+
+        setupProcessor(false);
+        doReturn(Metadata.LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(tp);
+        doThrow(new IllegalStateException()).when(subscriptionState).seekUnvalidated(eq(tp), any());
         processor.process(event);
 
         ExecutionException e = assertThrows(ExecutionException.class, () -> event.future().get());
