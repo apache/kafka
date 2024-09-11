@@ -139,7 +139,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
-    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+    // Init value is needed to avoid NPE in case of exception raised in the constructor
+    private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
     // currentThread holds the threadId of the current thread accessing this Consumer
     // and is used to prevent multi-threaded access

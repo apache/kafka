@@ -35,6 +35,15 @@
             </li>
             <li> Remove <code>use.incremental.alter.configs</code>. The modified behavior is identical to the previous <code>required</code> configuration,
                 therefore users should ensure that target broker is at least 2.3.0</li>
+            <li>
+                The <code>kafka.tools.DefaultMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.DefaultMessageFormatter</code> class instead.
+            </li>
+            <li>
+                The <code>kafka.tools.LoggingMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.LoggingMessageFormatter</code> class instead.
+            </li>
+            <li>
+                The <code>kafka.tools.NoOpMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.NoOpMessageFormatter</code> class instead.
+            </li>
         </ul>
     </ul>
 

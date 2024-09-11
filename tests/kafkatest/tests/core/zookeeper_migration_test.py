@@ -17,19 +17,19 @@ from functools import partial
 import time
 
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, matrix
 from ducktape.mark.resource import cluster
 from ducktape.errors import TimeoutError
 
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, config_property
 from kafkatest.services.kafka.config_property import CLUSTER_ID
 from kafkatest.services.kafka.quorum import isolated_kraft, ServiceQuorumInfo, zk
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import DEV_BRANCH, LATEST_3_4
+from kafkatest.version import DEV_BRANCH, LATEST_3_4, LATEST_3_7, LATEST_3_8, KafkaVersion
 
 
 class TestMigration(ProduceConsumeValidateTest):
@@ -51,10 +51,10 @@ class TestMigration(ProduceConsumeValidateTest):
             wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.replication_factor, timeout_sec=60,
                        backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
-    def do_migration(self, roll_controller = False, downgrade_to_zk = False):
+    def do_migration(self, roll_controller=False, downgrade_to_zk=False, from_kafka_version=str(DEV_BRANCH)):
         # Start up KRaft controller in migration mode
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
-        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
+        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=KafkaVersion(from_kafka_version),
                                   allow_zk_with_kraft=True,
                                   isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
@@ -86,20 +86,23 @@ class TestMigration(ProduceConsumeValidateTest):
                 controller.start_node(node)
 
     @cluster(num_nodes=7)
-    @parametrize(roll_controller = True)
-    @parametrize(roll_controller = False)
-    def test_online_migration(self, roll_controller):
+    @matrix(roll_controller=[True, False], from_kafka_version=[str(DEV_BRANCH), str(LATEST_3_7), str(LATEST_3_8)])
+    def test_online_migration(self, roll_controller, from_kafka_version):
         zk_quorum = partial(ServiceQuorumInfo, zk)
         self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
+
+        server_prop_overrides = [["zookeeper.metadata.migration.enable", "false"]]
+
+        if from_kafka_version != str(DEV_BRANCH):
+            server_prop_overrides.append([config_property.INTER_BROKER_PROTOCOL_VERSION, from_kafka_version])
+
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
                                   zk=self.zk,
                                   version=DEV_BRANCH,
                                   quorum_info_provider=zk_quorum,
                                   allow_zk_with_kraft=True,
-                                  server_prop_overrides=[
-                                      ["zookeeper.metadata.migration.enable", "false"],
-                                  ])
+                                  server_prop_overrides=server_prop_overrides)
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = "PLAINTEXT"
         self.zk.start()
@@ -128,7 +131,7 @@ class TestMigration(ProduceConsumeValidateTest):
                                         self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=DEV_BRANCH)
 
-        self.run_produce_consume_validate(core_test_action=partial(self.do_migration, roll_controller = roll_controller))
+        self.run_produce_consume_validate(core_test_action=partial(self.do_migration, roll_controller=roll_controller, from_kafka_version=from_kafka_version))
         self.kafka.stop()
 
     @cluster(num_nodes=7)
