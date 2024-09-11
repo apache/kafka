@@ -662,13 +662,28 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private static List<PersisterStateBatch> sortedList(Collection<PersisterStateBatch> collection) {
         List<PersisterStateBatch> finalList = new ArrayList<>(collection);
         finalList.sort((b1, b2) -> {
-            int deltaFirst = (int) (b1.firstOffset() - b2.firstOffset());
+            int deltaFirst = getComparisonSign(b1.firstOffset() - b2.firstOffset());
             if (deltaFirst == 0) {
-                return (int) (b1.lastOffset() - b2.lastOffset());
+                int deltaLast = getComparisonSign(b1.lastOffset() - b2.lastOffset());
+                if (deltaLast == 0) {
+                    return b1.deliveryCount() - b2.deliveryCount();
+                }
+                return deltaLast;
             }
             return deltaFirst;
         });
         return finalList;
+    }
+
+    // to prevent int overflow
+    private static int getComparisonSign(long delta) {
+        if (delta > 0) {
+            return 1;
+        }
+        if (delta < 0) {
+            return -1;
+        }
+        return 0;
     }
 
     // assumes sorted input
