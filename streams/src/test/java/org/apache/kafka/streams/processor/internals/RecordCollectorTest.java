@@ -54,6 +54,7 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.SerializationExceptionOrigin;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
@@ -1347,15 +1348,40 @@ public class RecordCollectorTest {
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
 
-        // With default handler which returns FAIL, flush() throws StreamsException with TimeoutException cause,
-        // otherwise it would throw a TaskCorruptedException with null cause
+        final TaskCorruptedException thrown = assertThrows(TaskCorruptedException.class, collector::flush);
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Tasks [0_0] are corrupted and hence need to be re-initialized")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnUnknownTopicOrPartitionExceptionExceptionHandlerReturnsFail() {
+        final KafkaException exception = new TimeoutException("KABOOM!", new UnknownTopicOrPartitionException());
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(exception),
+            new ProductionExceptionHandlerMock(
+                Optional.of(ProductionExceptionHandlerResponse.FAIL),
+                context,
+                sinkNodeName,
+                taskId
+            ),
+            streamsMetrics,
+            topology
+        );
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
+
+        // With custom handler which returns FAIL, flush() throws StreamsException with TimeoutException cause
         final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
         assertThat(
             thrown.getMessage(),
             equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                    "\norg.apache.kafka.common.errors.TimeoutException: KABOOM!" +
-                    "\nException handler choose to FAIL the processing, no more records would be sent.")
+                "\norg.apache.kafka.common.errors.TimeoutException: KABOOM!" +
+                "\nException handler choose to FAIL the processing, no more records would be sent.")
         );
     }
 
@@ -1379,6 +1405,42 @@ public class RecordCollectorTest {
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
 
         assertDoesNotThrow(collector::flush);
+    }
+
+    @Test
+    public void shouldTreatRetryAsFailForNonRetriableException() {
+        try (final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(RecordCollectorImpl.class)) {
+            final RuntimeException exception = new RuntimeException("KABOOM!");
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                getExceptionalStreamsProducerOnSend(exception),
+                new ProductionExceptionHandlerMock(
+                    Optional.of(ProductionExceptionHandlerResponse.RETRY),
+                    context,
+                    sinkNodeName,
+                    taskId
+                ),
+                streamsMetrics,
+                topology
+            );
+
+            collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, sinkNodeName, context, streamPartitioner);
+
+            final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
+            assertEquals(exception, thrown.getCause());
+            assertThat(
+                thrown.getMessage(),
+                equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                    "\njava.lang.RuntimeException: KABOOM!" +
+                    "\nException handler choose to FAIL the processing, no more records would be sent.")
+            );
+
+            assertThat(
+                logCaptureAppender.getMessages().get(0),
+                equalTo("test ProductionExceptionHandler returned RETRY for a non-retriable exception. Will treat it as FAIL.")
+            );
+        }
     }
 
     @Test
