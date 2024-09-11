@@ -88,7 +88,7 @@ public interface ProductionExceptionHandler extends Configurable {
         /** Continue processing.
          *
          * <p> For this case, output records which could not be written successfully are lost.
-         * Use this option only, if your can tolerate data loss.
+         * Use this option only if you can tolerate data loss.
          */
         CONTINUE(0, "CONTINUE"),
         /** Fail processing.

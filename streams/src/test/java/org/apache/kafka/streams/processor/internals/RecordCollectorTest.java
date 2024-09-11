@@ -1356,7 +1356,7 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnUnknownTopicOrPartitionExceptionExceptionHandlerReturnsFail() {
+    public void shouldThrowStreamsExceptionOnUnknownTopicOrPartitionExceptionWhenExceptionHandlerReturnsFail() {
         final KafkaException exception = new TimeoutException("KABOOM!", new UnknownTopicOrPartitionException());
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,

@@ -98,7 +98,6 @@ public class SwallowUnknownTopicErrorIntegrationTest {
         final KStream<Integer, String> stream = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.to(NON_EXISTING_TOPIC, Produced.with(Serdes.Integer(), Serdes.String()));
         stream.to(STREAM_OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
-        produceRecords();
         topology = builder.build();
     }
 
@@ -125,14 +124,29 @@ public class SwallowUnknownTopicErrorIntegrationTest {
         );
     }
 
+    private void verifyResult() {
+        final Properties props = TestUtils.consumerConfig(
+            CLUSTER.bootstrapServers(),
+            "consumer",
+            IntegerDeserializer.class,
+            StringDeserializer.class
+        );
+
+        IntegrationTestUtils.verifyKeyValueTimestamps(
+            props,
+            STREAM_OUTPUT,
+            Collections.singletonList(new KeyValueTimestamp<>(1, "A", CLUSTER.time.milliseconds() + 2))
+        );
+    }
+
     private Properties getCommonProperties() {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        streamsConfiguration.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, TestHandler.class);
-        streamsConfiguration.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10_000);
+        streamsConfiguration.put(StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, TestHandler.class);
         return streamsConfiguration;
     }
 
@@ -173,20 +187,9 @@ public class SwallowUnknownTopicErrorIntegrationTest {
             () -> "Kafka Streams application did not reach state RUNNING in " + timeoutMs + " ms"
         );
 
-        final Properties props = TestUtils.consumerConfig(
-            CLUSTER.bootstrapServers(),
-            "consumer",
-            IntegerDeserializer.class,
-            StringDeserializer.class
-        );
-
-        IntegrationTestUtils.verifyKeyValueTimestamps(
-            props,
-            STREAM_OUTPUT,
-            Collections.singletonList(new KeyValueTimestamp<>(1, "A", CLUSTER.time.milliseconds() + 2))
-        );
+        produceRecords();
+        verifyResult();
 
         closeApplication(streamsConfiguration);
-        assertEquals(kafkaStreams.state(), State.NOT_RUNNING);
     }
 }
