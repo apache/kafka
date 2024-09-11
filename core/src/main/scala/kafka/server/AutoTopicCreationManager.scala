@@ -26,13 +26,14 @@ import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
+import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.collection.{Map, Seq, Set, mutable}
@@ -57,9 +58,10 @@ object AutoTopicCreationManager {
    controller: Option[KafkaController],
    groupCoordinator: GroupCoordinator,
    txnCoordinator: TransactionCoordinator,
+   shareCoordinator: Option[ShareCoordinator],
  ): AutoTopicCreationManager = {
     new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
-      controller, groupCoordinator, txnCoordinator)
+      controller, groupCoordinator, txnCoordinator, shareCoordinator)
   }
 }
 
@@ -69,7 +71,8 @@ class DefaultAutoTopicCreationManager(
   adminManager: Option[ZkAdminManager],
   controller: Option[KafkaController],
   groupCoordinator: GroupCoordinator,
-  txnCoordinator: TransactionCoordinator
+  txnCoordinator: TransactionCoordinator,
+  shareCoordinator: Option[ShareCoordinator]
 ) extends AutoTopicCreationManager with Logging {
   if (controller.isEmpty && channelManager.isEmpty) {
     throw new IllegalArgumentException("Must supply a channel manager if not supplying a controller")
@@ -244,6 +247,16 @@ class DefaultAutoTopicCreationManager(
           .setReplicationFactor(config.transactionLogConfig.transactionTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(
             txnCoordinator.transactionTopicConfigs))
+      case SHARE_GROUP_STATE_TOPIC_NAME =>
+        val props = shareCoordinator match {
+          case Some(coordinator) => coordinator.shareGroupStateTopicConfigs()
+          case None => new Properties()
+        }
+        new CreatableTopic()
+          .setName(topic)
+          .setNumPartitions(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
+          .setReplicationFactor(config.shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
+          .setConfigs(convertToTopicConfigCollections(props))
       case topicName =>
         new CreatableTopic()
           .setName(topicName)

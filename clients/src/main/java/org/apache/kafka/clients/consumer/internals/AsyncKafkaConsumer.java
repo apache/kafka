@@ -238,7 +238,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final int defaultApiTimeoutMs;
     private final boolean autoCommitEnabled;
     private volatile boolean closed = false;
-    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+    // Init value is needed to avoid NPE in case of exception raised in the constructor
+    private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
