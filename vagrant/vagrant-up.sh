@@ -18,9 +18,6 @@ set -o nounset
 set -o errexit  # exit script if any command exits with nonzero value
 
 readonly PROG_NAME=$(basename $0)
-readonly PROG_DIR=$(dirname $(realpath $0))
-readonly INVOKE_DIR=$(pwd)
-readonly ARGS="$@"
 
 # overrideable defaults
 AWS=false
