@@ -55,7 +55,6 @@ import java.util.regex.Pattern;
 import static java.time.Duration.ofMillis;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SuppressWarnings("deprecation")
 public class StreamsGraphTest {
 
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
@@ -64,6 +63,7 @@ public class StreamsGraphTest {
 
     // Test builds topology in successive manner but only graph node not yet processed written to topology
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldBeAbleToBuildTopologyIncrementally() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -107,7 +107,7 @@ public class StreamsGraphTest {
 
         // second repartition
         changedKeyStream.groupByKey(Grouped.as("windowed-repartition"))
-            .windowedBy(TimeWindows.of(Duration.ofSeconds(5)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofSeconds(5)))
             .count(Materialized.as("windowed-count-store"))
             .toStream()
             .map((k, v) -> KeyValue.pair(k.key(), v)).to("windowed-count", Produced.with(Serdes.String(), Serdes.Long()));
@@ -250,7 +250,7 @@ public class StreamsGraphTest {
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v);
 
         mappedKeyStream.mapValues(v -> v.toUpperCase(Locale.getDefault())).groupByKey().count().toStream().to("output");
-        mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.of(ofMillis(5000))).count().toStream().to("windowed-output");
+        mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(5000))).count().toStream().to("windowed-output");
 
         return builder.build(properties);
 
@@ -267,7 +267,7 @@ public class StreamsGraphTest {
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v).through("through-topic");
 
         mappedKeyStream.groupByKey().count().toStream().to("output");
-        mappedKeyStream.groupByKey().windowedBy(TimeWindows.of(ofMillis(5000))).count().toStream().to("windowed-output");
+        mappedKeyStream.groupByKey().windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(5000))).count().toStream().to("windowed-output");
 
         return builder.build(properties);
 
@@ -290,7 +290,7 @@ public class StreamsGraphTest {
         inputStream
             .repartition()
             .groupByKey()
-            .windowedBy(TimeWindows.of(ofMillis(5000)))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(5000)))
             .count()
             .toStream()
             .to("windowed-output");

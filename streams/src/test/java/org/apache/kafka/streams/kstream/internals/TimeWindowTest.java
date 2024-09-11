@@ -125,10 +125,9 @@ public class TimeWindowTest {
         assertThrows(IllegalArgumentException.class, () -> window.overlap(sessionWindow));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldReturnMatchedWindowsOrderedByTimestamp() {
-        final TimeWindows windows = TimeWindows.of(ofMillis(12L)).advanceBy(ofMillis(5L));
+        final TimeWindows windows = TimeWindows.ofSizeWithNoGrace(ofMillis(12L)).advanceBy(ofMillis(5L));
         final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
 
         final Long[] expected = matched.keySet().toArray(new Long[0]);

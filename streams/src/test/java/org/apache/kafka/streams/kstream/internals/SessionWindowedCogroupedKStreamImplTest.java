@@ -47,12 +47,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
+import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SuppressWarnings("deprecation")
 public class SessionWindowedCogroupedKStreamImplTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
@@ -80,7 +80,7 @@ public class SessionWindowedCogroupedKStreamImplTest {
         groupedStream2 = stream2.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
                 .cogroup(groupedStream2, MockAggregator.TOSTRING_REMOVER);
-        windowedCogroupedStream = cogroupedStream.windowedBy(SessionWindows.with(ofMillis(100)));
+        windowedCogroupedStream = cogroupedStream.windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(100), ofDays(1)));
     }
 
     @Test
@@ -147,7 +147,7 @@ public class SessionWindowedCogroupedKStreamImplTest {
                 .with(Serdes.String(), Serdes.String()));
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(SessionWindows.with(ofMillis(1)))
+                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(1)))
                 .aggregate(MockInitializer.STRING_INIT, sessionMerger, Named.as("foo"));
 
         assertThat(builder.build().describe().toString(), equalTo(
@@ -166,7 +166,7 @@ public class SessionWindowedCogroupedKStreamImplTest {
     @Test
     public void sessionWindowAggregateTest() {
         final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(SessionWindows.with(ofMillis(500)))
+                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(500)))
                 .aggregate(MockInitializer.STRING_INIT, sessionMerger, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 
@@ -190,7 +190,7 @@ public class SessionWindowedCogroupedKStreamImplTest {
     @Test
     public void sessionWindowAggregate2Test() {
         final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(SessionWindows.with(ofMillis(500)))
+                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(ofMillis(500)))
                 .aggregate(MockInitializer.STRING_INIT, sessionMerger, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 

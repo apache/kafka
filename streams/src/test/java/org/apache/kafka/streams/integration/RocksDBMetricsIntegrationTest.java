@@ -189,7 +189,7 @@ public class RocksDBMetricsIntegrationTest {
         ).toStream().to(STREAM_OUTPUT_ONE);
         builder.stream(STREAM_INPUT_TWO, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
-            .windowedBy(TimeWindows.of(WINDOW_SIZE).grace(Duration.ZERO))
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(WINDOW_SIZE))
             .aggregate(() -> 0L,
                 (aggKey, newValue, aggValue) -> aggValue,
                 Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as("time-windowed-aggregated-stream-store")
