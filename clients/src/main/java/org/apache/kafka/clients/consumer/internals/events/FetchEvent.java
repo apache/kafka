@@ -25,8 +25,8 @@ import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
  * <p/>
  *
  * <em>Note</em>: this event is completed when the {@link FetchRequestManager} has finished performing the
- * fetch request process. It does not mean that the requests are complete. It could be the case that no fetch
- * requests were created. Also of note is that if any fetch requests were created.
+ * fetch request process. It does not mean that the requests themselves have completed. The completion of this event
+ * occurs regardless of the number of requests created; it may be the case that no fetch requests were created.
  */
 public class FetchEvent extends CompletableApplicationEvent<Void> {
 
