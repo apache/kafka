@@ -176,10 +176,11 @@ object StorageTool extends Logging {
     namespace: Namespace,
     printStream: PrintStream
   ): Unit = {
-    val featuresArgs = namespace.getList[String]("feature").asScala
+    val featureArgs = namespace.getList[String]("feature").asScala
 
-    if (featuresArgs != null) {
-      for (featureArg <- featuresArgs) {
+    // Iterate over each feature specified with --feature
+    if (featureArgs != null) {
+      for (featureArg <- featureArgs) {
         val Array(featureName, versionStr) = featureArg.split("=")
 
         val featureLevel = try {
