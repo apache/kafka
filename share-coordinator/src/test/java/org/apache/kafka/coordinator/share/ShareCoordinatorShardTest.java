@@ -1038,7 +1038,9 @@ class ShareCoordinatorShardTest {
                 Arrays.asList(
                     new PersisterStateBatch(100, 110, (byte) 0, (short) 1),
                     new PersisterStateBatch(121, 130, (byte) 0, (short) 1),
-                    new PersisterStateBatch(105, 115, (byte) 0, (short) 1) // overlap with 1st batch
+                    new PersisterStateBatch(105, 115, (byte) 0, (short) 1), // overlap with 1st batch
+                    new PersisterStateBatch(123, 125, (byte) 0, (short) 1)  // overlap with 2nd batch
+
                 ),  //[(100-115, 0, 1), (121-130, 0, 1)]
                 Arrays.asList(
                     new PersisterStateBatch(111, 119, (byte) 2, (short) 2),

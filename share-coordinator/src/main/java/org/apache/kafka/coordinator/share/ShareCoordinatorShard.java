@@ -62,6 +62,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Stack;
 import java.util.stream.Collectors;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
@@ -670,29 +671,36 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return finalList;
     }
 
+    // assumes sorted input
     private static List<PersisterStateBatch> mergeBatches(List<PersisterStateBatch> batches) {
         if (batches.size() < 2) {
             return batches;
         }
-        List<PersisterStateBatch> mergedList = new ArrayList<>();
-        PersisterStateBatch cur = batches.get(0);
-        for (int i = 1; i < batches.size(); i++) {
-            if (cur.lastOffset() + 1 >= batches.get(i).firstOffset() && // the +1 will take care of fo = lo + 1 case
-                cur.deliveryState() == batches.get(i).deliveryState() &&
-                cur.deliveryCount() == batches.get(i).deliveryCount()) {
-                cur = new PersisterStateBatch(
-                    cur.firstOffset(),
-                    batches.get(i).lastOffset(),
-                    cur.deliveryState(),
-                    cur.deliveryCount()
+        Stack<PersisterStateBatch> stack = new Stack<>();
+        stack.add(batches.get(0));
+
+        for (PersisterStateBatch candidate : batches) {
+            PersisterStateBatch last = stack.peek();
+            if ((candidate.firstOffset() <= last.lastOffset() || // overlap
+                candidate.firstOffset() == last.lastOffset() + 1) &&  // contiguous
+                candidate.deliveryState() == last.deliveryState() &&
+                candidate.deliveryCount() == last.deliveryCount()) {
+                last = new PersisterStateBatch(
+                    last.firstOffset(),
+                    // cover cases
+                    // ______   ________       _________
+                    //  ___       __________            _____
+                    Math.max(candidate.lastOffset(), last.lastOffset()),
+                    last.deliveryState(),
+                    last.deliveryCount()
                 );
+                stack.pop();    // remove older smaller interval
+                stack.add(last);
             } else {
-                mergedList.add(cur);
-                cur = batches.get(i);
+                stack.add(candidate);
             }
         }
-        mergedList.add(cur);
-        return mergedList;
+        return new ArrayList<>(stack);
     }
 
     // Any batches where the last offset is < the current start offset
