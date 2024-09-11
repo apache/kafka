@@ -524,6 +524,7 @@ public class SharePartitionManager implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        this.delayedShareFetchPurgatory.shutdown();
         this.timer.close();
         this.persister.stop();
         if (!fetchQueue.isEmpty()) {
@@ -532,7 +533,6 @@ public class SharePartitionManager implements AutoCloseable {
                 Errors.BROKER_NOT_AVAILABLE.exception()));
             fetchQueue.clear();
         }
-        this.delayedShareFetchPurgatory.shutdown();
     }
 
     private ShareSessionKey shareSessionKey(String groupId, Uuid memberId) {
