@@ -247,11 +247,11 @@ public class KRaftMigrationDriverTest {
             migrationClient.setMigrationRecoveryState(
                     ZkMigrationLeadershipState.EMPTY.withKRaftMetadataOffsetAndEpoch(100, 1));
 
-            // enqueue a poll event. once run, this will enqueue a recovery event
-            driver.start();
-
-            // immediately enqueue a new controller event
+            // simulate the Raft layer running before the driver has fully started.
             driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+
+            // start up the driver. this will enqueue a poll event. once run, this will enqueue a recovery event
+            driver.start();
 
             // Even though we contrived a race above, the driver still makes it past initialization.
             TestUtils.waitForCondition(() -> driver.migrationState().get(30, TimeUnit.SECONDS).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
