@@ -55,6 +55,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
@@ -238,7 +239,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
-    // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
+    // to keep from repeatedly scanning subscriptions in poll() and position(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
@@ -828,8 +829,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         acquireAndEnsureOpen();
         try {
-            Collection<TopicPartition> parts = partitions.isEmpty() ? subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.EARLIEST);
+            cachedSubscriptionHasAllFetchPositions = false;
+            applicationEventHandler.add(new ResetOffsetEvent(partitions, OffsetResetStrategy.EARLIEST));
         } finally {
             release();
         }
@@ -842,8 +843,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         acquireAndEnsureOpen();
         try {
-            Collection<TopicPartition> parts = partitions.isEmpty() ? subscriptions.assignedPartitions() : partitions;
-            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.LATEST);
+            cachedSubscriptionHasAllFetchPositions = false;
+            applicationEventHandler.add(new ResetOffsetEvent(partitions, OffsetResetStrategy.LATEST));
         } finally {
             release();
         }
@@ -863,9 +864,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
-                if (position != null)
-                    return position.offset;
+                if (cachedSubscriptionHasAllFetchPositions) {
+                    SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
+                    if (position != null) {
+                        return position.offset;
+                    }
+                }
 
                 updateFetchPositions(timer);
                 timer.update();
