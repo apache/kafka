@@ -83,7 +83,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
 
         if (pendingFetchRequestFuture != null) {
             // In this case, we have an outstanding fetch request, so chain the newly created future to be
-            // invoked when the outstanding fetch request is completed.
+            // completed when the outstanding fetch request is completed.
             pendingFetchRequestFuture.whenComplete((value, exception) -> {
                 if (exception != null) {
                     future.completeExceptionally(exception);
