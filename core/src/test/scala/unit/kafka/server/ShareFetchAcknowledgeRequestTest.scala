@@ -1826,17 +1826,17 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
   private def compareFetchResponsePartitions(expectedResponse: ShareFetchResponseData.PartitionData,
                                              actualResponse: ShareFetchResponseData.PartitionData): Unit = {
-    assertEquals(actualResponse.partitionIndex(), expectedResponse.partitionIndex())
-    assertEquals(actualResponse.errorCode, expectedResponse.errorCode)
-    assertEquals(actualResponse.errorCode(), expectedResponse.errorCode())
-    assertEquals(actualResponse.acknowledgeErrorCode(), expectedResponse.acknowledgeErrorCode())
-    assertEquals(actualResponse.acquiredRecords(), expectedResponse.acquiredRecords())
+    assertEquals(expectedResponse.partitionIndex, actualResponse.partitionIndex)
+    assertEquals(expectedResponse.errorCode, actualResponse.errorCode)
+    assertEquals(expectedResponse.errorCode, actualResponse.errorCode)
+    assertEquals(expectedResponse.acknowledgeErrorCode, actualResponse.acknowledgeErrorCode)
+    assertEquals(expectedResponse.acquiredRecords, actualResponse.acquiredRecords)
   }
 
   private def compareAcknowledgeResponsePartitions(expectedResponse: ShareAcknowledgeResponseData.PartitionData,
                                                    actualResponse: ShareAcknowledgeResponseData.PartitionData): Unit = {
-    assertEquals(actualResponse.partitionIndex(), expectedResponse.partitionIndex())
-    assertEquals(actualResponse.errorCode(), expectedResponse.errorCode())
+    assertEquals(expectedResponse.partitionIndex, actualResponse.partitionIndex)
+    assertEquals(expectedResponse.errorCode, actualResponse.errorCode)
   }
 
   private def createShareFetchRequest(groupId: String,
