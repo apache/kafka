@@ -131,6 +131,7 @@ public class SharePartitionManagerTest {
     static final int PARTITION_MAX_BYTES = 40000;
     private static final int DELAYED_SHARE_FETCH_MAX_WAIT_MS = 2000;
     private static final int DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL = 1000;
+    private static final int DELAYED_SHARE_FETCH_TIMEOUT_MS = 3000;
 
     private static Timer mockTimer;
 
@@ -2089,7 +2090,7 @@ public class SharePartitionManagerTest {
         // Verify that the fetch request is completed.
         TestUtils.waitForCondition(
             future::isDone,
-            DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         assertTrue(future.join().isEmpty());
         // Verify that replica manager fetch is not called.
@@ -2128,7 +2129,7 @@ public class SharePartitionManagerTest {
             sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
-            DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         // Exception for client should not occur for LeaderNotAvailableException, this exception is to communicate
         // between SharePartitionManager and SharePartition to retry the request as SharePartition is not yet ready.
@@ -2140,7 +2141,7 @@ public class SharePartitionManagerTest {
         future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
-            DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         assertTrue(future.isCompletedExceptionally());
         assertFutureThrows(future, IllegalStateException.class);
@@ -2150,7 +2151,7 @@ public class SharePartitionManagerTest {
         future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
-            DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         assertTrue(future.isCompletedExceptionally());
         assertFutureThrows(future, CoordinatorNotAvailableException.class);
@@ -2160,7 +2161,7 @@ public class SharePartitionManagerTest {
         future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
-            DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         assertTrue(future.isCompletedExceptionally());
         assertFutureThrows(future, InvalidRequestException.class);
@@ -2172,7 +2173,7 @@ public class SharePartitionManagerTest {
         future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
-            DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         assertTrue(future.isCompletedExceptionally());
         assertFutureThrows(future, FencedStateEpochException.class);
@@ -2186,7 +2187,7 @@ public class SharePartitionManagerTest {
         future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
-            DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         assertTrue(future.isCompletedExceptionally());
         assertFutureThrows(future, NotLeaderOrFollowerException.class);
@@ -2200,7 +2201,7 @@ public class SharePartitionManagerTest {
         future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
-            DELAYED_SHARE_FETCH_MAX_WAIT_MS,
+            DELAYED_SHARE_FETCH_TIMEOUT_MS,
             () -> "Processing in delayed share fetch queue never ended.");
         assertTrue(future.isCompletedExceptionally());
         assertFutureThrows(future, RuntimeException.class);
