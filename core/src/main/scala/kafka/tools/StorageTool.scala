@@ -36,7 +36,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 
 import java.util
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.{CollectionHasAsScala, MapHasAsScala}
 
 object StorageTool extends Logging {
 
@@ -176,51 +176,56 @@ object StorageTool extends Logging {
     namespace: Namespace,
     printStream: PrintStream
   ): Unit = {
-    val featureArg = namespace.getString("feature")
-    val Array(featureName, versionStr) = featureArg.split("=")
+    val featuresArgs = namespace.getList[String]("feature").asScala
 
-    val featureLevel = try {
-      versionStr.toShort
-    } catch {
-      case _: NumberFormatException =>
-        throw new TerseFailure(s"Invalid version format: $versionStr for feature $featureName")
-    }
+    if (featuresArgs != null) {
+      for (featureArg <- featuresArgs) {
+        val Array(featureName, versionStr) = featureArg.split("=")
 
-    if (featureName == MetadataVersion.FEATURE_NAME) {
-      val metadataVersion = try {
-        MetadataVersion.fromFeatureLevel(featureLevel)
-      } catch {
-        case _: IllegalArgumentException =>
-          throw new TerseFailure(s"Unsupported metadata.version $featureLevel")
-      }
-      printStream.print(f"$featureName%s=$featureLevel%d (${metadataVersion.version()}%s) has no dependencies.%n")
-    } else {
-      Features.values().find(_.featureName == featureName) match {
-        case Some(feature) =>
-          val featureVersion = try {
-            feature.fromFeatureLevel(featureLevel, true)
+        val featureLevel = try {
+          versionStr.toShort
+        } catch {
+          case _: NumberFormatException =>
+            throw new TerseFailure(s"Invalid version format: $versionStr for feature $featureName")
+        }
+
+        if (featureName == MetadataVersion.FEATURE_NAME) {
+          val metadataVersion = try {
+            MetadataVersion.fromFeatureLevel(featureLevel)
           } catch {
             case _: IllegalArgumentException =>
-              throw new TerseFailure(s"Feature level $featureLevel is not supported for feature $featureName")
+              throw new TerseFailure(s"Unsupported metadata.version $featureLevel")
           }
-          val dependencies = featureVersion.dependencies().asScala
-
-          if (dependencies.isEmpty) {
-            printStream.print(f"$featureName%s=$featureLevel%d has no dependencies.%n")
-          } else {
-            printStream.print(f"$featureName%s=$featureLevel%d requires:%n")
-            for ((depFeature, depLevel) <- dependencies) {
-              if (depFeature == MetadataVersion.FEATURE_NAME) {
-                val metadataVersion = MetadataVersion.fromFeatureLevel(depLevel)
-                printStream.println(s"    $depFeature=$depLevel (${metadataVersion.version()})")
-              } else {
-                printStream.println(s"    $depFeature=$depLevel")
+          printStream.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version())
+        } else {
+          Features.values().find(_.featureName == featureName) match {
+            case Some(feature) =>
+              val featureVersion = try {
+                feature.fromFeatureLevel(featureLevel, true)
+              } catch {
+                case _: IllegalArgumentException =>
+                  throw new TerseFailure(s"Feature level $featureLevel is not supported for feature $featureName")
               }
-            }
-          }
+              val dependencies = featureVersion.dependencies().asScala
 
-        case None =>
-          throw new TerseFailure(s"Unknown feature: $featureName")
+              if (dependencies.isEmpty) {
+                printStream.printf("%s=%d has no dependencies.%n", featureName, featureLevel)
+              } else {
+                printStream.printf("%s=%d requires:%n", featureName, featureLevel)
+                for ((depFeature, depLevel) <- dependencies) {
+                  if (depFeature == MetadataVersion.FEATURE_NAME) {
+                    val metadataVersion = MetadataVersion.fromFeatureLevel(depLevel)
+                    printStream.println(s"    $depFeature=$depLevel (${metadataVersion.version()})")
+                  } else {
+                    printStream.println(s"    $depFeature=$depLevel")
+                  }
+                }
+              }
+
+            case None =>
+              throw new TerseFailure(s"Unknown feature: $featureName")
+          }
+        }
       }
     }
   }
@@ -322,15 +327,16 @@ object StorageTool extends Logging {
   private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {
     val featureDependenciesParser = subparsers.addParser("feature-dependencies")
       .help("Look up dependencies for a given feature version. " +
-        "If the feature is not known or the version not yet defined, an error is thrown. "
+        "If the feature is not known or the version not yet defined, an error is thrown. " +
+        "Multiple features can be specified."
       )
 
     featureDependenciesParser.addArgument("--feature", "-f")
       .required(true)
-      .help("The feature and version to look up dependencies for, in feature=level format." +
+      .help("The features and their versions to look up dependencies for, in feature=level format." +
         " For example: `metadata.version=5`."
       )
-      .action(store())
+      .action(append())
   }
 
   private def addRandomUuidParser(subparsers: Subparsers): Unit = {

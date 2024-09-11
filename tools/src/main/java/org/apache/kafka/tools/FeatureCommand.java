@@ -40,11 +40,11 @@ import net.sourceforge.argparse4j.inf.Subparsers;
 import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -195,14 +195,15 @@ public class FeatureCommand {
     private static void addFeatureDependenciesParser(Subparsers subparsers) {
         Subparser featureDependenciesParser = subparsers.addParser("feature-dependencies")
                 .help("Look up dependencies for a given feature version. " +
-                    "If the feature is not known or the version not yet defined, an error is thrown. "
+                    "If the feature is not known or the version not yet defined, an error is thrown. " +
+                     "Multiple features can be specified. "
                 );
         featureDependenciesParser.addArgument("--feature")
                 .help("The feature and version to look up dependencies for, in feature=level format. " +
                     "For example: `metadata.version=5`."
                 )
                 .required(true)
-                .action(store());
+                .action(append());
     }
 
     static String levelToString(String feature, short level) {
@@ -339,43 +340,49 @@ public class FeatureCommand {
     }
 
     static void handleFeatureDependencies(Namespace namespace) throws TerseException {
-        String featureArg = namespace.getString("feature");
-        String[] nameAndLevel = parseNameAndLevel(featureArg);
+        List<String> featureArgs = namespace.getList("feature");
 
-        String featureName = nameAndLevel[0];
-        short featureLevel = Short.parseShort(nameAndLevel[1]);
+        // Iterate over each feature specified with --feature
+        if (featureArgs != null) {
+            for (String feature : featureArgs) {
+                String[] nameAndLevel = parseNameAndLevel(feature);
 
-        if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
-            MetadataVersion metadataVersion;
-            try {
-                metadataVersion = MetadataVersion.fromFeatureLevel(featureLevel);
-            } catch (IllegalArgumentException e) {
-                throw new TerseException("Unsupported metadata.version " + featureLevel);
-            }
+                String featureName = nameAndLevel[0];
+                short featureLevel = Short.parseShort(nameAndLevel[1]);
 
-            // Assuming metadata versions do not have dependencies.
-            System.out.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version());
-        } else {
-            Features feature = Arrays.stream(Features.FEATURES)
-                    .filter(f -> f.featureName().equals(featureName))
-                    .findFirst()
-                    .orElseThrow(() -> new TerseException("Unknown feature: " + featureName));
-
-            FeatureVersion featureVersion = feature.fromFeatureLevel(featureLevel, true);
-            Map<String, Short> dependencies = featureVersion.dependencies();
-
-            if (dependencies.isEmpty()) {
-                System.out.printf("%s=%d has no dependencies.%n", featureName, featureLevel);
-            } else {
-                System.out.printf("%s=%d requires:%n", featureName, featureLevel);
-                dependencies.forEach((depFeature, depLevel) -> {
-                    if (depFeature.equals(MetadataVersion.FEATURE_NAME)) {
-                        MetadataVersion depMetadataVersion = MetadataVersion.fromFeatureLevel(depLevel);
-                        System.out.printf("    %s=%d (%s)%n", depFeature, depLevel, depMetadataVersion.version());
-                    } else {
-                        System.out.printf("    %s=%d%n", depFeature, depLevel);
+                if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
+                    MetadataVersion metadataVersion;
+                    try {
+                        metadataVersion = MetadataVersion.fromFeatureLevel(featureLevel);
+                    } catch (IllegalArgumentException e) {
+                        throw new TerseException("Unsupported metadata.version " + featureLevel);
                     }
-                });
+
+                    // Assuming metadata versions do not have dependencies.
+                    System.out.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version());
+                } else {
+                    Features featureEnum = Arrays.stream(Features.FEATURES)
+                            .filter(f -> f.featureName().equals(featureName))
+                            .findFirst()
+                            .orElseThrow(() -> new TerseException("Unknown feature: " + featureName));
+
+                    FeatureVersion featureVersion = featureEnum.fromFeatureLevel(featureLevel, true);
+                    Map<String, Short> dependencies = featureVersion.dependencies();
+
+                    if (dependencies.isEmpty()) {
+                        System.out.printf("%s=%d has no dependencies.%n", featureName, featureLevel);
+                    } else {
+                        System.out.printf("%s=%d requires:%n", featureName, featureLevel);
+                        dependencies.forEach((depFeature, depLevel) -> {
+                            if (depFeature.equals(MetadataVersion.FEATURE_NAME)) {
+                                MetadataVersion depMetadataVersion = MetadataVersion.fromFeatureLevel(depLevel);
+                                System.out.printf("    %s=%d (%s)%n", depFeature, depLevel, depMetadataVersion.version());
+                            } else {
+                                System.out.printf("    %s=%d%n", depFeature, depLevel);
+                            }
+                        });
+                    }
+                }
             }
         }
     }

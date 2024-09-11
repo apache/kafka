@@ -404,7 +404,7 @@ public class FeatureCommandTest {
     @Test
     public void testHandleFeatureDependenciesForFeatureWithDependencies() {
         Map<String, Object> namespace = new HashMap<>();
-        namespace.put("feature", "test.feature.version=2");
+        namespace.put("feature", Collections.singletonList("test.feature.version=2"));
 
         String output = ToolsTestUtils.captureStandardOut(() -> {
             try {
@@ -426,7 +426,7 @@ public class FeatureCommandTest {
     @Test
     public void testHandleFeatureDependenciesForFeatureWithNoDependencies() {
         Map<String, Object> namespace = new HashMap<>();
-        namespace.put("feature", "metadata.version=17");
+        namespace.put("feature", Collections.singletonList("metadata.version=17"));
 
         String output = ToolsTestUtils.captureStandardOut(() -> {
             try {
@@ -442,7 +442,7 @@ public class FeatureCommandTest {
     @Test
     public void testHandleFeatureDependenciesForUnknownFeature() {
         Map<String, Object> namespace = new HashMap<>();
-        namespace.put("feature", "unknown.feature=1");
+        namespace.put("feature", Collections.singletonList("unknown.feature=1"));
 
         Exception exception = assertThrows(
             TerseException.class,
@@ -455,7 +455,7 @@ public class FeatureCommandTest {
     @Test
     public void testHandleFeatureDependenciesForFeatureWithUnknownFeatureVersion() {
         Map<String, Object> namespace = new HashMap<>();
-        namespace.put("feature", "transaction.version=1000");
+        namespace.put("feature", Collections.singletonList("transaction.version=1000"));
 
         Exception exception = assertThrows(
             IllegalArgumentException.class,
@@ -468,7 +468,7 @@ public class FeatureCommandTest {
     @Test
     public void testHandleFeatureDependenciesForInvalidVersionFormat() {
         Map<String, Object> namespace = new HashMap<>();
-        namespace.put("feature", "metadata.version=invalid");
+        namespace.put("feature", Collections.singletonList("metadata.version=invalid"));
 
         RuntimeException exception = assertThrows(
             RuntimeException.class,
@@ -479,5 +479,38 @@ public class FeatureCommandTest {
             "Can't parse feature=level string metadata.version=invalid: unable to parse invalid as a short.",
             exception.getMessage()
         );
+    }
+
+    @Test
+    public void testHandleFeatureDependenciesForMultipleFeatures() {
+        Map<String, Object> namespace = new HashMap<>();
+        namespace.put("feature", Arrays.asList(
+                "transaction.version=2",
+                "group.version=1",
+                "test.feature.version=2"
+        ));
+
+        String output = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                FeatureCommand.handleFeatureDependencies(new Namespace(namespace));
+            } catch (TerseException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // Expected output for test.feature.version=2 dependencies
+        String latestTestingVersionOutput = String.format(
+                "test.feature.version=2 requires:\n    metadata.version=%d (%s)\n",
+                MetadataVersion.latestTesting().featureLevel(),
+                MetadataVersion.latestTesting().version()
+        );
+
+        String expectedOutput = String.join("\n",
+                "transaction.version=2 has no dependencies.",
+                "group.version=1 has no dependencies.",
+                latestTestingVersionOutput.trim()
+        );
+
+        assertEquals(expectedOutput.trim(), output.trim());
     }
 }

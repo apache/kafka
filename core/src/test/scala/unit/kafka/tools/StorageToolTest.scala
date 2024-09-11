@@ -529,12 +529,15 @@ Found problem:
 
   private def runFeatureDependenciesCommand(
     stream: ByteArrayOutputStream,
-    properties: Properties,
-    feature: String
+    features: Seq[String]
   ): Int = {
     val tempDir = TestUtils.tempDir()
     try {
-      val arguments = ListBuffer[String]("feature-dependencies", "--feature", feature)
+      val arguments = ListBuffer[String]("feature-dependencies")
+      features.foreach(feature => {
+        arguments += "--feature"
+        arguments += feature
+      })
       StorageTool.execute(arguments.toArray, new PrintStream(stream))
     } finally {
       Utils.delete(tempDir)
@@ -543,11 +546,8 @@ Found problem:
 
   @Test
   def testHandleFeatureDependenciesForFeatureWithDependencies(): Unit = {
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-
     val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFeatureDependenciesCommand(stream, properties, "test.feature.version=2"))
+    assertEquals(0, runFeatureDependenciesCommand(stream, Seq("test.feature.version=2")))
 
     val output = stream.toString
     val metadataVersion = MetadataVersion.latestTesting()
@@ -557,12 +557,32 @@ Found problem:
   }
 
   @Test
-  def testHandleFeatureDependenciesForFeatureWithNoDependencies(): Unit = {
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-
+  def testMultipleFeatureDependencies(): Unit = {
     val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFeatureDependenciesCommand(stream, properties, "metadata.version=17"))
+    val features = Seq("transaction.version=2", "group.version=1", "test.feature.version=2")
+
+    assertEquals(0, runFeatureDependenciesCommand(stream, features))
+
+    val output = stream.toString.trim
+    System.out.println(output)
+
+    val latestTestingVersion = MetadataVersion.latestTesting()
+    val latestTestingVersionString = s"metadata.version=${latestTestingVersion.featureLevel()} (${latestTestingVersion.version()})"
+
+    val expectedOutput =
+      s"""transaction.version=2 has no dependencies.
+         |group.version=1 has no dependencies.
+         |test.feature.version=2 requires:
+         |    $latestTestingVersionString
+         |""".stripMargin.trim
+
+    assertEquals(expectedOutput, output)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForFeatureWithNoDependencies(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFeatureDependenciesCommand(stream, Seq("metadata.version=17")))
 
     val output = stream.toString.trim
 
@@ -571,12 +591,9 @@ Found problem:
 
   @Test
   def testHandleFeatureDependenciesForUnknownFeature(): Unit = {
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-
     val stream = new ByteArrayOutputStream()
     val exception = assertThrows(classOf[TerseFailure], () => {
-      runFeatureDependenciesCommand(stream, properties, "unknown.feature.version=1")
+      runFeatureDependenciesCommand(stream, Seq("unknown.feature.version=1"))
     })
 
     assertEquals("Unknown feature: unknown.feature.version", exception.getMessage)
@@ -584,12 +601,9 @@ Found problem:
 
   @Test
   def testHandleFeatureDependenciesForFeatureWithUnknownFeatureVersion(): Unit = {
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-
     val stream = new ByteArrayOutputStream()
     val exception = assertThrows(classOf[TerseFailure], () => {
-      runFeatureDependenciesCommand(stream, properties, "transaction.version=1000")
+      runFeatureDependenciesCommand(stream, Seq("transaction.version=1000"))
     })
 
     assertEquals("Feature level 1000 is not supported for feature transaction.version", exception.getMessage)
@@ -597,13 +611,10 @@ Found problem:
 
   @Test
   def testHandleFeatureDependenciesForInvalidVersionFormat(): Unit = {
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-
     val stream = new ByteArrayOutputStream()
 
     val exception = assertThrows(classOf[TerseFailure], () => {
-      runFeatureDependenciesCommand(stream, properties, "metadata.version=invalid")
+      runFeatureDependenciesCommand(stream, Seq("metadata.version=invalid"))
     })
 
     assertEquals("Invalid version format: invalid for feature metadata.version", exception.getMessage)
