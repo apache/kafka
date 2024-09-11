@@ -42,14 +42,17 @@ jobs:
         with:
           debug-only: ${{ inputs.dryRun || false }}
           operations-per-run: ${{ inputs.operationsPerRun || 100 }}
+          ascending: true
           days-before-stale: 90
-          days-before-close: -1
+          days-before-close: 120
           stale-pr-label: 'stale'
           stale-pr-message: >
             This PR is being marked as stale since it has not had any activity in 90 days. If you
             would like to keep this PR alive, please ask a committer for review. If the PR has 
-            merge conflicts, please update it with the latest from trunk (or appropriate release branch)
+            merge conflicts, please update it with the latest from trunk (or appropriate release branch).
+            <p>
+            If you are having difficulty finding a reviewer, please reach out on the 
+            [mailing list](https://kafka.apache.org/contact).
             <p>
             If this PR is no longer valid or desired, please feel free to close it. If no activity
             occurs in the next 30 days, it will be automatically closed.
-          
