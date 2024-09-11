@@ -74,35 +74,6 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldParseWhitelistArgument() throws IOException {
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--whitelist", "whitelistTest*",
-            "--from-beginning"
-        };
-
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
-
-        assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("whitelistTest*", config.includedTopicsArg().orElse(""));
-        assertTrue(config.fromBeginning());
-    }
-
-    @Test
-    public void shouldIgnoreWhitelistArgumentIfIncludeSpecified() throws IOException {
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--include", "includeTest*",
-            "--whitelist", "whitelistTest*",
-            "--from-beginning"
-        };
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
-        assertEquals("localhost:9092", config.bootstrapServer());
-        assertEquals("includeTest*", config.includedTopicsArg().orElse(""));
-        assertTrue(config.fromBeginning());
-    }
-
-    @Test
     public void shouldParseValidSimpleConsumerValidConfigWithNumericOffset() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
@@ -528,25 +499,6 @@ public class ConsoleConsumerOptionsTest {
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--include", "includeTest*"
-        };
-
-        try {
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
-        } finally {
-            Exit.resetExitProcedure();
-        }
-    }
-
-    @Test
-    public void shouldExitIfTopicAndWhitelistSpecified() {
-        Exit.setExitProcedure((code, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-
-        String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--whitelist", "whitelistTest*"
         };
 
         try {

@@ -47,7 +47,6 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     private static final Random RANDOM = new Random();
 
     private final OptionSpec<String> topicOpt;
-    private final OptionSpec<String> whitelistOpt;
     private final OptionSpec<String> includeOpt;
     private final OptionSpec<Integer> partitionIdOpt;
     private final OptionSpec<String> offsetOpt;
@@ -75,11 +74,6 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         topicOpt = parser.accepts("topic", "The topic to consume on.")
                 .withRequiredArg()
                 .describedAs("topic")
-                .ofType(String.class);
-        whitelistOpt = parser.accepts("whitelist",
-                        "DEPRECATED, use --include instead; ignored if --include specified. Regular expression specifying list of topics to include for consumption.")
-                .withRequiredArg()
-                .describedAs("Java regex (String)")
                 .ofType(String.class);
         includeOpt = parser.accepts("include",
                         "Regular expression specifying list of topics to include for consumption.")
@@ -194,10 +188,9 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     private void checkRequiredArgs() {
         List<Optional<String>> topicOrFilterArgs = new ArrayList<>(Arrays.asList(topicArg(), includedTopicsArg()));
         topicOrFilterArgs.removeIf(arg -> !arg.isPresent());
-        // user need to specify value for either --topic or one of the include filters options (--include or --whitelist)
+        // user need to specify value for either --topic or --include options)
         if (topicOrFilterArgs.size() != 1) {
-            CommandLineUtils.printUsageAndExit(parser, "Exactly one of --include/--topic is required. " +
-                    (options.has(whitelistOpt) ? "--whitelist is DEPRECATED use --include instead; ignored if --include specified." : ""));
+            CommandLineUtils.printUsageAndExit(parser, "Exactly one of --include/--topic is required. ");
         }
 
         if (partitionArg().isPresent()) {
@@ -416,7 +409,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     Optional<String> includedTopicsArg() {
         return options.has(includeOpt)
                 ? Optional.of(options.valueOf(includeOpt))
-                : Optional.ofNullable(options.valueOf(whitelistOpt));
+                : Optional.empty();
     }
 
     Properties formatterArgs() throws IOException {
