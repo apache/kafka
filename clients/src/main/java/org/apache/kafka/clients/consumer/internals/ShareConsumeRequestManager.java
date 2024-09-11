@@ -89,6 +89,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final Map<Integer, Tuple<AcknowledgeRequestState>> acknowledgeRequestStates;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
+    private boolean closing = false;
     private final CompletableFuture<Void> closeFuture;
 
     ShareConsumeRequestManager(final Time time,
@@ -256,6 +257,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         } else if (checkAndRemoveCompletedAcknowledgements()) {
             // Return empty result until all the acknowledgement request states are processed
             pollResult = PollResult.EMPTY;
+        } else if (closing) {
+            if (!closeFuture.isDone()) {
+                closeFuture.complete(null);
+            }
+            pollResult = PollResult.EMPTY;
         }
         return pollResult;
     }
@@ -308,7 +314,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     /**
      * Prunes the empty acknowledgementRequestStates.
      * Returns true if there are still any acknowledgements left to be processed.
-     * If there is a pending/inFlight close request, we always return true.
      */
     private boolean checkAndRemoveCompletedAcknowledgements() {
         boolean areAnyAcksLeft = false;
@@ -322,8 +327,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 areAsyncAcksLeft = false;
             }
             if (!areRequestStatesInProgress(acknowledgeRequestStatePair.getValue().getSyncRequestQueue())) {
-                acknowledgeRequestStatePair.getValue().setSyncRequestQueue(null);
+                acknowledgeRequestStatePair.getValue().nullifySyncRequestQueue();
                 areSyncAcksLeft = false;
+            }
+            if (!isRequestStateInProgress(acknowledgeRequestStatePair.getValue().getCloseRequest())) {
+                acknowledgeRequestStatePair.getValue().setCloseRequest(null);
             }
 
             if (areAsyncAcksLeft || areSyncAcksLeft) {
@@ -338,7 +346,13 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     private boolean isRequestStateInProgress(AcknowledgeRequestState acknowledgeRequestState) {
-        return acknowledgeRequestState != null && !(acknowledgeRequestState.isEmpty());
+        if (acknowledgeRequestState == null) {
+            return false;
+        } else if (acknowledgeRequestState.onClose()) {
+            return !acknowledgeRequestState.isCloseProcessed;
+        } else {
+            return !(acknowledgeRequestState.isEmpty());
+        }
     }
 
     private boolean areRequestStatesInProgress(Queue<AcknowledgeRequestState> acknowledgeRequestStates) {
@@ -385,10 +399,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         log.debug("Added sync acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
                         resultCount.incrementAndGet();
                     }
-                }
-
-                if (acknowledgeRequestStates.get(nodeId).getSyncRequestQueue() == null) {
-                    acknowledgeRequestStates.get(nodeId).setSyncRequestQueue(new LinkedList<>());
                 }
 
                 acknowledgeRequestStates.get(nodeId).addSyncRequest(new AcknowledgeRequestState(logContext,
@@ -475,6 +485,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         final Cluster cluster = metadata.fetch();
         final AtomicInteger resultCount = new AtomicInteger();
         final ResultHandler resultHandler = new ResultHandler(resultCount, Optional.empty());
+
+        closing = true;
 
         sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Node node = cluster.nodeById(nodeId);
@@ -809,6 +821,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          */
         private final AcknowledgeRequestType requestType;
 
+        /**
+         * Boolean to indicate if the request has been processed, only applicable to close requests.
+         */
+        private boolean isCloseProcessed;
+
         AcknowledgeRequestState(LogContext logContext,
                                 String owner,
                                 long deadlineMs,
@@ -827,6 +844,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.inFlightAcknowledgements = new HashMap<>();
             this.incompleteAcknowledgements = new HashMap<>();
             this.requestType = acknowledgeRequestType;
+            this.isCloseProcessed = false;
         }
 
         UnsentRequest buildRequest() {
@@ -949,8 +967,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         void processingComplete() {
             inFlightAcknowledgements.clear();
             resultHandler.completeIfEmpty();
-            if (onClose() && !closeFuture.isDone()) {
-                closeFuture.complete(null);
+            if (onClose()) {
+                isCloseProcessed = true;
             }
         }
 
@@ -1051,11 +1069,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.asyncRequest = asyncRequest;
         }
 
-        public void setSyncRequestQueue(Queue<V> syncRequestQueue) {
-            this.syncRequestQueue = syncRequestQueue;
+        public void nullifySyncRequestQueue() {
+            this.syncRequestQueue = null;
         }
 
         public void addSyncRequest(V syncRequest) {
+            if (syncRequestQueue == null) {
+                syncRequestQueue = new LinkedList<>();
+            }
             this.syncRequestQueue.add(syncRequest);
         }
 
