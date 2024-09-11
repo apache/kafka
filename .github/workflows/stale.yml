@@ -46,7 +46,7 @@ jobs:
           days-before-stale: 90
           days-before-close: 120
           stale-pr-label: 'stale'
-          stale-pr-message: >
+          stale-pr-message: |
             This PR is being marked as stale since it has not had any activity in 90 days. If you
             would like to keep this PR alive, please ask a committer for review. If the PR has 
             merge conflicts, please update it with the latest from trunk (or appropriate release branch).
@@ -56,3 +56,7 @@ jobs:
             <p>
             If this PR is no longer valid or desired, please feel free to close it. If no activity
             occurs in the next 30 days, it will be automatically closed.
+          close-pr-label: 'closed-stale'
+          close-pr-message: |
+            This PR has been closed since it has not had any activity in 120 days. If you fell like this
+            was a mistake, please feel free to re-open the PR and ask a committer for a review.
