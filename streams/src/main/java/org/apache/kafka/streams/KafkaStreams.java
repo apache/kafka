@@ -185,7 +185,6 @@ public class KafkaStreams implements AutoCloseable {
     GlobalStreamThread globalStreamThread;
     protected StateDirectory stateDirectory = null;
     private KafkaStreams.StateListener stateListener;
-    private boolean oldHandler;
     private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
     private final Object changeThreadCount = new Object();
 
@@ -474,18 +473,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable, final boolean skipThreadReplacement) {
-        if (oldHandler) {
-            threads.remove(Thread.currentThread());
-            if (throwable instanceof RuntimeException) {
-                throw (RuntimeException) throwable;
-            } else if (throwable instanceof Error) {
-                throw (Error) throwable;
-            } else {
-                throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
-            }
-        } else {
-            handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT, skipThreadReplacement);
-        }
+        handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT, skipThreadReplacement);
     }
 
     private void replaceStreamThread(final Throwable throwable) {
@@ -511,10 +499,7 @@ public class KafkaStreams implements AutoCloseable {
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler,
                                                 final boolean skipThreadReplacement) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
-        if (oldHandler) {
-            log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
-                    "The old handler will be ignored as long as a new handler is set.");
-        }
+
         switch (action) {
             case REPLACE_THREAD:
                 if (!skipThreadReplacement) {
@@ -1004,8 +989,6 @@ public class KafkaStreams implements AutoCloseable {
             parseHostInfo(applicationConfigs.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
             logContext
         );
-
-        oldHandler = false;
         streamsUncaughtExceptionHandler = this::defaultStreamsUncaughtExceptionHandler;
         delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         delegatingStandbyUpdateListener = new DelegatingStandbyUpdateListener();

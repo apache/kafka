@@ -39,6 +39,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -532,7 +533,12 @@ public class EosIntegrationTest {
                 getMaxPerKey(expectedResultBeforeFailure),
                 "The state store content before failure do not match what expected");
 
+            errorInjected.set(true);
             writeInputData(dataAfterFailure);
+
+            waitForCondition(
+                    () -> uncaughtException != null, MAX_WAIT_TIME_MS,
+                    "Should receive uncaught exception from one StreamThread.");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -1184,7 +1190,7 @@ public class EosIntegrationTest {
             }
             if (tries >= maxTries) {
                 throw new AssertionError("No committed records in topic " + topic
-                    + ", partition " + partition + " after " + maxTries + " retries.");
+                        + ", partition " + partition + " after " + maxTries + " retries.");
             }
             final long now = System.currentTimeMillis();
             if (now > deadline) {
