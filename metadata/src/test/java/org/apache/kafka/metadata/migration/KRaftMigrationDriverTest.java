@@ -232,6 +232,32 @@ public class KRaftMigrationDriverTest {
         return future;
     }
 
+    @Test
+    public void testOnControllerChangeWhenUninitialized() throws InterruptedException {
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+        CapturingMigrationClient.newBuilder().build();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder().build();
+        MockFaultHandler faultHandler = new MockFaultHandler("testBecomeLeaderUninitialized");
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+            .setZkMigrationClient(migrationClient)
+            .setPropagator(metadataPropagator)
+            .setFaultHandler(faultHandler);
+        try (KRaftMigrationDriver driver = builder.build()) {
+            // Fake a complete migration with ZK client
+            migrationClient.setMigrationRecoveryState(
+                    ZkMigrationLeadershipState.EMPTY.withKRaftMetadataOffsetAndEpoch(100, 1));
+
+            // simulate the Raft layer running before the driver has fully started.
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+
+            // start up the driver. this will enqueue a poll event. once run, this will enqueue a recovery event
+            driver.start();
+
+            // Even though we contrived a race above, the driver still makes it past initialization.
+            TestUtils.waitForCondition(() -> driver.migrationState().get(30, TimeUnit.SECONDS).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
+                "Waiting for KRaftMigrationDriver to enter WAIT_FOR_CONTROLLER_QUORUM state");
+        }
+    }
     /**
      * Don't send RPCs to brokers for every metadata change, only when brokers or topics change.
      * This is a regression test for KAFKA-14668
