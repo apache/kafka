@@ -1038,10 +1038,7 @@ public class SharePartitionManagerTest {
             .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .build();
 
-        doAnswer(invocation -> {
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
-            return buildLogReadResult(partitionMaxBytes.keySet());
-        }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), fetchParams, partitionMaxBytes);
         Mockito.verify(replicaManager, times(1)).readFromLog(
@@ -1117,35 +1114,30 @@ public class SharePartitionManagerTest {
             assertEquals(4, sp1.nextFetchOffset());
             assertEquals(10, sp2.nextFetchOffset());
             assertEquals(20, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
             return buildLogReadResult(partitionMaxBytes.keySet());
         }).doAnswer(invocation -> {
             assertEquals(15, sp0.nextFetchOffset());
             assertEquals(1, sp1.nextFetchOffset());
             assertEquals(25, sp2.nextFetchOffset());
             assertEquals(15, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
             return buildLogReadResult(partitionMaxBytes.keySet());
         }).doAnswer(invocation -> {
             assertEquals(6, sp0.nextFetchOffset());
             assertEquals(18, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(23, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
             return buildLogReadResult(partitionMaxBytes.keySet());
         }).doAnswer(invocation -> {
             assertEquals(30, sp0.nextFetchOffset());
             assertEquals(5, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(16, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
             return buildLogReadResult(partitionMaxBytes.keySet());
         }).doAnswer(invocation -> {
             assertEquals(25, sp0.nextFetchOffset());
             assertEquals(5, sp1.nextFetchOffset());
             assertEquals(26, sp2.nextFetchOffset());
             assertEquals(16, sp3.nextFetchOffset());
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
             return buildLogReadResult(partitionMaxBytes.keySet());
         }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
@@ -1233,10 +1225,7 @@ public class SharePartitionManagerTest {
             .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .build();
 
-        doAnswer(invocation -> {
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
-            return buildLogReadResult(partitionMaxBytes.keySet());
-        }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.fetchMessages(groupId, memberId.toString(), fetchParams, partitionMaxBytes);
         // Since the nextFetchOffset does not point to endOffset + 1, i.e. some of the records in the cachedState are AVAILABLE,
@@ -1681,10 +1670,7 @@ public class SharePartitionManagerTest {
             .withDelayedShareFetchPurgatory(delayedShareFetchPurgatory)
             .withFetchQueue(fetchQueue).build();
 
-        doAnswer(invocation -> {
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
-            return buildLogReadResult(partitionMaxBytes.keySet());
-        }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         sharePartitionManager.maybeProcessFetchQueue();
 
@@ -1762,10 +1748,7 @@ public class SharePartitionManagerTest {
             .withTimer(mockTimer)
             .build();
 
-        doAnswer(invocation -> {
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
-            return buildLogReadResult(partitionMaxBytes.keySet());
-        }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
         acknowledgeTopics.put(tp1, Arrays.asList(
@@ -1955,10 +1938,7 @@ public class SharePartitionManagerTest {
                 .withTimer(mockTimer)
                 .build());
 
-        doAnswer(invocation -> {
-            sharePartitionManager.releaseFetchQueueAndPartitionsLock(groupId, partitionMaxBytes.keySet());
-            return buildLogReadResult(partitionMaxBytes.keySet());
-        }).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         assertEquals(2, delayedShareFetchPurgatory.watched());
 

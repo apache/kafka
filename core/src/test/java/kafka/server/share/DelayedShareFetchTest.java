@@ -31,7 +31,6 @@ import org.apache.kafka.storage.internals.log.FetchParams;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -235,6 +234,9 @@ public class DelayedShareFetchTest {
                         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
                 future, partitionMaxBytes);
 
+        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(false);
+
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchPartitionData(shareFetchPartitionData)
             .withReplicaManager(replicaManager)
@@ -242,13 +244,19 @@ public class DelayedShareFetchTest {
             .build());
         assertFalse(delayedShareFetch.isCompleted());
 
-        // Completing the future before calling forceComplete which can happen in a real world scenario where the future
-        // might be completed by another thread which has the same share fetch request entry.
-        future.complete(Collections.emptyMap());
+        // Force completing the share fetch request for the first time should complete the future with an empty map.
         delayedShareFetch.forceComplete();
         assertTrue(delayedShareFetch.isCompleted());
-        // Verifying that forceComplete does not call topicPartitionDataForAcquirablePartitions method in DelayedShareFetch.
-        Mockito.verify(delayedShareFetch, times(0)).acquirablePartitions();
+        // Verifying that the first forceComplete calls acquirablePartitions method in DelayedShareFetch.
+        Mockito.verify(delayedShareFetch, times(1)).acquirablePartitions();
+        assertEquals(0, shareFetchPartitionData.future().join().size());
+
+        // Force completing the share fetch request for the second time should hit the future completion check and not
+        // proceed ahead in the function.
+        delayedShareFetch.forceComplete();
+        assertTrue(delayedShareFetch.isCompleted());
+        // Verifying that the second forceComplete does not call acquirablePartitions method in DelayedShareFetch.
+        Mockito.verify(delayedShareFetch, times(1)).acquirablePartitions();
     }
 
     static class DelayedShareFetchBuilder {

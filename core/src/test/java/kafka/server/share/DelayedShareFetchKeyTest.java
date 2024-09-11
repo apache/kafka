@@ -50,7 +50,6 @@ public class DelayedShareFetchKeyTest {
                 assertEquals(value1.hashCode(), value2.hashCode());
             } else {
                 assertNotEquals(value1, value2);
-                assertNotEquals(value1.hashCode(), value2.hashCode());
             }
         }));
     }

@@ -42,7 +42,8 @@ import scala.Option;
 public class ShareFetchUtils {
     private static final Logger log = LoggerFactory.getLogger(ShareFetchUtils.class);
 
-    // Process the replica manager fetch response to update share partitions and futures.
+    // Process the replica manager fetch response to update share partitions and futures. We acquire the fetched data
+    // from share partitions.
     static CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> processFetchResponse(
             SharePartitionManager.ShareFetchPartitionData shareFetchPartitionData,
             Map<TopicIdPartition, FetchPartitionData> responseData,

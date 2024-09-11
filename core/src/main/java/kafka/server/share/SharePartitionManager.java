@@ -667,12 +667,6 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     // Visible for testing.
-    void releaseFetchQueueAndPartitionsLock(String groupId, Set<TopicIdPartition> topicIdPartitions) {
-        topicIdPartitions.forEach(tp -> partitionCacheMap.get(sharePartitionKey(groupId, tp)).releaseFetchLock());
-        releaseProcessFetchQueueLock();
-    }
-
-    // Visible for testing.
     boolean acquireProcessFetchQueueLock() {
         return processFetchQueueLock.compareAndSet(false, true);
     }
