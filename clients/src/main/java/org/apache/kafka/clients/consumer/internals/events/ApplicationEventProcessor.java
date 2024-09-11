@@ -147,6 +147,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((ShareAcknowledgeOnCloseEvent) event);
                 return;
 
+            case SEEK_UNVALIDATED:
+                process((SeekUnvalidatedEvent) event);
+                return;
+
             default:
                 log.warn("Application event type {} was not expected", event.type());
         }
@@ -408,5 +412,19 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 );
             }
         };
+    }
+
+    private void process(final SeekUnvalidatedEvent event) {
+        try {
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    event.offset(),
+                    event.offsetEpoch(),
+                    metadata.currentLeader(event.partition())
+            );
+            subscriptions.seekUnvalidated(event.partition(), newPosition);
+            event.future().complete(null);
+        } catch (Exception e) {
+            event.future().completeExceptionally(e);
+        }
     }
 }

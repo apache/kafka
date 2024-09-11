@@ -35,7 +35,8 @@ public abstract class ApplicationEvent {
         COMMIT_ON_CLOSE,
         SHARE_FETCH, SHARE_ACKNOWLEDGE_ASYNC, SHARE_ACKNOWLEDGE_SYNC,
         SHARE_SUBSCRIPTION_CHANGE, SHARE_UNSUBSCRIBE,
-        SHARE_ACKNOWLEDGE_ON_CLOSE
+        SHARE_ACKNOWLEDGE_ON_CLOSE,
+        SEEK_UNVALIDATED,
     }
 
     private final Type type;
