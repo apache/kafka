@@ -16,14 +16,14 @@ committers will be able to utilize such scripts.
 Check if Python and pip are installed in your system.
 
 ```bash
-python3 --version
-pip3 --version
+python --version
+pip --version
 ```
 
 ### 2. Set up a virtual environment (optional)
 
 ```bash
-python3 -m venv venv
+python -m venv venv
 
 # For Linux/macOS
 source venv/bin/activate
@@ -35,7 +35,7 @@ source venv/bin/activate
 ### 3. Install the required dependencies
 
 ```bash
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 4. Install the GitHub CLI
@@ -55,7 +55,7 @@ Some simple string prefix matching is done to find candidates.
 Usage:
 
 ```bash
-python3 reviewers.py
+python reviewers.py
 ```
 
 ## Refresh Collaborators
@@ -84,7 +84,7 @@ export GITHUB_TOKEN="$(gh auth token)"
 Usage:
 
 ```bash
-python3 refresh_collaborators.py
+python refresh_collaborators.py
 ```
 
 ## Approve GitHub Action Workflows
@@ -98,7 +98,7 @@ non-committers. It fetches the latest 20 workflow runs that are in the
 Usage:
 
 ```bash
-python3 approve-workflows.py
+python approve-workflows.py
 ```
 
 ## Find Hanging Tests
@@ -109,7 +109,7 @@ tests that were STARTED but do not have a corresponding FINISHED or FAILED.
 Usage:
 
 ```bash
-python2 find-unfinished-test.py ~/Downloads/logs_28218821016/5_build\ _\ JUnit\ tests\ Java\ 11.txt
+python find-unfinished-test.py ~/Downloads/logs_28218821016/5_build\ _\ JUnit\ tests\ Java\ 11.txt
 
 Found tests that were started, but not finished:
 
