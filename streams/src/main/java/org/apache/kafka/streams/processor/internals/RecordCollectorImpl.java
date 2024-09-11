@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -46,6 +47,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.errors.internals.FailedProcessingException;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -220,7 +222,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 partition,
                 timestamp,
                 processorNodeId,
-                context,
+                context.recordContext(),
                 serializationException);
             return;
         }
@@ -244,7 +246,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 partition,
                 timestamp,
                 processorNodeId,
-                context,
+                context.recordContext(),
                 serializationException);
             return;
         }
@@ -282,7 +284,22 @@ public class RecordCollectorImpl implements RecordCollector {
                     topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
                 }
             } else {
-                recordSendError(topic, exception, serializedRecord, context, processorNodeId);
+                final RecordContext recordContext = context.recordContext();
+                recordSendError(
+                    topic,
+                    exception,
+                    serializedRecord,
+                    recordContext != null ?
+                        new ProcessorRecordContext(
+                            recordContext.timestamp(),
+                            recordContext.offset(),
+                            recordContext.partition(),
+                            recordContext.topic(),
+                            recordContext.headers()
+                        ) :
+                        null,
+                    processorNodeId
+                );
 
                 // KAFKA-7510 only put message key and value in TRACE level log so we don't leak data by default
                 log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
@@ -298,19 +315,19 @@ public class RecordCollectorImpl implements RecordCollector {
                                         final Integer partition,
                                         final Long timestamp,
                                         final String processorNodeId,
-                                        final InternalProcessorContext<Void, Void> context,
+                                        final RecordContext recordContext,
                                         final RuntimeException serializationException) {
         log.debug(String.format("Error serializing record for topic %s", topic), serializationException);
 
         final DefaultErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
             null, // only required to pass for DeserializationExceptionHandler
-            context.recordContext().topic(),
-            context.recordContext().partition(),
-            context.recordContext().offset(),
-            context.recordContext().headers(),
+            recordContext != null ? recordContext.topic() : null,
+            recordContext != null ? recordContext.partition() : -1,
+            recordContext != null ? recordContext.offset() : -1,
+            recordContext != null ? recordContext.headers() : new RecordHeaders(),
             processorNodeId,
             taskId,
-            context.recordContext().timestamp()
+            recordContext != null ? recordContext.timestamp() : -1L
         );
         final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
 
@@ -378,7 +395,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private void recordSendError(final String topic,
                                  final Exception productionException,
                                  final ProducerRecord<byte[], byte[]> serializedRecord,
-                                 final InternalProcessorContext<Void, Void> context,
+                                 final RecordContext recordContext,
                                  final String processorNodeId) {
         String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, productionException.toString());
 
@@ -402,13 +419,13 @@ public class RecordCollectorImpl implements RecordCollector {
             } else {
                 final DefaultErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                     null, // only required to pass for DeserializationExceptionHandler
-                    context.recordContext().topic(),
-                    context.recordContext().partition(),
-                    context.recordContext().offset(),
-                    context.recordContext().headers(),
+                    recordContext != null ? recordContext.topic() : null,
+                    recordContext != null ? recordContext.partition() : -1,
+                    recordContext != null ? recordContext.offset() : -1,
+                    recordContext != null ? recordContext.headers() : new RecordHeaders(),
                     processorNodeId,
                     taskId,
-                    context.recordContext().timestamp()
+                    recordContext != null ? recordContext.timestamp() : -1L
                 );
 
                 final ProductionExceptionHandlerResponse response;
