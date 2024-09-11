@@ -54,10 +54,13 @@ if __name__ == "__main__":
     last_dt = datetime.fromisoformat(last_timestamp)
 
     if len(started) > 0:
-        print("Found tests that were started, but apparently not finished:\n")
+        print("Found tests that were started, but apparently not finished")
 
     for started_not_finished, line in started.items():
+        print("-"*80)
         timestamp, _ = line.split(" ", 1)
         dt = datetime.fromisoformat(timestamp)
         dur_s = (last_dt - dt).total_seconds()
-        print(f"{started_not_finished} was running for {pretty_time_duration(dur_s)}")
+        print(f"Test: {started_not_finished}")
+        print(f"Duration: {pretty_time_duration(dur_s)}")
+        print(f"Raw line: {line}")
