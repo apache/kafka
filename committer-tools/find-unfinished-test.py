@@ -14,6 +14,19 @@
 # limitations under the License.
 
 import argparse
+from datetime import datetime
+
+
+def pretty_time_duration(seconds: float) -> str:
+    time_min, time_sec = divmod(int(seconds), 60)
+    time_hour, time_min = divmod(time_min, 60)
+    time_fmt = ""
+    if time_hour > 0:
+        time_fmt += f"{time_hour}h"
+    if time_min > 0:
+        time_fmt += f"{time_min}m"
+    time_fmt += f"{time_sec}s"
+    return time_fmt
 
 
 if __name__ == "__main__":
@@ -22,9 +35,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     started = dict()
+    last_test_line = None
     for line in args.file.readlines():
         if "Gradle Test Run" not in line:
             continue
+        last_test_line = line
+
         toks = line.strip().split(" > ")
         name, status = toks[-1].rsplit(" ", 1)
         name_toks = toks[2:-1] + [name]
@@ -34,8 +50,14 @@ if __name__ == "__main__":
         else:
             started.pop(test)
 
+    last_timestamp, _ = last_test_line.split(" ", 1)
+    last_dt = datetime.fromisoformat(last_timestamp)
+
     if len(started) > 0:
-        print("Found tests that were started, but not finished:\n")
+        print("Found tests that were started, but apparently not finished:\n")
 
     for started_not_finished, line in started.items():
-        print(line)
+        timestamp, _ = line.split(" ", 1)
+        dt = datetime.fromisoformat(timestamp)
+        dur_s = (last_dt - dt).total_seconds()
+        print(f"{started_not_finished} was running for {pretty_time_duration(dur_s)}")
