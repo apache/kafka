@@ -40,6 +40,7 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
+import org.apache.kafka.server.group.share.PersisterStateBatch;
 import org.apache.kafka.server.group.share.SharePartitionKey;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -48,14 +49,11 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -314,7 +312,9 @@ class ShareCoordinatorShardTest {
         assertEquals(incrementalUpdate.snapshotEpoch(), combinedState.snapshotEpoch());
         assertEquals(incrementalUpdate.leaderEpoch(), combinedState.leaderEpoch());
         assertEquals(incrementalUpdate.startOffset(), combinedState.startOffset());
-        assertTrue(combinedState.stateBatchAsSet().containsAll(incrementalUpdate.stateBatchAsSet()));
+        // the batches should have combined to 1 since same state
+        assertEquals(Collections.singletonList(new PersisterStateBatch(0, 20, (byte) 0, (short) 1)),
+            combinedState.stateBatches());
         assertEquals(0, shard.getLeaderMapValue(shareCoordinatorKey));
     }
 
@@ -775,8 +775,8 @@ class ShareCoordinatorShardTest {
             .setStateEpoch(0)
             .setSnapshotEpoch(2)    // since 2nd share snapshot
             .setStateBatches(Arrays.asList(
-                new PersisterOffsetsStateBatch(110, 119, (byte) 1, (short) 2),  //  b2 not lost
-                new PersisterOffsetsStateBatch(120, 129, (byte) 2, (short) 1)
+                new PersisterStateBatch(110, 119, (byte) 1, (short) 2),  //  b2 not lost
+                new PersisterStateBatch(120, 129, (byte) 2, (short) 1)
             ))
             .build();
         List<CoordinatorRecord> expectedRecordsFinal = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
@@ -797,19 +797,19 @@ class ShareCoordinatorShardTest {
     public void testStateBatchCombine() {
         class TestAttributes {
             final String testName;
-            final LinkedHashSet<PersisterOffsetsStateBatch> curSet;
-            final LinkedHashSet<PersisterOffsetsStateBatch> newSet;
-            final List<PersisterOffsetsStateBatch> expectedResult;
+            final List<PersisterStateBatch> curList;
+            final List<PersisterStateBatch> newList;
+            final List<PersisterStateBatch> expectedResult;
             final long startOffset;
 
             TestAttributes(String testName,
-                           LinkedHashSet<PersisterOffsetsStateBatch> curSet,
-                           LinkedHashSet<PersisterOffsetsStateBatch> newSet,
-                           List<PersisterOffsetsStateBatch> expectedResult,
+                           List<PersisterStateBatch> curList,
+                           List<PersisterStateBatch> newList,
+                           List<PersisterStateBatch> expectedResult,
                            long startOffset) {
                 this.testName = testName;
-                this.curSet = curSet;
-                this.newSet = newSet;
+                this.curList = curList;
+                this.newList = newList;
                 this.expectedResult = expectedResult;
                 this.startOffset = startOffset;
             }
@@ -817,134 +817,225 @@ class ShareCoordinatorShardTest {
 
         List<TestAttributes> tests = Arrays.asList(
             new TestAttributes(
-                "Both cur and new set empty => empty result list.",
-                new LinkedHashSet<>(),
-                new LinkedHashSet<>(),
-                new LinkedList<>(),
-                -1
-            ),
-
-            new TestAttributes(
-                "New set is empty => result list only contains cur set batches.",
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
-                )),
-                new LinkedHashSet<>(),
-                Collections.singletonList(new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)),
-                -1
-            ),
-
-            new TestAttributes(
-                "Cur set is empty => result list only contains new set batches.",
-                new LinkedHashSet<>(),
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
-                )),
-                Collections.singletonList(new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)),
-                -1
-            ),
-
-            new TestAttributes(
-                "Sets have no overlap => result list contains batches from both sets.",
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
-                )),
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(120, 130, (byte) 0, (short) 1)
-                )),
-                Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
-                    new PersisterOffsetsStateBatch(120, 130, (byte) 0, (short) 1)
+                "New batch left and right offsets extend beyond current batch.",
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 11, (byte) 1, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 11, (byte) 1, (short) 1)
                 ),
                 -1
             ),
 
             new TestAttributes(
-                "Sets have partial overlap => result list contains batches from both sets (we do not add gaps).",
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
-                )),
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(105, 130, (byte) 0, (short) 1)
-                )),
-                Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
-                    new PersisterOffsetsStateBatch(105, 130, (byte) 0, (short) 1)
+                "New batch left offset extends beyond current batch, right offset aligns.",
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 1, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 1, (short) 1)
                 ),
                 -1
             ),
 
             new TestAttributes(
-                "New set batch is contained in cur set => result list contains batches from both sets (we do not add gaps).",
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1)
-                )),
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(105, 108, (byte) 0, (short) 2)
-                )),
-                Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
-                    new PersisterOffsetsStateBatch(105, 108, (byte) 0, (short) 2)
+                "New batch left offset aligns and right offset extends beyond current batch.",
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 11, (byte) 1, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 11, (byte) 1, (short) 1)
                 ),
                 -1
             ),
 
             new TestAttributes(
-                "Sets have overlapping batches => batches in new set are preferred. " +
-                    "Overlap means cur.firstOffset == new.firstOffset && cur.lastOffset == new.lastOffset",
-                new LinkedHashSet<>(Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1)
-                )),
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // overlap
-                )),
+                "New batch left offset aligns and right offset smaller.",
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 5, (byte) 1, (short) 1)
+                ),
                 Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // batch from new set
+                    new PersisterStateBatch(2, 5, (byte) 1, (short) 1),
+                    new PersisterStateBatch(6, 10, (byte) 0, (short) 1)
                 ),
                 -1
             ),
-            
+
+            new TestAttributes(
+                "New batch left and right offsets align current batch.",
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 1, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 1, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "New batch left offset greater and right offset smaller",
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(5, 7, (byte) 1, (short) 1)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(1, 4, (byte) 0, (short) 1),
+                    new PersisterStateBatch(5, 7, (byte) 1, (short) 1),
+                    new PersisterStateBatch(8, 10, (byte) 0, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "New batch left offset greater and right offset aligns",
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 10, (byte) 1, (short) 1)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(1, 1, (byte) 0, (short) 1),
+                    new PersisterStateBatch(2, 10, (byte) 1, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "New batch left and right offsets smaller.",
+                Collections.singletonList(
+                    new PersisterStateBatch(5, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 7, (byte) 1, (short) 1)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(2, 7, (byte) 1, (short) 1),
+                    new PersisterStateBatch(8, 10, (byte) 0, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "New batch left offset smaller and right offset aligns",
+                Collections.singletonList(
+                    new PersisterStateBatch(5, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 10, (byte) 1, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(2, 10, (byte) 1, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "New batch left and right offsets greater.",
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(5, 15, (byte) 1, (short) 1)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(1, 4, (byte) 0, (short) 1),
+                    new PersisterStateBatch(5, 15, (byte) 1, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "New batch left offset greater and right offset aligns",
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(5, 10, (byte) 1, (short) 1)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(1, 4, (byte) 0, (short) 1),
+                    new PersisterStateBatch(5, 10, (byte) 1, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "Multiple completely overlapping new batches",
+                Collections.singletonList(
+                    new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(4, 5, (byte) 1, (short) 1),
+                    new PersisterStateBatch(7, 8, (byte) 1, (short) 1)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(1, 3, (byte) 0, (short) 1),
+                    new PersisterStateBatch(4, 5, (byte) 1, (short) 1),
+                    new PersisterStateBatch(6, 6, (byte) 0, (short) 1),
+                    new PersisterStateBatch(7, 8, (byte) 1, (short) 1),
+                    new PersisterStateBatch(9, 10, (byte) 0, (short) 1)
+                ),
+                -1
+            ),
+
+            new TestAttributes(
+                "One left overlap new batch and two non overlapping batches.",
+                Collections.singletonList(
+                    new PersisterStateBatch(111, 120, (byte) 0, (short) 1)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(111, 113, (byte) 0, (short) 2),
+                    new PersisterStateBatch(114, 114, (byte) 2, (short) 1),
+                    new PersisterStateBatch(115, 119, (byte) 0, (short) 2)
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(111, 113, (byte) 0, (short) 2),
+                    new PersisterStateBatch(114, 114, (byte) 2, (short) 1),
+                    new PersisterStateBatch(115, 119, (byte) 0, (short) 2),
+                    new PersisterStateBatch(120, 120, (byte) 0, (short) 1)
+                ),
+                -1
+            ),
+
             new TestAttributes(
                 "Batches which are older than start offset are removed. " +
                     "Old means batch.lastOffset < startOffset",
-                new LinkedHashSet<>(Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),  // should be removed
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1),
-                    new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1)
-                )),
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // overlap
-                )),
                 Arrays.asList(
-                    new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1),  // offset values are higher but this arrived first - order is valid
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // batch from new set
+                    new PersisterStateBatch(100, 110, (byte) 0, (short) 1),  // should be removed
+                    new PersisterStateBatch(111, 120, (byte) 0, (short) 1),
+                    new PersisterStateBatch(121, 130, (byte) 0, (short) 1)
+                ),
+                Collections.singletonList(
+                    new PersisterStateBatch(111, 119, (byte) 2, (short) 2)   // overlap
+                ),
+                Arrays.asList(
+                    new PersisterStateBatch(111, 119, (byte) 2, (short) 2),
+                    new PersisterStateBatch(120, 130, (byte) 0, (short) 1)
                 ),
                 111
-            ),
-
-            new TestAttributes(
-                "StartOffset is -1 => no batches are considered old but overlaps are still removed preferring the new set.",
-                new LinkedHashSet<>(Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),  // should not be removed as start offset is -1
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 0, (short) 1),
-                    new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1)
-                )),
-                new LinkedHashSet<>(Collections.singletonList(
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // overlap
-                )),
-                Arrays.asList(
-                    new PersisterOffsetsStateBatch(100, 110, (byte) 0, (short) 1),
-                    new PersisterOffsetsStateBatch(121, 130, (byte) 0, (short) 1),  // offset values are higher but this arrived first - order is valid
-                    new PersisterOffsetsStateBatch(111, 120, (byte) 2, (short) 2)   // batch from new set
-                ),
-                -1
             )
         );
 
         for (TestAttributes attrs : tests) {
-            assertEquals(attrs.expectedResult, ShareCoordinatorShard.combineStateBatches(attrs.curSet, attrs.newSet, attrs.startOffset),
+            assertEquals(attrs.expectedResult, ShareCoordinatorShard.combineStateBatches(attrs.curList, attrs.newList, attrs.startOffset),
                 attrs.testName);
         }
     }

@@ -20,6 +20,7 @@ package org.apache.kafka.coordinator.share;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
+import org.apache.kafka.server.group.share.PersisterStateBatch;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -36,13 +37,13 @@ public class ShareGroupOffset {
     private final int stateEpoch;
     private final int leaderEpoch;
     private final long startOffset;
-    private final List<PersisterOffsetsStateBatch> stateBatches;
+    private final List<PersisterStateBatch> stateBatches;
 
     private ShareGroupOffset(int snapshotEpoch,
                             int stateEpoch,
                             int leaderEpoch,
                             long startOffset,
-                            List<PersisterOffsetsStateBatch> stateBatches) {
+                            List<PersisterStateBatch> stateBatches) {
         this.snapshotEpoch = snapshotEpoch;
         this.stateEpoch = stateEpoch;
         this.leaderEpoch = leaderEpoch;
@@ -66,16 +67,16 @@ public class ShareGroupOffset {
         return startOffset;
     }
 
-    public List<PersisterOffsetsStateBatch> stateBatches() {
+    public List<PersisterStateBatch> stateBatches() {
         return Collections.unmodifiableList(stateBatches);
     }
 
-    private static PersisterOffsetsStateBatch toPersisterOffsetsStateBatch(ShareSnapshotValue.StateBatch stateBatch) {
-        return new PersisterOffsetsStateBatch(stateBatch.firstOffset(), stateBatch.lastOffset(), stateBatch.deliveryState(), stateBatch.deliveryCount());
+    private static PersisterStateBatch toPersisterOffsetsStateBatch(ShareSnapshotValue.StateBatch stateBatch) {
+        return new PersisterStateBatch(stateBatch.firstOffset(), stateBatch.lastOffset(), stateBatch.deliveryState(), stateBatch.deliveryCount());
     }
 
-    private static PersisterOffsetsStateBatch toPersisterOffsetsStateBatch(ShareUpdateValue.StateBatch stateBatch) {
-        return new PersisterOffsetsStateBatch(stateBatch.firstOffset(), stateBatch.lastOffset(), stateBatch.deliveryState(), stateBatch.deliveryCount());
+    private static PersisterStateBatch toPersisterOffsetsStateBatch(ShareUpdateValue.StateBatch stateBatch) {
+        return new PersisterStateBatch(stateBatch.firstOffset(), stateBatch.lastOffset(), stateBatch.deliveryState(), stateBatch.deliveryCount());
     }
 
     public static ShareGroupOffset fromRecord(ShareSnapshotValue record) {
@@ -98,11 +99,11 @@ public class ShareGroupOffset {
             data.leaderEpoch(),
             data.startOffset(),
             data.stateBatches().stream()
-                .map(PersisterOffsetsStateBatch::from)
+                .map(PersisterStateBatch::from)
                 .collect(Collectors.toList()));
     }
 
-    public LinkedHashSet<PersisterOffsetsStateBatch> stateBatchAsSet() {
+    public LinkedHashSet<PersisterStateBatch> stateBatchAsSet() {
         return new LinkedHashSet<>(stateBatches);
     }
 
@@ -111,7 +112,7 @@ public class ShareGroupOffset {
         private int stateEpoch;
         private int leaderEpoch;
         private long startOffset;
-        private List<PersisterOffsetsStateBatch> stateBatches;
+        private List<PersisterStateBatch> stateBatches;
 
         public Builder setSnapshotEpoch(int snapshotEpoch) {
             this.snapshotEpoch = snapshotEpoch;
@@ -133,7 +134,7 @@ public class ShareGroupOffset {
             return this;
         }
 
-        public Builder setStateBatches(List<PersisterOffsetsStateBatch> stateBatches) {
+        public Builder setStateBatches(List<PersisterStateBatch> stateBatches) {
             this.stateBatches = stateBatches;
             return this;
         }

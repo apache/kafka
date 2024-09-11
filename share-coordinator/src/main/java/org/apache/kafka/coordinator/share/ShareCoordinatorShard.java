@@ -48,17 +48,19 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.group.share.PartitionFactory;
+import org.apache.kafka.server.group.share.PersisterStateBatch;
 import org.apache.kafka.server.group.share.SharePartitionKey;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.stream.Collectors;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
@@ -291,11 +293,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
             // Since the number of update records for this share part key exceeds snapshotUpdateRecordsPerSnapshot,
             // we should be creating a share snapshot record.
-            List<PersisterOffsetsStateBatch> batchesToAdd = combineStateBatches(
-                shareStateMap.get(key).stateBatchAsSet(),
+            List<PersisterStateBatch> batchesToAdd = combineStateBatches(
+                shareStateMap.get(key).stateBatches(),
                 partitionData.stateBatches().stream()
-                    .map(PersisterOffsetsStateBatch::from)
-                    .collect(Collectors.toCollection(LinkedHashSet::new)),
+                    .map(PersisterStateBatch::from)
+                    .collect(Collectors.toList()),
                 newStartOffset);
 
             recordList = Collections.singletonList(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
@@ -525,7 +527,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private static ShareGroupOffset merge(ShareGroupOffset soFar, ShareUpdateValue newData) {
         // snapshot epoch should be same as last share snapshot
         // state epoch is not present
-        LinkedHashSet<PersisterOffsetsStateBatch> currentBatches = soFar.stateBatchAsSet();
+        List<PersisterStateBatch> currentBatches = soFar.stateBatches();
         long newStartOffset = newData.startOffset() == -1 ? soFar.startOffset() : newData.startOffset();
         int newLeaderEpoch = newData.leaderEpoch() == -1 ? soFar.leaderEpoch() : newData.leaderEpoch();
 
@@ -535,39 +537,158 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setStartOffset(newStartOffset)
             .setLeaderEpoch(newLeaderEpoch)
             .setStateBatches(combineStateBatches(currentBatches, newData.stateBatches().stream()
-                .map(PersisterOffsetsStateBatch::from)
-                .collect(Collectors.toCollection(LinkedHashSet::new)), newStartOffset))
-            .build();
+                .map(ShareCoordinatorShard::toPersisterStateBatch)
+                .collect(Collectors.toList()), newStartOffset))
+            .build();   
     }
 
     /**
-     * Util method which takes in 2 collections containing {@link PersisterOffsetsStateBatch}
+     * Util method which takes in 2 collections containing {@link PersisterStateBatch}
      * and the startOffset.
-     * It removes all batches from the 1st collection which have the same first and last offset
-     * as the batches in 2nd collection. It then creates a final list of batches which contains the
-     * former result and all the batches in the 2nd collection. In set notation (A - B) U B (we prefer batches in B
-     * which have same first and last offset in A).
-     * Finally, it removes any batches where the lastOffset < startOffset, if the startOffset > -1.
-     * @param currentBatch - collection containing current soft state of batches
-     * @param newBatch - collection containing batches in incoming request
+     * This method checks any overlap between current state batches and new state batches.
+     * Based on various conditions it creates new non-overlapping records preferring new batches.
+     * Finally, it removes any batches where the lastOffset < startOffset, if the startOffset > -1 and
+     * merges any contiguous intervals with same state.
+     * @param batchesSoFar - collection containing current soft state of batches
+     * @param newBatches - collection containing batches in incoming request
      * @param startOffset - startOffset to consider when removing old batches.
      * @return List containing combined batches
      */
     // visibility for testing
-    static List<PersisterOffsetsStateBatch> combineStateBatches(
-        LinkedHashSet<PersisterOffsetsStateBatch> currentBatch,
-        LinkedHashSet<PersisterOffsetsStateBatch> newBatch,
+    static List<PersisterStateBatch> combineStateBatches(
+        List<PersisterStateBatch> batchesSoFar,
+        List<PersisterStateBatch> newBatches,
         long startOffset
     ) {
-        currentBatch.removeAll(newBatch);
-        List<PersisterOffsetsStateBatch> batchesToAdd = new LinkedList<>(currentBatch);
-        batchesToAdd.addAll(newBatch);
+        Queue<PersisterStateBatch> batchQueue = new LinkedList<>(batchesSoFar);
+        for (PersisterStateBatch batch : newBatches) {
+            for (int i = 0; i < batchQueue.size(); i++) {
+                PersisterStateBatch cur = batchQueue.poll();
+                // cur batch under inspection has no overlap with the new one
+                // we will need to add to our result
+                if (batch.lastOffset() < cur.firstOffset() || batch.firstOffset() > cur.lastOffset()) {
+                    batchQueue.add(cur);
+                    continue;
+                }
+
+                // covers cases where we need to create a new interval 
+                // which from the current one such that it does not
+                // overlap with the new one
+                // these cases will not produce any new records so need not be handled
+                //   ____      ______     ______
+                // ________   _______     _________
+                
+                
+                // covers
+                // cur:   ______   _____   _____   ______
+                // batch:   ___    _____   ___        ___
+                if (batch.firstOffset() >= cur.firstOffset() && batch.lastOffset() <= cur.lastOffset()) {
+                    // extra batch needs to be created
+                    if (batch.firstOffset() > cur.firstOffset()) {
+                        batchQueue.add(
+                            new PersisterStateBatch(
+                                cur.firstOffset(),
+                                batch.firstOffset() - 1,
+                                cur.deliveryState(),
+                                cur.deliveryCount()
+                            )
+                        );
+                    }
+
+                    // extra batch needs to be created
+                    if (batch.lastOffset() < cur.lastOffset()) {
+                        batchQueue.add(
+                            new PersisterStateBatch(
+                                batch.lastOffset() + 1,
+                                cur.lastOffset(),
+                                cur.deliveryState(),
+                                cur.deliveryCount()
+                            )
+                        );
+                    }
+                } else if (batch.firstOffset() < cur.firstOffset() && batch.lastOffset() < cur.lastOffset()) {
+                    // covers
+                    //  ______    
+                    //____ 
+                    batchQueue.add(new PersisterStateBatch(
+                        batch.lastOffset() + 1,
+                        cur.lastOffset(),
+                        cur.deliveryState(),
+                        cur.deliveryCount()
+                    ));
+                } else if (batch.firstOffset() > cur.firstOffset() && batch.lastOffset() > cur.lastOffset()) {
+                    // covers
+                    //  ______  
+                    //   _______    
+                    batchQueue.add(new PersisterStateBatch(
+                        cur.firstOffset(),
+                        batch.firstOffset() - 1,
+                        cur.deliveryState(),
+                        cur.deliveryCount()
+                    ));
+                }
+            }
+            batchQueue.add(batch);
+        }
+
+        // the queuing process above must have moved the intervals
+        // around, lets sort it so that we can do faster manipulations on them.
+        List<PersisterStateBatch> finalList = sortedListFromQueue(batchQueue);
+
         // Any batches where the last offset is < the current start offset
         // are now expired. We should remove them from the persister.
         if (startOffset != -1) {
-            batchesToAdd.removeIf(batch -> batch.lastOffset() < startOffset);
+            finalList.removeIf(batch -> batch.lastOffset() < startOffset);
         }
-        return batchesToAdd;
+
+        // merge same state intervals
+        return mergeIntervals(finalList);
+    }
+
+    private static List<PersisterStateBatch> sortedListFromQueue(Queue<PersisterStateBatch> queue) {
+        List<PersisterStateBatch> finalList = new ArrayList<>(queue);
+        finalList.sort((b1, b2) -> {
+            int deltaFirst = (int) (b1.firstOffset() - b2.firstOffset());
+            if (deltaFirst == 0) {
+                return (int) (b1.lastOffset() - b2.lastOffset());
+            }
+            return deltaFirst;
+        });
+        return finalList;
+    }
+
+    private static List<PersisterStateBatch> mergeIntervals(List<PersisterStateBatch> batches) {
+        if (batches.size() < 2) {
+            return batches;
+        }
+        List<PersisterStateBatch> mergedList = new ArrayList<>();
+        PersisterStateBatch cur = batches.get(0);
+        for (int i = 1; i < batches.size(); i++) {
+            if (cur.lastOffset() + 1 == batches.get(i).firstOffset() &&
+                cur.deliveryState() == batches.get(i).deliveryState() &&
+                cur.deliveryCount() == batches.get(i).deliveryCount()) {
+                cur = new PersisterStateBatch(
+                    cur.firstOffset(),
+                    batches.get(i).lastOffset(),
+                    cur.deliveryState(),
+                    cur.deliveryCount()
+                );
+            } else {
+                mergedList.add(cur);
+                cur = batches.get(i);
+            }
+        }
+        mergedList.add(cur);
+        return mergedList;
+    }
+
+    private static PersisterStateBatch toPersisterStateBatch(ShareUpdateValue.StateBatch batch) {
+        return new PersisterStateBatch(
+            batch.firstOffset(),
+            batch.lastOffset(),
+            batch.deliveryState(),
+            batch.deliveryCount()
+        );
     }
 
     private static ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
