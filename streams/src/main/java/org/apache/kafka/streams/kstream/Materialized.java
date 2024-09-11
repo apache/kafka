@@ -70,7 +70,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * {@link Materialized} instance, and any configuration set on the first instance (e.g., store name, logging settings)
  * will be lost.
  * <p>
- * For example, the following code is incorrect because it discards the configuration of the store name:
+ * For example, the following code is incorrect because it discards the configuration of the store name (calling {@code static}) methods on an object/instance is an anti-pattern):
  * <pre>{@code
  * // This will not work as expected:
  * Materialized.<KeyType, ValueType, StateStore>as("MyStoreName")
