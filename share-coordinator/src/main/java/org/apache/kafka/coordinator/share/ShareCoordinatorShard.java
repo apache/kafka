@@ -658,8 +658,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         );
     }
 
-    private static List<PersisterStateBatch> sortedList(Collection<PersisterStateBatch> queue) {
-        List<PersisterStateBatch> finalList = new ArrayList<>(queue);
+    private static List<PersisterStateBatch> sortedList(Collection<PersisterStateBatch> collection) {
+        List<PersisterStateBatch> finalList = new ArrayList<>(collection);
         finalList.sort((b1, b2) -> {
             int deltaFirst = (int) (b1.firstOffset() - b2.firstOffset());
             if (deltaFirst == 0) {
