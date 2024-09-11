@@ -307,7 +307,7 @@ public class ShareConsumerTest {
         assertEquals(1, records.count());
 
         // Waiting until the acquisition lock expires.
-        Thread.sleep(15000);
+        Thread.sleep(20000);
 
         // Now in the second poll, we implicitly acknowledge the record received in the first poll.
         // We get back the acknowledgment error code after the second poll.
@@ -538,7 +538,7 @@ public class ShareConsumerTest {
         shareConsumer1.commitAsync();
 
         // Allowing acquisition lock timeout to expire.
-        Thread.sleep(15000);
+        Thread.sleep(20000);
 
         // The 3rd record should be reassigned to 2nd consumer when it polls.
         ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(5000));
@@ -1149,7 +1149,7 @@ public class ShareConsumerTest {
         assertEquals("value_2", new String(records1.iterator().next().value()));
 
         // Allowing acquisition lock to expire.
-        Thread.sleep(15000);
+        Thread.sleep(20000);
 
         records2 = shareConsumer1.poll(Duration.ofMillis(5000));
         assertEquals(1, records2.count());
