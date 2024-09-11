@@ -95,6 +95,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -124,6 +125,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -3460,18 +3462,24 @@ public class StreamThreadTest {
         assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
 
-        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread
+            .producersClientInstanceIds(Duration.ZERO)
+            .get(5L, TimeUnit.SECONDS);
 
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
-        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        final ExecutionException error = assertThrows(
+            ExecutionException.class,
+            () -> future.get(5L, TimeUnit.SECONDS)
+        );
         assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
         assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
     }
