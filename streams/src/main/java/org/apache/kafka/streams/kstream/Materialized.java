@@ -65,7 +65,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * }</pre>
  * This ensures that the store name is retained while configuring the key and value serde.
  * <p>
- * <b>Warning:</b> If you use the {@link Materialized#with(Serde, Serde)} method after calling
+ * <b>Warning:</b> If you use the ({@code static}) {@link Materialized#with(Serde, Serde)} method after calling
  * {@link Materialized#as(String)}, the instance created by {@link Materialized#as(String)} will be replaced by a new
  * {@link Materialized} instance, and any configuration set on the first instance (e.g., store name, logging settings)
  * will be lost.
