@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 
 /**
  * Container class to represent data encapsulated in {@link ShareSnapshotValue} and {@link ShareUpdateValue}
- * This class is effectively immutable (state batches is not modified out of context).
+ * This class is immutable (state batches is not modified out of context).
  */
 public class ShareGroupOffset {
     private final int snapshotEpoch;
