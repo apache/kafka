@@ -25,7 +25,7 @@ import java.util.Objects;
 /**
  * This class contains the information for a single batch of state information for use by the {@link Persister}.
  */
-public class PersisterStateBatch {
+public class PersisterStateBatch implements Comparable {
     private final long firstOffset;
     private final long lastOffset;
     private final byte deliveryState;
@@ -94,5 +94,19 @@ public class PersisterStateBatch {
             "deliveryState=" + deliveryState + "," +
             "deliveryCount=" + deliveryCount +
             ")";
+    }
+
+    @Override
+    public int compareTo(Object o) {
+        PersisterStateBatch that = (PersisterStateBatch) o;
+        int deltaFirst = Long.compare(this.firstOffset(), that.firstOffset());
+        if (deltaFirst == 0) {
+            int deltaLast = Long.compare(this.lastOffset(), that.lastOffset());
+            if (deltaLast == 0) {
+                return this.deliveryCount() - that.deliveryCount();
+            }
+            return deltaLast;
+        }
+        return deltaFirst;
     }
 }
