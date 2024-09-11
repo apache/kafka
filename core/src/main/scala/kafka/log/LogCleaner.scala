@@ -623,9 +623,12 @@ private[log] class Cleaner(val id: Int,
 
     val groupedSegments = groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize,
       log.config.maxIndexSize, cleanable.firstUncleanableOffset)
-    for (group <- groupedSegments.init)
-      cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, retainLastBatch = false)
-    groupedSegments.lastOption.foreach(group => cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, retainLastBatch = true))
+    val groupIter = groupedSegments.iterator
+    while (groupIter.hasNext) {
+      val group = groupIter.next
+      val retainLastBatch = !groupIter.hasNext
+      cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, retainLastBatch)
+    }
 
     // record buffer utilization
     stats.bufferUtilization = offsetMap.utilization
@@ -646,6 +649,7 @@ private[log] class Cleaner(val id: Int,
    * @param transactionMetadata State of ongoing transactions which is carried between the cleaning
    *                            of the grouped segments
    * @param legacyDeleteHorizonMs The delete horizon used for tombstones whose version is less than 2
+   * @param retainLastBatch whether to retain last batch in the source segments or not.
    */
   private[log] def cleanSegments(log: UnifiedLog,
                                  segments: Seq[LogSegment],
@@ -732,6 +736,8 @@ private[log] class Cleaner(val id: Int,
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param transactionMetadata The state of ongoing transactions which is carried between the cleaning of the grouped segments
    * @param lastRecordsOfActiveProducers The active producers and its last data offset
+   * @param retainLastBatch Whether or not to retain the last batch in the source segments
+   * @param isLastBatch Checks whether a batch is the last batch in the source segments
    * @param stats Collector for cleaning statistics
    * @param currentTime The time at which the clean was initiated
    */
