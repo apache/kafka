@@ -571,12 +571,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     continue;
                 }
 
-                // covers cases where we need to create a new interval 
-                // which from the current one such that it does not
-                // overlap with the new one
-                // these cases will not produce any new records so need not be handled
-                //   ____      ______     ______
-                // ________   _______     _________
+                // Covers cases where we need to create a new interval
+                // from the current one such that they do not
+                // overlap with the new one.
+                // Following cases will not produce any new records so need not be handled.
+                // cur:  ____      ______     ______
+                // new: ________   ______    _________
                 
                 
                 // covers
@@ -638,7 +638,22 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // Any batches where the last offset is < the current start offset
         // are now expired. We should remove them from the persister.
         if (startOffset != -1) {
-            finalList.removeIf(batch -> batch.lastOffset() < startOffset);
+            List<PersisterStateBatch> prunedList = new ArrayList<>();
+            finalList.forEach(batch -> {
+                if (batch.firstOffset() >= startOffset) {
+                    // covers
+                    //   ______
+                    // | -> start offset
+                    prunedList.add(batch);
+                } else if (batch.lastOffset() >= startOffset) {
+                    // covers
+                    //  ________
+                    //       | -> start offset
+                    prunedList.add(new PersisterStateBatch(startOffset, batch.lastOffset(), batch.deliveryState(), batch.deliveryCount()));
+                }
+                // all other cases, the interval need not be touched.
+            });
+            finalList = prunedList;
         }
 
         // merge same state intervals

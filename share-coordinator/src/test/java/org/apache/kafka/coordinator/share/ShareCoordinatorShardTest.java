@@ -1031,6 +1031,18 @@ class ShareCoordinatorShardTest {
                     new PersisterStateBatch(120, 130, (byte) 0, (short) 1)
                 ),
                 111
+            ),
+
+            new TestAttributes(
+                "Batches with start offset midway are pruned.",
+                Collections.singletonList(
+                    new PersisterStateBatch(100, 130, (byte) 0, (short) 1)
+                ),
+                Collections.emptyList(),
+                Collections.singletonList(
+                    new PersisterStateBatch(120, 130, (byte) 0, (short) 1)
+                ),
+                120
             )
         );
 
