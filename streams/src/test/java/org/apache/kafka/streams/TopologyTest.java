@@ -80,7 +80,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("deprecation")
 @Timeout(600)
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -726,6 +725,7 @@ public class TopologyTest {
         assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void streamStreamJoinTopologyWithDefaultStoresNames() {
         final StreamsBuilder builder  = new StreamsBuilder();
@@ -768,6 +768,7 @@ public class TopologyTest {
             describe.toString());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void streamStreamJoinTopologyWithCustomStoresNames() {
         final StreamsBuilder builder  = new StreamsBuilder();
@@ -811,6 +812,7 @@ public class TopologyTest {
             describe.toString());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void streamStreamJoinTopologyWithCustomStoresSuppliers() {
         final StreamsBuilder builder  = new StreamsBuilder();
@@ -1267,6 +1269,7 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void kGroupedStreamZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
@@ -1389,6 +1392,7 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void timeWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
@@ -1462,6 +1466,7 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void slidingWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
@@ -1546,6 +1551,7 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void timeWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
@@ -1635,6 +1641,7 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void slidingWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
@@ -1723,6 +1730,7 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void sessionWindowedCogroupedZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
@@ -1850,6 +1858,7 @@ public class TopologyTest {
         assertThat(topology.internalTopologyBuilder.setApplicationId("test").buildTopology().hasPersistentLocalStore(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void sessionWindowZeroArgCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
@@ -1960,6 +1969,7 @@ public class TopologyTest {
         assertThat(processorTopology.stateStores().get(1).persistent(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void tableNamedMaterializedCountWithTopologyConfigShouldPreserveTopologyStructure() {
         // override the default store into in-memory
@@ -2405,6 +2415,7 @@ public class TopologyTest {
         assertThat(stateStoreFactory.loggingEnabled(), equalTo(false));
     }
 
+    @SuppressWarnings("deprecation")
     private TopologyConfig overrideDefaultStore(final String defaultStore) {
         final Properties topologyOverrides = new Properties();
         // change default store as in-memory

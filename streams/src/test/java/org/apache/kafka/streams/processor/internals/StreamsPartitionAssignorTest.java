@@ -176,7 +176,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 @Timeout(30_000)
-@SuppressWarnings("deprecation")
 public class StreamsPartitionAssignorTest {
 
     private static final String CONSUMER_1 = "consumer1";
@@ -1837,6 +1836,7 @@ public class StreamsPartitionAssignorTest {
         assertThrows(ConfigException.class, () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:j87yhk"), parameterizedConfig));
     }
 
+    @SuppressWarnings("deprecation")
     @ParameterizedTest
     @MethodSource("parameter")
     public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks(final Map<String, Object> parameterizedConfig) {

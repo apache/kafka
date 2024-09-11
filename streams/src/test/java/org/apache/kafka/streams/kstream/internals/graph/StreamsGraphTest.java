@@ -55,7 +55,6 @@ import java.util.regex.Pattern;
 import static java.time.Duration.ofMillis;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SuppressWarnings("deprecation")
 public class StreamsGraphTest {
 
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
@@ -64,6 +63,7 @@ public class StreamsGraphTest {
 
     // Test builds topology in successive manner but only graph node not yet processed written to topology
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldBeAbleToBuildTopologyIncrementally() {
         final StreamsBuilder builder = new StreamsBuilder();
