@@ -28,11 +28,16 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import org.apache.kafka.server.telemetry.ClientTelemetry;
+import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
+import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -82,9 +87,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("integration")
 public class KafkaStreamsTelemetryIntegrationTest {
 
-    private static final int NUM_BROKERS = 1;
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-
+    private static EmbeddedKafkaCluster cluster;
     private String appId;
     private String inputTopicTwoPartitions;
     private String outputTopicTwoPartitions;
@@ -93,12 +96,16 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private final List<Properties> streamsConfigurations = new ArrayList<>();
     private static final List<MetricsInterceptingConsumer<byte[], byte[]>> INTERCEPTING_CONSUMERS = new ArrayList<>();
     private static final List<TestingMetricsInterceptingAdminClient> INTERCEPTING_ADMIN_CLIENTS = new ArrayList<>();
+    private static final int NUM_BROKERS = 1;
     private static final int FIRST_INSTANCE_CONSUMER = 0;
     private static final int SECOND_INSTANCE_CONSUMER = 1;
 
     @BeforeAll
     public static void startCluster() throws IOException {
-        CLUSTER.start();
+        final Properties properties = new Properties();
+        properties.put("metric.reporters", TestingClientTelemetry.class.getName());
+        cluster = new EmbeddedKafkaCluster(NUM_BROKERS, properties);
+        cluster.start();
     }
 
     @BeforeEach
@@ -108,15 +115,15 @@ public class KafkaStreamsTelemetryIntegrationTest {
         outputTopicTwoPartitions = appId + "-output-two";
         inputTopicOnePartition = appId + "-input-one";
         outputTopicOnePartition = appId + "-output-one";
-        CLUSTER.createTopic(inputTopicTwoPartitions, 2, 1);
-        CLUSTER.createTopic(outputTopicTwoPartitions, 2, 1);
-        CLUSTER.createTopic(inputTopicOnePartition, 1, 1);
-        CLUSTER.createTopic(outputTopicOnePartition, 1, 1);
+        cluster.createTopic(inputTopicTwoPartitions, 2, 1);
+        cluster.createTopic(outputTopicTwoPartitions, 2, 1);
+        cluster.createTopic(inputTopicOnePartition, 1, 1);
+        cluster.createTopic(outputTopicOnePartition, 1, 1);
     }
 
     @AfterAll
     public static void closeCluster() {
-        CLUSTER.stop();
+        cluster.stop();
     }
 
     @AfterEach
@@ -144,7 +151,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertDoesNotThrow(() -> embeddedConsumer.unregisterMetricFromSubscription(nonExitingMetric));
         }
     }
-
 
     @ParameterizedTest
     @MethodSource("singleAndMultiTaskParameters")
@@ -328,7 +334,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         final Properties streamsConfiguration = new Properties();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
@@ -423,6 +429,45 @@ public class KafkaStreamsTelemetryIntegrationTest {
         public void unregisterMetricFromSubscription(final KafkaMetric metric) {
             passedMetrics.remove(metric);
             super.unregisterMetricFromSubscription(metric);
+        }
+    }
+
+    public static class TestingClientTelemetry implements ClientTelemetry, MetricsReporter, ClientTelemetryReceiver {
+        public static final List<ClientTelemetryPayload> SUBSCRIBED_METRICS = new ArrayList<>();
+
+        public TestingClientTelemetry() {
+        }
+
+        @Override
+        public void init(final List<KafkaMetric> metrics) {
+        }
+
+        @Override
+        public void metricChange(final KafkaMetric metric) {
+        }
+
+        @Override
+        public void metricRemoval(final KafkaMetric metric) {
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+
+        }
+
+        @Override
+        public ClientTelemetryReceiver clientReceiver() {
+            return this;
+        }
+
+        @Override
+        public void exportMetrics(final AuthorizableRequestContext context, final ClientTelemetryPayload payload) {
+            SUBSCRIBED_METRICS.add(payload);
         }
     }
 
