@@ -36,6 +36,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.TestUtils;
@@ -127,7 +130,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         outputTopic2 = "output2" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, inputTopic2, outputTopic, outputTopic2);
         final KStream<String, String> stream = builder.stream(inputTopic);
-        stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
+        stream.process(() -> new ShutdownProcessor<>(processorValueCollector), Named.as("process"));
         properties = basicProps();
     }
 
@@ -198,18 +201,48 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         testShutdownApplication(1);
     }
 
+    private static class ShutdownProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
+
+        private ProcessorContext<KOut, VOut> context;
+
+        final List<String> valueList;
+
+        ShutdownProcessor(final List<String> valueList) {
+            this.valueList = valueList;
+        }
+
+        @Override
+        public void init(final ProcessorContext<KOut, VOut> context) {} {
+            this.context = context;
+        }
+
+        @Override
+        public void close() {
+            // do nothing
+        }
+
+        @Override
+        public void process(final Record<KIn, VIn> record) {
+            valueList.add(record.value().toString());
+            if (throwError.get()) {
+                throw new StreamsException(Thread.currentThread().getName());
+            }
+            throwError.set(true);
+        }
+    }
+
     @Test
     public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread() throws Exception {
         builder.addGlobalStore(
-            new KeyValueStoreBuilder<>(
-                Stores.persistentKeyValueStore("globalStore"),
-                Serdes.String(),
-                Serdes.String(),
-                CLUSTER.time
-            ),
-            inputTopic2,
-            Consumed.with(Serdes.String(), Serdes.String()),
-            () -> new ShutdownProcessor(processorValueCollector)
+                new KeyValueStoreBuilder<>(
+                        Stores.persistentKeyValueStore("globalStore"),
+                        Serdes.String(),
+                        Serdes.String(),
+                        CLUSTER.time
+                ),
+                inputTopic2,
+                Consumed.with(Serdes.String(), Serdes.String()),
+                () -> new ShutdownProcessor<String, String, Void, Void>(processorValueCollector)
         );
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
 
@@ -224,7 +257,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
-
     }
 
     @Test
@@ -317,23 +349,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 StringSerializer.class,
                 new Properties()),
             timestamp);
-    }
-
-    private static class ShutdownProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
-        final List<String> valueList;
-
-        ShutdownProcessor(final List<String> valueList) {
-            this.valueList = valueList;
-        }
-
-        @Override
-        public void process(final String key, final String value) {
-            valueList.add(value + " " + context.taskId());
-            if (throwError.get()) {
-                throw new StreamsException(Thread.currentThread().getName());
-            }
-            throwError.set(true);
-        }
     }
 
     private void testShutdownApplication(final int numThreads) throws Exception {
