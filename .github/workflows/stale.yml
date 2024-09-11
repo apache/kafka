@@ -58,5 +58,5 @@ jobs:
             occurs in the next 30 days, it will be automatically closed.
           close-pr-label: 'closed-stale'
           close-pr-message: |
-            This PR has been closed since it has not had any activity in 120 days. If you fell like this
+            This PR has been closed since it has not had any activity in 120 days. If you feel like this
             was a mistake, please feel free to re-open the PR and ask a committer for a review.
