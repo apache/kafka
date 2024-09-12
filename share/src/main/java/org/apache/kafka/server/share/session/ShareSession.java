@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.session;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.server.share.CachedSharePartition;
 
 import java.util.ArrayList;
 import java.util.Collection;
