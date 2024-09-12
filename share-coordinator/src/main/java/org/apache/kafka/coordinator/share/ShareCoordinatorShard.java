@@ -56,12 +56,12 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -580,23 +580,78 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return finalList;
     }
 
+    private static class BatchOverlapState {
+        private PersisterStateBatch last;
+        private PersisterStateBatch candidate;
+        private List<PersisterStateBatch> nonOverlapping;
+        public static final BatchOverlapState SENTINEL = new BatchOverlapState(null, null, Collections.emptyList());
+
+        public BatchOverlapState(
+            PersisterStateBatch last,
+            PersisterStateBatch candidate,
+            List<PersisterStateBatch> nonOverlapping
+        ) {
+            this.last = last;
+            this.candidate = candidate;
+            this.nonOverlapping = nonOverlapping;
+        }
+
+        public PersisterStateBatch last() {
+            return last;
+        }
+
+        public PersisterStateBatch candidate() {
+            return candidate;
+        }
+
+        public List<PersisterStateBatch> nonOverlapping() {
+            return nonOverlapping;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof BatchOverlapState)) return false;
+            BatchOverlapState that = (BatchOverlapState) o;
+            return Objects.equals(last, that.last) && Objects.equals(candidate, that.candidate) && Objects.equals(nonOverlapping, that.nonOverlapping);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(last, candidate, nonOverlapping);
+        }
+    }
+
     // assumes sorted input
     static List<PersisterStateBatch> mergeBatches(List<PersisterStateBatch> batches) {
         if (batches.size() < 2) {
             return batches;
         }
-        TreeSet<PersisterStateBatch> stack = new TreeSet<>(batches);
-        List<PersisterStateBatch> pair = getOverlappingPair(stack);
-        while (!pair.isEmpty()) {
-            PersisterStateBatch last = pair.get(0);
-            PersisterStateBatch candidate = pair.get(1);
+        TreeSet<PersisterStateBatch> sortedBatches = new TreeSet<>(batches);
+        List<PersisterStateBatch> answer = new ArrayList<>();
+
+        BatchOverlapState overlapState = getOverlappingState(sortedBatches);
+
+        while (overlapState != BatchOverlapState.SENTINEL) {
+            PersisterStateBatch last = overlapState.last();
+            PersisterStateBatch candidate = overlapState.candidate();
+            
+            // remove non overlapping prefix from sortedBatches,
+            // will make getting next overlapping pair efficient
+            // as a prefix batch which is non overlapping will only
+            // be checked once.
+            if (overlapState.nonOverlapping() != null) {
+                overlapState.nonOverlapping().forEach(sortedBatches::remove);
+                answer.addAll(overlapState.nonOverlapping());
+            }
+
             if (candidate == null) {
                 break;
             }
 
             if (compareBatchState(candidate, last) == 0) {
-                stack.remove(last);  // remove older smaller interval
-                stack.remove(candidate);
+                sortedBatches.remove(last);  // remove older smaller interval
+                sortedBatches.remove(candidate);
 
                 last = new PersisterStateBatch(
                     last.firstOffset(),
@@ -608,7 +663,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     last.deliveryCount()
                 );
 
-                stack.add(last);
+                sortedBatches.add(last);
             } else if (candidate.firstOffset() <= last.lastOffset()) { // non contiguous overlap
                 // overlap and different state
                 // covers:
@@ -618,20 +673,20 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 // max records: 1           2       2                3          2            2
                 // min records: 1           1       1                1          1            2
 
-                stack.remove(last);
+                sortedBatches.remove(last);
                 if (candidate.firstOffset() == last.firstOffset()) {
                     if (candidate.lastOffset() == last.lastOffset()) {   // case 1
                         if (compareBatchState(candidate, last) < 0) {  // candidate is lower priority
-                            stack.add(last);
+                            sortedBatches.add(last);
                         } else {    // last is lower priority
-                            stack.add(candidate);
+                            sortedBatches.add(candidate);
                         }
                     } else if (candidate.lastOffset() < last.lastOffset()) { // case 2
                         if (compareBatchState(candidate, last) < 0) {
-                            stack.add(last);
+                            sortedBatches.add(last);
                         } else {    // last has lower priority
-                            stack.add(candidate);
-                            stack.add(new PersisterStateBatch(
+                            sortedBatches.add(candidate);
+                            sortedBatches.add(new PersisterStateBatch(
                                 candidate.lastOffset() + 1,
                                 last.firstOffset(),
                                 last.deliveryState(),
@@ -640,34 +695,34 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                         }
                     } else {    // case 3
                         if (compareBatchState(candidate, last) < 0) {
-                            stack.add(last);
-                            stack.remove(candidate);
-                            stack.add(new PersisterStateBatch(
+                            sortedBatches.add(last);
+                            sortedBatches.remove(candidate);
+                            sortedBatches.add(new PersisterStateBatch(
                                 last.lastOffset() + 1,
                                 candidate.lastOffset(),
                                 candidate.deliveryState(),
                                 candidate.deliveryCount()
                             ));
                         } else {    // last has lower priority
-                            stack.add(candidate);
+                            sortedBatches.add(candidate);
                         }
                     }
                 } else {    // candidate.firstOffset() > last.lastOffset()
                     if (candidate.lastOffset() < last.lastOffset()) {    // case 4
                         if (compareBatchState(candidate, last) < 0) {
-                            stack.add(last);
-                            stack.remove(candidate);
+                            sortedBatches.add(last);
+                            sortedBatches.remove(candidate);
                         } else {
-                            stack.add(new PersisterStateBatch(
+                            sortedBatches.add(new PersisterStateBatch(
                                 last.firstOffset(),
                                 candidate.firstOffset() - 1,
                                 last.deliveryState(),
                                 last.deliveryCount()
                             ));
 
-                            stack.add(candidate);
+                            sortedBatches.add(candidate);
 
-                            stack.add(new PersisterStateBatch(
+                            sortedBatches.add(new PersisterStateBatch(
                                 candidate.lastOffset() + 1,
                                 last.lastOffset(),
                                 last.deliveryState(),
@@ -676,62 +731,66 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                         }
                     } else if (candidate.lastOffset() == last.lastOffset()) {    // case 5
                         if (compareBatchState(candidate, last) < 0) {
-                            stack.add(last);
-                            stack.remove(candidate);
+                            sortedBatches.add(last);
+                            sortedBatches.remove(candidate);
                         } else {
-                            stack.add(new PersisterStateBatch(
+                            sortedBatches.add(new PersisterStateBatch(
                                 last.firstOffset(),
                                 candidate.firstOffset() - 1,
                                 last.deliveryState(),
                                 last.deliveryCount()
                             ));
 
-                            stack.add(candidate);
+                            sortedBatches.add(candidate);
                         }
                     } else {    // case 6
                         if (compareBatchState(candidate, last) < 0) {
-                            stack.add(last);
-                            stack.remove(candidate);
+                            sortedBatches.add(last);
+                            sortedBatches.remove(candidate);
 
-                            stack.add(new PersisterStateBatch(
+                            sortedBatches.add(new PersisterStateBatch(
                                 last.lastOffset() + 1,
                                 candidate.lastOffset(),
                                 candidate.deliveryState(),
                                 candidate.deliveryCount()
                             ));
                         } else {
-                            stack.add(new PersisterStateBatch(
+                            sortedBatches.add(new PersisterStateBatch(
                                 last.firstOffset(),
                                 candidate.firstOffset() - 1,
                                 last.deliveryState(),
                                 last.deliveryCount()
                             ));
 
-                            stack.add(candidate);
+                            sortedBatches.add(candidate);
                         }
                     }
                 }
             }
-            pair = getOverlappingPair(stack);
+            overlapState = getOverlappingState(sortedBatches);
         }
-        return new ArrayList<>(stack);
+        answer.addAll(sortedBatches);   // some non overlapping batches might have remained
+        return answer;
     }
 
-    private static List<PersisterStateBatch> getOverlappingPair(TreeSet<PersisterStateBatch> batchSet) {
+    private static BatchOverlapState getOverlappingState(TreeSet<PersisterStateBatch> batchSet) {
         Iterator<PersisterStateBatch> iter = batchSet.iterator();
         PersisterStateBatch last = iter.next();
+        List<PersisterStateBatch> nonOverlapping = new ArrayList<>();
         while (iter.hasNext()) {
             PersisterStateBatch candidate = iter.next();
             if (candidate.firstOffset() <= last.lastOffset() || // overlap
                 last.lastOffset() + 1 == candidate.firstOffset() && compareBatchState(last, candidate) == 0) {  // contiguous
-                return Arrays.asList(
+                return new BatchOverlapState(
                     last,
-                    candidate
+                    candidate,
+                    nonOverlapping
                 );
             }
+            nonOverlapping.add(last);
             last = candidate;
         }
-        return Collections.emptyList();
+        return new BatchOverlapState(null, null, nonOverlapping);
     }
 
     private static int compareBatchState(PersisterStateBatch b1, PersisterStateBatch b2) {

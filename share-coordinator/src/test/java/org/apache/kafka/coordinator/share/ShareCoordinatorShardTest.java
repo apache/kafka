@@ -1074,6 +1074,24 @@ class ShareCoordinatorShardTest {
             ),
 
             new BatchTestHolder(
+                "Handle overlapping batches with different priority.",
+                Collections.singletonList(
+                    new PersisterStateBatch(100, 110, (byte) 0, (short) 1)
+
+                ),  //[(100-115, 0, 1), (121-130, 0, 1)]
+                Arrays.asList(
+                    new PersisterStateBatch(101, 105, (byte) 1, (short) 2),
+                    new PersisterStateBatch(101, 115, (byte) 2, (short) 2),
+                    new PersisterStateBatch(101, 120, (byte) 3, (short) 2)
+                ),  //[(111-123, 2, 2)]
+                Arrays.asList(
+                    new PersisterStateBatch(100, 100, (byte) 0, (short) 1),
+                    new PersisterStateBatch(101, 120, (byte) 3, (short) 2)
+                ),
+                -1
+            ),
+
+            new BatchTestHolder(
                 "Handle overlapping batches within each list with pruning.",
                 Arrays.asList(
                     new PersisterStateBatch(100, 110, (byte) 0, (short) 1),
