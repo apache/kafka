@@ -18,17 +18,15 @@ import os
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, V_0_9_0_0, V_2_0_0, LATEST_0_10_0
+from kafkatest.version import DEV_BRANCH, V_2_0_0, LATEST_0_10_0
 
 
 class ConsumerPerformanceService(PerformanceService):
     """
-        See ConsumerPerformance.scala as the source of truth on these settings, but for reference:
+        See ConsumerPerformance tool as the source of truth on these settings, but for reference:
 
         "zookeeper" "The connection string for the zookeeper connection in the form host:port. Multiple URLS can
                      be given to allow fail-over. This option is only used with the old consumer."
-
-        "broker-list", "A broker list to use for connecting if using the new consumer."
 
         "topic", "REQUIRED: The topic to consume from."
 
@@ -40,10 +38,6 @@ class ConsumerPerformanceService(PerformanceService):
                         start with the latest message present in the log rather than the earliest message."
 
         "socket-buffer-size", "The size of the tcp RECV size."
-
-        "threads", "Number of processing threads."
-
-        "num-fetch-threads", "Number of fetcher threads. Defaults to 1"
 
         "new-consumer", "Use the new consumer implementation."
         "consumer.config", "Consumer config properties file."
@@ -79,21 +73,19 @@ class ConsumerPerformanceService(PerformanceService):
         self.new_consumer = new_consumer
         self.settings = settings
 
-        assert version >= V_0_9_0_0 or (not new_consumer), \
+        assert version.consumer_supports_bootstrap_server() or (not new_consumer), \
             "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(version)
 
         assert version < V_2_0_0 or new_consumer, \
             "new_consumer==false is only supported if version < 2.0.0, version %s" % str(version)
 
         security_protocol = self.security_config.security_protocol
-        assert version >= V_0_9_0_0 or security_protocol == SecurityConfig.PLAINTEXT, \
+        assert version.consumer_supports_bootstrap_server() or security_protocol == SecurityConfig.PLAINTEXT, \
             "Security protocol %s is only supported if version >= 0.9.0.0, version %s" % (self.security_config, str(version))
 
         # These less-frequently used settings can be updated manually after instantiation
         self.fetch_size = None
         self.socket_buffer_size = None
-        self.threads = None
-        self.num_fetch_threads = None
         self.group = None
         self.from_latest = None
 
@@ -110,7 +102,9 @@ class ConsumerPerformanceService(PerformanceService):
         if self.new_consumer:
             if version <= LATEST_0_10_0:
                 args['new-consumer'] = ""
-            args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+                args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
+            else:
+                args['bootstrap-server'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         else:
             args['zookeeper'] = self.kafka.zk_connect_setting()
 
@@ -119,12 +113,6 @@ class ConsumerPerformanceService(PerformanceService):
 
         if self.socket_buffer_size is not None:
             args['socket-buffer-size'] = self.socket_buffer_size
-
-        if self.threads is not None:
-            args['threads'] = self.threads
-
-        if self.num_fetch_threads is not None:
-            args['num-fetch-threads'] = self.num_fetch_threads
 
         if self.group is not None:
             args['group'] = self.group
@@ -142,7 +130,7 @@ class ConsumerPerformanceService(PerformanceService):
         for key, value in self.args(node.version).items():
             cmd += " --%s %s" % (key, value)
 
-        if node.version >= V_0_9_0_0:
+        if node.version.consumer_supports_bootstrap_server():
             # This is only used for security settings
             cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
 
@@ -155,7 +143,7 @@ class ConsumerPerformanceService(PerformanceService):
 
     def parse_results(self, line, version):
         parts = line.split(',')
-        if version >= V_0_9_0_0:
+        if version.consumer_supports_bootstrap_server():
             result = {
                 'total_mb': float(parts[2]),
                 'mbps': float(parts[3]),

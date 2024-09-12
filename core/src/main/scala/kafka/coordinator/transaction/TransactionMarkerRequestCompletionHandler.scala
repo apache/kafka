@@ -24,12 +24,12 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
 
 import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnStateManager: TransactionStateManager,
                                                 txnMarkerChannelManager: TransactionMarkerChannelManager,
-                                                txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {
+                                                pendingCompleteTxnAndMarkerEntries: java.util.List[PendingCompleteTxnAndMarkerEntry]) extends RequestCompletionHandler with Logging {
 
   this.logIdent = "[Transaction Marker Request Completion Handler " + brokerId + "]: "
 
@@ -39,22 +39,23 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
     if (response.wasDisconnected) {
       trace(s"Cancelled request with header $requestHeader due to node ${response.destination} being disconnected")
 
-      for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
-        val transactionalId = txnIdAndMarker.txnId
-        val txnMarker = txnIdAndMarker.txnMarkerEntry
+      for (pendingCompleteTxnAndMarker <- pendingCompleteTxnAndMarkerEntries.asScala) {
+        val pendingCompleteTxn = pendingCompleteTxnAndMarker.pendingCompleteTxn
+        val transactionalId = pendingCompleteTxn.transactionalId
+        val txnMarker = pendingCompleteTxnAndMarker.txnMarkerEntry
 
         txnStateManager.getTransactionState(transactionalId) match {
 
           case Left(Errors.NOT_COORDINATOR) =>
             info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 
-            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            txnMarkerChannelManager.removeMarkersForTxn(pendingCompleteTxn)
 
           case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
             info(s"I am loading the transaction partition that contains $transactionalId which means the current markers have to be obsoleted; " +
               s"cancel sending transaction markers $txnMarker to the brokers")
 
-            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            txnMarkerChannelManager.removeMarkersForTxn(pendingCompleteTxn)
 
           case Left(unexpectedError) =>
             throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
@@ -69,17 +70,16 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               info(s"Transaction coordinator epoch for $transactionalId has changed from ${txnMarker.coordinatorEpoch} to " +
                 s"${epochAndMetadata.coordinatorEpoch}; cancel sending transaction markers $txnMarker to the brokers")
 
-              txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+              txnMarkerChannelManager.removeMarkersForTxn(pendingCompleteTxn)
             } else {
               // re-enqueue the markers with possibly new destination brokers
               trace(s"Re-enqueuing ${txnMarker.transactionResult} transaction markers for transactional id $transactionalId " +
                 s"under coordinator epoch ${txnMarker.coordinatorEpoch}")
 
-              txnMarkerChannelManager.addTxnMarkersToBrokerQueue(transactionalId,
-                txnMarker.producerId,
+              txnMarkerChannelManager.addTxnMarkersToBrokerQueue(txnMarker.producerId,
                 txnMarker.producerEpoch,
                 txnMarker.transactionResult,
-                txnMarker.coordinatorEpoch,
+                pendingCompleteTxn,
                 txnMarker.partitions.asScala.toSet)
             }
         }
@@ -89,10 +89,12 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
-      for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
-        val transactionalId = txnIdAndMarker.txnId
-        val txnMarker = txnIdAndMarker.txnMarkerEntry
-        val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
+      val responseErrors = writeTxnMarkerResponse.errorsByProducerId
+      for (pendingCompleteTxnAndMarker <- pendingCompleteTxnAndMarkerEntries.asScala) {
+        val pendingCompleteTxn = pendingCompleteTxnAndMarker.pendingCompleteTxn
+        val transactionalId = pendingCompleteTxn.transactionalId
+        val txnMarker = pendingCompleteTxnAndMarker.txnMarkerEntry
+        val errors = responseErrors.get(txnMarker.producerId)
 
         if (errors == null)
           throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for producer id ${txnMarker.producerId}")
@@ -101,13 +103,13 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
           case Left(Errors.NOT_COORDINATOR) =>
             info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 
-            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            txnMarkerChannelManager.removeMarkersForTxn(pendingCompleteTxn)
 
           case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
             info(s"I am loading the transaction partition that contains $transactionalId which means the current markers have to be obsoleted; " +
               s"cancel sending transaction markers $txnMarker to the brokers")
 
-            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            txnMarkerChannelManager.removeMarkersForTxn(pendingCompleteTxn)
 
           case Left(unexpectedError) =>
             throw new IllegalStateException(s"Unhandled error $unexpectedError when fetching current transaction state")
@@ -126,7 +128,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               info(s"Transaction coordinator epoch for $transactionalId has changed from ${txnMarker.coordinatorEpoch} to " +
                 s"${epochAndMetadata.coordinatorEpoch}; cancel sending transaction markers $txnMarker to the brokers")
 
-              txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+              txnMarkerChannelManager.removeMarkersForTxn(pendingCompleteTxn)
               abortSending = true
             } else {
               txnMetadata.inLock {
@@ -143,10 +145,11 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                       throw new IllegalStateException(s"Received fatal error ${error.exceptionName} while sending txn marker for $transactionalId")
 
                     case Errors.UNKNOWN_TOPIC_OR_PARTITION |
-                         Errors.NOT_LEADER_FOR_PARTITION |
+                         Errors.NOT_LEADER_OR_FOLLOWER |
                          Errors.NOT_ENOUGH_REPLICAS |
                          Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND |
-                         Errors.REQUEST_TIMED_OUT => // these are retriable errors
+                         Errors.REQUEST_TIMED_OUT |
+                         Errors.KAFKA_STORAGE_ERROR => // these are retriable errors
 
                       info(s"Sending $transactionalId's transaction marker for partition $topicPartition has failed with error ${error.exceptionName}, retrying " +
                         s"with current coordinator epoch ${epochAndMetadata.coordinatorEpoch}")
@@ -159,7 +162,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                       info(s"Sending $transactionalId's transaction marker for partition $topicPartition has permanently failed with error ${error.exceptionName} " +
                         s"with the current coordinator epoch ${epochAndMetadata.coordinatorEpoch}; cancel sending any more transaction markers $txnMarker to the brokers")
 
-                      txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+                      txnMarkerChannelManager.removeMarkersForTxn(pendingCompleteTxn)
                       abortSending = true
 
                     case Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT |
@@ -185,14 +188,13 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
                 // re-enqueue with possible new leaders of the partitions
                 txnMarkerChannelManager.addTxnMarkersToBrokerQueue(
-                  transactionalId,
                   txnMarker.producerId,
                   txnMarker.producerEpoch,
                   txnMarker.transactionResult,
-                  txnMarker.coordinatorEpoch,
+                  pendingCompleteTxn,
                   retryPartitions.toSet)
               } else {
-                txnMarkerChannelManager.completeSendMarkersForTxnId(transactionalId)
+                txnMarkerChannelManager.maybeWriteTxnCompletion(transactionalId)
               }
             }
         }

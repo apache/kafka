@@ -16,29 +16,30 @@
  */
 package org.apache.kafka.clients.producer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
-
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class RecordSendTest {
 
     private final TopicPartition topicPartition = new TopicPartition("test", 0);
     private final long baseOffset = 45;
-    private final long relOffset = 5;
+    private final int relOffset = 5;
 
     /**
      * Test that waiting on a request that never completes times out
@@ -47,8 +48,8 @@ public class RecordSendTest {
     public void testTimeout() throws Exception {
         ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
-                RecordBatch.NO_TIMESTAMP, 0L, 0, 0, Time.SYSTEM);
-        assertFalse("Request is not completed", future.isDone());
+                RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
+        assertFalse(future.isDone(), "Request is not completed");
         try {
             future.get(5, TimeUnit.MILLISECONDS);
             fail("Should have thrown exception.");
@@ -64,11 +65,11 @@ public class RecordSendTest {
     /**
      * Test that an asynchronous request will eventually throw the right exception
      */
-    @Test(expected = ExecutionException.class)
-    public void testError() throws Exception {
+    @Test
+    public void testError() {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, new CorruptRecordException(), 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, Time.SYSTEM);
-        future.get();
+                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
+        assertThrows(ExecutionException.class, future::get);
     }
 
     /**
@@ -77,22 +78,25 @@ public class RecordSendTest {
     @Test
     public void testBlocking() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, null, 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, Time.SYSTEM);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
 
     /* create a new request result that will be completed after the given timeout */
     public ProduceRequestResult asyncRequest(final long baseOffset, final RuntimeException error, final long timeout) {
         final ProduceRequestResult request = new ProduceRequestResult(topicPartition);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    sleep(timeout);
-                    request.set(baseOffset, RecordBatch.NO_TIMESTAMP, error);
-                    request.done();
-                } catch (InterruptedException e) { }
-            }
-        };
+        Thread thread = new Thread(() -> {
+            try {
+                Thread.sleep(timeout);
+                if (error == null) {
+                    request.set(baseOffset, RecordBatch.NO_TIMESTAMP, null);
+                } else {
+                    request.set(-1L, RecordBatch.NO_TIMESTAMP, index -> error);
+                }
+
+                request.done();
+            } catch (InterruptedException e) { }
+        });
         thread.start();
         return request;
     }

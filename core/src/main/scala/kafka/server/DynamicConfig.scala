@@ -17,106 +17,107 @@
 
 package kafka.server
 
+import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
+
+import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
-
-import kafka.log.LogConfig
-import kafka.security.CredentialProvider
 import org.apache.kafka.common.config.ConfigDef
-import org.apache.kafka.common.config.ConfigDef.Importance._
-import org.apache.kafka.common.config.ConfigDef.Range._
-import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 
-import scala.collection.JavaConverters._
+import java.util
+import scala.jdk.CollectionConverters._
 
 /**
   * Class used to hold dynamic configs. These are configs which have no physical manifestation in the server.properties
   * and can only be set dynamically.
   */
 object DynamicConfig {
+    object Broker {
+      private val brokerConfigs = {
+        val configs = QuotaConfigs.brokerQuotaConfigs()
 
-  object Broker {
-    //Properties
-    val LeaderReplicationThrottledRateProp = "leader.replication.throttled.rate"
-    val FollowerReplicationThrottledRateProp = "follower.replication.throttled.rate"
-    val ReplicaAlterLogDirsIoMaxBytesPerSecondProp = "replica.alter.log.dirs.io.max.bytes.per.second"
+        // Filter and define all dynamic configurations
+        KafkaConfig.configKeys
+          .filter { case (configName, _) => AllDynamicConfigs.contains(configName) }
+          .foreach { case (_, config) => configs.define(config) }
+        configs
+      }
 
-    //Defaults
-    val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
+    // In order to avoid circular reference, all DynamicBrokerConfig's variables which are initialized by `DynamicConfig.Broker` should be moved to `DynamicConfig.Broker`.
+    // Otherwise, those variables of DynamicBrokerConfig will see intermediate state of `DynamicConfig.Broker`, because `brokerConfigs` is created by `DynamicBrokerConfig.AllDynamicConfigs`
+    val nonDynamicProps: Set[String] = KafkaConfig.configNames.toSet -- brokerConfigs.names.asScala
 
-    //Documentation
-    val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-      s"property ${LogConfig.LeaderReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
-      s"limit be kept above 1MB/s for accurate behaviour."
-    val FollowerReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-      s"property ${LogConfig.FollowerReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
-      s"limit be kept above 1MB/s for accurate behaviour."
-    val ReplicaAlterLogDirsIoMaxBytesPerSecondDoc = "A long representing the upper bound (bytes/sec) on disk IO used for moving replica between log directories on the same broker. " +
-      s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = brokerConfigs.configKeys
 
-    //Definitions
-    private val brokerConfigDef = new ConfigDef()
-      //round minimum value down, to make it easier for users.
-      .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
-      .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
-      .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
-    DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
-    val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
+    def names: util.Set[String] = brokerConfigs.names
 
-    def names = brokerConfigDef.names
-
-    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true)
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(brokerConfigs, props, customPropsAllowed = true)
   }
 
   object Client {
-    //Properties
-    val ProducerByteRateOverrideProp = "producer_byte_rate"
-    val ConsumerByteRateOverrideProp = "consumer_byte_rate"
-    val RequestPercentageOverrideProp = "request_percentage"
+    private val clientConfigs = QuotaConfigs.userAndClientQuotaConfigs()
 
-    //Defaults
-    val DefaultProducerOverride = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
-    val DefaultConsumerOverride = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
-    val DefaultRequestOverride = ClientQuotaManagerConfig.QuotaRequestPercentDefault
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = clientConfigs.configKeys
 
-    //Documentation
-    val ProducerOverrideDoc = "A rate representing the upper bound (bytes/sec) for producer traffic."
-    val ConsumerOverrideDoc = "A rate representing the upper bound (bytes/sec) for consumer traffic."
-    val RequestOverrideDoc = "A percentage representing the upper bound of time spent for processing requests."
+    def names: util.Set[String] = clientConfigs.names
 
-    //Definitions
-    private val clientConfigs = new ConfigDef()
-      .define(ProducerByteRateOverrideProp, LONG, DefaultProducerOverride, MEDIUM, ProducerOverrideDoc)
-      .define(ConsumerByteRateOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ConsumerOverrideDoc)
-      .define(RequestPercentageOverrideProp, DOUBLE, DefaultRequestOverride, MEDIUM, RequestOverrideDoc)
-
-    def names = clientConfigs.names
-
-    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
   }
 
   object User {
+    private val userConfigs = QuotaConfigs.scramMechanismsPlusUserAndClientQuotaConfigs()
 
-    //Definitions
-    private val userConfigs = CredentialProvider.userCredentialConfigs
-      .define(Client.ProducerByteRateOverrideProp, LONG, Client.DefaultProducerOverride, MEDIUM, Client.ProducerOverrideDoc)
-      .define(Client.ConsumerByteRateOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ConsumerOverrideDoc)
-      .define(Client.RequestPercentageOverrideProp, DOUBLE, Client.DefaultRequestOverride, MEDIUM, Client.RequestOverrideDoc)
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = userConfigs.configKeys
 
-    def names = userConfigs.names
+    def names: util.Set[String] = userConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
+  }
+
+  object Ip {
+    private val ipConfigs = QuotaConfigs.ipConfigs
+
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = ipConfigs.configKeys
+
+    def names: util.Set[String] = ipConfigs.names
+
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
+
+    def isValidIpEntity(ip: String): Boolean = {
+      if (ip != ZooKeeperInternals.DEFAULT_STRING) {
+        try {
+          InetAddress.getByName(ip)
+        } catch {
+          case _: UnknownHostException => return false
+        }
+      }
+      true
+    }
+  }
+
+  object ClientMetrics {
+    private val clientConfigs = org.apache.kafka.server.metrics.ClientMetricsConfigs.configDef()
+
+    def names: util.Set[String] = clientConfigs.names
+  }
+
+  object Group {
+    private val groupConfigs = GroupConfig.configDef()
+
+    def names: util.Set[String] = groupConfigs.names
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
-    //Validate Names
-    val names = configDef.names()
+    // Validate Names
+    val names = configDef.names
     val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
     if (!customPropsAllowed) {
-      val unknownKeys = propKeys.filter(!names.contains(_))
+      val unknownKeys = propKeys.filterNot(names.contains(_))
       require(unknownKeys.isEmpty, s"Unknown Dynamic Configuration: $unknownKeys.")
     }
     val propResolved = DynamicBrokerConfig.resolveVariableConfigs(props)
-    //ValidateValues
+    // ValidateValues
     configDef.parse(propResolved)
   }
 }

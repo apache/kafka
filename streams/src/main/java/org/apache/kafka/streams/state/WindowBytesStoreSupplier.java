@@ -27,16 +27,6 @@ import org.apache.kafka.common.utils.Bytes;
  * 2. Null value bytes should never be returned in range query results.
  */
 public interface WindowBytesStoreSupplier extends StoreSupplier<WindowStore<Bytes, byte[]>> {
-    /**
-     * The number of segments the store has. If your store is segmented then this should be the number of segments
-     * in the underlying store.
-     * It is also used to reduce the amount of data that is scanned when caching is enabled.
-     *
-     * @return number of segments
-     * @deprecated since 2.1. Use {@link WindowBytesStoreSupplier#segmentIntervalMs()} instead.
-     */
-    @Deprecated
-    int segments();
 
     /**
      * The size of the segments (in milliseconds) the store has.

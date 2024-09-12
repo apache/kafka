@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Locale;
+
 public enum IsolationLevel {
     READ_UNCOMMITTED((byte) 0), READ_COMMITTED((byte) 1);
 
@@ -38,5 +40,10 @@ public enum IsolationLevel {
             default:
                 throw new IllegalArgumentException("Unknown isolation level " + id);
         }
+    }
+
+    @Override
+    public String toString() {
+        return super.toString().toLowerCase(Locale.ROOT);
     }
 }

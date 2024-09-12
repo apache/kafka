@@ -1,0 +1,36 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 66,
+  "type": "response",
+  "name": "ListTransactionsResponse",
+  // Version 1 is the same as version 0 (KIP-994).
+  "validVersions": "0-1",
+  "flexibleVersions": "0+",
+  "fields": [
+      { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+        "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+      { "name": "ErrorCode", "type": "int16", "versions": "0+" },
+      { "name": "UnknownStateFilters", "type": "[]string", "versions": "0+",
+        "about": "Set of state filters provided in the request which were unknown to the transaction coordinator" },
+      { "name": "TransactionStates", "type": "[]TransactionState", "versions": "0+", "fields": [
+        { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId" },
+        { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId" },
+        { "name": "TransactionState", "type": "string", "versions": "0+",
+          "about": "The current transaction state of the producer" }
+    ]}
+  ]
+}

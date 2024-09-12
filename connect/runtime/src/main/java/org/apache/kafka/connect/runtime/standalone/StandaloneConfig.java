@@ -21,6 +21,9 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import java.util.Map;
 
+/**
+ * Provides configuration for Kafka Connect workers running in standalone mode.
+ */
 public class StandaloneConfig extends WorkerConfig {
     private static final ConfigDef CONFIG;
 
@@ -28,7 +31,7 @@ public class StandaloneConfig extends WorkerConfig {
      * <code>offset.storage.file.filename</code>
      */
     public static final String OFFSET_STORAGE_FILE_FILENAME_CONFIG = "offset.storage.file.filename";
-    private static final String OFFSET_STORAGE_FILE_FILENAME_DOC = "File to store offset data in";
+    private static final String OFFSET_STORAGE_FILE_FILENAME_DOC = "File to store source connector offsets";
 
     static {
         CONFIG = baseConfigDef()

@@ -13,12 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StaticMemberTestService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running, extract_generation_from_logs
+from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running, extract_generation_from_logs, extract_generation_id
 
 class StreamsStaticMembershipTest(Test):
     """
@@ -37,9 +39,13 @@ class StreamsStaticMembershipTest(Test):
             self.input_topic: {'partitions': 18},
         }
 
-        self.zookeeper = ZookeeperService(self.test_context, num_nodes=1)
+        self.zookeeper = (
+            ZookeeperService(self.test_context, 1)
+            if quorum.for_test(self.test_context) == quorum.zk
+            else None
+        )
         self.kafka = KafkaService(self.test_context, num_nodes=3,
-                                  zk=self.zookeeper, topics=self.topics)
+                                  zk=self.zookeeper, topics=self.topics, controller_num_nodes_override=1)
 
         self.producer = VerifiableProducer(self.test_context,
                                            1,
@@ -48,8 +54,11 @@ class StreamsStaticMembershipTest(Test):
                                            throughput=1000,
                                            acks=1)
 
-    def test_rolling_bounces_will_not_trigger_rebalance_under_static_membership(self):
-        self.zookeeper.start()
+    @cluster(num_nodes=8)
+    @matrix(metadata_quorum=[quorum.isolated_kraft], use_new_coordinator=[True, False])
+    def test_rolling_bounces_will_not_trigger_rebalance_under_static_membership(self, metadata_quorum, use_new_coordinator=False):
+        if self.zookeeper:
+            self.zookeeper.start()
         self.kafka.start()
 
         numThreads = 3
@@ -83,7 +92,7 @@ class StreamsStaticMembershipTest(Test):
                 "Smaller than minimum expected %d generation messages, actual %d" % (num_bounce_generations, len(generations))
 
             for generation in generations[-num_bounce_generations:]:
-                generation = int(generation)
+                generation = extract_generation_id(generation)
                 if stable_generation == -1:
                     stable_generation = generation
                 assert stable_generation == generation, \
@@ -94,8 +103,9 @@ class StreamsStaticMembershipTest(Test):
         stop_processors(processors, self.stopped_message)
 
         self.producer.stop()
-        self.kafka.stop()
-        self.zookeeper.stop()
+        self.kafka.stop(timeout_sec=120)
+        if self.zookeeper:
+            self.zookeeper.stop()
 
     def verify_processing(self, processors):
         for processor in processors:

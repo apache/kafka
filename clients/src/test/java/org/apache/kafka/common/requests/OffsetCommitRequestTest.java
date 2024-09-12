@@ -21,12 +21,14 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,13 +36,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.requests.OffsetCommitRequest.getErrorResponseTopics;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.apache.kafka.common.requests.OffsetCommitRequest.getErrorResponse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OffsetCommitRequestTest {
 
     protected static String groupId = "groupId";
+    protected static String memberId = "consumerId";
+    protected static String groupInstanceId = "groupInstanceId";
     protected static String topicOne = "topicOne";
     protected static String topicTwo = "topicTwo";
     protected static int partitionOne = 1;
@@ -52,11 +56,10 @@ public class OffsetCommitRequestTest {
     protected static int throttleTimeMs = 10;
 
     private static OffsetCommitRequestData data;
-    private static List<OffsetCommitRequestTopic> topics;
 
-    @Before
+    @BeforeEach
     public void setUp() {
-        topics = Arrays.asList(
+        List<OffsetCommitRequestTopic> topics = Arrays.asList(
             new OffsetCommitRequestTopic()
                 .setName(topicOne)
                 .setPartitions(Collections.singletonList(
@@ -89,7 +92,7 @@ public class OffsetCommitRequestTest {
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequest request = builder.build(version);
             assertEquals(expectedOffsets, request.offsets());
 
@@ -101,34 +104,15 @@ public class OffsetCommitRequestTest {
     }
 
     @Test
-    public void testGetErrorResponseTopics() {
-        List<OffsetCommitResponseTopic> expectedTopics = Arrays.asList(
-            new OffsetCommitResponseTopic()
-                .setName(topicOne)
-                .setPartitions(Collections.singletonList(
-                    new OffsetCommitResponsePartition()
-                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                        .setPartitionIndex(partitionOne))),
-            new OffsetCommitResponseTopic()
-                .setName(topicTwo)
-                .setPartitions(Collections.singletonList(
-                    new OffsetCommitResponsePartition()
-                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                        .setPartitionIndex(partitionTwo)))
-        );
-        assertEquals(expectedTopics, getErrorResponseTopics(topics, Errors.UNKNOWN_MEMBER_ID));
-    }
-
-    @Test
     public void testVersionSupportForGroupInstanceId() {
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
             new OffsetCommitRequestData()
-                .setGroupId("groupId")
-                .setMemberId("consumerId")
-                .setGroupInstanceId("groupInstanceId")
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setGroupInstanceId(groupInstanceId)
         );
 
-        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             if (version >= 7) {
                 builder.build(version);
             } else {
@@ -136,5 +120,25 @@ public class OffsetCommitRequestTest {
                 assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
             }
         }
+    }
+
+    @Test
+    public void testGetErrorResponse() {
+        OffsetCommitResponseData expectedResponse = new OffsetCommitResponseData()
+            .setTopics(Arrays.asList(
+                new OffsetCommitResponseTopic()
+                    .setName(topicOne)
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitResponsePartition()
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                            .setPartitionIndex(partitionOne))),
+                new OffsetCommitResponseTopic()
+                    .setName(topicTwo)
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitResponsePartition()
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                            .setPartitionIndex(partitionTwo)))));
+
+        assertEquals(expectedResponse, getErrorResponse(data, Errors.UNKNOWN_MEMBER_ID));
     }
 }

@@ -19,72 +19,97 @@ package kafka.api
 
 import java.time.Duration
 import java.nio.charset.StandardCharsets
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
-
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.admin.{Admin, NewPartitions}
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.network.{ListenerName, ConnectionMode}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable.Buffer
+import scala.collection.mutable
 import scala.concurrent.ExecutionException
+import scala.jdk.CollectionConverters._
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
-  def generateConfigs = {
+  def generateConfigs: scala.collection.Seq[KafkaConfig] = {
     val overridingProps = new Properties()
     val numServers = 2
-    overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
-    TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
+    overridingProps.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 4.toString)
+    TestUtils.createBrokerConfigs(
+      numServers,
+      zkConnectOrNull,
+      interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile,
+      saslProperties = serverSaslProperties
+    ).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
-  private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  private var consumer: Consumer[Array[Byte], Array[Byte]] = _
+  private val producers = mutable.Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  protected var admin: Admin = _
 
   protected val topic = "topic"
   private val numRecords = 100
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
-    consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers), securityProtocol = SecurityProtocol.PLAINTEXT)
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+
+    admin = TestUtils.createAdminClient(brokers, listenerName,
+        TestUtils.securityConfigs(ConnectionMode.CLIENT,
+          securityProtocol,
+          trustStoreFile,
+          "adminClient",
+          TestUtils.SslCertificateCn,
+          clientSaslProperties))
+
+    consumer = TestUtils.createConsumer(
+      bootstrapServers(listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)),
+      securityProtocol = SecurityProtocol.PLAINTEXT
+    )
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     consumer.close()
     // Ensure that all producers are closed since unclosed producers impact other tests when Kafka server ports are reused
     producers.foreach(_.close())
+    admin.close()
 
     super.tearDown()
   }
 
-  protected def createProducer(brokerList: String,
-                               lingerMs: Int = 0,
+  protected def createProducer(lingerMs: Int = 0,
                                deliveryTimeoutMs: Int = 2 * 60 * 1000,
                                batchSize: Int = 16384,
                                compressionType: String = "none",
-                               maxBlockMs: Long = 60 * 1000L): KafkaProducer[Array[Byte],Array[Byte]] = {
-    val producer = TestUtils.createProducer(brokerList,
+                               maxBlockMs: Long = 60 * 1000L,
+                               bufferSize: Long = 1024L * 1024L): KafkaProducer[Array[Byte],Array[Byte]] = {
+    val producer = TestUtils.createProducer(
+      bootstrapServers(),
       compressionType = compressionType,
       securityProtocol = securityProtocol,
       trustStoreFile = trustStoreFile,
       saslProperties = clientSaslProperties,
       lingerMs = lingerMs,
       deliveryTimeoutMs = deliveryTimeoutMs,
-      maxBlockMs = maxBlockMs)
+      maxBlockMs = maxBlockMs,
+      batchSize = batchSize,
+      bufferSize = bufferSize)
     registerProducer(producer)
   }
 
@@ -99,9 +124,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * 1. Send with null key/value/partition-id should be accepted; send with null topic should be rejected.
    * 2. Last message of the non-blocking send should return the correct offset metadata
    */
-  @Test
-  def testSendOffset(): Unit = {
-    val producer = createProducer(brokerList)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendOffset(quorum: String): Unit = {
+    val producer = createProducer()
     val partition = 0
 
     object callback extends Callback {
@@ -119,70 +145,61 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
             case 2 => assertEquals(metadata.serializedValueSize, "value".getBytes(StandardCharsets.UTF_8).length)
             case _ => assertTrue(metadata.serializedValueSize > 0)
           }
-          assertNotEquals(metadata.checksum(), 0)
           offset += 1
         } else {
-          fail("Send callback returns the following exception", exception)
+          fail(s"Send callback returns the following exception: $exception")
         }
       }
     }
 
     try {
       // create topic
-      createTopic(topic, 1, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
 
       // send a normal record
       val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes(StandardCharsets.UTF_8),
         "value".getBytes(StandardCharsets.UTF_8))
-      assertEquals("Should have offset 0", 0L, producer.send(record0, callback).get.offset)
+      assertEquals(0L, producer.send(record0, callback).get.offset, "Should have offset 0")
 
       // send a record with null value should be ok
       val record1 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes(StandardCharsets.UTF_8), null)
-      assertEquals("Should have offset 1", 1L, producer.send(record1, callback).get.offset)
+      assertEquals(1L, producer.send(record1, callback).get.offset, "Should have offset 1")
 
       // send a record with null key should be ok
       val record2 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes(StandardCharsets.UTF_8))
-      assertEquals("Should have offset 2", 2L, producer.send(record2, callback).get.offset)
+      assertEquals(2L, producer.send(record2, callback).get.offset, "Should have offset 2")
 
       // send a record with null part id should be ok
       val record3 = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, "key".getBytes(StandardCharsets.UTF_8),
         "value".getBytes(StandardCharsets.UTF_8))
-      assertEquals("Should have offset 3", 3L, producer.send(record3, callback).get.offset)
-
-      // send a record with null topic should fail
-      try {
-        val record4 = new ProducerRecord[Array[Byte], Array[Byte]](null, partition, "key".getBytes(StandardCharsets.UTF_8),
-          "value".getBytes(StandardCharsets.UTF_8))
-        producer.send(record4, callback)
-        fail("Should not allow sending a record without topic")
-      } catch {
-        case _: IllegalArgumentException => // this is ok
-      }
+      assertEquals(3L, producer.send(record3, callback).get.offset, "Should have offset 3")
 
       // non-blocking send a list of records
       for (_ <- 1 to numRecords)
         producer.send(record0, callback)
 
       // check that all messages have been acked via offset
-      assertEquals("Should have offset " + (numRecords + 4), numRecords + 4L, producer.send(record0, callback).get.offset)
+      assertEquals(numRecords + 4L, producer.send(record0, callback).get.offset, "Should have offset " + (numRecords + 4))
 
     } finally {
       producer.close()
     }
   }
 
-  @Test
-  def testSendCompressedMessageWithCreateTime(): Unit = {
-    val producer = createProducer(brokerList = brokerList,
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendCompressedMessageWithCreateTime(quorum: String): Unit = {
+    val producer = createProducer(
       compressionType = "gzip",
       lingerMs = Int.MaxValue,
       deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
 
-  @Test
-  def testSendNonCompressedMessageWithCreateTime(): Unit = {
-    val producer = createProducer(brokerList = brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendNonCompressedMessageWithCreateTime(quorum: String): Unit = {
+    val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
 
@@ -191,7 +208,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
                               timeoutMs: Long = 20000L): Unit = {
     val partition = 0
     try {
-      createTopic(topic, 1, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
 
       val futures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord(topic, partition, s"key$i".getBytes(StandardCharsets.UTF_8),
@@ -234,7 +251,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           offset += 1
           timestampDiff += 1
         } else {
-          fail("Send callback returns the following exception", exception)
+          fail(s"Send callback returns the following exception: $exception")
         }
       }
     }
@@ -243,10 +260,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       // create topic
       val topicProps = new Properties()
       if (timestampType == TimestampType.LOG_APPEND_TIME)
-        topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "LogAppendTime")
+        topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
       else
-        topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "CreateTime")
-      createTopic(topic, 1, 2, topicProps)
+        topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime")
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
 
       val recordAndFutures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord(topic, partition, baseTimestamp + i, s"key$i".getBytes(StandardCharsets.UTF_8),
@@ -261,7 +278,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         else
           assertEquals(record.timestamp, recordMetadata.timestamp)
       }
-      assertEquals(s"Should have offset $numRecords but only successfully sent ${callback.offset}", numRecords, callback.offset)
+      assertEquals(numRecords, callback.offset, s"Should have offset $numRecords but only successfully sent ${callback.offset}")
     } finally {
       producer.close()
     }
@@ -272,13 +289,14 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    *
    * After close() returns, all messages should be sent with correct returned offset metadata
    */
-  @Test
-  def testClose(): Unit = {
-    val producer = createProducer(brokerList)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClose(quorum: String): Unit = {
+    val producer = createProducer()
 
     try {
       // create topic
-      createTopic(topic, 1, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
 
       // non-blocking send a list of records
       val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, "key".getBytes(StandardCharsets.UTF_8),
@@ -292,8 +310,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
       // check that all messages have been acked via offset,
       // this also checks that messages with same key go to the same partition
-      assertTrue("The last message should be acked before producer is shutdown", response0.isDone)
-      assertEquals("Should have offset " + numRecords, numRecords.toLong, response0.get.offset)
+      assertTrue(response0.isDone, "The last message should be acked before producer is shutdown")
+      assertEquals(numRecords.toLong, response0.get.offset, "Should have offset " + numRecords)
 
     } finally {
       producer.close()
@@ -305,12 +323,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    *
    * The specified partition-id should be respected
    */
-  @Test
-  def testSendToPartition(): Unit = {
-    val producer = createProducer(brokerList)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendToPartition(quorum: String): Unit = {
+    val producer = createProducer()
 
     try {
-      createTopic(topic, 2, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
       val partition = 1
 
       val now = System.currentTimeMillis()
@@ -344,20 +363,68 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendToPartitionWithFollowerShutdownShouldNotTimeout(quorum: String): Unit = {
+    // This test produces to a leader that has follower that is shutting down. It shows that
+    // the produce request succeed, do not timeout and do not need to be retried.
+    val producer = createProducer()
+    val follower = 1
+    val replicas = List(0, follower)
+
+    try {
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 3, Map(0 -> replicas))
+      val partition = 0
+
+      val now = System.currentTimeMillis()
+      val futures = (1 to numRecords).map { i =>
+        producer.send(new ProducerRecord(topic, partition, now, null, ("value" + i).getBytes(StandardCharsets.UTF_8)))
+      }
+
+      // Shutdown the follower
+      killBroker(follower)
+
+      // make sure all of them end up in the same partition with increasing offset values
+      futures.zip(0 until numRecords).foreach { case (future, offset) =>
+        val recordMetadata = future.get(30, TimeUnit.SECONDS)
+        assertEquals(offset.toLong, recordMetadata.offset)
+        assertEquals(topic, recordMetadata.topic)
+        assertEquals(partition, recordMetadata.partition)
+      }
+
+      consumer.assign(List(new TopicPartition(topic, partition)).asJava)
+
+      // make sure the fetched messages also respect the partitioning and ordering
+      val records = TestUtils.consumeRecords(consumer, numRecords)
+
+      records.zipWithIndex.foreach { case (record, i) =>
+        assertEquals(topic, record.topic)
+        assertEquals(partition, record.partition)
+        assertEquals(i.toLong, record.offset)
+        assertNull(record.key)
+        assertEquals(s"value${i + 1}", new String(record.value))
+        assertEquals(now, record.timestamp)
+      }
+    } finally {
+      producer.close()
+    }
+  }
+
   /**
     * Checks partitioning behavior before and after partitions are added
     *
     * Producer will attempt to send messages to the partition specified in each record, and should
     * succeed as long as the partition is included in the metadata.
     */
-  @Test
-  def testSendBeforeAndAfterPartitionExpansion(): Unit = {
-    val producer = createProducer(brokerList, maxBlockMs = 5 * 1000L)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendBeforeAndAfterPartitionExpansion(quorum: String): Unit = {
+    val producer = createProducer(maxBlockMs = 5 * 1000L)
 
     // create topic
-    createTopic(topic, 1, 2)
-    val partition0 = 0
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
 
+    val partition0 = 0
     var futures0 = (1 to numRecords).map { i =>
       producer.send(new ProducerRecord(topic, partition0, null, ("value" + i).getBytes(StandardCharsets.UTF_8)))
     }.map(_.get(30, TimeUnit.SECONDS))
@@ -371,23 +438,14 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     // Trying to send a record to a partition beyond topic's partition range before adding the partition should fail.
     val partition1 = 1
-    try {
-      producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get()
-      fail("Should not allow sending a record to a partition not present in the metadata")
-    } catch {
-      case e: ExecutionException => e.getCause match {
-        case _: TimeoutException => // this is ok
-        case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
-      }
-    }
+    val e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get())
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
-    val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(Set(topic)).map {
-      case (topicPartition, assignment) => topicPartition.partition -> assignment
-    }
-    adminZkClient.addPartitions(topic, existingAssignment, adminZkClient.getBrokerMetadatas(), 2)
+    admin.createPartitions(Collections.singletonMap(topic, NewPartitions.increaseTo(2))).all().get()
+
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1)
+    TestUtils.waitForPartitionMetadata(brokers, topic, 0)
+    TestUtils.waitForPartitionMetadata(brokers, topic, 1)
 
     // send records to the newly added partition after confirming that metadata have been updated.
     val futures1 = (1 to numRecords).map { i =>
@@ -416,18 +474,19 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   /**
    * Test that flush immediately sends all accumulated requests.
    */
-  @Test
-  def testFlush(): Unit = {
-    val producer = createProducer(brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFlush(quorum: String): Unit = {
+    val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     try {
-      createTopic(topic, 2, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
       val record = new ProducerRecord[Array[Byte], Array[Byte]](topic,
         "value".getBytes(StandardCharsets.UTF_8))
       for (_ <- 0 until 50) {
         val responses = (0 until numRecords) map (_ => producer.send(record))
-        assertTrue("No request is complete.", responses.forall(!_.isDone()))
+        assertTrue(responses.forall(!_.isDone), "No request is complete.")
         producer.flush()
-        assertTrue("All requests are complete.", responses.forall(_.isDone()))
+        assertTrue(responses.forall(_.isDone), "All requests are complete.")
       }
     } finally {
       producer.close()
@@ -437,9 +496,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   /**
    * Test close with zero timeout from caller thread
    */
-  @Test
-  def testCloseWithZeroTimeoutFromCallerThread(): Unit = {
-    createTopic(topic, 2, 2)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCloseWithZeroTimeoutFromCallerThread(quorum: String): Unit = {
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
     val partition = 0
     consumer.assign(List(new TopicPartition(topic, partition)).asJava)
     val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null,
@@ -447,28 +507,25 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     // Test closing from caller thread.
     for (_ <- 0 until 50) {
-      val producer = createProducer(brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
+      val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
       val responses = (0 until numRecords) map (_ => producer.send(record0))
-      assertTrue("No request is complete.", responses.forall(!_.isDone()))
+      assertTrue(responses.forall(!_.isDone), "No request is complete.")
       producer.close(Duration.ZERO)
       responses.foreach { future =>
-        try {
-          future.get()
-          fail("No message should be sent successfully.")
-        } catch {
-          case e: ExecutionException => assertEquals(classOf[KafkaException], e.getCause.getClass)
-        }
+        val e = assertThrows(classOf[ExecutionException], () => future.get())
+        assertEquals(classOf[KafkaException], e.getCause.getClass)
       }
-      assertEquals("Fetch response should have no message returned.", 0, consumer.poll(Duration.ofMillis(50L)).count)
+      assertEquals(0, consumer.poll(Duration.ofMillis(50L)).count, "Fetch response should have no message returned.")
     }
   }
 
   /**
    * Test close with zero and non-zero timeout from sender thread
    */
-  @Test
-  def testCloseWithZeroTimeoutFromSenderThread(): Unit = {
-    createTopic(topic, 1, 2)
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCloseWithZeroTimeoutFromSenderThread(quorum: String): Unit = {
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
     val partition = 0
     consumer.assign(List(new TopicPartition(topic, partition)).asJava)
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes(StandardCharsets.UTF_8))
@@ -487,16 +544,16 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       }
     }
     for (i <- 0 until 50) {
-      val producer = createProducer(brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
+      val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
       try {
         // send message to partition 0
         // Only send the records in the first callback since we close the producer in the callback and no records
         // can be sent afterwards.
         val responses = (0 until numRecords) map (i => producer.send(record, new CloseCallback(producer, i == 0)))
-        assertTrue("No request is complete.", responses.forall(!_.isDone()))
+        assertTrue(responses.forall(!_.isDone), "No request is complete.")
         // flush the messages.
         producer.flush()
-        assertTrue("All requests are complete.", responses.forall(_.isDone()))
+        assertTrue(responses.forall(_.isDone), "All requests are complete.")
         // Check the messages received by broker.
         TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords)
       } finally {

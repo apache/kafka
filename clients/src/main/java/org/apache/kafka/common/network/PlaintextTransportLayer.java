@@ -20,22 +20,21 @@ package org.apache.kafka.common.network;
  * Transport layer for PLAINTEXT communication
  */
 
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
-
+import java.nio.channels.SocketChannel;
 import java.security.Principal;
-
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 public class PlaintextTransportLayer implements TransportLayer {
     private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Principal principal = KafkaPrincipal.ANONYMOUS;
 
-    public PlaintextTransportLayer(SelectionKey key) throws IOException {
+    public PlaintextTransportLayer(SelectionKey key) {
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
     }

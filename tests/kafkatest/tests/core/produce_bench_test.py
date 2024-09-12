@@ -14,19 +14,20 @@
 # limitations under the License.
 
 import json
+from ducktape.mark import matrix
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.trogdor.produce_bench_workload import ProduceBenchWorkloadService, ProduceBenchWorkloadSpec
 from kafkatest.services.trogdor.task_spec import TaskSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
 
-
 class ProduceBenchTest(Test):
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(ProduceBenchTest, self).__init__(test_context)
-        self.zk = ZookeeperService(test_context, num_nodes=3)
+        self.zk = ZookeeperService(test_context, num_nodes=3) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk)
         self.workload_service = ProduceBenchWorkloadService(test_context, self.kafka)
         self.trogdor = TrogdorService(context=self.test_context,
@@ -36,15 +37,19 @@ class ProduceBenchTest(Test):
 
     def setUp(self):
         self.trogdor.start()
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
         self.kafka.start()
 
     def teardown(self):
         self.trogdor.stop()
         self.kafka.stop()
-        self.zk.stop()
+        if self.zk:
+            self.zk.stop()
 
-    def test_produce_bench(self):
+    @cluster(num_nodes=8)
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_produce_bench(self, metadata_quorum=quorum.zk):
         spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                         self.workload_service.producer_node,
                                         self.workload_service.bootstrap_servers,
@@ -60,7 +65,8 @@ class ProduceBenchTest(Test):
         tasks = self.trogdor.tasks()
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
-    def test_produce_bench_transactions(self):
+    @cluster(num_nodes=8)
+    def test_produce_bench_transactions(self, metadata_quorum=quorum.zk):
         spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                         self.workload_service.producer_node,
                                         self.workload_service.bootstrap_servers,

@@ -17,31 +17,43 @@
 package org.apache.kafka.common.utils;
 
 /**
- * Internal class that should be used instead of `Exit.exit()` and `Runtime.getRuntime().halt()` so that tests can
+ * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can
  * easily change the behaviour.
  */
 public class Exit {
 
+    @FunctionalInterface
     public interface Procedure {
         void execute(int statusCode, String message);
     }
 
-    private static final Procedure DEFAULT_HALT_PROCEDURE = new Procedure() {
-        @Override
-        public void execute(int statusCode, String message) {
-            Runtime.getRuntime().halt(statusCode);
-        }
+    @FunctionalInterface
+    public interface ShutdownHookAdder {
+        void addShutdownHook(String name, Runnable runnable);
+    }
+
+    private static final Procedure DEFAULT_HALT_PROCEDURE = (statusCode, message) -> Runtime.getRuntime().halt(statusCode);
+
+    private static final Procedure DEFAULT_EXIT_PROCEDURE = (statusCode, message) -> System.exit(statusCode);
+
+    private static final ShutdownHookAdder DEFAULT_SHUTDOWN_HOOK_ADDER = (name, runnable) -> {
+        if (name != null)
+            Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
+        else
+            Runtime.getRuntime().addShutdownHook(new Thread(runnable));
     };
 
-    private static final Procedure DEFAULT_EXIT_PROCEDURE = new Procedure() {
-        @Override
-        public void execute(int statusCode, String message) {
-            System.exit(statusCode);
-        }
+    private static final Procedure NOOP_HALT_PROCEDURE = (statusCode, message) -> {
+        throw new IllegalStateException("Halt called after resetting procedures; possible race condition present in test");
     };
 
-    private volatile static Procedure exitProcedure = DEFAULT_EXIT_PROCEDURE;
-    private volatile static Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;
+    private static final Procedure NOOP_EXIT_PROCEDURE = (statusCode, message) -> {
+        throw new IllegalStateException("Exit called after resetting procedures; possible race condition present in test");
+    };
+
+    private static volatile Procedure exitProcedure = DEFAULT_EXIT_PROCEDURE;
+    private static volatile Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;
+    private static volatile ShutdownHookAdder shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
 
     public static void exit(int statusCode) {
         exit(statusCode, null);
@@ -59,20 +71,52 @@ public class Exit {
         haltProcedure.execute(statusCode, message);
     }
 
+    public static void addShutdownHook(String name, Runnable runnable) {
+        shutdownHookAdder.addShutdownHook(name, runnable);
+    }
+
+    /**
+     * For testing only, do not call in main code.
+     */
     public static void setExitProcedure(Procedure procedure) {
         exitProcedure = procedure;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     */
     public static void setHaltProcedure(Procedure procedure) {
         haltProcedure = procedure;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     */
+    public static void setShutdownHookAdder(ShutdownHookAdder shutdownHookAdder) {
+        Exit.shutdownHookAdder = shutdownHookAdder;
+    }
+
+    /**
+     * For testing only, do not call in main code.
+     * <p>Clears the procedure set in {@link #setExitProcedure(Procedure)}, but does not restore system default behavior of exiting the JVM.
+     */
     public static void resetExitProcedure() {
-        exitProcedure = DEFAULT_EXIT_PROCEDURE;
+        exitProcedure = NOOP_EXIT_PROCEDURE;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     * <p>Clears the procedure set in {@link #setHaltProcedure(Procedure)}, but does not restore system default behavior of exiting the JVM.
+     */
     public static void resetHaltProcedure() {
-        haltProcedure = DEFAULT_HALT_PROCEDURE;
+        haltProcedure = NOOP_HALT_PROCEDURE;
     }
 
+    /**
+     * For testing only, do not call in main code.
+     * <p>Restores the system default shutdown hook behavior.
+     */
+    public static void resetShutdownHookAdder() {
+        shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
+    }
 }

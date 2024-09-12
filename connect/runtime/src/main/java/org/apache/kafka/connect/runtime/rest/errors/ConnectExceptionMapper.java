@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest.errors;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +29,9 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ExceptionMapper;
 
+/**
+ * Maps uncaught exceptions thrown while handling REST requests to appropriate {@link javax.ws.rs.core.Response}s
+ */
 public class ConnectExceptionMapper implements ExceptionMapper<Exception> {
     private static final Logger log = LoggerFactory.getLogger(ConnectExceptionMapper.class);
 
@@ -45,7 +49,7 @@ public class ConnectExceptionMapper implements ExceptionMapper<Exception> {
                     .build();
         }
 
-        if (exception instanceof NotFoundException) {
+        if (exception instanceof NotFoundException || exception instanceof javax.ws.rs.NotFoundException) {
             return Response.status(Response.Status.NOT_FOUND)
                     .entity(new ErrorMessage(Response.Status.NOT_FOUND.getStatusCode(), exception.getMessage()))
                     .build();

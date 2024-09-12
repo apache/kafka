@@ -23,28 +23,52 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
 
-class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
+import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Function;
+
+class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V>, MeteredIterator {
 
     private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
-    private final Sensor sensor;
+    private final Sensor operationSensor;
+    private final Sensor iteratorSensor;
     private final StreamsMetrics metrics;
-    private final StateSerdes<K, V> serdes;
+    private final Function<byte[], K> deserializeKey;
+    private final Function<byte[], V> deserializeValue;
     private final long startNs;
+    private final long startTimestampMs;
     private final Time time;
+    private final LongAdder numOpenIterators;
+    private final Set<MeteredIterator> openIterators;
 
     MeteredWindowedKeyValueIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter,
-                                    final Sensor sensor,
+                                    final Sensor operationSensor,
+                                    final Sensor iteratorSensor,
                                     final StreamsMetrics metrics,
-                                    final StateSerdes<K, V> serdes,
-                                    final Time time) {
+                                    final Function<byte[], K> deserializeKey,
+                                    final Function<byte[], V> deserializeValue,
+                                    final Time time,
+                                    final LongAdder numOpenIterators,
+                                    final Set<MeteredIterator> openIterators) {
         this.iter = iter;
-        this.sensor = sensor;
+        this.operationSensor = operationSensor;
+        this.iteratorSensor = iteratorSensor;
         this.metrics = metrics;
-        this.serdes = serdes;
+        this.deserializeKey = deserializeKey;
+        this.deserializeValue = deserializeValue;
         this.startNs = time.nanoseconds();
+        this.startTimestampMs = time.milliseconds();
         this.time = time;
+        this.numOpenIterators = numOpenIterators;
+        this.openIterators = openIterators;
+        numOpenIterators.increment();
+        openIterators.add(this);
+    }
+
+    @Override
+    public long startTimestamp() {
+        return this.startTimestampMs;
     }
 
     @Override
@@ -55,11 +79,11 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     @Override
     public KeyValue<Windowed<K>, V> next() {
         final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
-        return KeyValue.pair(windowedKey(next.key), serdes.valueFrom(next.value));
+        return KeyValue.pair(windowedKey(next.key), deserializeValue.apply(next.value));
     }
 
     private Windowed<K> windowedKey(final Windowed<Bytes> bytesKey) {
-        final K key = serdes.keyFrom(bytesKey.key().get());
+        final K key = deserializeKey.apply(bytesKey.key().get());
         return new Windowed<>(key, bytesKey.window());
     }
 
@@ -68,7 +92,11 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
         try {
             iter.close();
         } finally {
-            metrics.recordLatency(sensor, startNs, time.nanoseconds());
+            final long duration = time.nanoseconds() - startNs;
+            operationSensor.record(duration);
+            iteratorSensor.record(duration);
+            numOpenIterators.decrement();
+            openIterators.remove(this);
         }
     }
 

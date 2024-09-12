@@ -35,7 +35,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class LineSplit {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-linesplit");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");

@@ -30,6 +30,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -60,7 +61,7 @@ import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 
 public class SmokeTestDriver extends SmokeTestUtil {
-    private static final String[] TOPICS = {
+    private static final String[] NUMERIC_VALUE_TOPICS = {
         "data",
         "echo",
         "max",
@@ -72,6 +73,15 @@ public class SmokeTestDriver extends SmokeTestUtil {
         "avg",
         "tagg"
     };
+    private static final String[] STRING_VALUE_TOPICS = {
+        "fk"
+    };
+
+    private static final String[] TOPICS = new String[NUMERIC_VALUE_TOPICS.length + STRING_VALUE_TOPICS.length];
+    static {
+        System.arraycopy(NUMERIC_VALUE_TOPICS, 0, TOPICS, 0, NUMERIC_VALUE_TOPICS.length);
+        System.arraycopy(STRING_VALUE_TOPICS, 0, TOPICS, NUMERIC_VALUE_TOPICS.length, STRING_VALUE_TOPICS.length);
+    }
 
     private static final int MAX_RECORD_EMPTY_RETRIES = 30;
 
@@ -133,6 +143,14 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
                 producer.send(record);
 
+                final ProducerRecord<byte[], byte[]> fkRecord =
+                    new ProducerRecord<>(
+                        "fk",
+                        intSerde.serializer().serialize("", value),
+                        stringSerde.serializer().serialize("", key)
+                    );
+                producer.send(fkRecord);
+
                 numRecordsProduced++;
                 if (numRecordsProduced % 100 == 0) {
                     System.out.println(Instant.now() + " " + numRecordsProduced + " records produced");
@@ -163,7 +181,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         final long recordPauseTime = timeToSpend.toMillis() / numKeys / maxRecordsPerKey;
 
-        List<ProducerRecord<byte[], byte[]>> needRetry = new ArrayList<>();
+        final List<ProducerRecord<byte[], byte[]>> dataNeedRetry = new ArrayList<>();
+        final List<ProducerRecord<byte[], byte[]>> fkNeedRetry = new ArrayList<>();
 
         try (final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps)) {
             while (remaining > 0) {
@@ -183,7 +202,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
                             intSerde.serializer().serialize("", value)
                         );
 
-                    producer.send(record, new TestCallback(record, needRetry));
+                    producer.send(record, new TestCallback(record, dataNeedRetry));
+
+                    final ProducerRecord<byte[], byte[]> fkRecord =
+                        new ProducerRecord<>(
+                            "fk",
+                            intSerde.serializer().serialize("", value),
+                            stringSerde.serializer().serialize("", key)
+                        );
+
+                    producer.send(fkRecord, new TestCallback(fkRecord, fkNeedRetry));
 
                     numRecordsProduced++;
                     allData.get(key).add(value);
@@ -195,36 +223,60 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
             producer.flush();
 
-            int remainingRetries = 5;
-            while (!needRetry.isEmpty()) {
-                final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
-                for (final ProducerRecord<byte[], byte[]> record : needRetry) {
-                    System.out.println("retry producing " + stringSerde.deserializer().deserialize("", record.key()));
-                    producer.send(record, new TestCallback(record, needRetry2));
-                }
-                producer.flush();
-                needRetry = needRetry2;
+            retry(producer, dataNeedRetry, stringSerde);
+            retry(producer, fkNeedRetry, intSerde);
 
-                if (--remainingRetries == 0 && !needRetry.isEmpty()) {
-                    System.err.println("Failed to produce all records after multiple retries");
-                    Exit.exit(1);
-                }
-            }
+            flush(producer,
+                "data",
+                stringSerde.serializer().serialize("", "flush"),
+                intSerde.serializer().serialize("", 0)
+            );
+            flush(producer,
+                "fk",
+                intSerde.serializer().serialize("", 0),
+                stringSerde.serializer().serialize("", "flush")
+            );
 
-            // now that we've sent everything, we'll send some final records with a timestamp high enough to flush out
-            // all suppressed records.
-            final List<PartitionInfo> partitions = producer.partitionsFor("data");
-            for (final PartitionInfo partition : partitions) {
-                producer.send(new ProducerRecord<>(
-                    partition.topic(),
-                    partition.partition(),
-                    System.currentTimeMillis() + Duration.ofDays(2).toMillis(),
-                    stringSerde.serializer().serialize("", "flush"),
-                    intSerde.serializer().serialize("", 0)
-                ));
-            }
         }
         return Collections.unmodifiableMap(allData);
+    }
+
+    private static void retry(final KafkaProducer<byte[], byte[]> producer,
+                              List<ProducerRecord<byte[], byte[]>> needRetry,
+                              final Serde<?> keySerde) {
+        int remainingRetries = 5;
+        while (!needRetry.isEmpty()) {
+            final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
+            for (final ProducerRecord<byte[], byte[]> record : needRetry) {
+                System.out.println("retry producing " + keySerde.deserializer().deserialize("", record.key()));
+                producer.send(record, new TestCallback(record, needRetry2));
+            }
+            producer.flush();
+            needRetry = needRetry2;
+
+            if (--remainingRetries == 0 && !needRetry.isEmpty()) {
+                System.err.println("Failed to produce all records after multiple retries");
+                Exit.exit(1);
+            }
+        }
+    }
+
+    private static void flush(final KafkaProducer<byte[], byte[]> producer,
+                              final String topic,
+                              final byte[] keyBytes,
+                              final byte[] valBytes) {
+        // now that we've sent everything, we'll send some final records with a timestamp high enough to flush out
+        // all suppressed records.
+        final List<PartitionInfo> partitions = producer.partitionsFor(topic);
+        for (final PartitionInfo partition : partitions) {
+            producer.send(new ProducerRecord<>(
+                partition.topic(),
+                partition.partition(),
+                System.currentTimeMillis() + Duration.ofDays(2).toMillis(),
+                keyBytes,
+                valBytes
+            ));
+        }
     }
 
     private static Properties generatorProperties(final String kafka) {
@@ -315,14 +367,14 @@ public class SmokeTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
 
         final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props);
-        final List<TopicPartition> partitions = getAllPartitions(consumer, TOPICS);
+        final List<TopicPartition> partitions = getAllPartitions(consumer, NUMERIC_VALUE_TOPICS);
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
 
         final int recordsGenerated = inputs.size() * maxRecordsPerKey;
         int recordsProcessed = 0;
         final Map<String, AtomicInteger> processed =
-            Stream.of(TOPICS)
+            Stream.of(NUMERIC_VALUE_TOPICS)
                   .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
 
         final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
@@ -368,6 +420,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         }
         consumer.close();
+
         final long finished = System.currentTimeMillis() - start;
         System.out.println("Verification time=" + finished);
         System.out.println("-------------------");
@@ -382,19 +435,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
             System.out.println("PROCESSED-LESS-THAN-GENERATED");
         }
 
-        boolean success;
+        final Map<String, Set<Number>> received = parseRecordsForEchoTopic(events);
 
-        final Map<String, Set<Number>> received =
-            events.get("echo")
-                  .entrySet()
-                  .stream()
-                  .map(entry -> mkEntry(
-                      entry.getKey(),
-                      entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
-                  )
-                  .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-        success = inputs.equals(received);
+        boolean success = inputs.equals(received);
 
         if (success) {
             System.out.println("ALL-RECORDS-DELIVERED");
@@ -416,6 +459,19 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         System.out.println(success ? "SUCCESS" : "FAILURE");
         return verificationResult;
+    }
+
+    private static Map<String, Set<Number>> parseRecordsForEchoTopic(
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
+        return events.containsKey("echo") ?
+            events.get("echo")
+                .entrySet()
+                .stream()
+                .map(entry -> mkEntry(
+                    entry.getKey(),
+                    entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
+                )
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)) : Collections.emptyMap();
     }
 
     public static class VerificationResult {

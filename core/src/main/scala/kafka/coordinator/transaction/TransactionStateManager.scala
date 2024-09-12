@@ -18,38 +18,33 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
-import kafka.api.ApiVersion
-import kafka.log.LogConfig
-import kafka.message.UncompressedCodec
-import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
+import kafka.server.{MetadataCache, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.{Logging, Pool, Scheduler}
-import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import kafka.utils.{Logging, Pool}
+import kafka.utils.Implicits._
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.stats.{Avg, Max}
+import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, SimpleRecord, TimestampType}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
+import org.apache.kafka.server.config.ServerConfigs
+import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
 
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
-import scala.collection.JavaConverters._
 
-
-object TransactionStateManager {
-  // default transaction management config values
-  val DefaultTransactionsMaxTimeoutMs: Int = TimeUnit.MINUTES.toMillis(15).toInt
-  val DefaultTransactionalIdExpirationMs: Int = TimeUnit.DAYS.toMillis(7).toInt
-  val DefaultAbortTimedOutTransactionsIntervalMs: Int = TimeUnit.MINUTES.toMillis(1).toInt
-  val DefaultRemoveExpiredTransactionalIdsIntervalMs: Int = TimeUnit.HOURS.toMillis(1).toInt
-}
 
 /**
  * Transaction state manager is part of the transaction coordinator, it manages:
@@ -59,9 +54,9 @@ object TransactionStateManager {
  * 3. the background expiration of the transaction as well as the transactional id.
  *
  * <b>Delayed operation locking notes:</b>
- * Delayed operations in TransactionStateManager use `stateLock.readLock` as the delayed operation
- * lock. Delayed operations are completed only if `stateLock.readLock` can be acquired.
- * Delayed callbacks may acquire `stateLock.readLock` or any of the `txnMetadata` locks.
+ * Delayed operations in TransactionStateManager use individual operation locks.
+ * Delayed callbacks may acquire `stateLock.readLock` or any of the `txnMetadata` locks,
+ * but we always require that `stateLock.readLock` be acquired first. In particular:
  * <ul>
  * <li>`stateLock.readLock` must never be acquired while holding `txnMetadata` lock.</li>
  * <li>`txnMetadata` lock must never be acquired while holding `stateLock.writeLock`.</li>
@@ -69,17 +64,16 @@ object TransactionStateManager {
  * </ul>
  */
 class TransactionStateManager(brokerId: Int,
-                              zkClient: KafkaZkClient,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
+                              metadataCache: MetadataCache,
                               config: TransactionConfig,
                               time: Time,
-                              metrics: Metrics,
-                              interBrokerProtocolVersion: ApiVersion) extends Logging {
+                              metrics: Metrics) extends Logging {
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
-  type SendTxnMarkersCallback = (String, Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
+  private type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -88,37 +82,36 @@ class TransactionStateManager(brokerId: Int,
   private val stateLock = new ReentrantReadWriteLock()
 
   /** partitions of transaction topic that are being loaded, state lock should be called BEFORE accessing this set */
-  private val loadingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
-
-  /** partitions of transaction topic that are being removed, state lock should be called BEFORE accessing this set */
-  private val leavingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
+  private[transaction] val loadingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
 
   /** transaction metadata cache indexed by assigned transaction topic partition ids */
-  private val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
+  private[transaction] val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
 
   /** number of partitions for the transaction log topic */
-  private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
+  private var retrieveTransactionTopicPartitionCount: () => Int = _
+  @volatile private var transactionTopicPartitionCount: Int = _
 
   /** setup metrics*/
-  private val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
+  private val partitionLoadSensor = metrics.sensor(TransactionStateManagerConfig.LOAD_TIME_SENSOR)
 
   partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
-    "transaction-coordinator-metrics",
+    TransactionStateManagerConfig.METRICS_GROUP,
     "The max time it took to load the partitions in the last 30sec"), new Max())
   partitionLoadSensor.add(metrics.metricName("partition-load-time-avg",
-    "transaction-coordinator-metrics",
+    TransactionStateManagerConfig.METRICS_GROUP,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
+
+  private[transaction] def usesFlexibleRecords(): Boolean = {
+    metadataCache.features().finalizedFeatures().getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort) > 0
+  }
 
   // visible for testing only
   private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
-
     inWriteLock(stateLock) {
-      leavingPartitions.remove(partitionAndLeaderEpoch)
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
   }
-  private[transaction] def stateReadLock = stateLock.readLock
 
   // this is best-effort expiration of an ongoing transaction which has been open for more than its
   // txn timeout value, we do not need to grab the lock on the metadata object upon checking its state
@@ -127,9 +120,7 @@ class TransactionStateManager(brokerId: Int,
   def timedOutTransactions(): Iterable[TransactionalIdAndProducerIdEpoch] = {
     val now = time.milliseconds()
     inReadLock(stateLock) {
-      transactionMetadataCache.filter { case (txnPartitionId, _) =>
-        !leavingPartitions.exists(_.txnPartitionId == txnPartitionId)
-      }.flatMap { case (_, entry) =>
+      transactionMetadataCache.flatMap { case (_, entry) =>
         entry.metadataPerTransactionalId.filter { case (_, txnMetadata) =>
           if (txnMetadata.pendingTransitionInProgress) {
             false
@@ -147,90 +138,227 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  def enableTransactionalIdExpiration(): Unit = {
-    scheduler.schedule("transactionalId-expiration", () => {
-      val now = time.milliseconds()
-      inReadLock(stateLock) {
-        val transactionalIdByPartition: Map[Int, mutable.Iterable[TransactionalIdCoordinatorEpochAndMetadata]] =
-          transactionMetadataCache.flatMap { case (_, entry) =>
-            entry.metadataPerTransactionalId.filter { case (_, txnMetadata) => txnMetadata.state match {
-              case Empty | CompleteCommit | CompleteAbort => true
-              case _ => false
-            }
-            }.filter { case (_, txnMetadata) =>
-              txnMetadata.txnLastUpdateTimestamp <= now - config.transactionalIdExpirationMs
-            }.map { case (transactionalId, txnMetadata) =>
-              val txnMetadataTransition = txnMetadata.inLock {
-                txnMetadata.prepareDead()
+  private def removeExpiredTransactionalIds(
+    transactionPartition: TopicPartition,
+    txnMetadataCacheEntry: TxnMetadataCacheEntry,
+  ): Unit = {
+    inReadLock(stateLock) {
+      replicaManager.getLogConfig(transactionPartition) match {
+        case Some(logConfig) =>
+          val currentTimeMs = time.milliseconds()
+          val maxBatchSize = logConfig.maxMessageSize
+          val expired = mutable.ListBuffer.empty[TransactionalIdCoordinatorEpochAndMetadata]
+          var recordsBuilder: MemoryRecordsBuilder = null
+          val stateEntries = txnMetadataCacheEntry.metadataPerTransactionalId.values.iterator.buffered
+
+          def flushRecordsBuilder(): Unit = {
+            writeTombstonesForExpiredTransactionalIds(
+              transactionPartition,
+              expired.toSeq,
+              recordsBuilder.build()
+            )
+            expired.clear()
+            recordsBuilder = null
+          }
+
+          while (stateEntries.hasNext) {
+            val txnMetadata = stateEntries.head
+            val transactionalId = txnMetadata.transactionalId
+            var fullBatch = false
+
+            txnMetadata.inLock {
+              if (txnMetadata.pendingState.isEmpty && shouldExpire(txnMetadata, currentTimeMs)) {
+                if (recordsBuilder == null) {
+                  recordsBuilder = MemoryRecords.builder(
+                    ByteBuffer.allocate(math.min(16384, maxBatchSize)),
+                    TransactionLog.EnforcedCompression,
+                    TimestampType.CREATE_TIME,
+                    0L,
+                    maxBatchSize
+                  )
+                }
+
+                if (maybeAppendExpiration(txnMetadata, recordsBuilder, currentTimeMs)) {
+                  val transitMetadata = txnMetadata.prepareDead()
+                  expired += TransactionalIdCoordinatorEpochAndMetadata(
+                    transactionalId,
+                    txnMetadataCacheEntry.coordinatorEpoch,
+                    transitMetadata
+                  )
+                } else {
+                  fullBatch = true
+                }
               }
-              TransactionalIdCoordinatorEpochAndMetadata(transactionalId, entry.coordinatorEpoch, txnMetadataTransition)
             }
-          }.groupBy { transactionalIdCoordinatorEpochAndMetadata =>
-            partitionFor(transactionalIdCoordinatorEpochAndMetadata.transactionalId)
+
+            if (fullBatch) {
+              flushRecordsBuilder()
+            } else {
+              // Advance the iterator if we do not need to retry the append
+              stateEntries.next()
+            }
           }
 
-        val recordsPerPartition = transactionalIdByPartition
-          .map { case (partition, transactionalIdCoordinatorEpochAndMetadatas) =>
-            val deletes: Array[SimpleRecord] = transactionalIdCoordinatorEpochAndMetadatas.map { entry =>
-              new SimpleRecord(now, TransactionLog.keyToBytes(entry.transactionalId), null)
-            }.toArray
-            val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, deletes: _*)
-            val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
-            (topicPartition, records)
+          if (expired.nonEmpty) {
+            flushRecordsBuilder()
           }
 
-        def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
-          responses.foreach { case (topicPartition, response) =>
-            inReadLock(stateLock) {
-              val toRemove = transactionalIdByPartition(topicPartition.partition)
-              transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
-                toRemove.foreach { idCoordinatorEpochAndMetadata =>
-                  val transactionalId = idCoordinatorEpochAndMetadata.transactionalId
-                  val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
-                  txnMetadata.inLock {
-                    if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
-                      && txnMetadata.pendingState.contains(Dead)
-                      && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
-                      && response.error == Errors.NONE) {
-                      txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
-                    } else {
-                      warn(s"Failed to remove expired transactionalId: $transactionalId" +
-                        s" from cache. Tombstone append error code: ${response.error}," +
-                        s" pendingState: ${txnMetadata.pendingState}, producerEpoch: ${txnMetadata.producerEpoch}," +
-                        s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
-                        s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
-                        s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
-                      txnMetadata.pendingState = None
-                    }
-                  }
+        case None =>
+          warn(s"Transaction expiration for partition $transactionPartition failed because the log " +
+            "config was not available, which likely means the partition is not online or is no longer local.")
+      }
+    }
+  }
+
+  private def shouldExpire(
+    txnMetadata: TransactionMetadata,
+    currentTimeMs: Long
+  ): Boolean = {
+    txnMetadata.state.isExpirationAllowed &&
+      txnMetadata.txnLastUpdateTimestamp <= currentTimeMs - config.transactionalIdExpirationMs
+  }
+
+  private def maybeAppendExpiration(
+    txnMetadata: TransactionMetadata,
+    recordsBuilder: MemoryRecordsBuilder,
+    currentTimeMs: Long,
+  ): Boolean = {
+    val keyBytes = TransactionLog.keyToBytes(txnMetadata.transactionalId)
+    if (recordsBuilder.hasRoomFor(currentTimeMs, keyBytes, null, Record.EMPTY_HEADERS)) {
+      recordsBuilder.append(currentTimeMs, keyBytes, null, Record.EMPTY_HEADERS)
+      true
+    } else {
+      false
+    }
+  }
+
+  private[transaction] def removeExpiredTransactionalIds(): Unit = {
+    inReadLock(stateLock) {
+      transactionMetadataCache.forKeyValue { (partitionId, partitionCacheEntry) =>
+        val transactionPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
+        removeExpiredTransactionalIds(transactionPartition, partitionCacheEntry)
+      }
+    }
+  }
+
+  private def writeTombstonesForExpiredTransactionalIds(
+    transactionPartition: TopicPartition,
+    expiredForPartition: Iterable[TransactionalIdCoordinatorEpochAndMetadata],
+    tombstoneRecords: MemoryRecords
+  ): Unit = {
+    def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
+      responses.forKeyValue { (topicPartition, response) =>
+        inReadLock(stateLock) {
+          transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
+            expiredForPartition.foreach { idCoordinatorEpochAndMetadata =>
+              val transactionalId = idCoordinatorEpochAndMetadata.transactionalId
+              val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
+              txnMetadata.inLock {
+                if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
+                  && txnMetadata.pendingState.contains(Dead)
+                  && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
+                  && response.error == Errors.NONE) {
+                  txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
+                } else {
+                  warn(s"Failed to remove expired transactionalId: $transactionalId" +
+                    s" from cache. Tombstone append error code: ${response.error}," +
+                    s" pendingState: ${txnMetadata.pendingState}, producerEpoch: ${txnMetadata.producerEpoch}," +
+                    s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
+                    s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
+                    s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
+                  txnMetadata.pendingState = None
                 }
               }
             }
           }
         }
-
-        replicaManager.appendRecords(
-          config.requestTimeoutMs,
-          TransactionLog.EnforcedRequiredAcks,
-          internalTopicsAllowed = true,
-          isFromClient = false,
-          recordsPerPartition,
-          removeFromCacheCallback,
-          Some(stateLock.readLock)
-        )
       }
+    }
 
-    }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
+    inReadLock(stateLock) {
+      replicaManager.appendRecords(
+        timeout = config.requestTimeoutMs,
+        requiredAcks = TransactionLog.EnforcedRequiredAcks,
+        internalTopicsAllowed = true,
+        origin = AppendOrigin.COORDINATOR,
+        entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
+        responseCallback = removeFromCacheCallback,
+        requestLocal = RequestLocal.noCaching)
+    }
+  }
+
+  def enableTransactionalIdExpiration(): Unit = {
+    scheduler.schedule(
+      "transactionalId-expiration",
+      () => removeExpiredTransactionalIds(),
+      config.removeExpiredTransactionalIdsIntervalMs,
+      config.removeExpiredTransactionalIdsIntervalMs
+    )
   }
 
   def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     getAndMaybeAddTransactionState(transactionalId, None)
   }
 
-  def putTransactionStateIfNotExists(transactionalId: String,
-                                     txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
-    getAndMaybeAddTransactionState(transactionalId, Some(txnMetadata))
-      .right.map(_.getOrElse(throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+  def putTransactionStateIfNotExists(txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
+    getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata)).map(_.getOrElse(
+      throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+  }
+
+  def listTransactionStates(
+    filterProducerIds: Set[Long],
+    filterStateNames: Set[String],
+    filterDurationMs: Long
+  ): ListTransactionsResponseData = {
+    inReadLock(stateLock) {
+      val response = new ListTransactionsResponseData()
+      if (loadingPartitions.nonEmpty) {
+        response.setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code)
+      } else {
+        val filterStates = mutable.Set.empty[TransactionState]
+        filterStateNames.foreach { stateName =>
+          TransactionState.fromName(stateName) match {
+            case Some(state) => filterStates += state
+            case None => response.unknownStateFilters.add(stateName)
+          }
+        }
+
+        val now : Long = time.milliseconds()
+        def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
+          if (txnMetadata.state == Dead) {
+            // We filter the `Dead` state since it is a transient state which
+            // indicates that the transactionalId and its metadata are in the
+            // process of expiration and removal.
+            false
+          } else if (filterProducerIds.nonEmpty && !filterProducerIds.contains(txnMetadata.producerId)) {
+            false
+          } else if (filterStateNames.nonEmpty && !filterStates.contains(txnMetadata.state)) {
+            false
+          } else if (filterDurationMs >= 0 && (now - txnMetadata.txnStartTimestamp) <= filterDurationMs) {
+            false
+          } else {
+            true
+          }
+        }
+
+        val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
+        transactionMetadataCache.forKeyValue { (_, cache) =>
+          cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
+            txnMetadata.inLock {
+              if (shouldInclude(txnMetadata)) {
+                states.add(new ListTransactionsResponseData.TransactionState()
+                  .setTransactionalId(txnMetadata.transactionalId)
+                  .setProducerId(txnMetadata.producerId)
+                  .setTransactionState(txnMetadata.state.name)
+                )
+              }
+            }
+          }
+        }
+        response.setErrorCode(Errors.NONE.code)
+          .setTransactionStates(states)
+      }
+    }
   }
 
   /**
@@ -246,8 +374,6 @@ class TransactionStateManager(brokerId: Int,
       val partitionId = partitionFor(transactionalId)
       if (loadingPartitions.exists(_.txnPartitionId == partitionId))
         Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
-      else if (leavingPartitions.exists(_.txnPartitionId == partitionId))
-        Left(Errors.NOT_COORDINATOR)
       else {
         transactionMetadataCache.get(partitionId) match {
           case Some(cacheEntry) =>
@@ -276,29 +402,20 @@ class TransactionStateManager(brokerId: Int,
     val props = new Properties
 
     // enforce disabled unclean leader election, no compression types, and compact cleanup policy
-    props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
-    props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
-    props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)
-    props.put(LogConfig.SegmentBytesProp, config.transactionLogSegmentBytes.toString)
+    props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
+    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.transactionLogMinInsyncReplicas.toString)
+    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.transactionLogSegmentBytes.toString)
 
     props
   }
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
 
-  /**
-   * Gets the partition count of the transaction log topic from ZooKeeper.
-   * If the topic does not exist, the default partition count is returned.
-   */
-  private def getTransactionTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions)
-  }
-
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
     def logEndOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
-    val startMs = time.milliseconds()
     val loadedTransactions = new Pool[String, TransactionMetadata]
 
     replicaManager.getLog(topicPartition) match {
@@ -312,15 +429,21 @@ class TransactionStateManager(brokerId: Int,
         // loop breaks if leader changes at any time during the load, since logEndOffset is -1
         var currOffset = log.logStartOffset
 
+        // loop breaks if no records have been read, since the end of the log has been reached
+        var readAtLeastOneRecord = true
+
         try {
-          while (currOffset < logEndOffset && !shuttingDown.get() && inReadLock(stateLock) {
+          while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get() && inReadLock(stateLock) {
             loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset,
               maxLength = config.transactionLogLoadBufferSize,
-              isolation = FetchLogEnd,
+              isolation = FetchIsolation.LOG_END,
               minOneMessage = true)
-            val memRecords = fetchDataInfo.records match {
+
+            readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
+
+            val memRecords = (fetchDataInfo.records: @unchecked) match {
               case records: MemoryRecords => records
               case fileRecords: FileRecords =>
                 val sizeInBytes = fileRecords.sizeInBytes
@@ -341,25 +464,28 @@ class TransactionStateManager(brokerId: Int,
                 MemoryRecords.readableRecords(buffer)
             }
 
-            memRecords.batches.asScala.foreach { batch =>
+            memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
-                val txnKey = TransactionLog.readTxnRecordKey(record.key)
-                // load transaction metadata along with transaction state
-                val transactionalId = txnKey.transactionalId
-                if (!record.hasValue) {
-                  loadedTransactions.remove(transactionalId)
-                } else {
-                  val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
-                  loadedTransactions.put(transactionalId, txnMetadata)
+                TransactionLog.readTxnRecordKey(record.key) match {
+                  case txnKey: TxnKey =>
+                    // load transaction metadata along with transaction state
+                    val transactionalId = txnKey.transactionalId
+                    TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
+                      case None =>
+                        loadedTransactions.remove(transactionalId)
+                      case Some(txnMetadata) =>
+                        loadedTransactions.put(transactionalId, txnMetadata)
+                    }
+                    currOffset = batch.nextOffset
+
+                  case unknownKey: UnknownKey =>
+                    warn(s"Unknown message key with version ${unknownKey.version}" +
+                      s" while loading transaction state from $topicPartition. Ignoring it. " +
+                      "It could be a left over from an aborted upgrade.")
                 }
-                currOffset = batch.nextOffset
               }
             }
-            val endMs = time.milliseconds()
-            val timeLapse = endMs - startMs
-            partitionLoadSensor.record(timeLapse, endMs, false)
-            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in $timeLapse milliseconds")
           }
         } catch {
           case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
@@ -371,42 +497,43 @@ class TransactionStateManager(brokerId: Int,
 
   /**
    * Add a transaction topic partition into the cache
-   *
-   * Make it package-private to be used only for unit tests.
    */
-  private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int, coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata]): Unit = {
-    val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, metadataPerTransactionalId)
-    val currentTxnMetadataCacheEntry = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
+  private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int,
+                                                        coordinatorEpoch: Int,
+                                                        loadedTransactions: Pool[String, TransactionMetadata]): Unit = {
+    val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, loadedTransactions)
+    val previousTxnMetadataCacheEntryOpt = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
-    if (currentTxnMetadataCacheEntry.isDefined) {
-      val coordinatorEpoch = currentTxnMetadataCacheEntry.get.coordinatorEpoch
-      val metadataPerTxnId = currentTxnMetadataCacheEntry.get.metadataPerTransactionalId
-      val errorMsg = s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
-        s"and ${metadataPerTxnId.size} entries while trying to add to it; " +
-        s"this should not happen"
-      fatal(errorMsg)
-      throw new IllegalStateException(errorMsg)
+    previousTxnMetadataCacheEntryOpt.foreach { previousTxnMetadataCacheEntry =>
+      warn(s"Unloaded transaction metadata $previousTxnMetadataCacheEntry from $txnTopicPartition as part of " +
+        s"loading metadata at epoch $coordinatorEpoch")
     }
   }
 
   /**
-   * When this broker becomes a leader for a transaction log partition, load this partition and
-   * populate the transaction metadata cache with the transactional ids.
+   * When this broker becomes a leader for a transaction log partition, load this partition and populate the transaction
+   * metadata cache with the transactional ids. This operation must be resilient to any partial state left off from
+   * the previous loading / unloading operation.
    */
   def loadTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int, sendTxnMarkers: SendTxnMarkersCallback): Unit = {
-    validateTransactionTopicPartitionCountIsStable()
-
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
     inWriteLock(stateLock) {
-      leavingPartitions.remove(partitionAndLeaderEpoch)
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
 
-    def loadTransactions(): Unit = {
-      info(s"Loading transaction metadata from $topicPartition")
+    def loadTransactions(startTimeMs: java.lang.Long): Unit = {
+      val schedulerTimeMs = time.milliseconds() - startTimeMs
+      info(s"Loading transaction metadata from $topicPartition at epoch $coordinatorEpoch")
+      validateTransactionTopicPartitionCountIsStable()
+
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
+      val endTimeMs = time.milliseconds()
+      val totalLoadingTimeMs = endTimeMs - startTimeMs
+      partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
+      info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in " +
+        s"$totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds was spent in the scheduler.")
 
       inWriteLock(stateLock) {
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
@@ -425,7 +552,7 @@ class TransactionStateManager(brokerId: Int,
                     transactionsPendingForCompletion +=
                       TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                   case _ =>
-                    // nothing need to be done
+                    // nothing needs to be done
                 }
               }
           }
@@ -436,13 +563,29 @@ class TransactionStateManager(brokerId: Int,
           loadingPartitions.remove(partitionAndLeaderEpoch)
 
           transactionsPendingForCompletion.foreach { txnTransitMetadata =>
-            sendTxnMarkers(txnTransitMetadata.transactionalId, txnTransitMetadata.coordinatorEpoch, txnTransitMetadata.result, txnTransitMetadata.txnMetadata, txnTransitMetadata.transitMetadata)
+            info(s"Sending txn markers for $txnTransitMetadata after loading partition $partitionId")
+            sendTxnMarkers(txnTransitMetadata.coordinatorEpoch, txnTransitMetadata.result,
+              txnTransitMetadata.txnMetadata, txnTransitMetadata.transitMetadata)
           }
         }
       }
+
+      info(s"Completed loading transaction metadata from $topicPartition for coordinator epoch $coordinatorEpoch")
     }
 
-    scheduler.schedule(s"load-txns-for-partition-$topicPartition", () => loadTransactions)
+    val scheduleStartMs = time.milliseconds()
+    scheduler.scheduleOnce(s"load-txns-for-partition-$topicPartition", () => loadTransactions(scheduleStartMs))
+  }
+
+  def removeTransactionsForTxnTopicPartition(partitionId: Int): Unit = {
+    val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
+    inWriteLock(stateLock) {
+      loadingPartitions --= loadingPartitions.filter(_.txnPartitionId == partitionId)
+      transactionMetadataCache.remove(partitionId).foreach { txnMetadataCacheEntry =>
+        info(s"Unloaded transaction metadata $txnMetadataCacheEntry for $topicPartition following " +
+          s"local partition deletion")
+      }
+    }
   }
 
   /**
@@ -450,54 +593,41 @@ class TransactionStateManager(brokerId: Int,
    * that belong to that partition.
    */
   def removeTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
-    validateTransactionTopicPartitionCountIsStable()
-
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
     inWriteLock(stateLock) {
       loadingPartitions.remove(partitionAndLeaderEpoch)
-      leavingPartitions.add(partitionAndLeaderEpoch)
-    }
+      transactionMetadataCache.remove(partitionId) match {
+        case Some(txnMetadataCacheEntry) =>
+          info(s"Unloaded transaction metadata $txnMetadataCacheEntry for $topicPartition on become-follower transition")
 
-    def removeTransactions(): Unit = {
-      inWriteLock(stateLock) {
-        if (leavingPartitions.contains(partitionAndLeaderEpoch)) {
-          transactionMetadataCache.remove(partitionId) match {
-            case Some(txnMetadataCacheEntry) =>
-              info(s"Removed ${txnMetadataCacheEntry.metadataPerTransactionalId.size} cached transaction metadata for $topicPartition on follower transition")
-
-            case None =>
-              info(s"Trying to remove cached transaction metadata for $topicPartition on follower transition but there is no entries remaining; " +
-                s"it is likely that another process for removing the cached entries has just executed earlier before")
-          }
-
-          leavingPartitions.remove(partitionAndLeaderEpoch)
-        }
+        case None =>
+          info(s"No cached transaction metadata found for $topicPartition during become-follower transition")
       }
     }
-
-    scheduler.schedule(s"remove-txns-for-partition-$topicPartition", () => removeTransactions)
   }
 
   private def validateTransactionTopicPartitionCountIsStable(): Unit = {
-    val curTransactionTopicPartitionCount = getTransactionTopicPartitionCount
-    if (transactionTopicPartitionCount != curTransactionTopicPartitionCount)
-      throw new KafkaException(s"Transaction topic number of partitions has changed from $transactionTopicPartitionCount to $curTransactionTopicPartitionCount")
+    val previouslyDeterminedPartitionCount = transactionTopicPartitionCount
+    val curTransactionTopicPartitionCount = retrieveTransactionTopicPartitionCount()
+    if (previouslyDeterminedPartitionCount != curTransactionTopicPartitionCount)
+      throw new KafkaException(s"Transaction topic number of partitions has changed from $previouslyDeterminedPartitionCount to $curTransactionTopicPartitionCount")
   }
 
   def appendTransactionToLog(transactionalId: String,
                              coordinatorEpoch: Int,
                              newMetadata: TxnTransitMetadata,
                              responseCallback: Errors => Unit,
-                             retryOnError: Errors => Boolean = _ => false): Unit = {
+                             retryOnError: Errors => Boolean = _ => false,
+                             requestLocal: RequestLocal): Unit = {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(newMetadata)
+    val valueBytes = TransactionLog.valueToBytes(newMetadata, usesFlexibleRecords())
     val timestamp = time.milliseconds()
 
-    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, new SimpleRecord(timestamp, keyBytes, valueBytes))
+    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val recordsPerPartition = Map(topicPartition -> records)
 
@@ -523,7 +653,7 @@ class TransactionStateManager(brokerId: Int,
                | Errors.REQUEST_TIMED_OUT => // note that for timed out request we return NOT_AVAILABLE error code to let client retry
             Errors.COORDINATOR_NOT_AVAILABLE
 
-          case Errors.NOT_LEADER_FOR_PARTITION
+          case Errors.NOT_LEADER_OR_FOLLOWER
                | Errors.KAFKA_STORAGE_ERROR =>
             Errors.NOT_COORDINATOR
 
@@ -638,18 +768,25 @@ class TransactionStateManager(brokerId: Int,
           }
           if (append) {
             replicaManager.appendRecords(
-                newMetadata.txnTimeoutMs.toLong,
-                TransactionLog.EnforcedRequiredAcks,
-                internalTopicsAllowed = true,
-                isFromClient = false,
-                recordsPerPartition,
-                updateCacheCallback,
-                delayedProduceLock = Some(stateLock.readLock))
+              timeout = newMetadata.txnTimeoutMs.toLong,
+              requiredAcks = TransactionLog.EnforcedRequiredAcks,
+              internalTopicsAllowed = true,
+              origin = AppendOrigin.COORDINATOR,
+              entriesPerPartition = recordsPerPartition,
+              responseCallback = updateCacheCallback,
+              requestLocal = requestLocal)
 
-              trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
+            trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }
       }
     }
+  }
+
+  def startup(retrieveTransactionTopicPartitionCount: () => Int, enableTransactionalIdExpiration: Boolean): Unit = {
+    this.retrieveTransactionTopicPartitionCount = retrieveTransactionTopicPartitionCount
+    transactionTopicPartitionCount = retrieveTransactionTopicPartitionCount()
+    if (enableTransactionalIdExpiration)
+      this.enableTransactionalIdExpiration()
   }
 
   def shutdown(): Unit = {
@@ -662,23 +799,32 @@ class TransactionStateManager(brokerId: Int,
 }
 
 
-private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata])
+private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
+                                                      metadataPerTransactionalId: Pool[String, TransactionMetadata]) {
+  override def toString: String = {
+    s"TxnMetadataCacheEntry(coordinatorEpoch=$coordinatorEpoch, numTransactionalEntries=${metadataPerTransactionalId.size})"
+  }
+}
 
 private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
                                                                transactionMetadata: TransactionMetadata)
 
-private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
-                                                  transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,
-                                                  transactionLogNumPartitions: Int = TransactionLog.DefaultNumPartitions,
-                                                  transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
-                                                  transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
-                                                  transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
-                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
-                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
-                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionalIdsIntervalMs,
-                                                  requestTimeoutMs: Int = Defaults.RequestTimeoutMs)
+private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT,
+                                                  transactionMaxTimeoutMs: Int = TransactionStateManagerConfig.TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT,
+                                                  transactionLogNumPartitions: Int = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_DEFAULT,
+                                                  transactionLogReplicationFactor: Short = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_DEFAULT,
+                                                  transactionLogSegmentBytes: Int = TransactionLogConfig.TRANSACTIONS_TOPIC_SEGMENT_BYTES_DEFAULT,
+                                                  transactionLogLoadBufferSize: Int = TransactionLogConfig.TRANSACTIONS_LOAD_BUFFER_SIZE_DEFAULT,
+                                                  transactionLogMinInsyncReplicas: Int = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT,
+                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT,
+                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT,
+                                                  requestTimeoutMs: Int = ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT)
 
-case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short)
+case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {
+  override def toString: String = {
+    s"(transactionalId=$transactionalId, producerId=$producerId, producerEpoch=$producerEpoch)"
+  }
+}
 
 case class TransactionPartitionAndLeaderEpoch(txnPartitionId: Int, coordinatorEpoch: Int)
 

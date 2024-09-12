@@ -17,15 +17,19 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -57,7 +61,28 @@ public class ConnectorHandle {
      * @return a non-null {@link TaskHandle}
      */
     public TaskHandle taskHandle(String taskId) {
-        return taskHandles.computeIfAbsent(taskId, k -> new TaskHandle(this, taskId));
+        return taskHandle(taskId, null);
+    }
+
+    /**
+     * Get or create a task handle for a given task id. The task need not be created when this method is called. If the
+     * handle is called before the task is created, the task will bind to the handle once it starts (or restarts).
+     *
+     * @param taskId the task id
+     * @param consumer A callback invoked when a sink task processes a record.
+     * @return a non-null {@link TaskHandle}
+     */
+    public TaskHandle taskHandle(String taskId, Consumer<SinkRecord> consumer) {
+        return taskHandles.computeIfAbsent(taskId, k -> new TaskHandle(this, taskId, consumer));
+    }
+
+    /**
+     * Gets the start and stop counter corresponding to this handle.
+     *
+     * @return the start and stop counter
+     */
+    public StartAndStopCounter startAndStopCounter() {
+        return startAndStopCounter;
     }
 
     /**
@@ -79,13 +104,11 @@ public class ConnectorHandle {
     }
 
     /**
-     * Delete the task handle for this task id.
-     *
-     * @param taskId the task id.
+     * Delete all task handles for this connector.
      */
-    public void deleteTask(String taskId) {
-        log.info("Removing handle for {} task in connector {}", taskId, connectorName);
-        taskHandles.remove(taskId);
+    public void clearTasks() {
+        log.info("Clearing {} existing task handles for connector {}", taskHandles.size(), connectorName);
+        taskHandles.clear();
     }
 
     /**
@@ -257,12 +280,20 @@ public class ConnectorHandle {
      * @return the latch that can be used to wait for the starts to complete; never null
      */
     public StartAndStopLatch expectedStarts(int expectedStarts, boolean includeTasks) {
-        List<StartAndStopLatch> taskLatches = null;
-        if (includeTasks) {
-            taskLatches = taskHandles.values().stream()
-                                     .map(task -> task.expectedStarts(expectedStarts))
-                                     .collect(Collectors.toList());
-        }
+        List<StartAndStopLatch> taskLatches = includeTasks
+                ? taskHandles.values().stream()
+                .map(task -> task.expectedStarts(expectedStarts))
+                .collect(Collectors.toList())
+                : Collections.emptyList();
+        return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
+    }
+
+    public StartAndStopLatch expectedStarts(int expectedStarts, Map<String, Integer> expectedTasksStarts, boolean includeTasks) {
+        List<StartAndStopLatch> taskLatches = includeTasks
+                ? taskHandles.values().stream()
+                .map(task -> task.expectedStarts(expectedTasksStarts.get(task.taskId())))
+                .collect(Collectors.toList())
+                : Collections.emptyList();
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
 
@@ -278,8 +309,8 @@ public class ConnectorHandle {
      * {@link StartAndStopLatch#await(long, TimeUnit)} to wait up to a specified duration for the
      * connector and all tasks to be started at least the specified number of times.
      *
-     * <p>This method does not track the number of times the connector and tasks are stopped, and
-     * only tracks the number of times the connector and tasks are <em>started</em>.
+     * <p>This method does not track the number of times the connector and tasks are started, and
+     * only tracks the number of times the connector and tasks are <em>stopped</em>.
      *
      * @param expectedStops the minimum number of starts that are expected once this method is
      *                      called
@@ -301,8 +332,8 @@ public class ConnectorHandle {
      * {@link StartAndStopLatch#await(long, TimeUnit)} to wait up to a specified duration for the
      * connector and all tasks to be started at least the specified number of times.
      *
-     * <p>This method does not track the number of times the connector and tasks are stopped, and
-     * only tracks the number of times the connector and tasks are <em>started</em>.
+     * <p>This method does not track the number of times the connector and tasks are started, and
+     * only tracks the number of times the connector and tasks are <em>stopped</em>.
      *
      * @param expectedStops the minimum number of starts that are expected once this method is
      *                      called
@@ -311,12 +342,20 @@ public class ConnectorHandle {
      * @return the latch that can be used to wait for the starts to complete; never null
      */
     public StartAndStopLatch expectedStops(int expectedStops, boolean includeTasks) {
-        List<StartAndStopLatch> taskLatches = null;
-        if (includeTasks) {
-            taskLatches = taskHandles.values().stream()
-                                     .map(task -> task.expectedStops(expectedStops))
-                                     .collect(Collectors.toList());
-        }
+        List<StartAndStopLatch> taskLatches = includeTasks
+                ? taskHandles.values().stream()
+                .map(task -> task.expectedStops(expectedStops))
+                .collect(Collectors.toList())
+                : Collections.emptyList();
+        return startAndStopCounter.expectedStops(expectedStops, taskLatches);
+    }
+
+    public StartAndStopLatch expectedStops(int expectedStops, Map<String, Integer> expectedTasksStops, boolean includeTasks) {
+        List<StartAndStopLatch> taskLatches = includeTasks
+                ? taskHandles.values().stream()
+                .map(task -> task.expectedStops(expectedTasksStops.get(task.taskId())))
+                .collect(Collectors.toList())
+                : Collections.emptyList();
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 

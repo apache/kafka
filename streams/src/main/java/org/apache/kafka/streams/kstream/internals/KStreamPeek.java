@@ -17,32 +17,29 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 
-class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
+class KStreamPeek<K, V> implements FixedKeyProcessorSupplier<K, V, V> {
 
-    private final boolean forwardDownStream;
     private final ForeachAction<K, V> action;
 
-    public KStreamPeek(final ForeachAction<K, V> action, final boolean forwardDownStream) {
+    public KStreamPeek(final ForeachAction<K, V> action) {
         this.action = action;
-        this.forwardDownStream = forwardDownStream;
     }
 
     @Override
-    public Processor<K, V> get() {
+    public FixedKeyProcessor<K, V, V> get() {
         return new KStreamPeekProcessor();
     }
 
-    private class KStreamPeekProcessor extends AbstractProcessor<K, V> {
+    private class KStreamPeekProcessor extends ContextualFixedKeyProcessor<K, V, V> {
         @Override
-        public void process(final K key, final V value) {
-            action.apply(key, value);
-            if (forwardDownStream) {
-                context().forward(key, value);
-            }
+        public void process(final FixedKeyRecord<K, V> record) {
+            action.apply(record.key(), record.value());
+            context().forward(record);
         }
     }
 

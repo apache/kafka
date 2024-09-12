@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -44,32 +42,37 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static java.time.Duration.ofDays;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class RepartitionOptimizingTest {
 
-    private final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
+    private static final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
 
     private static final String INPUT_TOPIC = "input";
     private static final String COUNT_TOPIC = "outputTopic_0";
@@ -105,30 +108,18 @@ public class RepartitionOptimizingTest {
     private final List<String> expectedCollectedProcessorValues =
         Arrays.asList("FOO", "BAR", "BAZ");
 
-    @Before
+    @BeforeEach
     public void setUp() {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 1024 * 10);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
-
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-            "maybe-optimized-test-app",
-            "dummy-bootstrap-servers-config",
-            Serdes.String().getClass().getName(),
-            Serdes.String().getClass().getName(),
-            props);
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        streamsConfiguration.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, Integer.toString(1024 * 10));
+        streamsConfiguration.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(5000));
 
         processorValueCollector.clear();
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
-        try {
-            topologyTestDriver.close();
-        } catch (final RuntimeException e) {
-            log.warn("The following exception was thrown while trying to close the TopologyTestDriver (note that " +
-                "KAFKA-6647 causes this when running on Windows):", e);
-        }
+        topologyTestDriver.close();
     }
 
     @Test
@@ -141,9 +132,7 @@ public class RepartitionOptimizingTest {
         runTest(StreamsConfig.NO_OPTIMIZATION, FOUR_REPARTITION_TOPICS);
     }
 
-
     private void runTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
-
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> sourceStream =
@@ -193,14 +182,14 @@ public class RepartitionOptimizingTest {
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                   JoinWindows.of(ofMillis(5000)),
                   StreamJoined.<String, String, Long>with(Stores.inMemoryWindowStore("join-store", ofDays(1), ofMillis(10000), true),
-                                                          Stores.inMemoryWindowStore("other-join-store",  ofDays(1), ofMillis(10000), true))
-                                                    .withName("join")
-                                                    .withKeySerde(Serdes.String())
-                                                    .withValueSerde(Serdes.String())
-                                                    .withOtherValueSerde(Serdes.Long()))
+                                       Stores.inMemoryWindowStore("other-join-store", ofDays(1), ofMillis(10000), true))
+                          .withName("join")
+                          .withKeySerde(Serdes.String())
+                          .withValueSerde(Serdes.String())
+                          .withOtherValueSerde(Serdes.Long()))
             .to(JOINED_TOPIC, Produced.as("join-to"));
 
-        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
+        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizationConfig);
         final Topology topology = builder.build(streamsConfiguration);
 
         topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
@@ -264,7 +253,7 @@ public class RepartitionOptimizingTest {
         return keyValueList;
     }
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+    private static class SimpleProcessor implements Processor<String, String, Void, Void> {
 
         final List<String> valueList;
 
@@ -273,8 +262,8 @@ public class RepartitionOptimizingTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            valueList.add(value);
+        public void process(final Record<String, String> record) {
+            valueList.add(record.value());
         }
     }
 

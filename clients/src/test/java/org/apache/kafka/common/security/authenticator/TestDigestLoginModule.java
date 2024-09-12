@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.plain.PlainLoginModule;
+
 import java.util.List;
 import java.util.Map;
 
@@ -25,9 +28,6 @@ import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
-
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.plain.PlainLoginModule;
 
 /**
  * Digest-MD5 login module for multi-mechanism tests.

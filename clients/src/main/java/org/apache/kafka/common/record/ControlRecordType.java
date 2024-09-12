@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,6 +45,15 @@ public enum ControlRecordType {
     ABORT((short) 0),
     COMMIT((short) 1),
 
+    // KRaft quorum related control messages
+    LEADER_CHANGE((short) 2),
+    SNAPSHOT_HEADER((short) 3),
+    SNAPSHOT_FOOTER((short) 4),
+
+    // KRaft membership changes messages
+    KRAFT_VERSION((short) 5),
+    KRAFT_VOTERS((short) 6),
+
     // UNKNOWN is used to indicate a control type which the client is not aware of and should be ignored
     UNKNOWN((short) -1);
 
@@ -55,10 +65,14 @@ public enum ControlRecordType {
             new Field("version", Type.INT16),
             new Field("type", Type.INT16));
 
-    final short type;
+    private final short type;
 
     ControlRecordType(short type) {
         this.type = type;
+    }
+
+    public short type() {
+        return type;
     }
 
     public Struct recordKey() {
@@ -93,6 +107,17 @@ public enum ControlRecordType {
                 return ABORT;
             case 1:
                 return COMMIT;
+            case 2:
+                return LEADER_CHANGE;
+            case 3:
+                return SNAPSHOT_HEADER;
+            case 4:
+                return SNAPSHOT_FOOTER;
+            case 5:
+                return KRAFT_VERSION;
+            case 6:
+                return KRAFT_VOTERS;
+
             default:
                 return UNKNOWN;
         }

@@ -19,51 +19,52 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
-import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.SingletonNoOpValueTransformer;
+import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.mockito.Mockito.mock;
 
-@RunWith(EasyMockRunner.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KStreamTransformValuesTest {
     private final String topicName = "topic";
-    private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
+    private final MockProcessorSupplier<Integer, Integer, Void, Void> supplier = new MockProcessorSupplier<>();
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
-    @Mock(MockType.NICE)
-    private ProcessorContext context;
+    private InternalProcessorContext context = mock(InternalProcessorContext.class);
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransform() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
-            () -> new ValueTransformer<Number, Integer>() {
+        final org.apache.kafka.streams.kstream.ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
+            () -> new org.apache.kafka.streams.kstream.ValueTransformer<Number, Integer>() {
                 private int total = 0;
 
                 @Override
-                public void init(final ProcessorContext context) { }
+                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) { }
 
                 @Override
                 public Integer transform(final Number value) {
@@ -93,9 +94,10 @@ public class KStreamTransformValuesTest {
             new KeyValueTimestamp<>(100, 1110, 50),
             new KeyValueTimestamp<>(1000, 11110, 500)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
+    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testTransformWithKey() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -105,7 +107,7 @@ public class KStreamTransformValuesTest {
                 private int total = 0;
 
                 @Override
-                public void init(final ProcessorContext context) { }
+                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) { }
 
                 @Override
                 public Integer transform(final Integer readOnlyKey, final Number value) {
@@ -135,15 +137,15 @@ public class KStreamTransformValuesTest {
             new KeyValueTimestamp<>(100, 1221, 50),
             new KeyValueTimestamp<>(1000, 12221, 500)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
-        final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
+        final NoOpValueTransformerWithKeySupplier<String, String> transformer = new NoOpValueTransformerWithKeySupplier<>();
         final KStreamTransformValues<String, String, String> transformValues = new KStreamTransformValues<>(transformer);
-        final Processor<String, String> processor = transformValues.get();
+        final Processor<String, String, String, String> processor = transformValues.get();
 
         processor.init(context);
 

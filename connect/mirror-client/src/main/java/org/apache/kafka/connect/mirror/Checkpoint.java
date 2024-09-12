@@ -16,19 +16,22 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 
-import java.util.Map;
-import java.util.HashMap;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
-/** Checkpoint records emitted from MirrorCheckpointConnector. Encodes remote consumer group state. */
+/**
+ * Checkpoint records emitted by MirrorCheckpointConnector.
+ */
 public class Checkpoint {
     public static final String TOPIC_KEY = "topic";
     public static final String PARTITION_KEY = "partition";
@@ -52,11 +55,11 @@ public class Checkpoint {
     public static final Schema HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY, Type.INT16));
 
-    private String consumerGroupId;
-    private TopicPartition topicPartition;
-    private long upstreamOffset;
-    private long downstreamOffset;
-    private String metadata;
+    private final String consumerGroupId;
+    private final TopicPartition topicPartition;
+    private final long upstreamOffset;
+    private final long downstreamOffset;
+    private final String metadata;
 
     public Checkpoint(String consumerGroupId, TopicPartition topicPartition, long upstreamOffset,
             long downstreamOffset, String metadata) {
@@ -94,7 +97,7 @@ public class Checkpoint {
     @Override
     public String toString() {
         return String.format("Checkpoint{consumerGroupId=%s, topicPartition=%s, "
-            + "upstreamOffset=%d, downstreamOffset=%d, metatadata=%s}",
+            + "upstreamOffset=%d, downstreamOffset=%d, metadata=%s}",
             consumerGroupId, topicPartition, upstreamOffset, downstreamOffset, metadata);
     }
 
@@ -180,5 +183,17 @@ public class Checkpoint {
     byte[] recordValue() {
         return serializeValue(VERSION).array();
     }
-};
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Checkpoint that = (Checkpoint) o;
+        return upstreamOffset == that.upstreamOffset && downstreamOffset == that.downstreamOffset && Objects.equals(consumerGroupId, that.consumerGroupId) && Objects.equals(topicPartition, that.topicPartition) && Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(consumerGroupId, topicPartition, upstreamOffset, downstreamOffset, metadata);
+    }
+}

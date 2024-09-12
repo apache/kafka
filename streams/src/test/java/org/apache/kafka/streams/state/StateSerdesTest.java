@@ -20,31 +20,32 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
-import org.junit.Assert;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings("unchecked")
 public class StateSerdesTest {
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfTopicNameIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes(null, byte[].class, byte[].class);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes(null, byte[].class, byte[].class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfKeyClassIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", null, byte[].class);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes("anyName", null, byte[].class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfValueClassIsNullForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", byte[].class, null);
+        assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes("anyName", byte[].class, null));
     }
 
     @Test
@@ -63,34 +64,34 @@ public class StateSerdesTest {
 
         for (final Class keyClass : supportedBuildInTypes) {
             for (final Class valueClass : supportedBuildInTypes) {
-                Assert.assertNotNull(StateSerdes.withBuiltinTypes("anyName", keyClass, valueClass));
+                assertNotNull(StateSerdes.withBuiltinTypes("anyName", keyClass, valueClass));
             }
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownKeyTypeForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", Class.class, byte[].class);
+        assertThrows(IllegalArgumentException.class, () -> StateSerdes.withBuiltinTypes("anyName", Class.class, byte[].class));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowForUnknownValueTypeForBuiltinTypes() {
-        StateSerdes.withBuiltinTypes("anyName", byte[].class, Class.class);
+        assertThrows(IllegalArgumentException.class, () -> StateSerdes.withBuiltinTypes("anyName", byte[].class, Class.class));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfTopicNameIsNull() {
-        new StateSerdes<>(null, Serdes.ByteArray(), Serdes.ByteArray());
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>(null, Serdes.ByteArray(), Serdes.ByteArray()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfKeyClassIsNull() {
-        new StateSerdes<>("anyName", null, Serdes.ByteArray());
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>("anyName", null, Serdes.ByteArray()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfValueClassIsNull() {
-        new StateSerdes<>("anyName", Serdes.ByteArray(), null);
+        assertThrows(NullPointerException.class, () -> new StateSerdes<>("anyName", Serdes.ByteArray(), null));
     }
 
     @Test

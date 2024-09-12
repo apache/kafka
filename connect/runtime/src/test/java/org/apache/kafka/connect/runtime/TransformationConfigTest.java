@@ -30,7 +30,8 @@ import org.apache.kafka.connect.transforms.SetSchemaMetadata;
 import org.apache.kafka.connect.transforms.TimestampConverter;
 import org.apache.kafka.connect.transforms.TimestampRouter;
 import org.apache.kafka.connect.transforms.ValueToKey;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 
@@ -120,7 +121,7 @@ public class TransformationConfigTest {
         connProps.put("transforms", "example");
         connProps.put("transforms.example.type", MaskField.Value.class.getName());
         connProps.put("transforms.example.fields", "field");
-
+        connProps.put("transforms.example.replacement", "nothing");
 
         Plugins plugins = null; // Safe when we're only constructing the config
         new ConnectorConfig(plugins, connProps);

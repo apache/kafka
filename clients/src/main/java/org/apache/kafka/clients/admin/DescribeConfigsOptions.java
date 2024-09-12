@@ -30,9 +30,10 @@ import java.util.Collection;
 public class DescribeConfigsOptions extends AbstractOptions<DescribeConfigsOptions> {
 
     private boolean includeSynonyms = false;
+    private boolean includeDocumentation = false;
 
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */
@@ -50,6 +51,13 @@ public class DescribeConfigsOptions extends AbstractOptions<DescribeConfigsOptio
     }
 
     /**
+     * Return true if config documentation should be returned in the response.
+     */
+    public boolean includeDocumentation() {
+        return includeDocumentation;
+    }
+
+    /**
      * Set to true if synonym configs should be returned in the response.
      */
     public DescribeConfigsOptions includeSynonyms(boolean includeSynonyms) {
@@ -57,4 +65,11 @@ public class DescribeConfigsOptions extends AbstractOptions<DescribeConfigsOptio
         return this;
     }
 
+    /**
+     * Set to true if config documentation should be returned in the response.
+     */
+    public DescribeConfigsOptions includeDocumentation(boolean includeDocumentation) {
+        this.includeDocumentation = includeDocumentation;
+        return this;
+    }
 }

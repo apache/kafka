@@ -24,24 +24,37 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.MergedSortedCacheWindowStoreKeyValueIterator.StoreKeyToWindowKey;
+import org.apache.kafka.streams.state.internals.MergedSortedCacheWindowStoreKeyValueIterator.WindowKeyToBytes;
+import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
+import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.apache.kafka.test.KeyValueIteratorStub;
-import org.junit.Test;
+
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Collections;
 import java.util.Iterator;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
+
+    @FunctionalInterface
+    private interface StoreKeySerializer<K> {
+        Bytes serialize(final Windowed<K> key, final int seq, final StateSerdes<K, ?> serdes);
+    }
+
     private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
         @Override
         public long segmentId(final Bytes key) {
             return 0;
         }
     };
+
     private static final int WINDOW_SIZE = 10;
 
     private final String storeKey = "a";
@@ -51,62 +64,174 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs = Collections.singleton(
         KeyValue.pair(new Windowed<>(Bytes.wrap(storeKey.getBytes()), storeWindow), storeKey.getBytes())).iterator();
     private final TimeWindow cacheWindow = new TimeWindow(10, 20);
-    private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
-        KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowKeySchema.toStoreKeyBinary(
-                    new Windowed<>(cacheKey, cacheWindow), 0, new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
-            ),
-            new LRUCacheEntry(cacheKey.getBytes())
-        )).iterator();
-    private Deserializer<String> deserializer = Serdes.String().deserializer();
+    private Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs;
+    private final Deserializer<String> deserializer = Serdes.String().deserializer();
 
-    @Test
-    public void shouldHaveNextFromStore() {
+    private StoreKeySerializer<String> storeKeySerializer;
+    private StoreKeyToWindowKey storeKeyToWindowKey;
+    private WindowKeyToBytes windowKeyToBytes;
+
+    private enum SchemaType {
+        WINDOW_KEY_SCHEMA,
+        KEY_FIRST_SCHEMA,
+        TIME_FIRST_SCHEMA
+    }
+
+    public void setUp(final SchemaType schemaType) {
+        switch (schemaType) {
+            case KEY_FIRST_SCHEMA:
+                storeKeySerializer = KeyFirstWindowKeySchema::toStoreKeyBinary;
+                storeKeyToWindowKey = KeyFirstWindowKeySchema::fromStoreKey;
+                windowKeyToBytes = KeyFirstWindowKeySchema::toStoreKeyBinary;
+                break;
+            case WINDOW_KEY_SCHEMA:
+                storeKeySerializer = WindowKeySchema::toStoreKeyBinary;
+                storeKeyToWindowKey = WindowKeySchema::fromStoreKey;
+                windowKeyToBytes = WindowKeySchema::toStoreKeyBinary;
+                break;
+            case TIME_FIRST_SCHEMA:
+                storeKeySerializer = TimeFirstWindowKeySchema::toStoreKeyBinary;
+                storeKeyToWindowKey = TimeFirstWindowKeySchema::fromStoreKey;
+                windowKeyToBytes = TimeFirstWindowKeySchema::toStoreKeyBinary;
+                break;
+            default:
+                throw new IllegalStateException("Unknown schemaType: " + schemaType);
+        }
+        cacheKvs = Collections.singleton(
+            KeyValue.pair(
+                SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize(
+                    new Windowed<>(cacheKey, cacheWindow), 0, new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
+                ),
+                new LRUCacheEntry(cacheKey.getBytes())
+            )
+        ).iterator();
+    }
+
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldHaveNextFromStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
-            createIterator(storeKvs, Collections.emptyIterator());
+            createIterator(storeKvs, Collections.emptyIterator(), false);
         assertTrue(mergeIterator.hasNext());
     }
 
-    @Test
-    public void shouldGetNextFromStore() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldHaveNextFromReverseStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
-            createIterator(storeKvs, Collections.emptyIterator());
+            createIterator(storeKvs, Collections.emptyIterator(), true);
+        assertTrue(mergeIterator.hasNext());
+    }
+
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldGetNextFromStore(final SchemaType schemaType) {
+        setUp(schemaType);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(storeKvs, Collections.emptyIterator(), false);
         assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
     }
 
-    @Test
-    public void shouldPeekNextKeyFromStore() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldGetNextFromReverseStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
-            createIterator(storeKvs, Collections.emptyIterator());
+            createIterator(storeKvs, Collections.emptyIterator(), true);
+        assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
+    }
+
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldPeekNextKeyFromStore(final SchemaType schemaType) {
+        setUp(schemaType);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(storeKvs, Collections.emptyIterator(), false);
         assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(storeKey, storeWindow)));
     }
 
-    @Test
-    public void shouldHaveNextFromCache() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldPeekNextKeyFromReverseStore(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
-            createIterator(Collections.emptyIterator(), cacheKvs);
+            createIterator(storeKvs, Collections.emptyIterator(), true);
+        assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(storeKey, storeWindow)));
+    }
+
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldHaveNextFromCache(final SchemaType schemaType) {
+        setUp(schemaType);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(Collections.emptyIterator(), cacheKvs, false);
         assertTrue(mergeIterator.hasNext());
     }
 
-    @Test
-    public void shouldGetNextFromCache() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldHaveNextFromReverseCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
-            createIterator(Collections.emptyIterator(), cacheKvs);
+            createIterator(Collections.emptyIterator(), cacheKvs, true);
+        assertTrue(mergeIterator.hasNext());
+    }
+
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldGetNextFromCache(final SchemaType schemaType) {
+        setUp(schemaType);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(Collections.emptyIterator(), cacheKvs, false);
         assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
     }
 
-    @Test
-    public void shouldPeekNextKeyFromCache() {
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldGetNextFromReverseCache(final SchemaType schemaType) {
+        setUp(schemaType);
         final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
-            createIterator(Collections.emptyIterator(), cacheKvs);
+            createIterator(Collections.emptyIterator(), cacheKvs, true);
+        assertThat(convertKeyValuePair(mergeIterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
+    }
+
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldPeekNextKeyFromCache(final SchemaType schemaType) {
+        setUp(schemaType);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(Collections.emptyIterator(), cacheKvs, false);
         assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(cacheKey, cacheWindow)));
     }
 
-    @Test
-    public void shouldIterateBothStoreAndCache() {
-        final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs);
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldPeekNextKeyFromReverseCache(final SchemaType schemaType) {
+        setUp(schemaType);
+        final MergedSortedCacheWindowStoreKeyValueIterator mergeIterator =
+            createIterator(Collections.emptyIterator(), cacheKvs, true);
+        assertThat(convertWindowedKey(mergeIterator.peekNextKey()), equalTo(new Windowed<>(cacheKey, cacheWindow)));
+    }
+
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldIterateBothStoreAndCache(final SchemaType schemaType) {
+        setUp(schemaType);
+        final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, true);
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
+        assertFalse(iterator.hasNext());
+    }
+
+    @ParameterizedTest
+    @EnumSource(SchemaType.class)
+    public void shouldReverseIterateBothStoreAndCache(final SchemaType schemaType) {
+        setUp(schemaType);
+        final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, false);
+        assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
+        assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
         assertFalse(iterator.hasNext());
     }
 
@@ -121,10 +246,9 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
 
-    private MergedSortedCacheWindowStoreKeyValueIterator createIterator(
-        final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
-        final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs
-    ) {
+    private MergedSortedCacheWindowStoreKeyValueIterator createIterator(final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
+                                                                        final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
+                                                                        final boolean forward) {
         final DelegatingPeekingKeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(storeKvs));
 
@@ -135,7 +259,10 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
             storeIterator,
             new StateSerdes<>("name", Serdes.Bytes(), Serdes.ByteArray()),
             WINDOW_SIZE,
-            SINGLE_SEGMENT_CACHE_FUNCTION
+            SINGLE_SEGMENT_CACHE_FUNCTION,
+            forward,
+            storeKeyToWindowKey,
+            windowKeyToBytes
         );
     }
 }

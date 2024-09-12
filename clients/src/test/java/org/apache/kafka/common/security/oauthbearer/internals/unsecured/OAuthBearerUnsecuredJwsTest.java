@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -26,7 +25,9 @@ import java.util.Base64.Encoder;
 import java.util.HashSet;
 import java.util.List;
 
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OAuthBearerUnsecuredJwsTest {
     private static final String QUOTE = "\"";
@@ -70,8 +71,8 @@ public class OAuthBearerUnsecuredJwsTest {
         assertEquals(4, jws.claims().size());
         assertEquals(subject, jws.claims().get("sub"));
         assertEquals(subject, jws.principalName());
-        assertEquals(issuedAt, Number.class.cast(jws.claims().get("iat")).longValue());
-        assertEquals(expirationTime, Number.class.cast(jws.claims().get("exp")).longValue());
+        assertEquals(issuedAt, ((Number) jws.claims().get("iat")).longValue());
+        assertEquals(expirationTime, ((Number) jws.claims().get("exp")).longValue());
         assertEquals(expirationTime * 1000, jws.lifetimeMs());
         assertEquals(scope, jws.claims().get("scope"));
         assertEquals(new HashSet<>(scope), jws.scope());
@@ -81,24 +82,26 @@ public class OAuthBearerUnsecuredJwsTest {
         assertEquals("", jws.splits().get(2));
     }
 
-    @Test(expected = OAuthBearerIllegalTokenException.class)
+    @Test
     public void missingPrincipal() {
         String subject = null;
         long issuedAt = 100;
         Long expirationTime = null;
         List<String> scope = Arrays.asList("scopeValue1", "scopeValue2");
         String validCompactSerialization = compactSerialization(subject, issuedAt, expirationTime, scope);
-        new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope");
+        assertThrows(OAuthBearerIllegalTokenException.class,
+            () -> new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope"));
     }
 
-    @Test(expected = OAuthBearerIllegalTokenException.class)
+    @Test
     public void blankPrincipalName() {
         String subject = "   ";
         long issuedAt = 100;
         long expirationTime = issuedAt + 60 * 60;
         List<String> scope = Arrays.asList("scopeValue1", "scopeValue2");
         String validCompactSerialization = compactSerialization(subject, issuedAt, expirationTime, scope);
-        new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope");
+        assertThrows(OAuthBearerIllegalTokenException.class,
+            () -> new OAuthBearerUnsecuredJws(validCompactSerialization, "sub", "scope"));
     }
 
     private static String compactSerialization(String subject, Long issuedAt, Long expirationTime, List<String> scope) {
@@ -107,8 +110,8 @@ public class OAuthBearerUnsecuredJwsTest {
         String headerJson = "{\"alg\":\"" + algorithm + "\"}";
         String encodedHeader = encoder.encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
         String subjectJson = subject != null ? "\"sub\":\"" + subject + "\"" : null;
-        String issuedAtJson = issuedAt != null ? "\"iat\":" + issuedAt.longValue() : null;
-        String expirationTimeJson = expirationTime != null ? "\"exp\":" + expirationTime.longValue() : null;
+        String issuedAtJson = issuedAt != null ? "\"iat\":" + issuedAt : null;
+        String expirationTimeJson = expirationTime != null ? "\"exp\":" + expirationTime : null;
         String scopeJson = scope != null ? scopeJson(scope) : null;
         String claimsJson = claimsJson(subjectJson, issuedAtJson, expirationTimeJson, scopeJson);
         String encodedClaims = encoder.encodeToString(claimsJson.getBytes(StandardCharsets.UTF_8));

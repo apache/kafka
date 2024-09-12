@@ -18,12 +18,12 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.kafka.common.utils.Utils;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * An internal class that implements a cache used for sticky partitioning behavior. The cache tracks the current sticky
@@ -51,14 +51,14 @@ public class StickyPartitionCache {
         // triggered the new batch matches the sticky partition that needs to be changed.
         if (oldPart == null || oldPart == prevPartition) {
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
-            if (availablePartitions.size() < 1) {
-                Integer random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
+            if (availablePartitions.isEmpty()) {
+                int random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
                 newPart = random % partitions.size();
             } else if (availablePartitions.size() == 1) {
                 newPart = availablePartitions.get(0).partition();
             } else {
                 while (newPart == null || newPart.equals(oldPart)) {
-                    Integer random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
+                    int random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
                     newPart = availablePartitions.get(random % availablePartitions.size()).partition();
                 }
             }

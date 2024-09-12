@@ -18,69 +18,246 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.internals.Murmur3;
-import org.junit.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class SubscriptionWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldSerdeTest() {
+    public void shouldSerdeV0Test() {
+        final byte version = SubscriptionWrapper.VERSION_0;
         final String originalKey = "originalKey";
-        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
-        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, originalKey);
+        final Integer primaryPartition = null;
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE,
+            originalKey,
+            version,
+            primaryPartition);
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
-        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
+        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
+            .deserialize(null, serialized);
 
-        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.getInstruction());
-        assertArrayEquals(hashedValue, deserialized.getHash());
-        assertEquals(originalKey, deserialized.getPrimaryKey());
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldSerdeNullHashTest() {
+    public void shouldSerdeV1Test() {
+        final byte version = SubscriptionWrapper.VERSION_1;
         final String originalKey = "originalKey";
-        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = 10;
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE,
+            originalKey,
+            version,
+            primaryPartition);
+        final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
+        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
+            .deserialize(null, serialized);
+
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldSerdeWithV0IfUpgradeTest() {
+        final byte version = SubscriptionWrapper.VERSION_1;
+        final String originalKey = "originalKey";
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
+        swSerde.configure(
+            Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_32),
+            true);
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = 10;
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE,
+            originalKey,
+            version,
+            primaryPartition);
+        final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
+        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
+            .deserialize(null, serialized);
+
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(0, deserialized.version());
+        assertNull(deserialized.primaryPartition());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldSerdeNullHashV0Test() {
+        final byte version = SubscriptionWrapper.VERSION_0;
+        final String originalKey = "originalKey";
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
         final long[] hashedValue = null;
-        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, originalKey);
+        final Integer primaryPartition = null;
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
+            originalKey,
+            version,
+            primaryPartition);
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
-        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.getInstruction());
-        assertArrayEquals(hashedValue, deserialized.getHash());
-        assertEquals(originalKey, deserialized.getPrimaryKey());
+        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
     }
 
-    @Test (expected = NullPointerException.class)
+    @Test
     @SuppressWarnings("unchecked")
-    public void shouldThrowExceptionOnNullKeyTest() {
-        final String originalKey = null;
-        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
-        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, originalKey);
-        swSerde.serializer().serialize(null, wrapper);
-    }
-
-    @Test (expected = NullPointerException.class)
-    @SuppressWarnings("unchecked")
-    public void shouldThrowExceptionOnNullInstructionTest() {
+    public void shouldSerdeNullHashV1Test() {
+        final byte version = SubscriptionWrapper.VERSION_1;
         final String originalKey = "originalKey";
-        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
-        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, null, originalKey);
-        swSerde.serializer().serialize(null, wrapper);
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
+        final long[] hashedValue = null;
+        final Integer primaryPartition = 10;
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
+            originalKey,
+            version,
+            primaryPartition);
+        final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
+        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer()
+            .deserialize(null, serialized);
+
+        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
     }
 
-    @Test (expected = UnsupportedVersionException.class)
+    @Test
+    public void shouldSerdeNullPrimaryPartitionOnV0Test() {
+        final String originalKey = "originalKey";
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = null;
+        final byte version = SubscriptionWrapper.VERSION_0;
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
+            originalKey,
+            version,
+            primaryPartition);
+        final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
+        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
+
+        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.instruction());
+        assertArrayEquals(hashedValue, deserialized.hash());
+        assertEquals(originalKey, deserialized.primaryKey());
+        assertEquals(primaryPartition, deserialized.primaryPartition());
+        assertEquals(version, deserialized.version());
+    }
+
+    @Test
+    public void shouldThrowExceptionOnNullKeyV0Test() {
+        final String originalKey = null;
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = 10;
+        assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(hashedValue,
+            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
+            originalKey,
+            SubscriptionWrapper.VERSION_0,
+            primaryPartition));
+    }
+
+    @Test
+    public void shouldThrowExceptionOnNullKeyV1Test() {
+        final String originalKey = null;
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = 10;
+        assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(hashedValue,
+            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
+            originalKey,
+            SubscriptionWrapper.VERSION_1,
+            primaryPartition));
+    }
+
+    @Test
+    public void shouldThrowExceptionOnNullInstructionV0Test() {
+        final String originalKey = "originalKey";
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = 10;
+        assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(
+            hashedValue,
+            null,
+            originalKey,
+            SubscriptionWrapper.VERSION_0,
+            primaryPartition));
+    }
+
+    @Test
+    public void shouldThrowExceptionOnNullInstructionV1Test() {
+        final String originalKey = "originalKey";
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = 10;
+        assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(
+            hashedValue,
+            null,
+            originalKey,
+            SubscriptionWrapper.VERSION_0,
+            primaryPartition));
+    }
+
+    @Test
+    public void shouldThrowExceptionOnNullPrimaryPartitionV1Test() {
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> "pkTopic", Serdes.String());
+        final String originalKey = "originalKey";
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final Integer primaryPartition = null;
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
+            originalKey,
+            SubscriptionWrapper.VERSION_1,
+            primaryPartition);
+        assertThrows(NullPointerException.class, () -> swSerde.serializer().serialize(null, wrapper));
+    }
+
+    @Test
     public void shouldThrowExceptionOnUnsupportedVersionTest() {
         final String originalKey = "originalKey";
         final long[] hashedValue = null;
-        new SubscriptionWrapper<>(hashedValue, SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, originalKey, (byte) 0x80);
+        final Integer primaryPartition = 10;
+        assertThrows(UnsupportedVersionException.class, () -> new SubscriptionWrapper<>(
+            hashedValue,
+            SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
+            originalKey,
+            (byte) 0x80,
+            primaryPartition));
     }
 }

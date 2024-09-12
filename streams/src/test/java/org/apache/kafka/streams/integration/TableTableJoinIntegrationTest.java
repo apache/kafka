@@ -23,535 +23,1024 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
  */
-@Category({IntegrationTest.class})
-@RunWith(value = Parameterized.class)
+@Tag("integration")
+@Timeout(600)
 public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
-    private KTable<Long, String> leftTable;
-    private KTable<Long, String> rightTable;
+    private static final String APP_ID = "table-table-join-integration-test";
+    private static final String STORE_NAME = APP_ID + "-store";
+    private final TestRecord<Long, String> expectedFinalJoinResultUnversioned =
+            new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L);
+    private final TestRecord<Long, String> expectedFinalJoinResultLeftVersionedOnly =
+            new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L);
+    private final TestRecord<Long, String> expectedFinalJoinResultRightVersionedOnly =
+            new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 14L);
+    private final TestRecord<Long, String> expectedFinalMultiJoinResult =
+            new TestRecord<>(ANY_UNIQUE_KEY, "F-f-f", null, 4L);
 
-    public TableTableJoinIntegrationTest(final boolean cacheEnabled) {
-        super(cacheEnabled);
-    }
-
-    @Before
-    public void prepareTopology() throws InterruptedException {
-        super.prepareEnvironment();
-
-        appID = "table-table-join-integration-test";
-
-        builder = new StreamsBuilder();
-        leftTable = builder.table(INPUT_TOPIC_LEFT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
-    }
-
-    final private TestRecord<Long, String> expectedFinalJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L);
-    final private TestRecord<Long, String> expectedFinalMultiJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L);
-    final private String storeName = appID + "-store";
-
-    private Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
+    private final Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(STORE_NAME)
             .withKeySerde(Serdes.Long())
             .withValueSerde(Serdes.String())
             .withCachingDisabled()
             .withLoggingDisabled();
 
-    @Test
-    public void testInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
         leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultUnversioned, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)),
                 null,
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 14L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L))
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
         leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultUnversioned, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 14L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-null", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L))
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
         leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalJoinResultUnversioned, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null,  3L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null,  5L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null,  6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  9L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null,  10L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null,  11L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-e", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-e", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-null", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-f", null, 4L))
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testInnerInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerWithVersionedStores(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+        leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
 
+        // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+            null,
+            null,
+            null,
+            null
+        );
+
+        runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftWithVersionedStores(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+        leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 11L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+            null,
+            null,
+            null,
+            null
+        );
+
+        runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterWithVersionedStores(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+        leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        // versioned stores do not support caching, so we expect the same result regardless of whether caching is enabled or not
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 11L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
+            null,
+            null,
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-e", null, 14L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+            null,
+            null,
+            null,
+            null
+        );
+
+        runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerWithLeftVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+        leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L))
+            );
+
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftWithLeftVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+        leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-null", null, 15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L))
+            );
+
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterWithLeftVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("left", Duration.ofMinutes(5))).withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+        leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(input, expectedFinalJoinResultLeftVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 7L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-e", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-null", null, 15L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-f", null, 15L))
+            );
+
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerWithRightVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
+        leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 14L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 14L)),
+                null
+            );
+
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftWithRightVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
+        leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-null", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 2L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 14L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 14L)),
+                null
+            );
+
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterWithRightVersionedOnly(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String>as(Stores.persistentVersionedKeyValueStore("right", Duration.ofMinutes(5))).withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
+        leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
+
+        if (cacheEnabled) {
+            runTestWithDriver(input, expectedFinalJoinResultRightVersionedOnly, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        } else {
+            final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null", null, 3L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-null", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 2L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-e", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "E-e", null, 15L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-e", null, 14L)),
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-e", null, 14L)),
+                null
+            );
+
+            runTestWithDriver(input, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
         leftTable.join(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
-            // FIXME: the duplicate below for all the multi-joins
-            //        are due to KAFKA-6443, should be updated once it is fixed.
+            // TODO K6443: the duplicate below for all the multi-joins are due to
+            //             KAFKA-6443, should be updated once it is fixed.
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
-                null, // correct would be -> new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
+                null, // correct would be -> new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)
                       // we don't get correct value, because of self-join of `rightTable`
                 null,
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
+                null,
+                null
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testInnerLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
         leftTable.join(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)),
                 null,
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
+                null,
+                null
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testInnerOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testInnerOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
         leftTable.join(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L)),
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)),
                 null,
                 null,
+                // incorrect result `null-d` is caused by self-join of `rightTable`
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
                 null,
-                Arrays.asList(
-                    // incorrect result `null-d` is caused by self-join of `rightTable`
-                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                null
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeftInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
         leftTable.leftJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)),
                 null,
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
+                null,
+                null
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeftLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
         leftTable.leftJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null, 3L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  7L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 7L)),
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 9L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
                 null,
                 null,
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
+                null,
+                null
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testLeftOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testLeftOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
         leftTable.leftJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null, 3L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b", null, 7L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 9L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
                 null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
                 null,
-                Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d", null, 14L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                null
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuterInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterInner(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
         leftTable.outerJoin(rightTable, valueJoiner)
                  .join(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b-b", null, 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  11L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 11L)),
                 null,
                 null,
                 Arrays.asList(
                     new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
+                null,
+                null
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuterLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterLeft(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
         leftTable.outerJoin(rightTable, valueJoiner)
                  .leftJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null, 3L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
                 Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b-b", null, 7L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
-                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 9L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
                 null,
                 Arrays.asList(
                     new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L),
                     new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
+                null,
+                null
             );
 
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 
-    @Test
-    public void testOuterOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOuterOuter(final boolean cacheEnabled) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Long, String> leftTable = builder.table(INPUT_TOPIC_LEFT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("left").withLoggingDisabled());
+        final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
+        final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
         leftTable.outerJoin(rightTable, valueJoiner)
                  .outerJoin(rightTable, valueJoiner, materialized)
                  .toStream()
                  .to(OUTPUT_TOPIC);
 
         if (cacheEnabled) {
-            runTestWithDriver(expectedFinalMultiJoinResult, storeName);
+            runTestWithDriver(input, expectedFinalMultiJoinResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         } else {
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null, 3L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null, 5L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null, 6L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b-b", null, 7L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, null, null, 8L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 9L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null, 10L)),
+                Arrays.asList(
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 11L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null, 11L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null, 12L)),
                 null,
                 Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-null-null", null,  3L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "A-a-a", null,  4L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a-a", null,  5L)),
-                Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "B-b-b", null,  6L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "null-b-b", null,  7L)),
-                Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, null, null,  8L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  9L)),
-                Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-c-c", null,  10L)),
-                Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "C-null-null", null,  11L)),
-                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, null, null,  12L)),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L),
+                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null, 14L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null, 15L)),
                 null,
-                null,
-                Arrays.asList(
-                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null,  14L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "null-d-d", null,  14L),
-                    new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L))
+                null
             );
-            runTestWithDriver(expectedResult, storeName);
+            runTestWithDriver(inputWithoutOutOfOrderData, expectedResult, STORE_NAME, streamsConfig, builder.build(streamsConfig));
         }
     }
 }

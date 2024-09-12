@@ -26,15 +26,16 @@ import java.util.{Properties, Random}
 
 import joptsimple.OptionParser
 import kafka.utils._
-import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.{CommonClientConfigs, admin}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.admin.{Admin, NewTopic}
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
-import org.apache.kafka.common.utils.{AbstractIterator, Utils}
+import org.apache.kafka.common.utils.{Exit, AbstractIterator, Utils}
+import org.apache.kafka.server.util.CommandLineUtils
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * This is a torture test that runs against an existing broker
@@ -97,8 +98,8 @@ object LogCompactionTester {
 
     val options = parser.parse(args: _*)
 
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "A tool to test log compaction. Valid options are: ")
+    if (args.isEmpty)
+      CommandLineUtils.printUsageAndExit(parser, "A tool to test log compaction. Valid options are: ")
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, numMessagesOpt)
 
@@ -138,7 +139,7 @@ object LogCompactionTester {
   def createTopics(brokerUrl: String, topics: Seq[String]): Unit = {
     val adminConfig = new Properties
     adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    val adminClient = admin.AdminClient.create(adminConfig)
+    val adminClient = Admin.create(adminConfig)
 
     try {
       val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)
@@ -247,12 +248,12 @@ object LogCompactionTester {
         if (exitCode != 0) {
           System.err.println("Process exited abnormally.")
           while (process.getErrorStream.available > 0) {
-            System.err.write(process.getErrorStream().read())
+            System.err.write(process.getErrorStream.read())
           }
         }
       }
     }.start()
-    new BufferedReader(new InputStreamReader(process.getInputStream(), UTF_8), 10 * 1024 * 1024)
+    new BufferedReader(new InputStreamReader(process.getInputStream, UTF_8), 10 * 1024 * 1024)
   }
 
   def produceMessages(brokerUrl: String,
@@ -292,7 +293,7 @@ object LogCompactionTester {
     }
   }
 
-  def createConsumer(brokerUrl: String): KafkaConsumer[String, String] = {
+  def createConsumer(brokerUrl: String): Consumer[String, String] = {
     val consumerProps = new Properties
     consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "log-cleaner-test-" + new Random().nextInt(Int.MaxValue))
     consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
@@ -302,7 +303,7 @@ object LogCompactionTester {
 
   def consumeMessages(brokerUrl: String, topics: Array[String]): Path = {
     val consumer = createConsumer(brokerUrl)
-    consumer.subscribe(topics.seq.asJava)
+    consumer.subscribe(topics.toSeq.asJava)
     val consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt")
     println(s"Logging consumed messages to $consumedFilePath")
     val consumedWriter: BufferedWriter = Files.newBufferedWriter(consumedFilePath, UTF_8)
@@ -316,7 +317,7 @@ object LogCompactionTester {
             val delete = record.value == null
             val value = if (delete) -1L else record.value.toLong
             consumedWriter.write(TestRecord(record.topic, record.key.toInt, value, delete).toString)
-            consumedWriter.newLine
+            consumedWriter.newLine()
           }
         } else {
           done = true

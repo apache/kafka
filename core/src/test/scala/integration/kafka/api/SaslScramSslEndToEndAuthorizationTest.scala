@@ -16,32 +16,70 @@
   */
 package kafka.api
 
-import kafka.utils.JaasTestUtils
-import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import kafka.security.JaasTestUtils
 
-import scala.collection.JavaConverters._
-import org.junit.Before
+import java.util.Properties
+import kafka.utils._
+import kafka.zk.ConfigEntityChangeNotificationZNode
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.metadata.storage.Formatter
+import org.apache.kafka.test.TestSslUtils
+
+import scala.jdk.CollectionConverters._
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
   override protected def kafkaServerSaslMechanisms = ScramMechanism.mechanismNames.asScala.toList
-  override val clientPrincipal = JaasTestUtils.KafkaScramUser
-  override val kafkaPrincipal = JaasTestUtils.KafkaScramAdmin
-  private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
+  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_USER)
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_ADMIN)
+  private val kafkaPassword = JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD
 
-  override def configureSecurityBeforeServersStart(): Unit = {
-    super.configureSecurityBeforeServersStart()
-    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
-    // Create broker credentials before starting brokers
-    createScramCredentials(zkConnect, kafkaPrincipal, kafkaPassword)
+  override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
+    super.configureSecurityBeforeServersStart(testInfo)
+
+    if (!TestInfoUtils.isKRaft(testInfo)) {
+      zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
+      // Create broker credentials before starting brokers
+      createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
+    }
+    TestSslUtils.convertToPemWithoutFiles(producerConfig)
+    TestSslUtils.convertToPemWithoutFiles(consumerConfig)
+    TestSslUtils.convertToPemWithoutFiles(adminClientConfig)
   }
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
-    // Create client credentials after starting brokers so that dynamic credential creation is also tested
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+  // Create the admin credentials for KRaft as part of controller initialization
+  override def addFormatterSettings(formatter: Formatter): Unit = {
+    formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ")
+    formatter.setScramArguments(List(
+      s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
+  }
+
+  override def configureListeners(props: collection.Seq[Properties]): Unit = {
+    props.foreach(TestSslUtils.convertToPemWithoutFiles)
+    super.configureListeners(props)
+  }
+
+  override def createPrivilegedAdminClient() = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
+
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+      super.setUp(testInfo)
+      // Create client credentials after starting brokers so that dynamic credential creation is also tested
+      createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER, JaasTestUtils.KAFKA_SCRAM_PASSWORD)
+      createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testAuthentications(quorum: String): Unit = {
+    val successfulAuths = TestUtils.totalMetricValue(brokers.head, "successful-authentication-total")
+    assertTrue(successfulAuths > 0, "No successful authentications")
+    val failedAuths = TestUtils.totalMetricValue(brokers.head, "failed-authentication-total")
+    assertEquals(0, failedAuths)
   }
 }

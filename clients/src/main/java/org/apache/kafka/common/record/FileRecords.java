@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.GatheringByteChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
@@ -135,18 +134,43 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return A sliced wrapper on this message set limited based on the given position and size
      */
     public FileRecords slice(int position, int size) throws IOException {
+        int availableBytes = availableBytes(position, size);
+        int startPosition = this.start + position;
+        return new FileRecords(file, channel, startPosition, startPosition + availableBytes, true);
+    }
+
+    /**
+     * Return a slice of records from this instance, the difference with {@link FileRecords#slice(int, int)} is
+     * that the position is not necessarily on an offset boundary.
+     *
+     * This method is reserved for cases where offset alignment is not necessary, such as in the replication of raft
+     * snapshots.
+     *
+     * @param position The start position to begin the read from
+     * @param size The number of bytes after the start position to include
+     * @return A unaligned slice of records on this message set limited based on the given position and size
+     */
+    public UnalignedFileRecords sliceUnaligned(int position, int size) {
+        int availableBytes = availableBytes(position, size);
+        return new UnalignedFileRecords(channel, this.start + position, availableBytes);
+    }
+
+    private int availableBytes(int position, int size) {
+        // Cache current size in case concurrent write changes it
+        int currentSizeInBytes = sizeInBytes();
+
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position + " in read from " + this);
-        if (position > sizeInBytes() - start)
+        if (position > currentSizeInBytes - start)
             throw new IllegalArgumentException("Slice from position " + position + " exceeds end position of " + this);
         if (size < 0)
             throw new IllegalArgumentException("Invalid size: " + size + " in read from " + this);
 
         int end = this.start + position + size;
-        // handle integer overflow or if end is beyond the end of the file
-        if (end < 0 || end >= start + sizeInBytes())
-            end = start + sizeInBytes();
-        return new FileRecords(file, channel, this.start + position, end, true);
+        // Handle integer overflow or if end is beyond the end of the file
+        if (end < 0 || end > start + currentSizeInBytes)
+            end = this.start + currentSizeInBytes;
+        return end - (this.start + position);
     }
 
     /**
@@ -208,11 +232,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Update the file reference (to be used with caution since this does not reopen the file channel)
-     * @param file The new file to use
+     * Update the parent directory (to be used with caution since this does not reopen the file channel)
+     * @param parentDir The new parent directory
      */
-    public void setFile(File file) {
-        this.file = file;
+    public void updateParentDir(File parentDir) {
+        this.file = new File(parentDir, file.getName());
     }
 
     /**
@@ -221,7 +245,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public void renameTo(File f) throws IOException {
         try {
-            Utils.atomicMoveWithFallback(file.toPath(), f.toPath());
+            Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), false);
         } finally {
             this.file = f;
         }
@@ -260,14 +284,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // are not enough available bytes in the response to read it fully. Note that this is
             // only possible prior to KIP-74, after which the broker was changed to always return at least
             // one full record batch, even if it requires exceeding the max fetch size requested by the client.
-            return new ConvertedRecords<>(this, RecordConversionStats.EMPTY);
+            return new ConvertedRecords<>(this, RecordValidationStats.EMPTY);
         } else {
             return convertedRecords;
         }
     }
 
     @Override
-    public long writeTo(GatheringByteChannel destChannel, long offset, int length) throws IOException {
+    public int writeTo(TransferableChannel destChannel, int offset, int length) throws IOException {
         long newSize = Math.min(channel.size(), end) - start;
         int oldSize = sizeInBytes();
         if (newSize < oldSize)
@@ -276,15 +300,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     file.getAbsolutePath(), oldSize, newSize));
 
         long position = start + offset;
-        int count = Math.min(length, oldSize);
-        final long bytesTransferred;
-        if (destChannel instanceof TransportLayer) {
-            TransportLayer tl = (TransportLayer) destChannel;
-            bytesTransferred = tl.transferFrom(channel, position, count);
-        } else {
-            bytesTransferred = channel.transferTo(position, count, destChannel);
-        }
-        return bytesTransferred;
+        int count = Math.min(length, oldSize - offset);
+        // safe to cast to int since `count` is an int
+        return (int) destChannel.transferFrom(channel, position, count);
     }
 
     /**
@@ -337,18 +355,18 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public TimestampAndOffset largestTimestampAfter(int startingPosition) {
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
-        long offsetOfMaxTimestamp = -1L;
+        long shallowOffsetOfMaxTimestamp = -1L;
         int leaderEpochOfMaxTimestamp = RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
         for (RecordBatch batch : batchesFrom(startingPosition)) {
             long timestamp = batch.maxTimestamp();
             if (timestamp > maxTimestamp) {
                 maxTimestamp = timestamp;
-                offsetOfMaxTimestamp = batch.lastOffset();
+                shallowOffsetOfMaxTimestamp = batch.lastOffset();
                 leaderEpochOfMaxTimestamp = batch.partitionLeaderEpoch();
             }
         }
-        return new TimestampAndOffset(maxTimestamp, offsetOfMaxTimestamp,
+        return new TimestampAndOffset(maxTimestamp, shallowOffsetOfMaxTimestamp,
                 maybeLeaderEpoch(leaderEpochOfMaxTimestamp));
     }
 

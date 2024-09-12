@@ -16,26 +16,30 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Record;
 
-public class SinkNode<K, V> extends ProcessorNode<K, V> {
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerializer;
 
-    private Serializer<K> keySerializer;
-    private Serializer<V> valSerializer;
-    private final TopicNameExtractor<K, V> topicExtractor;
-    private final StreamPartitioner<? super K, ? super V> partitioner;
+public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
-    private InternalProcessorContext context;
+    private Serializer<KIn> keySerializer;
+    private Serializer<VIn> valSerializer;
+    private final TopicNameExtractor<KIn, VIn> topicExtractor;
+    private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
+
+    private InternalProcessorContext<Void, Void> context;
 
     SinkNode(final String name,
-             final TopicNameExtractor<K, V> topicExtractor,
-             final Serializer<K> keySerializer,
-             final Serializer<V> valSerializer,
-             final StreamPartitioner<? super K, ? super V> partitioner) {
+             final TopicNameExtractor<KIn, VIn> topicExtractor,
+             final Serializer<KIn> keySerializer,
+             final Serializer<VIn> valSerializer,
+             final StreamPartitioner<? super KIn, ? super VIn> partitioner) {
         super(name);
 
         this.topicExtractor = topicExtractor;
@@ -48,58 +52,58 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
      * @throws UnsupportedOperationException if this method adds a child to a sink node
      */
     @Override
-    public void addChild(final ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<Void, Void, ?, ?> child) {
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<Void, Void> context) {
         super.init(context);
         this.context = context;
-
-        // if serializers are null, get the default ones from the context
-        if (keySerializer == null) {
-            keySerializer = (Serializer<K>) context.keySerde().serializer();
-        }
-        if (valSerializer == null) {
-            valSerializer = (Serializer<V>) context.valueSerde().serializer();
+        try {
+            keySerializer = prepareKeySerializer(keySerializer, context, this.name());
+        } catch (ConfigException | StreamsException e) {
+            throw new StreamsException(String.format("Failed to initialize key serdes for sink node %s", name()), e, context.taskId());
         }
 
-        // if value serializers are for {@code Change} values, set the inner serializer when necessary
-        if (valSerializer instanceof ChangedSerializer &&
-                ((ChangedSerializer) valSerializer).inner() == null) {
-            ((ChangedSerializer) valSerializer).setInner(context.valueSerde().serializer());
+        try {
+            valSerializer = prepareValueSerializer(valSerializer, context, this.name());
+        } catch (final ConfigException | StreamsException e) {
+            throw new StreamsException(String.format("Failed to initialize value serdes for sink node %s", name()), e, context.taskId());
         }
     }
 
-
     @Override
-    public void process(final K key, final V value) {
+    public void process(final Record<KIn, VIn> record) {
         final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
-        final long timestamp = context.timestamp();
-        if (timestamp < 0) {
-            throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
-        }
+        final KIn key = record.key();
+        final VIn value = record.value();
 
-        final String topic = topicExtractor.extract(key, value, this.context.recordContext());
+        final long timestamp = record.timestamp();
 
-        try {
-            collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
-        } catch (final ClassCastException e) {
-            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
-            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
-            throw new StreamsException(
-                    String.format("ClassCastException while producing data to a sink topic. A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
-                                    "(key type: %s / value type: %s). Change the default Serdes in StreamConfig or " +
-                                    "provide correct Serdes via method parameters (for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with `Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
-                                    keySerializer.getClass().getName(),
-                                    valSerializer.getClass().getName(),
-                                    keyClass,
-                                    valueClass),
-                    e);
-        }
+        final ProcessorRecordContext contextForExtraction =
+            new ProcessorRecordContext(
+                timestamp,
+                context.offset(),
+                context.partition(),
+                context.topic(),
+                record.headers()
+            );
+
+        final String topic = topicExtractor.extract(key, value, contextForExtraction);
+
+        collector.send(
+            topic,
+            key,
+            value,
+            record.headers(),
+            timestamp,
+            keySerializer,
+            valSerializer,
+            name(),
+            context,
+            partitioner);
     }
 
     /**

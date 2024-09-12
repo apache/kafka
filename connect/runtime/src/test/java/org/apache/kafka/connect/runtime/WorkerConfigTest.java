@@ -17,50 +17,86 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.connect.errors.ConnectException;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 
 public class WorkerConfigTest {
 
+    private static final String CLUSTER_ID = "cluster-id";
+    private MockedStatic<WorkerConfig> workerConfigMockedStatic;
+
+    @BeforeEach
+    public void setup() {
+        workerConfigMockedStatic = mockStatic(WorkerConfig.class, new CallsRealMethods());
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class))).thenReturn(CLUSTER_ID);
+    }
+
+    @AfterEach
+    public void teardown() {
+        workerConfigMockedStatic.close();
+    }
+
     @Test
-    public void testAdminListenersConfigAllowedValues() {
-        Map<String, String> props = baseProps();
+    public void testLookupKafkaClusterId() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).build();
+        assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
 
-        // no value set for "admin.listeners"
+    @Test
+    public void testLookupNullKafkaClusterId() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).clusterId(null).build();
+        assertNull(WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
+
+    @Test
+    public void testLookupKafkaClusterIdTimeout() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).build();
+        adminClient.timeoutNextRequest(1);
+
+        assertThrows(ConnectException.class, () -> WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
+
+    @Test
+    public void testKafkaClusterId() {
+        Map<String, String> props = baseProps();
         WorkerConfig config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-        assertNull("Default value should be null.", config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG));
+        assertEquals(CLUSTER_ID, config.kafkaClusterId());
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
 
-        props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "");
-        config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-        assertTrue(config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG).isEmpty());
-
-        props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
-        config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-        assertEquals(config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG), Arrays.asList("http://a.b:9999", "https://a.b:7812"));
-
-        new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-    }
-
-    @Test(expected = ConfigException.class)
-    public void testAdminListenersNotAllowingEmptyStrings() {
-        Map<String, String> props = baseProps();
-        props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999,");
-        new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-    }
-
-    @Test(expected = ConfigException.class)
-    public void testAdminListenersNotAllowingBlankStrings() {
-        Map<String, String> props = baseProps();
-        props.put(WorkerConfig.ADMIN_LISTENERS_CONFIG, "http://a.b:9999, ,https://a.b:9999");
-        new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+        // next calls hit the cache
+        assertEquals(CLUSTER_ID, config.kafkaClusterId());
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
     }
 
     private Map<String, String> baseProps() {

@@ -25,6 +25,10 @@ import java.util.Set;
 
 /**
  * A provider of configuration data, which may optionally support subscriptions to configuration changes.
+ * <p>Implementations are required to safely support concurrent calls to any of the methods in this interface.
+ * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
+ * To support this, implementations of this interface should also contain a service provider configuration file in
+ * {@code META-INF/services/org.apache.kafka.common.config.provider.ConfigProvider}.
  */
 public interface ConfigProvider extends Configurable, Closeable {
 
@@ -51,7 +55,7 @@ public interface ConfigProvider extends Configurable, Closeable {
      * @param path the path where the data resides
      * @param keys the keys whose values will be retrieved
      * @param callback the callback to invoke upon change
-     * @throws {@link UnsupportedOperationException} if the subscribe operation is not supported
+     * @throws UnsupportedOperationException if the subscribe operation is not supported
      */
     default void subscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
         throw new UnsupportedOperationException();
@@ -63,7 +67,7 @@ public interface ConfigProvider extends Configurable, Closeable {
      * @param path the path where the data resides
      * @param keys the keys whose values will be retrieved
      * @param callback the callback to be unsubscribed from changes
-     * @throws {@link UnsupportedOperationException} if the unsubscribe operation is not supported
+     * @throws UnsupportedOperationException if the unsubscribe operation is not supported
      */
     default void unsubscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
         throw new UnsupportedOperationException();
@@ -72,7 +76,7 @@ public interface ConfigProvider extends Configurable, Closeable {
     /**
      * Clears all subscribers (optional operation).
      *
-     * @throws {@link UnsupportedOperationException} if the unsubscribeAll operation is not supported
+     * @throws UnsupportedOperationException if the unsubscribeAll operation is not supported
      */
     default void unsubscribeAll() {
         throw new UnsupportedOperationException();

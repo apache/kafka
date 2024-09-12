@@ -20,11 +20,11 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
-
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,9 +32,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RemoveMembersFromConsumerGroupResultTest {
 
@@ -45,7 +45,7 @@ public class RemoveMembersFromConsumerGroupResultTest {
 
     private KafkaFutureImpl<Map<MemberIdentity, Errors>> memberFutures;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         memberFutures = new KafkaFutureImpl<>();
         membersToRemove = new HashSet<>();

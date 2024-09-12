@@ -31,46 +31,57 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.MockTime;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
-import org.powermock.reflect.Whitebox;
+import org.apache.kafka.common.utils.Time;
 
-import java.nio.ByteBuffer;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(KafkaBasedLog.class)
-@PowerMockIgnore("javax.management.*")
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KafkaBasedLogTest {
 
     private static final String TOPIC = "connect-log";
@@ -109,34 +120,38 @@ public class KafkaBasedLogTest {
     private static final String TP0_VALUE_NEW = "VAL0_NEW";
     private static final String TP1_VALUE_NEW = "VAL1_NEW";
 
-    private Time time = new MockTime();
+    private final Time time = new MockTime();
     private KafkaBasedLog<String, String> store;
 
     @Mock
-    private Runnable initializer;
+    private Consumer<TopicAdmin> initializer;
     @Mock
     private KafkaProducer<String, String> producer;
+    private TopicAdmin admin;
+    private final Supplier<TopicAdmin> topicAdminSupplier = () -> admin;
+    private final Predicate<TopicPartition> predicate = ignored -> true;
     private MockConsumer<String, String> consumer;
 
-    private Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
-    private Callback<ConsumerRecord<String, String>> consumedCallback = new Callback<ConsumerRecord<String, String>>() {
-        @Override
-        public void onCompletion(Throwable error, ConsumerRecord<String, String> record) {
-            TopicPartition partition = new TopicPartition(record.topic(), record.partition());
-            List<ConsumerRecord<String, String>> records = consumedRecords.get(partition);
-            if (records == null) {
-                records = new ArrayList<>();
-                consumedRecords.put(partition, records);
-            }
-            records.add(record);
-        }
+    private final Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
+    private final Callback<ConsumerRecord<String, String>> consumedCallback = (error, record) -> {
+        TopicPartition partition = new TopicPartition(record.topic(), record.partition());
+        List<ConsumerRecord<String, String>> records = consumedRecords.computeIfAbsent(partition, k -> new ArrayList<>());
+        records.add(record);
     };
 
-    @SuppressWarnings("unchecked")
-    @Before
+    @BeforeEach
     public void setUp() {
-        store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer);
+        store = new KafkaBasedLog<String, String>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer) {
+            @Override
+            protected KafkaProducer<String, String> createProducer() {
+                return producer;
+            }
+
+            @Override
+            protected MockConsumer<String, String> createConsumer() {
+                return consumer;
+            }
+        };
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -146,12 +161,7 @@ public class KafkaBasedLogTest {
     }
 
     @Test
-    public void testStartStop() throws Exception {
-        expectStart();
-        expectStop();
-
-        PowerMock.replayAll();
-
+    public void testStartStop() {
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
@@ -160,52 +170,33 @@ public class KafkaBasedLogTest {
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
 
         store.stop();
-
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
-        PowerMock.verifyAll();
+        verifyStartAndStop();
     }
 
     @Test
     public void testReloadOnStart() throws Exception {
-        expectStart();
-        expectStop();
-
-        PowerMock.replayAll();
-
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 1L);
         endOffsets.put(TP1, 1L);
         consumer.updateEndOffsets(endOffsets);
         final CountDownLatch finishedLatch = new CountDownLatch(1);
-        consumer.schedulePollTask(new Runnable() { // Use first poll task to setup sequence of remaining responses to polls
-            @Override
-            public void run() {
-                // Should keep polling until it reaches current log end offset for all partitions. Should handle
-                // as many empty polls as needed
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
-                    }
-                });
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE));
-                    }
-                });
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        finishedLatch.countDown();
-                    }
-                });
-            }
+        consumer.schedulePollTask(() -> {
+            // Use first poll task to setup sequence of remaining responses to polls
+            // Should keep polling until it reaches current log end offset for all partitions. Should handle
+            // as many empty polls as needed
+            consumer.scheduleNopPollTask();
+            consumer.scheduleNopPollTask();
+            consumer.schedulePollTask(() ->
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
+                    new RecordHeaders(), Optional.empty()))
+            );
+            consumer.scheduleNopPollTask();
+            consumer.scheduleNopPollTask();
+            consumer.schedulePollTask(() ->
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE,
+                    new RecordHeaders(), Optional.empty()))
+            );
+            consumer.schedulePollTask(finishedLatch::countDown);
         });
         store.start();
         assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
@@ -217,19 +208,11 @@ public class KafkaBasedLogTest {
         assertEquals(TP1_VALUE, consumedRecords.get(TP1).get(0).value());
 
         store.stop();
-
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
-        PowerMock.verifyAll();
+        verifyStartAndStop();
     }
 
     @Test
-    public void testReloadOnStartWithNoNewRecordsPresent() throws Exception {
-        expectStart();
-        expectStop();
-
-        PowerMock.replayAll();
-
+    public void testReloadOnStartWithNoNewRecordsPresent() {
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 7L);
         endOffsets.put(TP1, 7L);
@@ -237,14 +220,11 @@ public class KafkaBasedLogTest {
         // Better test with an advanced offset other than just 0L
         consumer.updateBeginningOffsets(endOffsets);
 
-        consumer.schedulePollTask(new Runnable() {
-            @Override
-            public void run() {
-                // Throw an exception that will not be ignored or handled by Connect framework. In
-                // reality a misplaced call to poll blocks indefinitely and connect aborts due to
-                // time outs (for instance via ConnectRestException)
-                throw new WakeupException();
-            }
+        consumer.schedulePollTask(() -> {
+            // Throw an exception that will not be ignored or handled by Connect framework. In
+            // reality a misplaced call to poll blocks indefinitely and connect aborts due to
+            // time outs (for instance via ConnectRestException)
+            throw new WakeupException();
         });
 
         store.start();
@@ -255,30 +235,19 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
-        PowerMock.verifyAll();
+        verifyStartAndStop();
     }
 
     @Test
     public void testSendAndReadToEnd() throws Exception {
-        expectStart();
         TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
         ProducerRecord<String, String> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY, TP0_VALUE);
-        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(EasyMock.eq(tp0Record), EasyMock.capture(callback0))).andReturn(tp0Future);
+        ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback0 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
+        when(producer.send(eq(tp0Record), callback0.capture())).thenReturn(tp0Future);
         TestFuture<RecordMetadata> tp1Future = new TestFuture<>();
         ProducerRecord<String, String> tp1Record = new ProducerRecord<>(TOPIC, TP1_KEY, TP1_VALUE);
-        Capture<org.apache.kafka.clients.producer.Callback> callback1 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(EasyMock.eq(tp1Record), EasyMock.capture(callback1))).andReturn(tp1Future);
-
-        // Producer flushes when read to log end is called
-        producer.flush();
-        PowerMock.expectLastCall();
-
-        expectStop();
-
-        PowerMock.replayAll();
+        ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback1 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
+        when(producer.send(eq(tp1Record), callback1.capture())).thenReturn(tp1Future);
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -291,12 +260,7 @@ public class KafkaBasedLogTest {
 
         // Set some keys
         final AtomicInteger invoked = new AtomicInteger(0);
-        org.apache.kafka.clients.producer.Callback producerCallback = new org.apache.kafka.clients.producer.Callback() {
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                invoked.incrementAndGet();
-            }
-        };
+        org.apache.kafka.clients.producer.Callback producerCallback = (metadata, exception) -> invoked.incrementAndGet();
         store.send(TP0_KEY, TP0_VALUE, producerCallback);
         store.send(TP1_KEY, TP1_VALUE, producerCallback);
         assertEquals(0, invoked.get());
@@ -309,46 +273,35 @@ public class KafkaBasedLogTest {
 
         // Now we should have to wait for the records to be read back when we call readToEnd()
         final AtomicBoolean getInvoked = new AtomicBoolean(false);
-        final FutureCallback<Void> readEndFutureCallback = new FutureCallback<>(new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                getInvoked.set(true);
-            }
-        });
-        consumer.schedulePollTask(new Runnable() {
-            @Override
-            public void run() {
-                // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
-                // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
-                // returning any data.
-                Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
-                newEndOffsets.put(TP0, 2L);
-                newEndOffsets.put(TP1, 2L);
-                consumer.updateEndOffsets(newEndOffsets);
-                store.readToEnd(readEndFutureCallback);
+        final FutureCallback<Void> readEndFutureCallback = new FutureCallback<>((error, result) -> getInvoked.set(true));
+        consumer.schedulePollTask(() -> {
+            // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
+            // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
+            // returning any data.
+            Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
+            newEndOffsets.put(TP0, 2L);
+            newEndOffsets.put(TP1, 2L);
+            consumer.updateEndOffsets(newEndOffsets);
+            store.readToEnd(readEndFutureCallback);
 
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE));
-                    }
-                });
+            // Should keep polling until it reaches current log end offset for all partitions
+            consumer.scheduleNopPollTask();
+            consumer.scheduleNopPollTask();
+            consumer.scheduleNopPollTask();
+            consumer.schedulePollTask(() -> {
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
+                    new RecordHeaders(), Optional.empty()));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty()));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE,
+                    new RecordHeaders(), Optional.empty()));
+            });
 
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE_NEW));
-                    }
-                });
+            consumer.schedulePollTask(() ->
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty())));
 
-                // Already have FutureCallback that should be invoked/awaited, so no need for follow up finishedLatch
-            }
+            // Already have FutureCallback that should be invoked/awaited, so no need for follow up finishedLatch
         });
         readEndFutureCallback.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(getInvoked.get());
@@ -365,52 +318,34 @@ public class KafkaBasedLogTest {
         // Cleanup
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
-        PowerMock.verifyAll();
+        // Producer flushes when read to log end is called
+        verify(producer).flush();
+        verifyStartAndStop();
     }
 
     @Test
     public void testPollConsumerError() throws Exception {
-        expectStart();
-        expectStop();
-
-        PowerMock.replayAll();
-
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 1L);
         endOffsets.put(TP1, 1L);
         consumer.updateEndOffsets(endOffsets);
-        consumer.schedulePollTask(new Runnable() {
-            @Override
-            public void run() {
-                // Trigger exception
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.setPollException(Errors.COORDINATOR_NOT_AVAILABLE.exception());
-                    }
-                });
+        consumer.schedulePollTask(() -> {
+            // Trigger exception
+            consumer.schedulePollTask(() ->
+                consumer.setPollException(Errors.COORDINATOR_NOT_AVAILABLE.exception()));
 
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
-                    }
-                });
+            // Should keep polling until it reaches current log end offset for all partitions
+            consumer.scheduleNopPollTask();
+            consumer.scheduleNopPollTask();
+            consumer.schedulePollTask(() -> {
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty()));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty()));
+            });
 
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        finishedLatch.countDown();
-                    }
-                });
-            }
+            consumer.schedulePollTask(finishedLatch::countDown);
         });
         store.start();
         assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
@@ -419,22 +354,11 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
-        PowerMock.verifyAll();
+        verifyStartAndStop();
     }
 
     @Test
     public void testGetOffsetsConsumerErrorOnReadToEnd() throws Exception {
-        expectStart();
-
-        // Producer flushes when read to log end is called
-        producer.flush();
-        PowerMock.expectLastCall();
-
-        expectStop();
-
-        PowerMock.replayAll();
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -442,45 +366,31 @@ public class KafkaBasedLogTest {
         consumer.updateEndOffsets(endOffsets);
         store.start();
         final AtomicBoolean getInvoked = new AtomicBoolean(false);
-        final FutureCallback<Void> readEndFutureCallback = new FutureCallback<>(new Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                getInvoked.set(true);
-            }
-        });
-        consumer.schedulePollTask(new Runnable() {
-            @Override
-            public void run() {
-                // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
-                // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
-                // returning any data.
-                Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
-                newEndOffsets.put(TP0, 1L);
-                newEndOffsets.put(TP1, 1L);
-                consumer.updateEndOffsets(newEndOffsets);
-                // Set exception to occur when getting offsets to read log to end.  It'll be caught in the work thread,
-                // which will retry and eventually get the correct offsets and read log to end.
-                consumer.setOffsetsException(new TimeoutException("Failed to get offsets by times"));
-                store.readToEnd(readEndFutureCallback);
+        final FutureCallback<Void> readEndFutureCallback = new FutureCallback<>((error, result) -> getInvoked.set(true));
+        consumer.schedulePollTask(() -> {
+            // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
+            // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
+            // returning any data.
+            Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
+            newEndOffsets.put(TP0, 1L);
+            newEndOffsets.put(TP1, 1L);
+            consumer.updateEndOffsets(newEndOffsets);
+            // Set exception to occur when getting offsets to read log to end.  It'll be caught in the work thread,
+            // which will retry and eventually get the correct offsets and read log to end.
+            consumer.setOffsetsException(new TimeoutException("Failed to get offsets by times"));
+            store.readToEnd(readEndFutureCallback);
 
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
-                    }
-                });
+            // Should keep polling until it reaches current log end offset for all partitions
+            consumer.scheduleNopPollTask();
+            consumer.scheduleNopPollTask();
+            consumer.schedulePollTask(() -> {
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
+                    new RecordHeaders(), Optional.empty()));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty()));
+            });
 
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        finishedLatch.countDown();
-                    }
-                });
-            }
+            consumer.schedulePollTask(finishedLatch::countDown);
         });
         readEndFutureCallback.get(10000, TimeUnit.MILLISECONDS);
         assertTrue(getInvoked.get());
@@ -490,22 +400,61 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
-        assertTrue(consumer.closed());
-        PowerMock.verifyAll();
+        // Producer flushes when read to log end is called
+        verify(producer).flush();
+        verifyStartAndStop();
     }
 
     @Test
-    public void testProducerError() throws Exception {
-        expectStart();
+    public void testOffsetReadFailureWhenWorkThreadFails() throws Exception {
+        RuntimeException exception = new RuntimeException();
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        admin = mock(TopicAdmin.class);
+        when(admin.endOffsets(eq(tps)))
+            .thenReturn(endOffsets)
+            .thenThrow(exception)
+            .thenReturn(endOffsets);
+
+        store.start();
+
+        AtomicInteger numSuccesses = new AtomicInteger();
+        AtomicInteger numFailures = new AtomicInteger();
+        AtomicReference<FutureCallback<Void>> finalSuccessCallbackRef = new AtomicReference<>();
+        final FutureCallback<Void> successCallback = new FutureCallback<>((error, result) -> numSuccesses.getAndIncrement());
+        store.readToEnd(successCallback);
+        // First log end read should succeed.
+        successCallback.get(1000, TimeUnit.MILLISECONDS);
+
+        // Second log end read fails.
+        final FutureCallback<Void> firstFailedCallback = new FutureCallback<>((error, result) -> {
+            numFailures.getAndIncrement();
+            // We issue another readToEnd call here to simulate the case that more read requests can come in while
+            // the failure is being handled in the WorkThread. This read request should not be impacted by the outcome of
+            // the current read request's failure.
+            final FutureCallback<Void> finalSuccessCallback = new FutureCallback<>((e, r) -> numSuccesses.getAndIncrement());
+            finalSuccessCallbackRef.set(finalSuccessCallback);
+            store.readToEnd(finalSuccessCallback);
+        });
+        store.readToEnd(firstFailedCallback);
+        ExecutionException e1 = assertThrows(ExecutionException.class, () -> firstFailedCallback.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(exception, e1.getCause());
+
+        // Last log read end should succeed.
+        finalSuccessCallbackRef.get().get(1000, TimeUnit.MILLISECONDS);
+
+        assertEquals(2, numSuccesses.get());
+        assertEquals(1, numFailures.get());
+    }
+
+    @Test
+    public void testProducerError() {
         TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
         ProducerRecord<String, String> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY, TP0_VALUE);
-        Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
-        EasyMock.expect(producer.send(EasyMock.eq(tp0Record), EasyMock.capture(callback0))).andReturn(tp0Future);
-
-        expectStop();
-
-        PowerMock.replayAll();
+        ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback0 = ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
+        when(producer.send(eq(tp0Record), callback0.capture())).thenReturn(tp0Future);
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -517,12 +466,9 @@ public class KafkaBasedLogTest {
         assertEquals(0L, consumer.position(TP1));
 
         final AtomicReference<Throwable> setException = new AtomicReference<>();
-        store.send(TP0_KEY, TP0_VALUE, new org.apache.kafka.clients.producer.Callback() {
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                assertNull(setException.get()); // Should only be invoked once
-                setException.set(exception);
-            }
+        store.send(TP0_KEY, TP0_VALUE, (metadata, exception) -> {
+            assertNull(setException.get()); // Should only be invoked once
+            setException.set(exception);
         });
         KafkaException exc = new LeaderNotAvailableException("Error");
         tp0Future.resolve(exc);
@@ -531,30 +477,86 @@ public class KafkaBasedLogTest {
 
         store.stop();
 
-        assertFalse(Whitebox.<Thread>getInternalState(store, "thread").isAlive());
+        verifyStartAndStop();
+    }
+
+    @Test
+    public void testReadEndOffsetsUsingAdmin() {
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        admin = mock(TopicAdmin.class);
+        when(admin.retryEndOffsets(eq(tps), any(), anyLong())).thenReturn(endOffsets);
+        when(admin.endOffsets(eq(tps))).thenReturn(endOffsets);
+
+        store.start();
+        assertEquals(endOffsets, store.readEndOffsets(tps, false));
+        verify(admin).retryEndOffsets(eq(tps), any(), anyLong());
+        verify(admin).endOffsets(eq(tps));
+    }
+
+    @Test
+    public void testReadEndOffsetsUsingAdminThatFailsWithUnsupported() {
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        admin = mock(TopicAdmin.class);
+        // Getting end offsets using the admin client should fail with unsupported version
+        when(admin.retryEndOffsets(eq(tps), any(), anyLong())).thenThrow(new UnsupportedVersionException("too old"));
+
+        // Falls back to the consumer
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        consumer.updateEndOffsets(endOffsets);
+
+        store.start();
+        assertEquals(endOffsets, store.readEndOffsets(tps, false));
+        verify(admin).retryEndOffsets(eq(tps), any(), anyLong());
+    }
+
+    @Test
+    public void testReadEndOffsetsUsingAdminThatFailsWithRetriable() {
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
+        Map<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(TP0, 0L);
+        endOffsets.put(TP1, 0L);
+        admin = mock(TopicAdmin.class);
+        // Getting end offsets upon startup should work fine
+        when(admin.retryEndOffsets(eq(tps), any(), anyLong())).thenReturn(endOffsets);
+        // Getting end offsets using the admin client should fail with leader not available
+        when(admin.endOffsets(eq(tps))).thenThrow(new LeaderNotAvailableException("retry"));
+
+        store.start();
+        assertThrows(LeaderNotAvailableException.class, () -> store.readEndOffsets(tps, false));
+        verify(admin).retryEndOffsets(eq(tps), any(), anyLong());
+        verify(admin).endOffsets(eq(tps));
+    }
+
+    @Test
+    public void testWithExistingClientsStartAndStop() {
+        admin = mock(TopicAdmin.class);
+        store = KafkaBasedLog.withExistingClients(TOPIC, consumer, producer, admin, consumedCallback, time, initializer, predicate);
+        store.start();
+        store.stop();
+        verifyStartAndStop();
+    }
+
+    @Test
+    public void testWithExistingClientsStopOnly() {
+        admin = mock(TopicAdmin.class);
+        store = KafkaBasedLog.withExistingClients(TOPIC, consumer, producer, admin, consumedCallback, time, initializer, predicate);
+        store.stop();
+        verifyStop();
+    }
+
+    private void verifyStartAndStop() {
+        verify(initializer).accept(admin);
+        verifyStop();
+        assertFalse(store.thread.isAlive());
+    }
+
+    private void verifyStop() {
+        verify(producer, atLeastOnce()).close();
         assertTrue(consumer.closed());
-        PowerMock.verifyAll();
     }
-
-
-    private void expectStart() throws Exception {
-        initializer.run();
-        EasyMock.expectLastCall().times(1);
-
-        PowerMock.expectPrivate(store, "createProducer")
-                .andReturn(producer);
-        PowerMock.expectPrivate(store, "createConsumer")
-                .andReturn(consumer);
-    }
-
-    private void expectStop() {
-        producer.close();
-        PowerMock.expectLastCall();
-        // MockConsumer close is checked after test.
-    }
-
-    private static ByteBuffer buffer(String v) {
-        return ByteBuffer.wrap(v.getBytes());
-    }
-
 }

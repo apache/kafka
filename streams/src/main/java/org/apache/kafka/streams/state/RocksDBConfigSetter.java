@@ -17,11 +17,10 @@
 package org.apache.kafka.streams.state;
 
 import org.rocksdb.Options;
-
-import java.util.Map;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 /**
  * An interface to that allows developers to customize the RocksDB settings for a given Store.
@@ -57,7 +56,5 @@ public interface RocksDBConfigSetter {
      * @param storeName     the name of the store being configured
      * @param options       the RocksDB options
      */
-    default void close(final String storeName, final Options options) {
-        LOG.warn("The default close will be removed in 3.0.0 -- you should overwrite it if you have implemented RocksDBConfigSetter");
-    }
+    void close(final String storeName, final Options options);
 }

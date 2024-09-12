@@ -14,32 +14,47 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.scala.kstream
+
+import org.apache.kafka.streams.kstream.internals.{InternalStreamsBuilder, StreamJoinedInternal}
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder
+import org.apache.kafka.streams.scala.serialization.Serdes
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import org.apache.kafka.streams.state.Stores
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.mockito.Mockito.{mock, when}
+import org.mockito.junit.jupiter.{MockitoExtension, MockitoSettings}
+import org.mockito.quality.Strictness
 
 import java.time.Duration
 
-import org.apache.kafka.streams.kstream.internals.StreamJoinedInternal
-import org.apache.kafka.streams.scala.Serdes
-import org.apache.kafka.streams.scala.Serdes._
-import org.apache.kafka.streams.state.Stores
-import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.junit.JUnitRunner
+@ExtendWith(Array(classOf[MockitoExtension]))
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+class StreamJoinedTest {
 
-@RunWith(classOf[JUnitRunner])
-class StreamJoinedTest extends FlatSpec with Matchers {
+  val builder: InternalStreamsBuilder = mock(classOf[InternalStreamsBuilder])
+  val topoBuilder: InternalTopologyBuilder = mock(classOf[InternalTopologyBuilder])
 
-  "Create a StreamJoined" should "create a StreamJoined with Serdes" in {
-    val streamJoined: StreamJoined[String, String, Long] = StreamJoined.`with`[String, String, Long]
-
-    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.Long.getClass
+  @BeforeEach
+  def before(): Unit = {
+    when(builder.internalTopologyBuilder()).thenReturn(topoBuilder)
+    when(topoBuilder.topologyConfigs()).thenReturn(null)
   }
 
-  "Create a StreamJoined" should "create a StreamJoined with Serdes and Store Suppliers" in {
+  @Test
+  def testCreateStreamJoinedWithSerdes(): Unit = {
+    val streamJoined: StreamJoined[String, String, Long] = StreamJoined.`with`[String, String, Long]
+
+    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined, builder)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
+    assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)
+  }
+
+  @Test
+  def testCreateStreamJoinedWithSerdesAndStoreSuppliers(): Unit = {
     val storeSupplier = Stores.inMemoryWindowStore("myStore", Duration.ofMillis(500), Duration.ofMillis(250), false)
 
     val otherStoreSupplier =
@@ -48,22 +63,23 @@ class StreamJoinedTest extends FlatSpec with Matchers {
     val streamJoined: StreamJoined[String, String, Long] =
       StreamJoined.`with`[String, String, Long](storeSupplier, otherStoreSupplier)
 
-    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.Long.getClass
-    streamJoinedInternal.otherStoreSupplier().equals(otherStoreSupplier)
-    streamJoinedInternal.thisStoreSupplier().equals(storeSupplier)
+    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined, builder)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
+    assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)
+    assertEquals(otherStoreSupplier, streamJoinedInternal.otherStoreSupplier())
+    assertEquals(storeSupplier, streamJoinedInternal.thisStoreSupplier())
   }
 
-  "Create a StreamJoined" should "create a StreamJoined with Serdes and a State Store name" in {
+  @Test
+  def testCreateStreamJoinedWithSerdesAndStateStoreName(): Unit = {
     val streamJoined: StreamJoined[String, String, Long] = StreamJoined.as[String, String, Long]("myStoreName")
 
-    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.Long.getClass
-    streamJoinedInternal.storeName().equals("myStoreName")
+    val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined, builder)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.keySerde().getClass)
+    assertEquals(Serdes.stringSerde.getClass, streamJoinedInternal.valueSerde().getClass)
+    assertEquals(Serdes.longSerde.getClass, streamJoinedInternal.otherValueSerde().getClass)
+    assertEquals("myStoreName", streamJoinedInternal.storeName())
   }
 
 }

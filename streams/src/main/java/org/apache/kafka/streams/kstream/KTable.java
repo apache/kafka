@@ -20,14 +20,15 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import java.util.function.Function;
@@ -53,7 +54,8 @@ import java.util.function.Function;
  *     streams.start()
  *     ...
  *     final String queryableStoreName = table.queryableStoreName(); // returns null if KTable is not queryable
- *     ReadOnlyKeyValueStore view = streams.store(queryableStoreName, QueryableStoreTypes.keyValueStore());
+ *     final StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+ *     ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> view = streams.store(storeQueryParams);
  *     view.get(key);
  *}</pre>
  *<p>
@@ -130,15 +132,16 @@ public interface KTable<K, V> {
      * Furthermore, for each record that gets dropped (i.e., does not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
-     * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-word";
-     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -169,15 +172,16 @@ public interface KTable<K, V> {
      * Furthermore, for each record that gets dropped (i.e., does not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
-     * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-word";
-     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -255,15 +259,16 @@ public interface KTable<K, V> {
      * Furthermore, for each record that gets dropped (i.e., does satisfy the given predicate) a tombstone record is
      * forwarded.
      * <p>
-     * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-word";
-     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -293,15 +298,16 @@ public interface KTable<K, V> {
      * Furthermore, for each record that gets dropped (i.e., does satisfy the given predicate) a tombstone record is
      * forwarded.
      * <p>
-     * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-word";
-     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -465,8 +471,8 @@ public interface KTable<K, V> {
      * }</pre>
      * <p>
      * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -511,8 +517,8 @@ public interface KTable<K, V> {
      * }</pre>
      * <p>
      * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -559,8 +565,8 @@ public interface KTable<K, V> {
      * }</pre>
      * <p>
      * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * {@link KafkaStreams#store(StoreQueryParameters)}  KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -606,8 +612,8 @@ public interface KTable<K, V> {
      * }</pre>
      * <p>
      * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * The store name to query with is specified by {@link Materialized#as(String)} or {@link Materialized#as(KeyValueBytesStoreSupplier)}.
      * <p>
@@ -662,7 +668,7 @@ public interface KTable<K, V> {
      * For example, you can compute the new key as the length of the value string.
      * <pre>{@code
      * KTable<String, String> table = builder.table("topic");
-     * KTable<Integer, String> keyedStream = table.toStream(new KeyValueMapper<String, String, Integer> {
+     * KStream<Integer, String> keyedStream = table.toStream(new KeyValueMapper<String, String, Integer> {
      *     Integer apply(String key, String value) {
      *         return value.length();
      *     }
@@ -714,8 +720,10 @@ public interface KTable<K, V> {
 
     /**
      * Suppress some updates from this changelog stream, determined by the supplied {@link Suppressed} configuration.
-     *
      * This controls what updates downstream table and stream operations will receive.
+     * <p>
+     * Note that {@code suppress()} cannot be applied to
+     * {@link org.apache.kafka.streams.state.VersionedBytesStoreSupplier versioned KTables}.
      *
      * @param suppressed Configuration object determining what, if any, updates to suppress
      * @return A new KTable with the desired suppression characteristics.
@@ -782,7 +790,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                            {@link ValueTransformerWithKey}.
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
@@ -855,7 +863,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                            {@link ValueTransformerWithKey}.
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
@@ -932,7 +940,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                            {@link ValueTransformerWithKey}.
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
@@ -1011,7 +1019,7 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      *
-     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                            {@link ValueTransformerWithKey}.
      *                            At least one transformer instance will be created per streaming task.
      *                            Transformers do not need to be thread-safe.
@@ -1061,40 +1069,6 @@ public interface KTable<K, V> {
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
      */
     <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector);
-
-    /**
-     * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}
-     * and {@link Serde}s as specified by {@link Serialized}.
-     * Each {@link KeyValue} pair of this {@code KTable} is mapped to a new {@link KeyValue} pair by applying the
-     * provided {@link KeyValueMapper}.
-     * Re-grouping a {@code KTable} is required before an aggregation operator can be applied to the data
-     * (cf. {@link KGroupedTable}).
-     * The {@link KeyValueMapper} selects a new key and value (with both maybe being the same type or a new type).
-     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
-     * <p>
-     * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
-     *
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
-     * <p>
-     * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
-     * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
-     * on the new key.
-     *
-     * @param selector      a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
-     * @param serialized    the {@link Serialized} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
-     * @param <KR>          the key type of the result {@link KGroupedTable}
-     * @param <VR>          the value type of the result {@link KGroupedTable}
-     * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
-     *
-     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KTable#groupBy(KeyValueMapper, Grouped)} instead
-     */
-    @Deprecated
-    <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
-                                           final Serialized<KR, VR> serialized);
 
     /**
      * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}
@@ -2138,7 +2112,10 @@ public interface KTable<K, V> {
                                     final ValueJoiner<V, VO, VR> joiner);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join,
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
@@ -2146,7 +2123,7 @@ public interface KTable<K, V> {
      * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
      *                            result is null, the update is ignored as invalid.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
      * @param <VR>                the value type of the result {@code KTable}
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
@@ -2155,7 +2132,7 @@ public interface KTable<K, V> {
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
                                     final Function<V, KO> foreignKeyExtractor,
                                     final ValueJoiner<V, VO, VR> joiner,
-                                    final Named named);
+                                    final TableJoined<K, KO> tableJoined);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
@@ -2179,7 +2156,10 @@ public interface KTable<K, V> {
                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join,
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
@@ -2187,7 +2167,7 @@ public interface KTable<K, V> {
      * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
      *                            result is null, the update is ignored as invalid.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
      * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                            should be materialized. Cannot be {@code null}
      * @param <VR>                the value type of the result {@code KTable}
@@ -2198,7 +2178,7 @@ public interface KTable<K, V> {
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
                                     final Function<V, KO> foreignKeyExtractor,
                                     final ValueJoiner<V, VO, VR> joiner,
-                                    final Named named,
+                                    final TableJoined<K, KO> tableJoined,
                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
@@ -2208,7 +2188,7 @@ public interface KTable<K, V> {
      *
      * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
      * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param <VR>                the value type of the result {@code KTable}
      * @param <KO>                the key type of the other {@code KTable}
@@ -2220,15 +2200,17 @@ public interface KTable<K, V> {
                                         final ValueJoiner<V, VO, VR> joiner);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join,
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
-     *                            result is null, the update is ignored as invalid.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
      * @param <VR>                the value type of the result {@code KTable}
      * @param <KO>                the key type of the other {@code KTable}
      * @param <VO>                the value type of the other {@code KTable}
@@ -2237,7 +2219,7 @@ public interface KTable<K, V> {
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
                                         final Function<V, KO> foreignKeyExtractor,
                                         final ValueJoiner<V, VO, VR> joiner,
-                                        final Named named);
+                                        final TableJoined<K, KO> tableJoined);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
@@ -2246,7 +2228,7 @@ public interface KTable<K, V> {
      *
      * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
      * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                            should be materialized. Cannot be {@code null}
@@ -2261,15 +2243,18 @@ public interface KTable<K, V> {
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join.
+     * Join records of this {@code KTable} with another {@code KTable} using non-windowed left join,
+     * using the {@link TableJoined} instance for optional configurations including
+     * {@link StreamPartitioner partitioners} when the tables being joined use non-default partitioning,
+     * and also the base name for components of the join.
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
      * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
-     *                            result is null, the update is ignored as invalid.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named               a {@link Named} config used to name the processor in the topology
+     * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
      * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                            should be materialized. Cannot be {@code null}
      * @param <VR>                the value type of the result {@code KTable}
@@ -2280,7 +2265,7 @@ public interface KTable<K, V> {
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
                                         final Function<V, KO> foreignKeyExtractor,
                                         final ValueJoiner<V, VO, VR> joiner,
-                                        final Named named,
+                                        final TableJoined<K, KO> tableJoined,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**

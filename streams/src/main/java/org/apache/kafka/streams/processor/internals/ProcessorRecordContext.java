@@ -21,13 +21,16 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
 
-public class ProcessorRecordContext implements RecordContext {
+public class ProcessorRecordContext implements RecordContext, RecordMetadata {
 
     private final long timestamp;
     private final long offset;
@@ -40,12 +43,11 @@ public class ProcessorRecordContext implements RecordContext {
                                   final int partition,
                                   final String topic,
                                   final Headers headers) {
-
         this.timestamp = timestamp;
         this.offset = offset;
         this.topic = topic;
         this.partition = partition;
-        this.headers = headers;
+        this.headers = Objects.requireNonNull(headers);
     }
 
     @Override
@@ -81,13 +83,11 @@ public class ProcessorRecordContext implements RecordContext {
             size += topic.toCharArray().length;
         }
         size += Integer.BYTES; // partition
-        if (headers != null) {
-            for (final Header header : headers) {
-                size += header.key().toCharArray().length;
-                final byte[] value = header.value();
-                if (value != null) {
-                    size += value.length;
-                }
+        for (final Header header : headers) {
+            size += header.key().toCharArray().length;
+            final byte[] value = header.value();
+            if (value != null) {
+                size += value.length;
             }
         }
         return size;
@@ -98,7 +98,6 @@ public class ProcessorRecordContext implements RecordContext {
         final byte[][] headerKeysBytes;
         final byte[][] headerValuesBytes;
 
-
         int size = 0;
         size += Long.BYTES; // value.context.timestamp
         size += Long.BYTES; // value.context.offset
@@ -107,26 +106,22 @@ public class ProcessorRecordContext implements RecordContext {
         size += Integer.BYTES; // partition
         size += Integer.BYTES; // number of headers
 
-        if (headers == null) {
-            headerKeysBytes = headerValuesBytes = null;
-        } else {
-            final Header[] headers = this.headers.toArray();
-            headerKeysBytes = new byte[headers.length][];
-            headerValuesBytes = new byte[headers.length][];
+        final Header[] headers = this.headers.toArray();
+        headerKeysBytes = new byte[headers.length][];
+        headerValuesBytes = new byte[headers.length][];
 
-            for (int i = 0; i < headers.length; i++) {
-                size += 2 * Integer.BYTES; // sizes of key and value
+        for (int i = 0; i < headers.length; i++) {
+            size += 2 * Integer.BYTES; // sizes of key and value
 
-                final byte[] keyBytes = headers[i].key().getBytes(UTF_8);
-                size += keyBytes.length;
-                final byte[] valueBytes = headers[i].value();
-                if (valueBytes != null) {
-                    size += valueBytes.length;
-                }
-
-                headerKeysBytes[i] = keyBytes;
-                headerValuesBytes[i] = valueBytes;
+            final byte[] keyBytes = headers[i].key().getBytes(UTF_8);
+            size += keyBytes.length;
+            final byte[] valueBytes = headers[i].value();
+            if (valueBytes != null) {
+                size += valueBytes.length;
             }
+
+            headerKeysBytes[i] = keyBytes;
+            headerValuesBytes[i] = valueBytes;
         }
 
         final ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -138,20 +133,16 @@ public class ProcessorRecordContext implements RecordContext {
         buffer.put(topicBytes);
 
         buffer.putInt(partition);
-        if (headers == null) {
-            buffer.putInt(-1);
-        } else {
-            buffer.putInt(headerKeysBytes.length);
-            for (int i = 0; i < headerKeysBytes.length; i++) {
-                buffer.putInt(headerKeysBytes[i].length);
-                buffer.put(headerKeysBytes[i]);
+        buffer.putInt(headerKeysBytes.length);
+        for (int i = 0; i < headerKeysBytes.length; i++) {
+            buffer.putInt(headerKeysBytes[i].length);
+            buffer.put(headerKeysBytes[i]);
 
-                if (headerValuesBytes[i] != null) {
-                    buffer.putInt(headerValuesBytes[i].length);
-                    buffer.put(headerValuesBytes[i]);
-                } else {
-                    buffer.putInt(-1);
-                }
+            if (headerValuesBytes[i] != null) {
+                buffer.putInt(headerValuesBytes[i].length);
+                buffer.put(headerValuesBytes[i]);
+            } else {
+                buffer.putInt(-1);
             }
         }
 
@@ -161,35 +152,22 @@ public class ProcessorRecordContext implements RecordContext {
     public static ProcessorRecordContext deserialize(final ByteBuffer buffer) {
         final long timestamp = buffer.getLong();
         final long offset = buffer.getLong();
-        final int topicSize = buffer.getInt();
         final String topic;
         {
-            // not handling the null topic condition, because we believe the topic will never be null when we serialize
-            final byte[] topicBytes = new byte[topicSize];
-            buffer.get(topicBytes);
+            // we believe the topic will never be null when we serialize
+            final byte[] topicBytes = requireNonNull(getNullableSizePrefixedArray(buffer));
             topic = new String(topicBytes, UTF_8);
         }
         final int partition = buffer.getInt();
         final int headerCount = buffer.getInt();
         final Headers headers;
-        if (headerCount == -1) {
-            headers = null;
+        if (headerCount == -1) { // keep for backward compatibility
+            headers = new RecordHeaders();
         } else {
             final Header[] headerArr = new Header[headerCount];
             for (int i = 0; i < headerCount; i++) {
-                final int keySize = buffer.getInt();
-                final byte[] keyBytes = new byte[keySize];
-                buffer.get(keyBytes);
-
-                final int valueSize = buffer.getInt();
-                final byte[] valueBytes;
-                if (valueSize == -1) {
-                    valueBytes = null;
-                } else {
-                    valueBytes = new byte[valueSize];
-                    buffer.get(valueBytes);
-                }
-
+                final byte[] keyBytes = requireNonNull(getNullableSizePrefixedArray(buffer));
+                final byte[] valueBytes = getNullableSizePrefixedArray(buffer);
                 headerArr[i] = new RecordHeader(new String(keyBytes, UTF_8), valueBytes);
             }
             headers = new RecordHeaders(headerArr);
@@ -215,12 +193,14 @@ public class ProcessorRecordContext implements RecordContext {
     }
 
     /**
-     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable.
+     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable
+     * due to the {@link Headers} field it contains.
      */
     @Deprecated
     @Override
     public int hashCode() {
-        throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections");
+        throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections "
+                                                    + "due to the mutable Headers field");
     }
 
     @Override

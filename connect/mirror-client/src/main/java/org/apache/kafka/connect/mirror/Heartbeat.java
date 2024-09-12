@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import java.util.Map;
-import java.util.HashMap;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
-/** Heartbeat message sent from MirrorHeartbeatTask to target cluster. Heartbeats are always replicated. */
+/**
+ * Heartbeat records emitted by MirrorHeartbeatConnector.
+ */
 public class Heartbeat {
     public static final String SOURCE_CLUSTER_ALIAS_KEY = "sourceClusterAlias";
     public static final String TARGET_CLUSTER_ALIAS_KEY = "targetClusterAlias";
@@ -44,9 +46,9 @@ public class Heartbeat {
     public static final Schema HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY, Type.INT16));
 
-    private String sourceClusterAlias;
-    private String targetClusterAlias;
-    private long timestamp;
+    private final String sourceClusterAlias;
+    private final String targetClusterAlias;
+    private final long timestamp;
 
     public Heartbeat(String sourceClusterAlias, String targetClusterAlias, long timestamp) {
         this.sourceClusterAlias = sourceClusterAlias;
@@ -141,5 +143,4 @@ public class Heartbeat {
         assert version == 0;
         return VALUE_SCHEMA_V0;
     }
-};
-
+}

@@ -19,10 +19,13 @@ package kafka.api
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
-import org.junit.{Before, Test}
-import org.junit.Assert._
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.clients.admin.AdminClientConfig
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.apache.kafka.common.errors.TopicAuthorizationException
-import org.scalatest.Assertions.intercept
 
 // This test case uses a separate listener for client and inter-broker communication, from
 // which we derive corresponding principals
@@ -31,7 +34,7 @@ object PlaintextEndToEndAuthorizationTest {
   private var clientListenerName = None: Option[String]
   @volatile
   private var serverListenerName = None: Option[String]
-  class TestClientPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestClientPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       clientListenerName = Some(context.listenerName)
       context match {
@@ -43,7 +46,7 @@ object PlaintextEndToEndAuthorizationTest {
     }
   }
 
-  class TestServerPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestServerPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       serverListenerName = Some(context.listenerName)
       context match {
@@ -67,20 +70,30 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     classOf[TestClientPrincipalBuilder].getName)
   this.serverConfig.setProperty("listener.name.server." + BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
     classOf[TestServerPrincipalBuilder].getName)
-  override val clientPrincipal = "client"
-  override val kafkaPrincipal = "server"
+  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
 
-  @Before
-  override def setUp(): Unit = {
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(List.empty, None, ZkSasl))
-    super.setUp()
+    super.setUp(testInfo)
   }
 
-  @Test
-  def testListenerName(): Unit = {
+  /*
+   * The principal used for all authenticated connections to listenerName is always clientPrincipal.
+   * The super user runs as kafkaPrincipal so we set the superuser admin client to connect directly to
+   * the interBrokerListenerName for superuser operations.
+   */ 
+  override def doSuperuserSetup(testInfo: TestInfo): Unit = {
+    superuserClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(interBrokerListenerName))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testListenerName(quorum: String): Unit = {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
     val producer = createProducer()
-    intercept[TopicAuthorizationException](sendRecords(producer, numRecords = 1, tp))
+    assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords = 1, tp))
 
     assertEquals(Some("CLIENT"), PlaintextEndToEndAuthorizationTest.clientListenerName)
     assertEquals(Some("SERVER"), PlaintextEndToEndAuthorizationTest.serverListenerName)

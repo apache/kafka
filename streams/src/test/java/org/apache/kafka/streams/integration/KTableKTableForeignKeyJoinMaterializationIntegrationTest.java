@@ -29,15 +29,17 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
-import java.util.Arrays;
-import java.util.Collection;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -50,39 +52,26 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-
-@RunWith(Parameterized.class)
+@Tag("integration")
+@Timeout(600)
 public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
-
     private static final String LEFT_TABLE = "left_table";
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
-    private final Properties streamsConfig;
-    private final boolean materialized;
-    private final boolean queriable;
 
-    public KTableKTableForeignKeyJoinMaterializationIntegrationTest(final boolean materialized, final boolean queriable) {
-        this.materialized = materialized;
-        this.queriable = queriable;
+    private Properties streamsConfig;
+
+    @BeforeEach
+    public void before() {
         streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
     }
 
-    @Parameterized.Parameters(name = "materialized={0}, queriable={1}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(
-            new Object[] {false, false},
-            new Object[] {true, false},
-            new Object[] {true, true}
-        );
-    }
-
-    @Test
-    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords() {
-        final Topology topology = getTopology(streamsConfig, "store");
+    @ParameterizedTest
+    @CsvSource({"false, false", "true, false", "true, true"})
+    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords(final boolean materialized, final boolean queryable) {
+        final Topology topology = getTopology(streamsConfig, "store", materialized, queryable);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -94,7 +83,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
                 outputTopic.readKeyValuesToMap(),
                 is(emptyMap())
             );
-            if (materialized && queriable) {
+            if (materialized && queryable) {
                 assertThat(
                     asMap(store),
                     is(emptyMap())
@@ -105,7 +94,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
             // it's not possible to know whether a result was previously emitted.
             left.pipeInput("lhs1", (String) null);
             {
-                if (materialized && queriable) {
+                if (materialized && queryable) {
                     // in only this specific case, the record cache will actually be activated and
                     // suppress the unnecessary tombstone. This is because the cache is able to determine
                     // for sure that there has never been a previous result. (Because the "old" and "new" values
@@ -134,7 +123,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
                     outputTopic.readKeyValuesToMap(),
                     is(emptyMap())
                 );
-                if (materialized && queriable) {
+                if (materialized && queryable) {
                     assertThat(
                         asMap(store),
                         is(emptyMap())
@@ -151,7 +140,9 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     }
 
     private Topology getTopology(final Properties streamsConfig,
-                                 final String queryableStoreName) {
+                                 final String queryableStoreName,
+                                 final boolean materialized,
+                                 final boolean queryable) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<String, String> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));
@@ -160,20 +151,20 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
         final Function<String, String> extractor = value -> value.split("\\|")[1];
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "(" + value1 + "," + value2 + ")";
 
-        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized;
-        if (queriable) {
-            materialized = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).withValueSerde(Serdes.String());
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materializedStore;
+        if (queryable) {
+            materializedStore = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).withValueSerde(Serdes.String());
         } else {
-            materialized = Materialized.with(null, Serdes.String());
+            materializedStore = Materialized.with(null, Serdes.String());
         }
 
         final KTable<String, String> joinResult;
-        if (this.materialized) {
+        if (materialized) {
             joinResult = left.join(
                 right,
                 extractor,
                 joiner,
-                materialized
+                materializedStore
             );
         } else {
             joinResult = left.join(
@@ -185,7 +176,7 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
 
         joinResult
             .toStream()
-            .to(OUTPUT);
+            .to(OUTPUT, Produced.with(null, Serdes.String()));
 
         return builder.build(streamsConfig);
     }

@@ -18,14 +18,15 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.TaskMetadata;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,7 +37,6 @@ import java.util.Set;
 public class StreamsUpgradeToCooperativeRebalanceTest {
 
 
-    @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
             System.err.println("StreamsUpgradeToCooperativeRebalanceTest requires one argument (properties-file) but no args provided");
@@ -52,7 +52,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "cooperative-rebalance-upgrade");
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         config.putAll(streamsProperties);
 
         final String sourceTopic = streamsProperties.getProperty("source.topic", "source");
@@ -82,7 +82,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
         streams.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING && oldState == State.REBALANCING) {
                 System.out.println(String.format("%sSTREAMS in a RUNNING State", upgradePhase));
-                final Set<ThreadMetadata> allThreadMetadata = streams.localThreadsMetadata();
+                final Set<ThreadMetadata> allThreadMetadata = streams.metadataForLocalThreads();
                 final StringBuilder taskReportBuilder = new StringBuilder();
                 final List<String> activeTasks = new ArrayList<>();
                 final List<String> standbyTasks = new ArrayList<>();
@@ -108,11 +108,11 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
 
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             streams.close();
-            System.out.println(String.format("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED", upgradePhase));
+            System.out.printf("%sCOOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED%n", upgradePhase);
             System.out.flush();
-        }));
+        });
     }
 
     private static void addTasksToBuilder(final List<String> tasks, final StringBuilder builder) {

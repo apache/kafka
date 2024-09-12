@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
@@ -31,6 +24,14 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.CollectionUtils;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * <p>The sticky assignor serves two purposes. First, it guarantees an assignment that is as balanced as possible, meaning either:
@@ -174,6 +175,7 @@ import org.apache.kafka.common.utils.CollectionUtils;
  * {@link ConsumerPartitionAssignor.RebalanceProtocol} for a detailed explanation of cooperative rebalancing.
  */
 public class StickyAssignor extends AbstractStickyAssignor {
+    public static final String STICKY_ASSIGNOR_NAME = "sticky";
 
     // these schemas are used for preserving consumer's previously assigned partitions
     // list and sending it as user data to the leader during a rebalance
@@ -196,7 +198,7 @@ public class StickyAssignor extends AbstractStickyAssignor {
 
     @Override
     public String name() {
-        return "sticky";
+        return STICKY_ASSIGNOR_NAME;
     }
 
     @Override
@@ -215,9 +217,11 @@ public class StickyAssignor extends AbstractStickyAssignor {
 
     @Override
     protected MemberData memberData(Subscription subscription) {
+        // Always deserialize ownedPartitions and generation id from user data
+        // since StickyAssignor is an eager rebalance protocol that will revoke all existing partitions before joining group
         ByteBuffer userData = subscription.userData();
         if (userData == null || !userData.hasRemaining()) {
-            return new MemberData(Collections.emptyList(), Optional.empty());
+            return new MemberData(Collections.emptyList(), Optional.empty(), subscription.rackId());
         }
         return deserializeTopicPartitionAssignment(userData);
     }
@@ -233,8 +237,7 @@ public class StickyAssignor extends AbstractStickyAssignor {
             topicAssignments.add(topicAssignment);
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        if (memberData.generation.isPresent())
-            struct.set(GENERATION_KEY_NAME, memberData.generation.get());
+        memberData.generation.ifPresent(integer -> struct.set(GENERATION_KEY_NAME, integer));
         ByteBuffer buffer = ByteBuffer.allocate(STICKY_ASSIGNOR_USER_DATA_V1.sizeOf(struct));
         STICKY_ASSIGNOR_USER_DATA_V1.write(buffer, struct);
         buffer.flip();

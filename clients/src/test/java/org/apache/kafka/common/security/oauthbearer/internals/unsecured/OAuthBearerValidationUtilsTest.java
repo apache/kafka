@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
-import static org.junit.Assert.assertTrue;
+import org.apache.kafka.common.utils.Time;
+
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -24,8 +26,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.kafka.common.utils.Time;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OAuthBearerValidationUtilsTest {
     private static final String QUOTE = "\"";
@@ -44,7 +45,7 @@ public class OAuthBearerValidationUtilsTest {
                 appendCommaJsonText(sb, "sub", "principalName");
                 if (useErrorValue)
                     appendCommaJsonText(sb, claimName, 1);
-                else if (exists != null && exists.booleanValue())
+                else if (exists)
                     appendCommaJsonText(sb, claimName, claimName);
                 sb.append("}");
                 String compactSerialization = HEADER_COMPACT_SERIALIZATION + Base64.getUrlEncoder().withoutPadding()
@@ -52,7 +53,7 @@ public class OAuthBearerValidationUtilsTest {
                 OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub", "scope");
                 OAuthBearerValidationResult result = OAuthBearerValidationUtils
                         .validateClaimForExistenceAndType(testJwt, required, claimName, String.class);
-                if (useErrorValue || required && !exists.booleanValue())
+                if (useErrorValue || required && !exists)
                     assertTrue(isFailureWithMessageAndNoFailureScope(result));
                 else
                     assertTrue(isSuccess(result));
@@ -81,16 +82,15 @@ public class OAuthBearerValidationUtilsTest {
                         OAuthBearerValidationResult result = OAuthBearerValidationUtils.validateIssuedAt(testJwt,
                                 required, whenCheckMs, allowableClockSkewMs);
                         if (required && !exists)
-                            assertTrue("useErrorValue || required && !exists",
-                                    isFailureWithMessageAndNoFailureScope(result));
+                            assertTrue(isFailureWithMessageAndNoFailureScope(result), "useErrorValue || required && !exists");
                         else if (!required && !exists)
-                            assertTrue("!required && !exists", isSuccess(result));
+                            assertTrue(isSuccess(result), "!required && !exists");
                         else if (nowClaimValue * 1000 > whenCheckMs + allowableClockSkewMs) // issued in future
-                            assertTrue(assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs),
-                                    isFailureWithMessageAndNoFailureScope(result));
+                            assertTrue(isFailureWithMessageAndNoFailureScope(result),
+                                assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs));
                         else
-                            assertTrue(assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs),
-                                    isSuccess(result));
+                            assertTrue(isSuccess(result),
+                                assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs));
                     }
                 }
             }
@@ -115,11 +115,10 @@ public class OAuthBearerValidationUtilsTest {
                 OAuthBearerValidationResult result = OAuthBearerValidationUtils.validateExpirationTime(testJwt,
                         whenCheckMs, allowableClockSkewMs);
                 if (whenCheckMs - allowableClockSkewMs >= nowClaimValue * 1000) // expired
-                    assertTrue(assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs),
-                            isFailureWithMessageAndNoFailureScope(result));
+                    assertTrue(isFailureWithMessageAndNoFailureScope(result),
+                        assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs));
                 else
-                    assertTrue(assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs),
-                            isSuccess(result));
+                    assertTrue(isSuccess(result), assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs));
             }
         }
     }
@@ -163,14 +162,14 @@ public class OAuthBearerValidationUtilsTest {
         long nowMs = TIME.milliseconds();
         double nowClaimValue = ((double) nowMs) / 1000;
         final List<String> noScope = Collections.emptyList();
-        final List<String> scope1 = Arrays.asList("scope1");
+        final List<String> scope1 = Collections.singletonList("scope1");
         final List<String> scope1And2 = Arrays.asList("scope1", "scope2");
         for (boolean actualScopeExists : new boolean[] {true, false}) {
-            List<? extends List> scopes = !actualScopeExists ? Arrays.asList((List) null)
+            List<? extends List> scopes = !actualScopeExists ? Collections.singletonList((List) null)
                     : Arrays.asList(noScope, scope1, scope1And2);
             for (List<String> actualScope : scopes) {
                 for (boolean requiredScopeExists : new boolean[] {true, false}) {
-                    List<? extends List> requiredScopes = !requiredScopeExists ? Arrays.asList((List) null)
+                    List<? extends List> requiredScopes = !requiredScopeExists ? Collections.singletonList((List) null)
                             : Arrays.asList(noScope, scope1, scope1And2);
                     for (List<String> requiredScope : requiredScopes) {
                         StringBuilder sb = new StringBuilder("{");

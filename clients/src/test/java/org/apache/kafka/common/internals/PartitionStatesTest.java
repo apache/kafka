@@ -17,13 +17,14 @@
 package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PartitionStatesTest {
 
@@ -174,7 +175,7 @@ public class PartitionStatesTest {
         LinkedHashMap<TopicPartition, String> map = createMap();
         states.set(map);
         states.clear();
-        checkState(states, new LinkedHashMap<TopicPartition, String>());
+        checkState(states, new LinkedHashMap<>());
     }
 
     @Test

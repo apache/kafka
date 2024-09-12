@@ -17,17 +17,18 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConfigTransformerTest {
 
@@ -42,13 +43,13 @@ public class ConfigTransformerTest {
 
     private ConfigTransformer configTransformer;
 
-    @Before
+    @BeforeEach
     public void setup() {
         configTransformer = new ConfigTransformer(Collections.singletonMap("test", new TestConfigProvider()));
     }
 
     @Test
-    public void testReplaceVariable() throws Exception {
+    public void testReplaceVariable() {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testKey}"));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();
@@ -57,7 +58,7 @@ public class ConfigTransformerTest {
     }
 
     @Test
-    public void testReplaceVariableWithTTL() throws Exception {
+    public void testReplaceVariableWithTTL() {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();
@@ -66,28 +67,28 @@ public class ConfigTransformerTest {
     }
 
     @Test
-    public void testReplaceMultipleVariablesInValue() throws Exception {
+    public void testReplaceMultipleVariablesInValue() {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "hello, ${test:testPath:testKey}; goodbye, ${test:testPath:testKeyWithTTL}!!!"));
         Map<String, String> data = result.data();
         assertEquals("hello, testResult; goodbye, testResultWithTTL!!!", data.get(MY_KEY));
     }
 
     @Test
-    public void testNoReplacement() throws Exception {
+    public void testNoReplacement() {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:missingKey}"));
         Map<String, String> data = result.data();
         assertEquals("${test:testPath:missingKey}", data.get(MY_KEY));
     }
 
     @Test
-    public void testSingleLevelOfIndirection() throws Exception {
+    public void testSingleLevelOfIndirection() {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testIndirection}"));
         Map<String, String> data = result.data();
         assertEquals("${test:testPath:testResult}", data.get(MY_KEY));
     }
 
     @Test
-    public void testReplaceVariableNoPath() throws Exception {
+    public void testReplaceVariableNoPath() {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testKey}"));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();
@@ -96,14 +97,14 @@ public class ConfigTransformerTest {
     }
 
     @Test
-    public void testReplaceMultipleVariablesWithoutPathInValue() throws Exception {
+    public void testReplaceMultipleVariablesWithoutPathInValue() {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "first ${test:testKey}; second ${test:testKey}"));
         Map<String, String> data = result.data();
         assertEquals("first testResultNoPath; second testResultNoPath", data.get(MY_KEY));
     }
 
     @Test
-    public void testNullConfigValue() throws Exception {
+    public void testNullConfigValue() {
         ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, null));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();

@@ -16,8 +16,13 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.junit.runner.RunWith;
-import org.junit.runners.Suite;
+
+import org.apache.kafka.streams.integration.StandbyTaskCreationIntegrationTest;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignorTest;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetricsTest;
+
+import org.junit.platform.suite.api.SelectClasses;
+import org.junit.platform.suite.api.Suite;
 
 /**
  * This suite runs all the tests related to task management. It's intended to simplify feature testing from IDEs.
@@ -25,14 +30,16 @@ import org.junit.runners.Suite;
  * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
  * these tests are already included in the `:streams:test` task.
  */
-@RunWith(Suite.class)
-@Suite.SuiteClasses({
-    AbstractTaskTest.class,
-    StreamTaskTest.class,
-    StandbyTaskTest.class,
-    AssignedStreamsTasksTest.class,
+@Suite
+@SelectClasses({
+        StreamTaskTest.class,
+        StandbyTaskTest.class,
+        GlobalStateTaskTest.class,
+        TaskManagerTest.class,
+        TaskMetricsTest.class,
+        LegacyStickyTaskAssignorTest.class,
+        StreamsPartitionAssignorTest.class,
+        StandbyTaskCreationIntegrationTest.class,
 })
 public class TaskSuite {
 }
-
-

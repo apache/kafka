@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.KafkaException;
+
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -23,8 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
 import javax.management.ObjectName;
-
-import org.apache.kafka.common.KafkaException;
 
 /**
  * Utility class for sanitizing/desanitizing/quoting values used in JMX metric names
@@ -50,9 +50,8 @@ public class Sanitizer {
      * using URL-encoding.
      */
     public static String sanitize(String name) {
-        String encoded = "";
         try {
-            encoded = URLEncoder.encode(name, StandardCharsets.UTF_8.name());
+            String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8.name());
             StringBuilder builder = new StringBuilder();
             for (int i = 0; i < encoded.length(); i++) {
                 char c = encoded.charAt(i);

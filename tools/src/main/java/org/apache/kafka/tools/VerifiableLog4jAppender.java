@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Exit;
+
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Exit;
+
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
@@ -236,15 +238,13 @@ public class VerifiableLog4jAppender {
         PropertyConfigurator.configure(props);
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
 
         final VerifiableLog4jAppender appender = createFromArgs(args);
         boolean infinite = appender.maxMessages < 0;
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            // Trigger main thread to stop producing messages
-            appender.stopLogging = true;
-        }));
+        // Trigger main thread to stop producing messages when shutting down
+        Exit.addShutdownHook("verifiable-log4j-appender-shutdown-hook", () -> appender.stopLogging = true);
 
         long maxMessages = infinite ? Long.MAX_VALUE : appender.maxMessages;
         for (long i = 0; i < maxMessages; i++) {

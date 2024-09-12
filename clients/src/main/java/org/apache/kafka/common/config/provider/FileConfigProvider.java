@@ -18,11 +18,16 @@ package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.internals.AllowedPaths;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,7 +40,15 @@ import java.util.Set;
  */
 public class FileConfigProvider implements ConfigProvider {
 
+    private static final Logger log = LoggerFactory.getLogger(FileConfigProvider.class);
+
+    public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
+    public static final String ALLOWED_PATHS_DOC = "A comma separated list of paths that this config provider is " +
+            "allowed to access. If not set, all paths are allowed.";
+    private volatile AllowedPaths allowedPaths;
+
     public void configure(Map<String, ?> configs) {
+        allowedPaths = new AllowedPaths((String) configs.getOrDefault(ALLOWED_PATHS_CONFIG, null));
     }
 
     /**
@@ -45,11 +58,22 @@ public class FileConfigProvider implements ConfigProvider {
      * @return the configuration data
      */
     public ConfigData get(String path) {
+        if (allowedPaths == null) {
+            throw new IllegalStateException("The provider has not been configured yet.");
+        }
+
         Map<String, String> data = new HashMap<>();
         if (path == null || path.isEmpty()) {
             return new ConfigData(data);
         }
-        try (Reader reader = reader(path)) {
+
+        Path filePath = allowedPaths.parseUntrustedPath(path);
+        if (filePath == null) {
+            log.warn("The path {} is not allowed to be accessed", path);
+            return new ConfigData(data);
+        }
+
+        try (Reader reader = reader(filePath)) {
             Properties properties = new Properties();
             properties.load(reader);
             Enumeration<Object> keys = properties.keys();
@@ -62,6 +86,7 @@ public class FileConfigProvider implements ConfigProvider {
             }
             return new ConfigData(data);
         } catch (IOException e) {
+            log.error("Could not read properties from file {}", path, e);
             throw new ConfigException("Could not read properties from file " + path);
         }
     }
@@ -74,11 +99,22 @@ public class FileConfigProvider implements ConfigProvider {
      * @return the configuration data
      */
     public ConfigData get(String path, Set<String> keys) {
+        if (allowedPaths == null) {
+            throw new IllegalStateException("The provider has not been configured yet.");
+        }
+
         Map<String, String> data = new HashMap<>();
         if (path == null || path.isEmpty()) {
             return new ConfigData(data);
         }
-        try (Reader reader = reader(path)) {
+
+        Path filePath = allowedPaths.parseUntrustedPath(path);
+        if (filePath == null) {
+            log.warn("The path {} is not allowed to be accessed", path);
+            return new ConfigData(data);
+        }
+
+        try (Reader reader = reader(filePath)) {
             Properties properties = new Properties();
             properties.load(reader);
             for (String key : keys) {
@@ -89,13 +125,14 @@ public class FileConfigProvider implements ConfigProvider {
             }
             return new ConfigData(data);
         } catch (IOException e) {
+            log.error("Could not read properties from file {}", path, e);
             throw new ConfigException("Could not read properties from file " + path);
         }
     }
 
     // visible for testing
-    protected Reader reader(String path) throws IOException {
-        return Files.newBufferedReader(Paths.get(path));
+    protected Reader reader(Path path) throws IOException {
+        return Files.newBufferedReader(path, StandardCharsets.UTF_8);
     }
 
     public void close() {

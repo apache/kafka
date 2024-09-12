@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -18,42 +18,57 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CombinedKeySchemaTest {
 
     @Test
     public void nonNullPrimaryKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("someTopic", Serdes.String(), Serdes.Integer());
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
         final Integer primary = -999;
         final Bytes result = cks.toBytes("foreignKey", primary);
 
         final CombinedKey<String, Integer> deserializedKey = cks.fromBytes(result);
-        assertEquals("foreignKey", deserializedKey.getForeignKey());
-        assertEquals(primary, deserializedKey.getPrimaryKey());
+        assertEquals("foreignKey", deserializedKey.foreignKey());
+        assertEquals(primary, deserializedKey.primaryKey());
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void nullPrimaryKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("someTopic", Serdes.String(), Serdes.Integer());
-        cks.toBytes("foreignKey", null);
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
+        assertThrows(NullPointerException.class, () -> cks.toBytes("foreignKey", null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void nullForeignKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("someTopic", Serdes.String(), Serdes.Integer());
-        cks.toBytes(null, 10);
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
+        assertThrows(NullPointerException.class, () -> cks.toBytes(null, 10));
     }
 
     @Test
     public void prefixKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("someTopic", Serdes.String(), Serdes.Integer());
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
         final String foreignKey = "someForeignKey";
-        final byte[] foreignKeySerializedData = Serdes.String().serializer().serialize("someTopic", foreignKey);
+        final byte[] foreignKeySerializedData =
+            Serdes.String().serializer().serialize("fkTopic", foreignKey);
         final Bytes prefix = cks.prefixBytes(foreignKey);
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length);
@@ -64,10 +79,13 @@ public class CombinedKeySchemaTest {
         assertEquals(expectedPrefixBytes, prefix);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void nullPrefixKeySerdeTest() {
-        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("someTopic", Serdes.String(), Serdes.Integer());
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>(
+            () -> "fkTopic", Serdes.String(),
+            () -> "pkTopic", Serdes.Integer()
+        );
         final String foreignKey = null;
-        cks.prefixBytes(foreignKey);
+        assertThrows(NullPointerException.class, () -> cks.prefixBytes(foreignKey));
     }
 }

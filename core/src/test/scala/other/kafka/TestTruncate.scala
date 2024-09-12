@@ -17,7 +17,8 @@
 
 package kafka
 
-import java.io._
+import kafka.utils.TestUtils
+
 import java.nio._
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
@@ -26,7 +27,7 @@ import java.nio.file.StandardOpenOption
 object TestTruncate {
 
   def main(args: Array[String]): Unit = {
-    val name = File.createTempFile("kafka", ".test")
+    val name = TestUtils.tempFile("kafka", ".test")
     name.deleteOnExit()
     val file = FileChannel.open(name.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
     val buffer = ByteBuffer.allocate(12)

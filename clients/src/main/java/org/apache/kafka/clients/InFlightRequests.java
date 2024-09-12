@@ -44,11 +44,7 @@ final class InFlightRequests {
      */
     public void add(NetworkClient.InFlightRequest request) {
         String destination = request.destination;
-        Deque<NetworkClient.InFlightRequest> reqs = this.requests.get(destination);
-        if (reqs == null) {
-            reqs = new ArrayDeque<>();
-            this.requests.put(destination, reqs);
-        }
+        Deque<NetworkClient.InFlightRequest> reqs = this.requests.computeIfAbsent(destination, k -> new ArrayDeque<>());
         reqs.addFirst(request);
         inFlightRequestCount.incrementAndGet();
     }
@@ -152,14 +148,15 @@ final class InFlightRequests {
         } else {
             final Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
             inFlightRequestCount.getAndAdd(-clearedRequests.size());
-            return () -> clearedRequests.descendingIterator();
+            return clearedRequests::descendingIterator;
         }
     }
 
     private Boolean hasExpiredRequest(long now, Deque<NetworkClient.InFlightRequest> deque) {
         for (NetworkClient.InFlightRequest request : deque) {
-            long timeSinceSend = Math.max(0, now - request.sendTimeMs);
-            if (timeSinceSend > request.requestTimeoutMs)
+            // We exclude throttle time here because we want to ensure that we don't expire requests while
+            // they are throttled. The request timeout should take effect only after the throttle time has elapsed.
+            if (request.timeElapsedSinceSendMs(now) - request.throttleTimeMs() > request.requestTimeoutMs)
                 return true;
         }
         return false;
@@ -182,4 +179,8 @@ final class InFlightRequests {
         return nodeIds;
     }
 
+    void incrementThrottleTime(String nodeId, long throttleTimeMs) {
+        requests.getOrDefault(nodeId, new ArrayDeque<>()).
+                forEach(request -> request.incrementThrottleTime(throttleTimeMs));
+    }
 }

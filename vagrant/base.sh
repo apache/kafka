@@ -32,7 +32,7 @@ fetch_jdk_tgz() {
 
   if [ ! -e $path ]; then
     mkdir -p $(dirname $path)
-    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
+    curl --retry 5 -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
   fi
 }
 
@@ -79,8 +79,8 @@ get_kafka() {
     url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
-        curl -O $url
-        curl -O $url_streams_test || true
+        curl --retry 5 -O $url
+        curl --retry 5 -O $url_streams_test || true
         file_tgz=`basename $url`
         file_streams_jar=`basename $url_streams_test` || true
         tar -xzf $file_tgz
@@ -134,10 +134,38 @@ get_kafka 2.0.1 2.12
 chmod a+rw /opt/kafka-2.0.1
 get_kafka 2.1.1 2.12
 chmod a+rw /opt/kafka-2.1.1
-get_kafka 2.2.1 2.12
-chmod a+rw /opt/kafka-2.2.1
-get_kafka 2.3.0 2.12
-chmod a+rw /opt/kafka-2.3.0
+get_kafka 2.2.2 2.12
+chmod a+rw /opt/kafka-2.2.2
+get_kafka 2.3.1 2.12
+chmod a+rw /opt/kafka-2.3.1
+get_kafka 2.4.1 2.12
+chmod a+rw /opt/kafka-2.4.1
+get_kafka 2.5.1 2.12
+chmod a+rw /opt/kafka-2.5.1
+get_kafka 2.6.3 2.12
+chmod a+rw /opt/kafka-2.6.3
+get_kafka 2.7.2 2.12
+chmod a+rw /opt/kafka-2.7.2
+get_kafka 2.8.2 2.12
+chmod a+rw /opt/kafka-2.8.2
+get_kafka 3.0.2 2.12
+chmod a+rw /opt/kafka-3.0.2
+get_kafka 3.1.2 2.12
+chmod a+rw /opt/kafka-3.1.2
+get_kafka 3.2.3 2.12
+chmod a+rw /opt/kafka-3.2.3
+get_kafka 3.3.2 2.12
+chmod a+rw /opt/kafka-3.3.2
+get_kafka 3.4.1 2.12
+chmod a+rw /opt/kafka-3.4.1
+get_kafka 3.5.2 2.12
+chmod a+rw /opt/kafka-3.5.2
+get_kafka 3.6.2 2.12
+chmod a+rw /opt/kafka-3.6.2
+get_kafka 3.7.1 2.12
+chmod a+rw /opt/kafka-3.7.1
+get_kafka 3.8.0 2.12
+chmod a+rw /opt/kafka-3.8.0
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
 # VMs, we can just create it if it doesn't exist and use it like we'd use

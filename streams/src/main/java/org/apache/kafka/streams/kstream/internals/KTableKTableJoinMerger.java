@@ -16,37 +16,40 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
+import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
-    private final KTableProcessorSupplier<K, ?, V> parent1;
-    private final KTableProcessorSupplier<K, ?, V> parent2;
+public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, K, V> {
+
+    private final KTableProcessorSupplier<K, ?, K, V> parent1;
+    private final KTableProcessorSupplier<K, ?, K, V> parent2;
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    KTableKTableJoinMerger(final KTableProcessorSupplier<K, ?, V> parent1,
-                           final KTableProcessorSupplier<K, ?, V> parent2,
+    KTableKTableJoinMerger(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                           final KTableProcessorSupplier<K, ?, K, V> parent2,
                            final String queryableName) {
         this.parent1 = parent1;
         this.parent2 = parent2;
         this.queryableName = queryableName;
     }
 
-    public String getQueryableName() {
+    public String queryableName() {
         return queryableName;
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public Processor<K, Change<V>, K, Change<V>> get() {
         return new KTableKTableJoinMergeProcessor();
     }
 
@@ -70,42 +73,44 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
                     final Set<String> stores = new HashSet<>(storeNames1.length + storeNames2.length);
                     Collections.addAll(stores, storeNames1);
                     Collections.addAll(stores, storeNames2);
-                    return stores.toArray(new String[stores.size()]);
+                    return stores.toArray(new String[0]);
                 }
             };
         }
     }
 
     @Override
-    public void enableSendingOldValues() {
-        parent1.enableSendingOldValues();
-        parent2.enableSendingOldValues();
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
+        // Table-table joins require upstream materialization:
+        parent1.enableSendingOldValues(true);
+        parent2.enableSendingOldValues(true);
         sendOldValues = true;
+        return true;
     }
 
-    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,
-                                                         final KTableProcessorSupplier<K, ?, V> parent2) {
+    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                                                         final KTableProcessorSupplier<K, ?, K, V> parent2) {
         return of(parent1, parent2, null);
     }
 
-    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,
-                                                         final KTableProcessorSupplier<K, ?, V> parent2,
+    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                                                         final KTableProcessorSupplier<K, ?, K, V> parent2,
                                                          final String queryableName) {
         return new KTableKTableJoinMerger<>(parent1, parent2, queryableName);
     }
 
-    private class KTableKTableJoinMergeProcessor extends AbstractProcessor<K, Change<V>> {
-        private TimestampedKeyValueStore<K, V> store;
+    private class KTableKTableJoinMergeProcessor extends ContextualProcessor<K, Change<V>, K, Change<V>> {
+        private KeyValueStoreWrapper<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<K, Change<V>> context) {
             super.init(context);
             if (queryableName != null) {
-                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.store(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -113,15 +118,18 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         }
 
         @Override
-        public void process(final K key, final Change<V> value) {
+        public void process(final Record<K, Change<V>> record) {
             if (queryableName != null) {
-                store.put(key, ValueAndTimestamp.make(value.newValue, context().timestamp()));
-                tupleForwarder.maybeForward(key, value.newValue, sendOldValues ? value.oldValue : null);
+                final long putReturnCode = store.put(record.key(), record.value().newValue, record.timestamp());
+                // if not put to store, do not forward downstream either
+                if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
+                    tupleForwarder.maybeForward(record.withValue(new Change<>(record.value().newValue, record.value().oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
+                }
             } else {
                 if (sendOldValues) {
-                    context().forward(key, value);
+                    context().forward(record);
                 } else {
-                    context().forward(key, new Change<>(value.newValue, null));
+                    context().forward(record.withValue(new Change<>(record.value().newValue, null, record.value().isLatest)));
                 }
             }
         }

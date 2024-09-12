@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,27 +29,32 @@ import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
-public class TransformationChain<R extends ConnectRecord<R>> {
+/**
+ * Represents a chain of {@link Transformation}s to be applied to a {@link ConnectRecord} serially.
+ * @param <T> The type of record included in the {@link ProcessingContext} associated with each record
+ * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
+ */
+public class TransformationChain<T, R extends ConnectRecord<R>> implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TransformationChain.class);
 
-    private final List<Transformation<R>> transformations;
-    private final RetryWithToleranceOperator retryWithToleranceOperator;
+    private final List<TransformationStage<R>> transformationStages;
+    private final RetryWithToleranceOperator<T> retryWithToleranceOperator;
 
-    public TransformationChain(List<Transformation<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
-        this.transformations = transformations;
+    public TransformationChain(List<TransformationStage<R>> transformationStages, RetryWithToleranceOperator<T> retryWithToleranceOperator) {
+        this.transformationStages = transformationStages;
         this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
 
-    public R apply(R record) {
-        if (transformations.isEmpty()) return record;
+    public R apply(ProcessingContext<T> context, R record) {
+        if (transformationStages.isEmpty()) return record;
 
-        for (final Transformation<R> transformation : transformations) {
+        for (final TransformationStage<R> transformationStage : transformationStages) {
             final R current = record;
 
             log.trace("Applying transformation {} to {}",
-                transformation.getClass().getName(), record);
+                transformationStage.transformClass().getName(), record);
             // execute the operation
-            record = retryWithToleranceOperator.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.getClass());
+            record = retryWithToleranceOperator.execute(context, () -> transformationStage.apply(current), Stage.TRANSFORMATION, transformationStage.transformClass());
 
             if (record == null) break;
         }
@@ -55,9 +62,10 @@ public class TransformationChain<R extends ConnectRecord<R>> {
         return record;
     }
 
+    @Override
     public void close() {
-        for (Transformation<R> transformation : transformations) {
-            transformation.close();
+        for (TransformationStage<R> transformationStage : transformationStages) {
+            transformationStage.close();
         }
     }
 
@@ -65,19 +73,19 @@ public class TransformationChain<R extends ConnectRecord<R>> {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        TransformationChain that = (TransformationChain) o;
-        return Objects.equals(transformations, that.transformations);
+        TransformationChain<?, ?> that = (TransformationChain<?, ?>) o;
+        return Objects.equals(transformationStages, that.transformationStages);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(transformations);
+        return Objects.hash(transformationStages);
     }
 
     public String toString() {
         StringJoiner chain = new StringJoiner(", ", getClass().getName() + "{", "}");
-        for (Transformation<R> transformation : transformations) {
-            chain.add(transformation.getClass().getName());
+        for (TransformationStage<R> transformationStage : transformationStages) {
+            chain.add(transformationStage.transformClass().getName());
         }
         return chain.toString();
     }

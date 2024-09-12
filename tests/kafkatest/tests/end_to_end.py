@@ -16,14 +16,12 @@
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import validate_delivery
-
-import time
 
 class EndToEndTest(Test):
     """This class provides a shared template for tests which follow the common pattern of:
@@ -43,8 +41,8 @@ class EndToEndTest(Test):
         self.records_consumed = []
         self.last_consumed_offsets = {}
         
-    def create_zookeeper(self, num_nodes=1, **kwargs):
-        self.zk = ZookeeperService(self.test_context, num_nodes=num_nodes, **kwargs)
+    def create_zookeeper_if_necessary(self, num_nodes=1, **kwargs):
+        self.zk = ZookeeperService(self.test_context, num_nodes=num_nodes, **kwargs) if quorum.for_test(self.test_context) == quorum.zk else None
 
     def create_kafka(self, num_nodes=1, **kwargs):
         group_metadata_config = {
@@ -57,6 +55,10 @@ class EndToEndTest(Test):
             self.topic: self.topic_config,
             "__consumer_offsets": group_metadata_config
         }
+
+        if self.topic:
+            topics[self.topic] = self.topic_config
+
         self.kafka = KafkaService(self.test_context, num_nodes=num_nodes,
                                   zk=self.zk, topics=topics, **kwargs)
 
@@ -85,9 +87,15 @@ class EndToEndTest(Test):
         self.last_consumed_offsets[partition] = offset
         self.records_consumed.append(record_id)
 
-    def await_consumed_offsets(self, last_acked_offsets, timeout_sec):
+    def await_produced_records(self, min_records, timeout_sec=30):
+        wait_until(lambda: self.producer.num_acked > min_records,
+                   timeout_sec=timeout_sec,
+                   err_msg="Producer failed to produce messages for %ds." %\
+                   timeout_sec)
+
+    def await_consumed_offsets(self, last_acked_offsets, timeout_sec=30):
         def has_finished_consuming():
-            for partition, offset in last_acked_offsets.iteritems():
+            for partition, offset in last_acked_offsets.items():
                 if not partition in self.last_consumed_offsets:
                     return False
                 last_commit = self.consumer.last_commit(partition)
@@ -100,6 +108,10 @@ class EndToEndTest(Test):
                    err_msg="Consumer failed to consume up to offsets %s after waiting %ds." %\
                    (str(last_acked_offsets), timeout_sec))
 
+    def await_consumed_records(self, min_records, producer_timeout_sec=30,
+                               consumer_timeout_sec=30):
+        self.await_produced_records(min_records=min_records)
+        self.await_consumed_offsets(self.producer.last_acked_offsets)
 
     def _collect_all_logs(self):
         for s in self.test_context.services:
@@ -118,11 +130,7 @@ class EndToEndTest(Test):
     def run_validation(self, min_records=5000, producer_timeout_sec=30,
                        consumer_timeout_sec=30, enable_idempotence=False):
         try:
-            wait_until(lambda: self.producer.num_acked > min_records,
-                       timeout_sec=producer_timeout_sec,
-                       err_msg="Producer failed to produce messages for %ds." %\
-                       producer_timeout_sec)
-
+            self.await_produced_records(min_records, producer_timeout_sec)
             self.logger.info("Stopping producer after writing up to offsets %s" %\
                          str(self.producer.last_acked_offsets))
             self.producer.stop()

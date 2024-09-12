@@ -33,7 +33,7 @@ public class LazyDownConversionRecords implements BaseRecords {
     private final Records records;
     private final byte toMagic;
     private final long firstOffset;
-    private ConvertedRecords firstConvertedBatch;
+    private ConvertedRecords<?> firstConvertedBatch;
     private final int sizeInBytes;
     private final Time time;
 
@@ -55,19 +55,20 @@ public class LazyDownConversionRecords implements BaseRecords {
         this.firstOffset = firstOffset;
         this.time = Objects.requireNonNull(time);
 
-        // Kafka consumers expect at least one full batch of messages for every topic-partition. To guarantee this, we
-        // need to make sure that we are able to accommodate one full batch of down-converted messages. The way we achieve
-        // this is by having sizeInBytes method factor in the size of the first down-converted batch and return at least
-        // its size.
+        // To make progress, kafka consumers require at least one full record batch per partition, i.e. we need to
+        // ensure we can accommodate one full batch of down-converted messages. We achieve this by having `sizeInBytes`
+        // factor in the size of the first down-converted batch and we return at least that many bytes.
         java.util.Iterator<ConvertedRecords<?>> it = iterator(0);
         if (it.hasNext()) {
             firstConvertedBatch = it.next();
             sizeInBytes = Math.max(records.sizeInBytes(), firstConvertedBatch.records().sizeInBytes());
         } else {
-            // If there are no messages we got after down-conversion, make sure we are able to send at least an overflow
-            // message to the consumer. Typically, the consumer would need to increase the fetch size in such cases.
+            // If there are messages before down-conversion and no messages after down-conversion,
+            // make sure we are able to send at least an overflow message to the consumer so that it can throw
+            // a RecordTooLargeException. Typically, the consumer would need to increase the fetch size in such cases.
+            // If there are no messages before down-conversion, we return an empty record batch.
             firstConvertedBatch = null;
-            sizeInBytes = LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH;
+            sizeInBytes = records.batches().iterator().hasNext() ? LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH : 0;
         }
     }
 
@@ -77,8 +78,8 @@ public class LazyDownConversionRecords implements BaseRecords {
     }
 
     @Override
-    public LazyDownConversionRecordsSend toSend(String destination) {
-        return new LazyDownConversionRecordsSend(destination, this);
+    public LazyDownConversionRecordsSend toSend() {
+        return new LazyDownConversionRecordsSend(this);
     }
 
     public TopicPartition topicPartition() {
@@ -115,10 +116,10 @@ public class LazyDownConversionRecords implements BaseRecords {
                 ")";
     }
 
-    public java.util.Iterator<ConvertedRecords<?>> iterator(long maximumReadSize) {
+    public final java.util.Iterator<ConvertedRecords<?>> iterator(long maximumReadSize) {
         // We typically expect only one iterator instance to be created, so null out the first converted batch after
         // first use to make it available for GC.
-        ConvertedRecords firstBatch = firstConvertedBatch;
+        ConvertedRecords<?> firstBatch = firstConvertedBatch;
         firstConvertedBatch = null;
         return new Iterator(records, maximumReadSize, firstBatch);
     }
@@ -131,7 +132,7 @@ public class LazyDownConversionRecords implements BaseRecords {
     private class Iterator extends AbstractIterator<ConvertedRecords<?>> {
         private final AbstractIterator<? extends RecordBatch> batchIterator;
         private final long maximumReadSize;
-        private ConvertedRecords firstConvertedBatch;
+        private ConvertedRecords<?> firstConvertedBatch;
 
         /**
          * @param recordsToDownConvert Records that require down-conversion
@@ -153,10 +154,10 @@ public class LazyDownConversionRecords implements BaseRecords {
          * @return Down-converted records
          */
         @Override
-        protected ConvertedRecords makeNext() {
+        protected ConvertedRecords<?> makeNext() {
             // If we have cached the first down-converted batch, return that now
             if (firstConvertedBatch != null) {
-                ConvertedRecords convertedBatch = firstConvertedBatch;
+                ConvertedRecords<?> convertedBatch = firstConvertedBatch;
                 firstConvertedBatch = null;
                 return convertedBatch;
             }
@@ -175,7 +176,7 @@ public class LazyDownConversionRecords implements BaseRecords {
                     isFirstBatch = false;
                 }
 
-                ConvertedRecords convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
+                ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
                 // During conversion, it is possible that we drop certain batches because they do not have an equivalent
                 // representation in the message format we want to convert to. For example, V0 and V1 message formats
                 // have no notion of transaction markers which were introduced in V2 so they get dropped during conversion.

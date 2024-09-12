@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class ConcurrentTransactionsException extends ApiException {
+public class ConcurrentTransactionsException extends RetriableException {
     private static final long serialVersionUID = 1L;
 
     public ConcurrentTransactionsException(final String message) {

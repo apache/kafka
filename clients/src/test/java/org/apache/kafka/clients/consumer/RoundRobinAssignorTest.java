@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor.MemberInfo;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,19 +30,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.RangeAssignorTest.checkStaticAssignment;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RoundRobinAssignorTest {
 
-    private RoundRobinAssignor assignor = new RoundRobinAssignor();
-    private String topic = "topic";
-    private String consumerId = "consumer";
-
-    private String topic1 = "topic1";
-    private String topic2 = "topic2";
+    private final RoundRobinAssignor assignor = new RoundRobinAssignor();
+    private final String topic = "topic";
+    private final String consumerId = "consumer";
+    private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
 
     @Test
     public void testOneConsumerNoTopic() {
@@ -109,7 +109,7 @@ public class RoundRobinAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
-        assertEquals(Collections.<TopicPartition>emptyList(), assignment.get(consumer2));
+        assertEquals(Collections.emptyList(), assignment.get(consumer2));
     }
 
     @Test
@@ -334,5 +334,14 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, numberOfPartitions1);
         partitionsPerTopic.put(topic2, numberOfPartitions2);
         return partitionsPerTopic;
+    }
+
+    private static Map<String, List<TopicPartition>> checkStaticAssignment(AbstractPartitionAssignor assignor,
+                                                                           Map<String, Integer> partitionsPerTopic,
+                                                                           Map<String, Subscription> consumers) {
+        Map<String, List<TopicPartition>> assignmentByMemberId = assignor.assign(partitionsPerTopic, consumers);
+        return consumers.entrySet().stream()
+                .filter(e -> e.getValue().groupInstanceId().isPresent())
+                .collect(Collectors.toMap(e -> e.getValue().groupInstanceId().get(), e -> assignmentByMemberId.get(e.getKey())));
     }
 }

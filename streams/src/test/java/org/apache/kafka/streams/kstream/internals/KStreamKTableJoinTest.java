@@ -19,23 +19,29 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,13 +52,14 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
+import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KStreamKTableJoinTest {
-    private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
+    private static final KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
 
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";
@@ -60,13 +67,12 @@ public class KStreamKTableJoinTest {
     private TestInputTopic<Integer, String> inputTableTopic;
     private final int[] expectedKeys = {0, 1, 2, 3};
 
-    private MockProcessor<Integer, String> processor;
+    private MockApiProcessor<Integer, String, Void, Void> processor;
     private TopologyTestDriver driver;
     private StreamsBuilder builder;
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
-    private final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+    private final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
-    @Before
+    @BeforeEach
     public void setUp() {
         builder = new StreamsBuilder();
 
@@ -85,7 +91,7 @@ public class KStreamKTableJoinTest {
         processor = supplier.theCapturedProcessor();
     }
 
-    @After
+    @AfterEach
     public void cleanup() {
         driver.close();
     }
@@ -93,6 +99,15 @@ public class KStreamKTableJoinTest {
     private void pushToStream(final int messageCount, final String valuePrefix) {
         for (int i = 0; i < messageCount; i++) {
             inputStreamTopic.pipeInput(expectedKeys[i], valuePrefix + expectedKeys[i], i);
+        }
+    }
+
+    private void pushToTableNonRandom(final int messageCount, final String valuePrefix) {
+        for (int i = 0; i < messageCount; i++) {
+            inputTableTopic.pipeInput(
+                expectedKeys[i],
+                valuePrefix + expectedKeys[i],
+                0);
         }
     }
 
@@ -110,6 +125,205 @@ public class KStreamKTableJoinTest {
         for (int i = 0; i < 2; i++) {
             inputTableTopic.pipeInput(expectedKeys[i], null);
         }
+    }
+
+
+    private void makeJoin(final Duration grace) {
+        final KStream<Integer, String> stream;
+        final KTable<Integer, String> table;
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        builder = new StreamsBuilder();
+
+        final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
+        stream = builder.stream(streamTopic, consumed);
+        table = builder.table("tableTopic2", consumed, Materialized.as(
+            Stores.persistentVersionedKeyValueStore("V-grace", Duration.ofMinutes(5))));
+        stream.join(table,
+            MockValueJoiner.TOSTRING_JOINER,
+            Joined.with(Serdes.Integer(), Serdes.String(), Serdes.String(), "Grace", grace)
+        ).process(supplier);
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+        driver = new TopologyTestDriver(builder.build(), props);
+        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+        inputTableTopic = driver.createInputTopic("tableTopic2", new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
+        processor = supplier.theCapturedProcessor();
+    }
+
+    @Test
+    public void shouldFailIfTableIsNotVersioned() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
+
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+            () -> streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one"));
+        assertThat(
+            exception.getMessage(),
+            is("KTable must be versioned to use a grace period in a stream table join.")
+        );
+    }
+
+    @Test
+    public void shouldFailIfTableIsNotVersionedButMaterializationIsInherited() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.inMemoryKeyValueStore("tableB")));
+        final KTable<String, String> tableB = source.filter((k, v) -> true);
+        // the filter operation forces the table materialization to be inherited
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
+
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, builder::build);
+        assertThat(
+            exception.getMessage(),
+            is("KTable must be versioned to use a grace period in a stream table join.")
+        );
+    }
+
+    @Test
+    public void shouldNotFailIfTableIsVersionedButMaterializationIsInherited() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
+        final KTable<String, String> tableB = source.filter((k, v) -> true);
+        // the filter operation forces the table materialization to be inherited
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
+
+        //should not throw an error
+        builder.build();
+    }
+
+    @Test
+    public void shouldFailIfGracePeriodIsLongerThanHistoryRetention() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.persistentVersionedKeyValueStore("tableB", Duration.ofMinutes(5))));
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMinutes(6))).to("out-one");
+
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> builder.build(props));
+        assertThat(exception.getMessage(), is("History retention must be at least grace period."));
+    }
+
+    @Test
+    public void shouldFailIfGracePeriodIsLongerThanHistoryRetentionAndInheritedStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> source = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()),
+            Materialized.as(Stores.persistentVersionedKeyValueStore("V-grace", Duration.ofMinutes(0))));
+        final KTable<String, String> tableB = source.filter((k, v) -> true);
+        // the filter operation forces the table materialization to be inherited
+
+        streamA.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join", Duration.ofMillis(6))).to("out-one");
+
+        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> builder.build(props));
+        assertThat(exception.getMessage(), is("History retention must be at least grace period."));
+    }
+
+
+    @Test
+    public void shouldDelayJoinByGracePeriod() {
+        makeJoin(Duration.ofMillis(2));
+
+        // push four items to the table. this should not produce any item.
+        pushToTableNonRandom(4, "Y");
+        processor.checkAndClearProcessResult(EMPTY);
+
+        // push all four items to the primary stream. this should produce two items.
+        pushToStream(4, "X");
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 0),
+            new KeyValueTimestamp<>(1, "X1+Y1", 1));
+
+        // push all items to the table. this should not produce any item
+        pushToTableNonRandom(4, "YY");
+        processor.checkAndClearProcessResult(EMPTY);
+
+        // push all four items to the primary stream. this should produce two items.
+        pushToStream(4, "X");
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+YY0", 0),
+            new KeyValueTimestamp<>(1, "X1+YY1", 1));
+
+        inputStreamTopic.pipeInput(5, "test", 7);
+
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(2, "X2+YY2", 2),
+            new KeyValueTimestamp<>(2, "X2+YY2", 2),
+            new KeyValueTimestamp<>(3, "X3+YY3", 3),
+            new KeyValueTimestamp<>(3, "X3+YY3", 3));
+
+
+        // push all items to the table. this should not produce any item
+        pushToTableNonRandom(4, "YYY");
+        processor.checkAndClearProcessResult(EMPTY);
+    }
+
+    @Test
+    public void shouldHandleLateJoinsWithGracePeriod() {
+        makeJoin(Duration.ofMillis(2));
+
+        // push four items to the table. this should not produce any item.
+        pushToTableNonRandom(4, "Y");
+        processor.checkAndClearProcessResult(EMPTY);
+
+        // push 4 records into the buffer and evict the first two
+        pushToStream(4, "X");
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 0),
+            new KeyValueTimestamp<>(1, "X1+Y1", 1));
+
+        //should be processed immediately and not evict any other records
+        pushToStream(1, "X");
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(0, "X0+Y0", 0));
+    }
+
+    @Test
+    public void shouldReuseRepartitionTopicWithGeneratedName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableC = builder.table("topic3", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> rekeyedStream = streamA.map((k, v) -> new KeyValue<>(v, k));
+        rekeyedStream.join(tableB, (value1, value2) -> value1 + value2).to("out-one");
+        rekeyedStream.join(tableC, (value1, value2) -> value1 + value2).to("out-two");
+        final Topology topology = builder.build(props);
+        assertEquals(expectedTopologyWithGeneratedRepartitionTopicNames, topology.describe().toString());
+    }
+
+    @Test
+    public void shouldCreateRepartitionTopicsWithUserProvidedName() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties props = new Properties();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        final KStream<String, String> streamA = builder.stream("topic", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableB = builder.table("topic2", Consumed.with(Serdes.String(), Serdes.String()));
+        final KTable<String, String> tableC = builder.table("topic3", Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> rekeyedStream = streamA.map((k, v) -> new KeyValue<>(v, k));
+
+        rekeyedStream.join(tableB, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "first-join")).to("out-one");
+        rekeyedStream.join(tableC, (value1, value2) -> value1 + value2, Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), "second-join")).to("out-two");
+        final Topology topology = builder.build(props);
+        System.out.println(topology.describe().toString());
+        assertEquals(expectedTopologyWithUserProvidedRepartitionTopicNames, topology.describe().toString());
     }
 
     @Test
@@ -195,65 +409,118 @@ public class KStreamKTableJoinTest {
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftKeyWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingNullLeftKey(StreamsConfig.METRICS_0100_TO_24);
+    public void shouldLogAndMeterWhenSkippingNullLeftKey() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+            inputTopic.pipeInput(null, "A");
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
+                    + "offset=[0]"));
+        }
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftKeyWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingNullLeftKey(StreamsConfig.METRICS_LATEST);
-    }
+    public void shouldLogAndMeterWhenSkippingNullLeftValue() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+            inputTopic.pipeInput(1, null);
 
-    private void shouldLogAndMeterWhenSkippingNullLeftKey(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        driver = new TopologyTestDriver(builder.build(), props);
-        final TestInputTopic<Integer, String> inputTopic =
-            driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-        inputTopic.pipeInput(null, "A");
-        LogCaptureAppender.unregister(appender);
-
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertEquals(
-                1.0,
-                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
+                    + "offset=[0]")
             );
         }
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] "
-                + "offset=[0]"));
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValueWithBuiltInMetricsVersionLatest() {
-        shouldLogAndMeterWhenSkippingNullLeftValue(StreamsConfig.METRICS_LATEST);
-    }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullLeftValueWithBuiltInMetricsVersion0100To24() {
-        shouldLogAndMeterWhenSkippingNullLeftValue(StreamsConfig.METRICS_0100_TO_24);
-    }
+    private final String expectedTopologyWithGeneratedRepartitionTopicNames =
+        "Topologies:\n"
+        + "   Sub-topology: 0\n"
+        + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
+        + "      --> KSTREAM-MAP-0000000007\n"
+        + "    Processor: KSTREAM-MAP-0000000007 (stores: [])\n"
+        + "      --> KSTREAM-FILTER-0000000009\n"
+        + "      <-- KSTREAM-SOURCE-0000000000\n"
+        + "    Processor: KSTREAM-FILTER-0000000009 (stores: [])\n"
+        + "      --> KSTREAM-SINK-0000000008\n"
+        + "      <-- KSTREAM-MAP-0000000007\n"
+        + "    Sink: KSTREAM-SINK-0000000008 (topic: KSTREAM-MAP-0000000007-repartition)\n"
+        + "      <-- KSTREAM-FILTER-0000000009\n"
+        + "\n"
+        + "  Sub-topology: 1\n"
+        + "    Source: KSTREAM-SOURCE-0000000010 (topics: [KSTREAM-MAP-0000000007-repartition])\n"
+        + "      --> KSTREAM-JOIN-0000000011, KSTREAM-JOIN-0000000016\n"
+        + "    Processor: KSTREAM-JOIN-0000000011 (stores: [topic2-STATE-STORE-0000000001])\n"
+        + "      --> KSTREAM-SINK-0000000012\n"
+        + "      <-- KSTREAM-SOURCE-0000000010\n"
+        + "    Processor: KSTREAM-JOIN-0000000016 (stores: [topic3-STATE-STORE-0000000004])\n"
+        + "      --> KSTREAM-SINK-0000000017\n"
+        + "      <-- KSTREAM-SOURCE-0000000010\n"
+        + "    Source: KSTREAM-SOURCE-0000000002 (topics: [topic2])\n"
+        + "      --> KTABLE-SOURCE-0000000003\n"
+        + "    Source: KSTREAM-SOURCE-0000000005 (topics: [topic3])\n"
+        + "      --> KTABLE-SOURCE-0000000006\n"
+        + "    Sink: KSTREAM-SINK-0000000012 (topic: out-one)\n"
+        + "      <-- KSTREAM-JOIN-0000000011\n"
+        + "    Sink: KSTREAM-SINK-0000000017 (topic: out-two)\n"
+        + "      <-- KSTREAM-JOIN-0000000016\n"
+        + "    Processor: KTABLE-SOURCE-0000000003 (stores: [topic2-STATE-STORE-0000000001])\n"
+        + "      --> none\n"
+        + "      <-- KSTREAM-SOURCE-0000000002\n"
+        + "    Processor: KTABLE-SOURCE-0000000006 (stores: [topic3-STATE-STORE-0000000004])\n"
+        + "      --> none\n"
+        + "      <-- KSTREAM-SOURCE-0000000005\n\n";
 
-    private void shouldLogAndMeterWhenSkippingNullLeftValue(final String builtInMetricsVersion) {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_0100_TO_24);
-        driver = new TopologyTestDriver(builder.build(), props);
-        final TestInputTopic<Integer, String> inputTopic =
-            driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
-        inputTopic.pipeInput(1, null);
-        LogCaptureAppender.unregister(appender);
 
-        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_0100_TO_24)) {
-            assertEquals(
-                1.0,
-                getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue()
-            );
-        }
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] "
-                + "offset=[0]")
-        );
-    }
+    private final String expectedTopologyWithUserProvidedRepartitionTopicNames =
+            "Topologies:\n"
+                    + "   Sub-topology: 0\n"
+                    + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
+                    + "      --> KSTREAM-MAP-0000000007\n"
+                    + "    Processor: KSTREAM-MAP-0000000007 (stores: [])\n"
+                    + "      --> first-join-repartition-filter, second-join-repartition-filter\n"
+                    + "      <-- KSTREAM-SOURCE-0000000000\n"
+                    + "    Processor: first-join-repartition-filter (stores: [])\n"
+                    + "      --> first-join-repartition-sink\n"
+                    + "      <-- KSTREAM-MAP-0000000007\n"
+                    + "    Processor: second-join-repartition-filter (stores: [])\n"
+                    + "      --> second-join-repartition-sink\n"
+                    + "      <-- KSTREAM-MAP-0000000007\n"
+                    + "    Sink: first-join-repartition-sink (topic: first-join-repartition)\n"
+                    + "      <-- first-join-repartition-filter\n"
+                    + "    Sink: second-join-repartition-sink (topic: second-join-repartition)\n"
+                    + "      <-- second-join-repartition-filter\n"
+                    + "\n"
+                    + "  Sub-topology: 1\n"
+                    + "    Source: first-join-repartition-source (topics: [first-join-repartition])\n"
+                    + "      --> first-join\n"
+                    + "    Source: KSTREAM-SOURCE-0000000002 (topics: [topic2])\n"
+                    + "      --> KTABLE-SOURCE-0000000003\n"
+                    + "    Processor: first-join (stores: [topic2-STATE-STORE-0000000001])\n"
+                    + "      --> KSTREAM-SINK-0000000012\n"
+                    + "      <-- first-join-repartition-source\n"
+                    + "    Sink: KSTREAM-SINK-0000000012 (topic: out-one)\n"
+                    + "      <-- first-join\n"
+                    + "    Processor: KTABLE-SOURCE-0000000003 (stores: [topic2-STATE-STORE-0000000001])\n"
+                    + "      --> none\n"
+                    + "      <-- KSTREAM-SOURCE-0000000002\n"
+                    + "\n"
+                    + "  Sub-topology: 2\n"
+                    + "    Source: second-join-repartition-source (topics: [second-join-repartition])\n"
+                    + "      --> second-join\n"
+                    + "    Source: KSTREAM-SOURCE-0000000005 (topics: [topic3])\n"
+                    + "      --> KTABLE-SOURCE-0000000006\n"
+                    + "    Processor: second-join (stores: [topic3-STATE-STORE-0000000004])\n"
+                    + "      --> KSTREAM-SINK-0000000017\n"
+                    + "      <-- second-join-repartition-source\n"
+                    + "    Sink: KSTREAM-SINK-0000000017 (topic: out-two)\n"
+                    + "      <-- second-join\n"
+                    + "    Processor: KTABLE-SOURCE-0000000006 (stores: [topic3-STATE-STORE-0000000004])\n"
+                    + "      --> none\n"
+                    + "      <-- KSTREAM-SOURCE-0000000005\n\n";
 }

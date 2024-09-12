@@ -20,7 +20,9 @@
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "0-2",
+  //
+  // Version 3 adds token requester details
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
@@ -29,6 +31,10 @@
       "about": "The principal type of the token owner." },
     { "name": "PrincipalName", "type": "string", "versions": "0+",
       "about": "The name of the token owner." },
+    { "name": "TokenRequesterPrincipalType", "type": "string", "versions": "3+",
+      "about": "The principal type of the requester of the token." },
+    { "name": "TokenRequesterPrincipalName", "type": "string", "versions": "3+",
+      "about": "The principal type of the requester of the token." },
     { "name": "IssueTimestampMs", "type": "int64", "versions": "0+",
       "about": "When this token was generated." },
     { "name": "ExpiryTimestampMs", "type": "int64", "versions": "0+",

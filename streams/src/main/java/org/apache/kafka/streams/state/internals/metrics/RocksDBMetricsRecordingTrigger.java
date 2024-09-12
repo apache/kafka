@@ -16,12 +16,19 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.utils.Time;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class RocksDBMetricsRecordingTrigger implements Runnable {
 
     private final Map<String, RocksDBMetricsRecorder> metricsRecordersToTrigger = new ConcurrentHashMap<>();
+    private final Time time;
+
+    public RocksDBMetricsRecordingTrigger(final Time time) {
+        this.time = time;
+    }
 
     public void addMetricsRecorder(final RocksDBMetricsRecorder metricsRecorder) {
         final String metricsRecorderName = metricsRecorderName(metricsRecorder);
@@ -49,8 +56,9 @@ public class RocksDBMetricsRecordingTrigger implements Runnable {
 
     @Override
     public void run() {
+        final long now = time.milliseconds();
         for (final RocksDBMetricsRecorder metricsRecorder : metricsRecordersToTrigger.values()) {
-            metricsRecorder.record();
+            metricsRecorder.record(now);
         }
     }
 }

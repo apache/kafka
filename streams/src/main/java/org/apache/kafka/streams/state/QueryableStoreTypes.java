@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
@@ -31,7 +32,7 @@ import java.util.Set;
 
 /**
  * Provides access to the {@link QueryableStoreType}s provided with {@link KafkaStreams}.
- * These can be used with {@link KafkaStreams#store(String, QueryableStoreType)}.
+ * These can be used with {@link KafkaStreams#store(StoreQueryParameters)}.
  * To access and query the {@link StateStore}s that are part of a {@link Topology}.
  */
 public final class QueryableStoreTypes {
@@ -48,7 +49,7 @@ public final class QueryableStoreTypes {
     }
 
     /**
-     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>}.
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore ReadOnlyKeyValueStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;}.
      *
      * @param <K> key type of the store
      * @param <V> value type of the store
@@ -70,7 +71,7 @@ public final class QueryableStoreTypes {
     }
 
     /**
-     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore<K, ValueAndTimestamp<V>>}.
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;}.
      *
      * @param <K> key type of the store
      * @param <V> value type of the store
@@ -91,7 +92,7 @@ public final class QueryableStoreTypes {
         return new SessionStoreType<>();
     }
 
-    private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
+    private abstract static class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
 
         private final Set<Class> matchTo;
 

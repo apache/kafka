@@ -20,6 +20,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -32,19 +35,24 @@ import java.util.Map;
  * data to bytes, the schema will be ignored and {@link Object#toString()} will always be invoked to convert the data to a String.
  * When converting from bytes to Kafka Connect format, the converter will only ever return an optional string schema and
  * a string or null.
- *
+ * <p>
  * Encoding configuration is identical to {@link StringSerializer} and {@link StringDeserializer}, but for convenience
  * this class can also be configured to use the same encoding for both encoding and decoding with the
  * {@link StringConverterConfig#ENCODING_CONFIG converter.encoding} setting.
- *
- * This implementation currently does nothing with the topic names or header names.
+ * <p>
+ * This implementation currently does nothing with the topic names or header keys.
  */
-public class StringConverter implements Converter, HeaderConverter {
+public class StringConverter implements Converter, HeaderConverter, Versioned {
 
     private final StringSerializer serializer = new StringSerializer();
     private final StringDeserializer deserializer = new StringDeserializer();
 
     public StringConverter() {
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 
     @Override
@@ -104,6 +112,7 @@ public class StringConverter implements Converter, HeaderConverter {
 
     @Override
     public void close() {
-        // do nothing
+        Utils.closeQuietly(this.serializer, "string converter serializer");
+        Utils.closeQuietly(this.deserializer, "string converter deserializer");
     }
 }

@@ -20,14 +20,15 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
@@ -174,6 +175,11 @@ public interface Consumer<K, V> extends Closeable {
     Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, final Duration timeout);
 
     /**
+     * See {@link KafkaConsumer#clientInstanceId(Duration)}}
+     */
+    Uuid clientInstanceId(Duration timeout);
+
+    /**
      * @see KafkaConsumer#metrics()
      */
     Map<MetricName, ? extends Metric> metrics();
@@ -244,15 +250,29 @@ public interface Consumer<K, V> extends Closeable {
     Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout);
 
     /**
+     * @see KafkaConsumer#currentLag(TopicPartition)
+     */
+    OptionalLong currentLag(TopicPartition topicPartition);
+
+    /**
+     * @see KafkaConsumer#groupMetadata()
+     */
+    ConsumerGroupMetadata groupMetadata();
+
+    /**
+     * @see KafkaConsumer#enforceRebalance()
+     */
+    void enforceRebalance();
+
+    /**
+     * @see KafkaConsumer#enforceRebalance(String)
+     */
+    void enforceRebalance(final String reason);
+
+    /**
      * @see KafkaConsumer#close()
      */
     void close();
-
-    /**
-     * @see KafkaConsumer#close(long, TimeUnit)
-     */
-    @Deprecated
-    void close(long timeout, TimeUnit unit);
 
     /**
      * @see KafkaConsumer#close(Duration)

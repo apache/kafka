@@ -17,12 +17,12 @@
 
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.utils.Time;
+
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-
-import org.apache.kafka.common.utils.Time;
 
 /**
  * A latch that can be used to count down the number of times a connector and/or tasks have
@@ -37,8 +37,8 @@ public class StartAndStopLatch {
 
     StartAndStopLatch(int expectedStarts, int expectedStops, Consumer<StartAndStopLatch> uponCompletion,
                  List<StartAndStopLatch> dependents, Time clock) {
-        this.startLatch = new CountDownLatch(expectedStarts < 0 ? 0 : expectedStarts);
-        this.stopLatch = new CountDownLatch(expectedStops < 0 ? 0 : expectedStops);
+        this.startLatch = new CountDownLatch(Math.max(expectedStarts, 0));
+        this.stopLatch = new CountDownLatch(Math.max(expectedStops, 0));
         this.dependents = dependents;
         this.uponCompletion = uponCompletion;
         this.clock = clock;

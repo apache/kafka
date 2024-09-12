@@ -19,16 +19,14 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -43,13 +41,13 @@ import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONNECT_PROTOCOL_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER;
 import static org.apache.kafka.connect.runtime.rest.InternalRequestSignature.SIGNATURE_HEADER;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * A simple integration test to ensure that internal request validation becomes enabled with the
  * "sessioned" protocol.
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class SessionedProtocolIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(SessionedProtocolIntegrationTest.class);
@@ -60,13 +58,13 @@ public class SessionedProtocolIntegrationTest {
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
 
-    @Before
-    public void setup() throws IOException {
+    @BeforeEach
+    public void setup() {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, ConnectProtocolCompatibility.SESSIONED.protocol());
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
             .numWorkers(2)
@@ -81,16 +79,13 @@ public class SessionedProtocolIntegrationTest {
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
 
-    @After
+    @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 
     @Test
-    @Ignore
-    // TODO: This test runs fine locally but fails on Jenkins. Ignoring for now, should revisit when
-    //       possible.
     public void ensureInternalEndpointIsSecured() throws Throwable {
         final String connectorTasksEndpoint = connect.endpointForResource(String.format(
             "connectors/%s/tasks",
@@ -110,7 +105,7 @@ public class SessionedProtocolIntegrationTest {
         );
         assertEquals(
             BAD_REQUEST.getStatusCode(),
-            connect.executePost(connectorTasksEndpoint, "[]", emptyHeaders)
+            connect.requestPost(connectorTasksEndpoint, "[]", emptyHeaders).getStatus()
         );
 
         // Try again, but with an invalid signature
@@ -120,8 +115,8 @@ public class SessionedProtocolIntegrationTest {
             connectorTasksEndpoint
         );
         assertEquals(
-            FORBIDDEN.getStatusCode(),
-            connect.executePost(connectorTasksEndpoint, "[]", invalidSignatureHeaders)
+                FORBIDDEN.getStatusCode(),
+                connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
         );
 
         // Create the connector now
@@ -151,7 +146,7 @@ public class SessionedProtocolIntegrationTest {
         );
         assertEquals(
             BAD_REQUEST.getStatusCode(),
-            connect.executePost(connectorTasksEndpoint, "[]", emptyHeaders)
+            connect.requestPost(connectorTasksEndpoint, "[]", emptyHeaders).getStatus()
         );
 
         // Try again, but with an invalid signature
@@ -162,7 +157,7 @@ public class SessionedProtocolIntegrationTest {
         );
         assertEquals(
             FORBIDDEN.getStatusCode(),
-            connect.executePost(connectorTasksEndpoint, "[]", invalidSignatureHeaders)
+            connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
         );
     }
 }

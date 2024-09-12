@@ -16,10 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -28,10 +34,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
  */
 public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
+    private final Position position = Position.emptyPosition();
 
     public interface EldestEntryRemovalListener {
         void apply(Bytes key, byte[] value);
@@ -43,6 +52,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     private boolean restoring = false; // TODO: this is a sub-optimal solution to avoid logging during restoration.
                                        // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
     private volatile boolean open = true;
+    protected StateStoreContext context;
 
     private EldestEntryRemovalListener listener;
 
@@ -74,14 +84,31 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-
+    public void init(final StateStoreContext context, final StateStore root) {
+        final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+            context.appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false
+        );
         // register the store
-        context.register(root, (key, value) -> {
-            restoring = true;
-            put(Bytes.wrap(key), value);
-            restoring = false;
-        });
+        context.register(
+            root,
+            (RecordBatchingStateRestoreCallback) records -> {
+                restoring = true;
+                synchronized (position) {
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                        put(Bytes.wrap(record.key()), record.value());
+                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                            record,
+                            consistencyEnabled,
+                            position
+                        );
+                    }
+                }
+                restoring = false;
+            }
+        );
+        this.context = context;
     }
 
     @Override
@@ -95,6 +122,11 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
+    public Position getPosition() {
+        return position;
+    }
+
+    @Override
     public synchronized byte[] get(final Bytes key) {
         Objects.requireNonNull(key);
 
@@ -104,10 +136,13 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key);
-        if (value == null) {
-            delete(key);
-        } else {
-            this.map.put(key, value);
+        synchronized (position) {
+            if (value == null) {
+                delete(key);
+            } else {
+                this.map.put(key, value);
+            }
+            StoreQueryUtils.updatePosition(position, context);
         }
     }
 
@@ -131,7 +166,10 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized byte[] delete(final Bytes key) {
         Objects.requireNonNull(key);
-        return this.map.remove(key);
+        synchronized (position) {
+            StoreQueryUtils.updatePosition(position, context);
+            return this.map.remove(key);
+        }
     }
 
     /**
@@ -146,8 +184,33 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
      * @throws UnsupportedOperationException at every invocation
      */
     @Override
+    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+        throw new UnsupportedOperationException("MemoryLRUCache does not support reverseRange() function.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException at every invocation
+     */
+    @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         throw new UnsupportedOperationException("MemoryLRUCache does not support all() function.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException at every invocation
+     */
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+        throw new UnsupportedOperationException("MemoryLRUCache does not support reverseAll() function.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException at every invocation
+     */
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                    final PS prefixKeySerializer) {
+        throw new UnsupportedOperationException("MemoryLRUCache does not support prefixScan() function.");
     }
 
     @Override

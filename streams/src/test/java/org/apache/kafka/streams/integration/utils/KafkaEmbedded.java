@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.cluster.EndPoint;
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
-import kafka.utils.MockTime;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -28,9 +28,12 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.rules.TemporaryFolder;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.config.ZkConfigs;
+import org.apache.kafka.server.util.MockTime;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +43,11 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+
+import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.NUM_PARTITIONS_CONFIG;
+
 
 /**
  * Runs an in-memory, "embedded" instance of a Kafka broker, which listens at `127.0.0.1:9092` by
@@ -55,7 +63,7 @@ public class KafkaEmbedded {
 
     private final Properties effectiveConfig;
     private final File logDir;
-    private final TemporaryFolder tmpFolder;
+    private final File tmpFolder;
     private final KafkaServer kafka;
 
     /**
@@ -65,11 +73,10 @@ public class KafkaEmbedded {
      *               broker should listen to.  Note that you cannot change the `log.dirs` setting
      *               currently.
      */
-    @SuppressWarnings("WeakerAccess")
+    @SuppressWarnings({"WeakerAccess", "this-escape"})
     public KafkaEmbedded(final Properties config, final MockTime time) throws IOException {
-        tmpFolder = new TemporaryFolder();
-        tmpFolder.create();
-        logDir = tmpFolder.newFolder();
+        tmpFolder = org.apache.kafka.test.TestUtils.tempDirectory();
+        logDir = org.apache.kafka.test.TestUtils.tempDirectory(tmpFolder.toPath(), "log");
         effectiveConfig = effectiveConfigFrom(config);
         final boolean loggingEnabled = true;
         final KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
@@ -88,17 +95,15 @@ public class KafkaEmbedded {
      */
     private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
-        effectiveConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), 0);
-        effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "localhost");
-        effectiveConfig.put(KafkaConfig$.MODULE$.PortProp(), "9092");
-        effectiveConfig.put(KafkaConfig$.MODULE$.NumPartitionsProp(), 1);
-        effectiveConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
-        effectiveConfig.put(KafkaConfig$.MODULE$.MessageMaxBytesProp(), 1000000);
-        effectiveConfig.put(KafkaConfig$.MODULE$.ControlledShutdownEnableProp(), true);
-        effectiveConfig.put(KafkaConfig$.MODULE$.ZkSessionTimeoutMsProp(), 10000);
+        effectiveConfig.put(ServerConfigs.BROKER_ID_CONFIG, 0);
+        effectiveConfig.put(NUM_PARTITIONS_CONFIG, 1);
+        effectiveConfig.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        effectiveConfig.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, 1000000);
+        effectiveConfig.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, true);
+        effectiveConfig.put(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         effectiveConfig.putAll(initialConfig);
-        effectiveConfig.setProperty(KafkaConfig$.MODULE$.LogDirProp(), logDir.getAbsolutePath());
+        effectiveConfig.setProperty(LOG_DIR_CONFIG, logDir.getAbsolutePath());
         return effectiveConfig;
     }
 
@@ -109,9 +114,8 @@ public class KafkaEmbedded {
      */
     @SuppressWarnings("WeakerAccess")
     public String brokerList() {
-        final Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
-        return kafka.config().hostName() + ":" + kafka.boundPort(
-            new ListenerName(listenerConfig != null ? listenerConfig.toString() : "PLAINTEXT"));
+        final EndPoint endPoint = kafka.advertisedListeners().head();
+        return endPoint.host() + ":" + endPoint.port();
     }
 
 
@@ -123,22 +127,22 @@ public class KafkaEmbedded {
         return effectiveConfig.getProperty("zookeeper.connect", DEFAULT_ZK_CONNECT);
     }
 
-    /**
-     * Stop the broker.
-     */
     @SuppressWarnings("WeakerAccess")
-    public void stop() {
+    public void stopAsync() {
         log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
-            brokerList(), zookeeperConnect());
+                  brokerList(), zookeeperConnect());
         kafka.shutdown();
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    public void awaitStoppedAndPurge() {
         kafka.awaitShutdown();
         log.debug("Removing log dir at {} ...", logDir);
         try {
-            Utils.delete(logDir);
+            Utils.delete(tmpFolder);
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
-        tmpFolder.delete();
         log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
     }
@@ -191,7 +195,7 @@ public class KafkaEmbedded {
     public Admin createAdminClient() {
         final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList());
-        final Object listeners = effectiveConfig.get(KafkaConfig$.MODULE$.ListenersProp());
+        final Object listeners = effectiveConfig.get(SocketServerConfigs.LISTENERS_CONFIG);
         if (listeners != null && listeners.toString().contains("SSL")) {
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());

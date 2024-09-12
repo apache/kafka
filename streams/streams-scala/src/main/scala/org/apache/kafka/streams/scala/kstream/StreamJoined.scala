@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.common.serialization.Serde
@@ -24,8 +23,8 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier
 object StreamJoined {
 
   /**
-   * Create an instance of [[StreamJoined]] with key, value, and otherValue [[Serde]]
-   * instances.
+   * Create an instance of [[StreamJoined]] with key, value, and otherValue
+   * `org.apache.kafka.common.serialization.Serde` instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
    *
    * @tparam K              key type
@@ -36,15 +35,17 @@ object StreamJoined {
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
    * @return new [[StreamJoined]] instance with the provided serdes
    */
-  def `with`[K, V, VO](implicit keySerde: Serde[K],
-                       valueSerde: Serde[V],
-                       otherValueSerde: Serde[VO]): StreamJoinedJ[K, V, VO] =
+  def `with`[K, V, VO](implicit
+    keySerde: Serde[K],
+    valueSerde: Serde[V],
+    otherValueSerde: Serde[VO]
+  ): StreamJoinedJ[K, V, VO] =
     StreamJoinedJ.`with`(keySerde, valueSerde, otherValueSerde)
 
   /**
-   * Create an instance of [[StreamJoinJ]] with store suppliers for the calling stream
-   * and the other stream.  Also adds the key, value, and otherValue [[Serde]]
-   * instances.
+   * Create an instance of [[StreamJoined]] with store suppliers for the calling stream
+   * and the other stream.  Also adds the key, value, and otherValue
+   * `org.apache.kafka.common.serialization.Serde` instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
    *
    * @tparam K key type
@@ -55,7 +56,7 @@ object StreamJoined {
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
-   * @return new [[StreamJoinJ]] instance with the provided store suppliers and serdes
+   * @return new [[StreamJoined]] instance with the provided store suppliers and serdes
    */
   def `with`[K, V, VO](
     supplier: WindowBytesStoreSupplier,
@@ -68,9 +69,9 @@ object StreamJoined {
       .withOtherValueSerde(otherValueSerde)
 
   /**
-   * Create an instance of [[StreamJoinJ]] with the name used for naming
-   * the state stores involved in the join.  Also adds the key, value, and otherValue [[Serde]]
-   * instances.
+   * Create an instance of [[StreamJoined]] with the name used for naming
+   * the state stores involved in the join.  Also adds the key, value, and otherValue
+   * `org.apache.kafka.common.serialization.Serde` instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
    *
    * @tparam K key type
@@ -80,7 +81,7 @@ object StreamJoined {
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
-   * @return new [[StreamJoinJ]] instance with the provided store suppliers and serdes
+   * @return new [[StreamJoined]] instance with the provided store suppliers and serdes
    */
   def as[K, V, VO](
     storeName: String

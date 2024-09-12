@@ -30,36 +30,30 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(value = Parameterized.class)
-public class SaslAuthenticatorFailureDelayTest {
+public abstract class SaslAuthenticatorFailureDelayTest {
     private static final int BUFFER_SIZE = 4 * 1024;
 
-    private final MockTime time = new MockTime(10);
+    private final MockTime time = new MockTime(1);
     private NioEchoServer server;
     private Selector selector;
-    private ChannelBuilder channelBuilder;
-    private CertStores serverCertStores;
-    private CertStores clientCertStores;
     private Map<String, Object> saslClientConfigs;
     private Map<String, Object> saslServerConfigs;
     private CredentialCache credentialCache;
@@ -70,19 +64,11 @@ public class SaslAuthenticatorFailureDelayTest {
         this.failedAuthenticationDelayMs = failedAuthenticationDelayMs;
     }
 
-    @Parameterized.Parameters(name = "failedAuthenticationDelayMs={0}")
-    public static Collection<Object[]> data() {
-        List<Object[]> values = new ArrayList<>();
-        values.add(new Object[]{0});
-        values.add(new Object[]{200});
-        return values;
-    }
-
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         LoginManager.closeAll();
-        serverCertStores = new CertStores(true, "localhost");
-        clientCertStores = new CertStores(false, "localhost");
+        CertStores serverCertStores = new CertStores(true, "localhost");
+        CertStores clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
@@ -90,15 +76,14 @@ public class SaslAuthenticatorFailureDelayTest {
         startTimeMs = time.milliseconds();
     }
 
-    @After
+    @AfterEach
     public void teardown() throws Exception {
         long now = time.milliseconds();
         if (server != null)
             this.server.close();
         if (selector != null)
             this.selector.close();
-        if (failedAuthenticationDelayMs != -1)
-            assertTrue("timeSpent: " + (now - startTimeMs), now - startTimeMs >= failedAuthenticationDelayMs);
+        assertTrue(now - startTimeMs >= failedAuthenticationDelayMs, "timeSpent: " + (now - startTimeMs));
     }
 
     /**
@@ -108,12 +93,44 @@ public class SaslAuthenticatorFailureDelayTest {
     public void testInvalidPasswordSaslPlain() throws Exception {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
         jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalidpassword");
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
                 "Authentication failed: Invalid username or password");
+        server.verifyAuthenticationMetrics(0, 1);
+    }
+
+    /**
+     * Tests that SASL/SCRAM clients with invalid password fail authentication with
+     * connection close delay if configured.
+     */
+    @Test
+    public void testInvalidPasswordSaslScram() throws Exception {
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        jaasConfig.setClientOptions("SCRAM-SHA-256", TestJaasConfig.USERNAME, "invalidpassword");
+
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
+        server.verifyAuthenticationMetrics(0, 1);
+    }
+
+    /**
+     * Tests that clients with disabled SASL mechanism fail authentication with
+     * connection close delay if configured.
+     */
+    @Test
+    public void testDisabledSaslMechanism() throws Exception {
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalidpassword");
+
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientAuthenticationFailure(securityProtocol, node, "SCRAM-SHA-256", null);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -124,7 +141,7 @@ public class SaslAuthenticatorFailureDelayTest {
     public void testClientConnectionClose() throws Exception {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
-        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Arrays.asList("PLAIN"));
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
         jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalidpassword");
 
         server = createEchoServer(securityProtocol);
@@ -162,7 +179,7 @@ public class SaslAuthenticatorFailureDelayTest {
         try {
             selector.poll(50);
         } catch (IOException e) {
-            Assert.fail("Caught unexpected exception " + e);
+            throw new RuntimeException("Unexpected failure during selector poll", e);
         }
     }
 
@@ -170,7 +187,7 @@ public class SaslAuthenticatorFailureDelayTest {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, clientMechanism);
         saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverMechanisms);
         if (serverMechanisms.contains("DIGEST-MD5")) {
-            saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+            saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
                     TestDigestLoginModule.DigestServerCallbackHandler.class.getName());
         }
         return TestJaasConfig.createConfiguration(clientMechanism, serverMechanisms);
@@ -183,8 +200,9 @@ public class SaslAuthenticatorFailureDelayTest {
         }
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
-        this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, true);
+        ChannelBuilder channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
+                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, true,
+                new LogContext());
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 
@@ -193,17 +211,13 @@ public class SaslAuthenticatorFailureDelayTest {
     }
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
-        if (failedAuthenticationDelayMs != -1)
-            return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                    new TestSecurityConfig(saslServerConfigs), credentialCache, failedAuthenticationDelayMs, time);
-        else
-            return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                    new TestSecurityConfig(saslServerConfigs), credentialCache, time);
+        return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
+                new TestSecurityConfig(saslServerConfigs), credentialCache, time);
     }
 
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
         createSelector(securityProtocol, saslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
 
@@ -211,9 +225,9 @@ public class SaslAuthenticatorFailureDelayTest {
                                                            String mechanism, String expectedErrorMessage) throws Exception {
         ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
         Exception exception = finalState.exception();
-        assertTrue("Invalid exception class " + exception.getClass(), exception instanceof SaslAuthenticationException);
+        assertInstanceOf(SaslAuthenticationException.class, exception, "Invalid exception class " + exception.getClass());
         if (expectedErrorMessage == null)
-            expectedErrorMessage = "Authentication failed due to invalid credentials with SASL mechanism " + mechanism;
+            expectedErrorMessage = "Authentication failed during authentication due to invalid credentials with SASL mechanism " + mechanism;
         assertEquals(expectedErrorMessage, exception.getMessage());
     }
 

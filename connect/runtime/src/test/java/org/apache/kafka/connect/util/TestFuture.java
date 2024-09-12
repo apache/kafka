@@ -26,7 +26,7 @@ public class TestFuture<T> implements Future<T> {
     private volatile boolean resolved;
     private T result;
     private Throwable exception;
-    private CountDownLatch getCalledLatch;
+    private final CountDownLatch getCalledLatch;
 
     private volatile boolean resolveOnGet;
     private T resolveOnGetResult;

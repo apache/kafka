@@ -117,9 +117,8 @@ public final class ByteBufferUnmapper {
         MethodHandle nonNullTest = lookup.findStatic(ByteBufferUnmapper.class, "nonNull",
                 methodType(boolean.class, Object.class)).asType(methodType(boolean.class, cleanerClass));
         MethodHandle noop = dropArguments(constant(Void.class, null).asType(methodType(void.class)), 0, cleanerClass);
-        MethodHandle unmapper = filterReturnValue(directBufferCleanerMethod, guardWithTest(nonNullTest, cleanMethod, noop))
+        return filterReturnValue(directBufferCleanerMethod, guardWithTest(nonNullTest, cleanMethod, noop))
                 .asType(methodType(void.class, ByteBuffer.class));
-        return unmapper;
     }
 
     private static MethodHandle unmapJava9(MethodHandles.Lookup lookup) throws ReflectiveOperationException {

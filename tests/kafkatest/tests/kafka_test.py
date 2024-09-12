@@ -17,7 +17,7 @@ from ducktape.tests.test import Test
 
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 
 
 class KafkaTest(Test):
@@ -34,12 +34,14 @@ class KafkaTest(Test):
         self.num_brokers = num_brokers
         self.topics = topics
 
-        self.zk = ZookeeperService(test_context, self.num_zk)
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
 
         self.kafka = KafkaService(
             test_context, self.num_brokers,
-            self.zk, topics=self.topics)
+            self.zk, topics=self.topics,
+            controller_num_nodes_override=self.num_zk)
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
         self.kafka.start()

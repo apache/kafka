@@ -17,36 +17,39 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.junit.Test;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class SessionCacheFlushListenerTest {
     @Test
     public void shouldForwardKeyNewValueOldValueAndTimestamp() {
-        final InternalProcessorContext context = mock(InternalProcessorContext.class);
-        expect(context.currentNode()).andReturn(null).anyTimes();
-        context.setCurrentNode(null);
-        context.setCurrentNode(null);
-        context.forward(
-            new Windowed<>("key", new SessionWindow(21L, 73L)),
-            new Change<>("newValue", "oldValue"),
-            To.all().withTimestamp(73L));
-        expectLastCall();
-        replay(context);
+        @SuppressWarnings("unchecked")
+        final InternalProcessorContext<Windowed<String>, Change<String>> context = mock(InternalProcessorContext.class);
+        doNothing().when(context).forward(
+            new Record<>(
+                new Windowed<>("key", new SessionWindow(21L, 73L)),
+                new Change<>("newValue", "oldValue"),
+                73L));
 
         new SessionCacheFlushListener<>(context).apply(
-            new Windowed<>("key", new SessionWindow(21L, 73L)),
-            "newValue",
-            "oldValue",
-            42L);
+            new Record<>(
+                new Windowed<>("key", new SessionWindow(21L, 73L)),
+                new Change<>("newValue", "oldValue"),
+                42L));
 
-        verify(context);
+        verify(context, times(2)).setCurrentNode(null);
     }
 }

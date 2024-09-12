@@ -17,57 +17,70 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
-import org.hamcrest.CoreMatchers;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 
+import org.hamcrest.CoreMatchers;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.time.Duration;
 import java.util.Collections;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WindowStoreBuilderTest {
 
-    @Mock(type = MockType.NICE)
+    @Mock
     private WindowBytesStoreSupplier supplier;
-    @Mock(type = MockType.NICE)
+    @Mock
     private WindowStore<Bytes, byte[]> inner;
     private WindowStoreBuilder<String, String> builder;
 
-    @Before
-    public void setUp() {
-        expect(supplier.get()).andReturn(inner);
-        expect(supplier.name()).andReturn("name");
-        replay(supplier);
+    public void setUpWithoutInner() {
+        when(supplier.name()).thenReturn("name");
+        when(supplier.metricsScope()).thenReturn("metricScope");
 
         builder = new WindowStoreBuilder<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime());
+                supplier,
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime());
+    }
+
+    public void setUp() {
+        when(supplier.get()).thenReturn(inner);
+        setUpWithoutInner();
     }
 
     @Test
     public void shouldHaveMeteredStoreAsOuterStore() {
+        setUp();
         final WindowStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredWindowStore.class));
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
+        setUp();
         final WindowStore<String, String> store = builder.build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, instanceOf(ChangeLoggingWindowBytesStore.class));
@@ -75,6 +88,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
+        setUp();
         final WindowStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, CoreMatchers.equalTo(inner));
@@ -82,6 +96,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
+        setUp();
         final WindowStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredWindowStore.class));
@@ -90,6 +105,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
+        setUp();
         final WindowStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .build();
@@ -101,6 +117,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
+        setUp();
         final WindowStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .withCachingEnabled()
@@ -113,25 +130,61 @@ public class WindowStoreBuilderTest {
         assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
-    @SuppressWarnings("all")
-    @Test(expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDisableCachingWithRetainDuplicates() {
+        supplier = Stores.persistentWindowStore("name", Duration.ofMillis(10L), Duration.ofMillis(10L), true);
+        final StoreBuilder<WindowStore<String, String>> builder = new WindowStoreBuilder<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        ).withCachingEnabled();
+        
+        builder.build();
+
+        assertFalse(((AbstractStoreBuilder<String, String, WindowStore<String, String>>) builder).enableCaching);
+    }
+
+    @Test
+    public void shouldDisableLogCompactionWithRetainDuplicates() {
+        supplier = Stores.persistentWindowStore(
+            "name",
+            Duration.ofMillis(10L),
+            Duration.ofMillis(10L),
+            true);
+        final StoreBuilder<WindowStore<String, String>> builder = new WindowStoreBuilder<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        ).withCachingEnabled();
+
+        assertThat(
+            builder.logConfig().get(TopicConfig.CLEANUP_POLICY_CONFIG),
+            equalTo(TopicConfig.CLEANUP_POLICY_DELETE)
+        );
+    }
+
+    @SuppressWarnings("null")
+    @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
-        new WindowStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
+        assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        new WindowStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        new WindowStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
-    }
-
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
-        new WindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
+        assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(supplier, Serdes.String(),
+                Serdes.String(), null));
     }
 
+    @Test
+    public void shouldThrowNullPointerIfMetricsScopeIsNull() {
+        setUpWithoutInner();
+        when(supplier.metricsScope()).thenReturn(null);
+
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new WindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
+    }
 }

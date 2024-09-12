@@ -20,6 +20,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -28,7 +31,6 @@ import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverterConfig;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -37,9 +39,9 @@ import java.util.Map;
  * It does support handling nulls. When converting from bytes to Kafka Connect format, the converter will always return the specified
  * schema.
  * <p>
- * This implementation currently does nothing with the topic names or header names.
+ * This implementation currently does nothing with the topic names or header keys.
  */
-abstract class NumberConverter<T extends Number> implements Converter, HeaderConverter {
+abstract class NumberConverter<T extends Number> implements Converter, HeaderConverter, Versioned {
 
     private final Serializer<T> serializer;
     private final Deserializer<T> deserializer;
@@ -65,6 +67,10 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
         assert this.schema != null;
     }
 
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
     @Override
     public ConfigDef config() {
         return NumberConverterConfig.configDef();
@@ -122,6 +128,8 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
+        Utils.closeQuietly(this.serializer, "number converter serializer");
+        Utils.closeQuietly(this.deserializer, "number converter deserializer");
     }
 }

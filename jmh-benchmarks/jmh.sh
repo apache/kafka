@@ -29,14 +29,14 @@ fi
 gradleCmd="${gradlew_dir}/gradlew"
 libDir="${base_dir}/build/libs"
 
-echo "running gradlew :jmh-benchmarks:clean :jmh-benchmarks:shadowJar in quiet mode"
+echo "running gradlew :jmh-benchmarks:clean :jmh-benchmarks:shadowJar"
 
-$gradleCmd  -q :jmh-benchmarks:clean :jmh-benchmarks:shadowJar
+$gradleCmd  :jmh-benchmarks:clean :jmh-benchmarks:shadowJar
 
 echo "gradle build done"
 
-echo "running JMH with args [$@]"
+echo "running JMH with args: $@"
 
-java -jar ${libDir}/kafka-jmh-benchmarks-all.jar "$@"
+java -jar ${libDir}/kafka-jmh-benchmarks-*.jar "$@"
 
 echo "JMH benchmarks done"

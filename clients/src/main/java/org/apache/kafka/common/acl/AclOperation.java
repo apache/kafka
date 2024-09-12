@@ -106,12 +106,22 @@ public enum AclOperation {
     /**
      * IDEMPOTENT_WRITE operation.
      */
-    IDEMPOTENT_WRITE((byte) 12);
+    IDEMPOTENT_WRITE((byte) 12),
+
+    /**
+     * CREATE_TOKENS operation.
+     */
+    CREATE_TOKENS((byte) 13),
+
+    /**
+     * DESCRIBE_TOKENS operation.
+     */
+    DESCRIBE_TOKENS((byte) 14);
 
     // Note: we cannot have more than 30 ACL operations without modifying the format used
     // to describe ACL operations in MetadataResponse.
 
-    private final static HashMap<Byte, AclOperation> CODE_TO_VALUE = new HashMap<>();
+    private static final HashMap<Byte, AclOperation> CODE_TO_VALUE = new HashMap<>();
 
     static {
         for (AclOperation operation : AclOperation.values()) {

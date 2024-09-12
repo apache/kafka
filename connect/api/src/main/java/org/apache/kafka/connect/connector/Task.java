@@ -21,7 +21,7 @@ import java.util.Map;
 /**
  * <p>
  * Tasks contain the code that actually copies data to/from another system. They receive
- * a configuration from their parent Connector, assigning them a fraction of a Kafka Connect job's work.
+ * a configuration from their parent {@link Connector}, assigning them a fraction of the connector's work.
  * The Kafka Connect framework then pushes/pulls data from the Task. The Task must also be able to
  * respond to reconfiguration requests.
  * </p>

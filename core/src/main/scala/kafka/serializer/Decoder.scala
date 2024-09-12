@@ -18,6 +18,7 @@
 package kafka.serializer
 
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 
 import kafka.utils.VerifiableProperties
 
@@ -26,13 +27,15 @@ import kafka.utils.VerifiableProperties
  * An implementation is required to provide a constructor that
  * takes a VerifiableProperties instance.
  */
-trait Decoder[T] {
+@deprecated(since = "3.8.0")
+trait Decoder[T]  {
   def fromBytes(bytes: Array[Byte]): T
 }
 
 /**
  * The default implementation does nothing, just returns the same byte array it takes in.
  */
+@deprecated(since = "3.8.0")
 class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[Byte]] {
   def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
 }
@@ -41,12 +44,13 @@ class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[B
  * The string decoder translates bytes into strings. It uses UTF8 by default but takes
  * an optional property serializer.encoding to control this.
  */
+@deprecated(since = "3.8.0")
 class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] {
-  val encoding =
-    if(props == null)
-      "UTF8"
+  val encoding: String =
+    if (props == null)
+      StandardCharsets.UTF_8.name()
     else
-      props.getString("serializer.encoding", "UTF8")
+      props.getString("serializer.encoding", StandardCharsets.UTF_8.name())
 
   def fromBytes(bytes: Array[Byte]): String = {
     new String(bytes, encoding)
@@ -56,6 +60,7 @@ class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] 
 /**
   * The long decoder translates bytes into longs.
   */
+@deprecated(since = "3.8.0")
 class LongDecoder(props: VerifiableProperties = null) extends Decoder[Long] {
   def fromBytes(bytes: Array[Byte]): Long = {
     ByteBuffer.wrap(bytes).getLong
@@ -65,6 +70,7 @@ class LongDecoder(props: VerifiableProperties = null) extends Decoder[Long] {
 /**
   * The integer decoder translates bytes into integers.
   */
+@deprecated(since = "3.8.0")
 class IntegerDecoder(props: VerifiableProperties = null) extends Decoder[Integer] {
   def fromBytes(bytes: Array[Byte]): Integer = {
     ByteBuffer.wrap(bytes).getInt()

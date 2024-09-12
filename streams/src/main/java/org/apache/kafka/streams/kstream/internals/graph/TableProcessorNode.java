@@ -17,39 +17,44 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.Arrays;
+import java.util.Objects;
 
-public class TableProcessorNode<K, V> extends StreamsGraphNode {
+public class TableProcessorNode<K, V> extends GraphNode {
 
-    private final ProcessorParameters<K, V> processorParameters;
-    private final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
+    private final ProcessorParameters<K, V, ?, ?> processorParameters;
+    private final StoreFactory storeFactory;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters,
-                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder) {
-        this(nodeName, processorParameters, storeBuilder, null);
+                              final ProcessorParameters<K, V, ?, ?> processorParameters,
+                              final StoreFactory storeFactory) {
+        this(nodeName, processorParameters, storeFactory, null);
     }
 
     public TableProcessorNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters,
-                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder,
+                              final ProcessorParameters<K, V, ?, ?> processorParameters,
+                              final StoreFactory storeFactory,
                               final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;
-        this.storeBuilder = storeBuilder;
+        this.storeFactory = storeFactory;
         this.storeNames = storeNames != null ? storeNames : new String[] {};
+    }
+
+    public ProcessorParameters<K, V, ?, ?> processorParameters() {
+        return processorParameters;
     }
 
     @Override
     public String toString() {
         return "TableProcessorNode{" +
             ", processorParameters=" + processorParameters +
-            ", storeBuilder=" + (storeBuilder == null ? "null" : storeBuilder.name()) +
+            ", storeFactory=" + (storeFactory == null ? "null" : storeFactory.name()) +
             ", storeNames=" + Arrays.toString(storeNames) +
             "} " + super.toString();
     }
@@ -64,9 +69,15 @@ public class TableProcessorNode<K, V> extends StreamsGraphNode {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
 
-        // TODO: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
-        if (storeBuilder != null) {
-            topologyBuilder.addStateStore(storeBuilder, processorName);
+        final KTableSource<K, V> tableSource =  processorParameters.processorSupplier() instanceof KTableSource ?
+                (KTableSource<K, V>) processorParameters.processorSupplier() : null;
+        if (tableSource != null) {
+            if (tableSource.materialized()) {
+                topologyBuilder.addStateStore(Objects.requireNonNull(storeFactory, "storeFactory was null"),
+                                              processorName);
+            }
+        } else if (storeFactory != null) {
+            topologyBuilder.addStateStore(storeFactory, processorName);
         }
     }
 }

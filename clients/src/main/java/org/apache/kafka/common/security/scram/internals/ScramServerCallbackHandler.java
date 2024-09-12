@@ -16,14 +16,6 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
-import java.util.List;
-import java.util.Map;
-
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.NameCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.AppConfigurationEntry;
-
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
@@ -31,6 +23,14 @@ import org.apache.kafka.common.security.scram.ScramCredentialCallback;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCredentialCallback;
+
+import java.util.List;
+import java.util.Map;
+
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.AppConfigurationEntry;
 
 public class ScramServerCallbackHandler implements AuthenticateCallbackHandler {
 

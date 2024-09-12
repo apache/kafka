@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.util.Properties;
@@ -23,13 +31,6 @@ import java.util.Properties;
 import javax.management.JMException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
-
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class AppInfoParser {
     private static final Logger log = LoggerFactory.getLogger(AppInfoParser.class);
@@ -60,8 +61,13 @@ public class AppInfoParser {
     public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics, long nowMs) {
         try {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
+            MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+            if (server.isRegistered(name)) {
+                log.info("The mbean of App info: [{}], id: [{}] already exists, so skipping a new mbean creation.", prefix, id);
+                return;
+            }
             AppInfo mBean = new AppInfo(nowMs);
-            ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
+            server.registerMBean(mBean, name);
 
             registerMetrics(metrics, mBean); // prefix will be added later by JmxReporter
         } catch (JMException e) {
@@ -79,6 +85,8 @@ public class AppInfoParser {
             unregisterMetrics(metrics);
         } catch (JMException e) {
             log.warn("Error unregistering AppInfo mbean", e);
+        } finally {
+            log.info("App info {} for {} unregistered", prefix, id);
         }
     }
 

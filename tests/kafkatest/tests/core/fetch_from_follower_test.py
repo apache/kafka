@@ -16,29 +16,16 @@
 import time
 from collections import defaultdict
 
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.services.kafka import KafkaService, quorum, consumer_group
+from kafkatest.services.monitor.jmx import JmxTool
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-
-
-class JmxTool(JmxMixin, KafkaPathResolverMixin):
-    """
-    Simple helper class for using the JmxTool directly instead of as a mix-in
-    """
-    def __init__(self, text_context, *args, **kwargs):
-        JmxMixin.__init__(self, num_nodes=1, *args, **kwargs)
-        self.context = text_context
-
-    @property
-    def logger(self):
-        return self.context.logger
 
 
 class FetchFromFollowerTest(ProduceConsumeValidateTest):
@@ -50,7 +37,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         super(FetchFromFollowerTest, self).__init__(test_context=test_context)
         self.jmx_tool = JmxTool(test_context, jmx_poll_ms=100)
         self.topic = "test_topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1)
+        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(test_context,
                                   num_nodes=3,
                                   zk=self.zk,
@@ -60,14 +47,15 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
                                           "replication-factor": 3,
                                           "configs": {"min.insync.replicas": 1}},
                                   },
-                                  server_prop_overides=[
+                                  server_prop_overrides=[
                                       ["replica.selector.class", self.RACK_AWARE_REPLICA_SELECTOR]
                                   ],
                                   per_node_server_prop_overrides={
                                       1: [("broker.rack", "rack-a")],
                                       2: [("broker.rack", "rack-b")],
                                       3: [("broker.rack", "rack-c")]
-                                  })
+                                  },
+                                  controller_num_nodes_override=1)
 
         self.producer_throughput = 1000
         self.num_producers = 1
@@ -77,11 +65,21 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         return super(FetchFromFollowerTest, self).min_cluster_size() + self.num_producers * 2 + self.num_consumers * 2
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
         self.kafka.start()
 
     @cluster(num_nodes=9)
-    def test_consumer_preferred_read_replica(self):
+    @matrix(
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_consumer_preferred_read_replica(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         This test starts up brokers with "broker.rack" and "replica.selector.class" configurations set. The replica
         selector is set to the rack-aware implementation. One of the brokers has a different rack than the other two.
@@ -101,10 +99,15 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
                                            throughput=self.producer_throughput)
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol,
+                                                                      config={
+                                                                          "client.rack": non_leader_rack,
+                                                                          "metadata.max.age.ms": self.METADATA_MAX_AGE_MS
+                                                                      })
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
                                         client_id="console-consumer", group_id="test-consumer-group-1",
                                         consumer_timeout_ms=60000, message_validator=is_int,
-                                        consumer_properties={"client.rack": non_leader_rack, "metadata.max.age.ms": self.METADATA_MAX_AGE_MS})
+                                        consumer_properties=consumer_properties)
 
         # Start up and let some data get produced
         self.start_producer_and_consumer()

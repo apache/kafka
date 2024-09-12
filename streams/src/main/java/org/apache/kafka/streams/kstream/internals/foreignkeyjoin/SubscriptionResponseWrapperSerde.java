@@ -20,6 +20,9 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.nio.ByteBuffer;
 
@@ -28,8 +31,8 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
     private final SubscriptionResponseWrapperDeserializer<V> deserializer;
 
     public SubscriptionResponseWrapperSerde(final Serde<V> foreignValueSerde) {
-        serializer = new SubscriptionResponseWrapperSerializer<>(foreignValueSerde.serializer());
-        deserializer = new SubscriptionResponseWrapperDeserializer<>(foreignValueSerde.deserializer());
+        serializer = new SubscriptionResponseWrapperSerializer<>(foreignValueSerde == null ? null : foreignValueSerde.serializer());
+        deserializer = new SubscriptionResponseWrapperDeserializer<>(foreignValueSerde == null ? null : foreignValueSerde.deserializer());
     }
 
     @Override
@@ -42,11 +45,21 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         return deserializer;
     }
 
-    private static final class SubscriptionResponseWrapperSerializer<V> implements Serializer<SubscriptionResponseWrapper<V>> {
-        private final Serializer<V> serializer;
+    private static final class SubscriptionResponseWrapperSerializer<V>
+        implements Serializer<SubscriptionResponseWrapper<V>>, WrappingNullableSerializer<SubscriptionResponseWrapper<V>, Void, V> {
+
+        private Serializer<V> serializer;
 
         private SubscriptionResponseWrapperSerializer(final Serializer<V> serializer) {
             this.serializer = serializer;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void setIfUnset(final SerdeGetter getter) {
+            if (serializer == null) {
+                serializer = (Serializer<V>) getter.valueSerde().serializer();
+            }
         }
 
         @Override
@@ -54,38 +67,47 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}
 
             //7-bit (0x7F) maximum for data version.
-            if (Byte.compare((byte) 0x7F, data.getVersion()) < 0) {
+            if (Byte.compare((byte) 0x7F, data.version()) < 0) {
                 throw new UnsupportedVersionException("SubscriptionResponseWrapper version is larger than maximum supported 0x7F");
             }
 
-            final byte[] serializedData = data.getForeignValue() == null ? null : serializer.serialize(topic, data.getForeignValue());
+            final byte[] serializedData = data.foreignValue() == null ? null : serializer.serialize(topic, data.foreignValue());
             final int serializedDataLength = serializedData == null ? 0 : serializedData.length;
-            final long[] originalHash = data.getOriginalValueHash();
+            final long[] originalHash = data.originalValueHash();
             final int hashLength = originalHash == null ? 0 : 2 * Long.BYTES;
 
             final ByteBuffer buf = ByteBuffer.allocate(1 + hashLength + serializedDataLength);
 
             if (originalHash != null) {
-                buf.put(data.getVersion());
+                buf.put(data.version());
                 buf.putLong(originalHash[0]);
                 buf.putLong(originalHash[1]);
             } else {
                 //Don't store hash as it's null.
-                buf.put((byte) (data.getVersion() | (byte) 0x80));
+                buf.put((byte) (data.version() | (byte) 0x80));
             }
 
             if (serializedData != null)
                 buf.put(serializedData);
             return buf.array();
         }
-
     }
 
-    private static final class SubscriptionResponseWrapperDeserializer<V> implements Deserializer<SubscriptionResponseWrapper<V>> {
-        private final Deserializer<V> deserializer;
+    private static final class SubscriptionResponseWrapperDeserializer<V>
+        implements Deserializer<SubscriptionResponseWrapper<V>>, WrappingNullableDeserializer<SubscriptionResponseWrapper<V>, Void, V> {
+
+        private Deserializer<V> deserializer;
 
         private SubscriptionResponseWrapperDeserializer(final Deserializer<V> deserializer) {
             this.deserializer = deserializer;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void setIfUnset(final SerdeGetter getter) {
+            if (deserializer == null) {
+                deserializer = (Deserializer<V>) getter.valueSerde().deserializer();
+            }
         }
 
         @Override
@@ -118,9 +140,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
                 value = null;
             }
 
-            return new SubscriptionResponseWrapper<>(hash, value, version);
+            return new SubscriptionResponseWrapper<>(hash, value, version, null);
         }
-
     }
-
 }

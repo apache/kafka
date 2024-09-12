@@ -18,15 +18,19 @@
 package kafka.server
 
 import java.io.File
-
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse}
-import org.junit.Assert._
-import org.junit.Test
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.storage.internals.log.LogFileUtils
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
-import scala.collection.JavaConverters._
+import java.util.Properties
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.util.Random
 
@@ -35,6 +39,17 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   override val brokerCount = 1
 
   val topic = "topic"
+
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "0")
+    properties.put(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG, "1000")
+  }
+
+  private def findErrorForPartition(response: AlterReplicaLogDirsResponse, tp: TopicPartition): Errors = {
+    Errors.forCode(response.data.results.asScala
+      .find(x => x.topicName == tp.topic).get.partitions.asScala
+      .find(p => p.partitionIndex == tp.partition).get.errorCode)
+  }
 
   @Test
   def testAlterReplicaLogDirsRequest(): Unit = {
@@ -48,11 +63,11 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     // The response should show error UNKNOWN_TOPIC_OR_PARTITION for all partitions
     (0 until partitionNum).foreach { partition =>
       val tp = new TopicPartition(topic, partition)
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, alterReplicaLogDirsResponse1.responses().get(tp))
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, findErrorForPartition(alterReplicaLogDirsResponse1, tp))
       assertTrue(servers.head.logManager.getLog(tp).isEmpty)
     }
 
-    createTopic(topic, partitionNum, 1)
+    createTopic(topic, partitionNum)
     (0 until partitionNum).foreach { partition =>
       assertEquals(logDir1, servers.head.logManager.getLog(new TopicPartition(topic, partition)).get.dir.getParent)
     }
@@ -64,7 +79,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     // The response should succeed for all partitions
     (0 until partitionNum).foreach { partition =>
       val tp = new TopicPartition(topic, partition)
-      assertEquals(Errors.NONE, alterReplicaLogDirsResponse2.responses().get(tp))
+      assertEquals(Errors.NONE, findErrorForPartition(alterReplicaLogDirsResponse2, tp))
       TestUtils.waitUntilTrue(() => {
         logDir2 == servers.head.logManager.getLog(new TopicPartition(topic, partition)).get.dir.getParent
       }, "timed out waiting for replica movement")
@@ -83,18 +98,18 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     partitionDirs1.put(new TopicPartition(topic, 0), "invalidDir")
     partitionDirs1.put(new TopicPartition(topic, 1), validDir1)
     val alterReplicaDirResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1.toMap)
-    assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 0)))
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 1)))
+    assertEquals(Errors.LOG_DIR_NOT_FOUND, findErrorForPartition(alterReplicaDirResponse1, new TopicPartition(topic, 0)))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, findErrorForPartition(alterReplicaDirResponse1, new TopicPartition(topic, 1)))
 
-    createTopic(topic, 3, 1)
+    createTopic(topic, 3)
 
     // Test AlterReplicaDirRequest after topic creation
     val partitionDirs2 = mutable.Map.empty[TopicPartition, String]
     partitionDirs2.put(new TopicPartition(topic, 0), "invalidDir")
     partitionDirs2.put(new TopicPartition(topic, 1), validDir2)
     val alterReplicaDirResponse2 = sendAlterReplicaLogDirsRequest(partitionDirs2.toMap)
-    assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse2.responses().get(new TopicPartition(topic, 0)))
-    assertEquals(Errors.NONE, alterReplicaDirResponse2.responses().get(new TopicPartition(topic, 1)))
+    assertEquals(Errors.LOG_DIR_NOT_FOUND, findErrorForPartition(alterReplicaDirResponse2, new TopicPartition(topic, 0)))
+    assertEquals(Errors.NONE, findErrorForPartition(alterReplicaDirResponse2, new TopicPartition(topic, 1)))
 
     // Test AlterReplicaDirRequest after topic creation and log directory failure
     servers.head.logDirFailureChannel.maybeAddOfflineLogDir(offlineDir, "", new java.io.IOException())
@@ -104,13 +119,78 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     partitionDirs3.put(new TopicPartition(topic, 1), validDir3)
     partitionDirs3.put(new TopicPartition(topic, 2), offlineDir)
     val alterReplicaDirResponse3 = sendAlterReplicaLogDirsRequest(partitionDirs3.toMap)
-    assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 0)))
-    assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 1)))
-    assertEquals(Errors.KAFKA_STORAGE_ERROR, alterReplicaDirResponse3.responses().get(new TopicPartition(topic, 2)))
+    assertEquals(Errors.LOG_DIR_NOT_FOUND, findErrorForPartition(alterReplicaDirResponse3, new TopicPartition(topic, 0)))
+    assertEquals(Errors.KAFKA_STORAGE_ERROR, findErrorForPartition(alterReplicaDirResponse3, new TopicPartition(topic, 1)))
+    assertEquals(Errors.KAFKA_STORAGE_ERROR, findErrorForPartition(alterReplicaDirResponse3, new TopicPartition(topic, 2)))
+  }
+
+  @Test
+  def testAlterReplicaLogDirsRequestWithRetention(): Unit = {
+    val partitionNum = 1
+
+    // Alter replica dir before topic creation
+    val logDir1 = new File(servers.head.config.logDirs(1)).getAbsolutePath
+    val partitionDirs1 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir1).toMap
+    val alterReplicaLogDirsResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1)
+
+    // The response should show error UNKNOWN_TOPIC_OR_PARTITION for all partitions
+    val tp = new TopicPartition(topic, 0)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, findErrorForPartition(alterReplicaLogDirsResponse1, tp))
+    assertTrue(servers.head.logManager.getLog(tp).isEmpty)
+
+    val topicProperties = new Properties()
+    topicProperties.put(TopicConfig.RETENTION_BYTES_CONFIG, "1024")
+    // This test needs enough time to wait for dir movement happened.
+    // We don't want files with `.deleted` suffix are removed too fast,
+    // so we can validate there will be orphan files and orphan files will be removed eventually.
+    topicProperties.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "10000")
+    topicProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1024")
+
+    createTopic(topic, partitionNum, 1, topicProperties)
+    assertEquals(logDir1, servers.head.logManager.getLog(tp).get.dir.getParent)
+
+    // send enough records to trigger log rolling
+    (0 until 20).foreach { _ =>
+      TestUtils.generateAndProduceMessages(servers, topic, 10, 1)
+    }
+    TestUtils.waitUntilTrue(() => servers.head.logManager.getLog(new TopicPartition(topic, 0)).get.numberOfSegments > 1,
+      "timed out waiting for log segment to roll")
+
+    // Wait for log segment retention in original dir.
+    TestUtils.waitUntilTrue(() => {
+      new File(logDir1, tp.toString).listFiles().count(_.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) > 0
+    }, "timed out waiting for log segment to retention")
+
+    // Alter replica dir again after topic creation
+    val logDir2 = new File(servers.head.config.logDirs(2)).getAbsolutePath
+    val alterReplicaLogDirsResponse2 = sendAlterReplicaLogDirsRequest(Map(tp -> logDir2))
+    // The response should succeed for all partitions
+    assertEquals(Errors.NONE, findErrorForPartition(alterReplicaLogDirsResponse2, tp))
+    TestUtils.waitUntilTrue(() => {
+      logDir2 == servers.head.logManager.getLog(tp).get.dir.getParent
+    }, "timed out waiting for replica movement")
+
+    // Make sure the deleted log segment is removed
+    TestUtils.waitUntilTrue(() => {
+      new File(logDir2, tp.toString).listFiles().count(_.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) == 0
+    }, "timed out waiting for removing deleted log segment")
   }
 
   private def sendAlterReplicaLogDirsRequest(partitionDirs: Map[TopicPartition, String]): AlterReplicaLogDirsResponse = {
-    val request = new AlterReplicaLogDirsRequest.Builder(partitionDirs.asJava).build()
+    val logDirs = partitionDirs.groupBy{case (_, dir) => dir}.map{ case(dir, tps) =>
+      new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
+        .setPath(dir)
+        .setTopics(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection(
+          tps.groupBy { case (tp, _) => tp.topic }
+            .map { case (topic, tpPartitions) =>
+              new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
+                .setName(topic)
+                .setPartitions(tpPartitions.map{case (tp, _) => tp.partition.asInstanceOf[Integer]}.toList.asJava)
+        }.toList.asJava.iterator))
+    }
+    val data = new AlterReplicaLogDirsRequestData()
+        .setDirs(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirCollection(logDirs.asJava.iterator))
+    val request = new AlterReplicaLogDirsRequest.Builder(data).build()
     connectAndReceive[AlterReplicaLogDirsResponse](request, destination = controllerSocketServer)
   }
 

@@ -14,16 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 /**
  * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
@@ -35,31 +36,35 @@ import org.apache.kafka.streams.state.QueryableStoreType;
  * {@link KGroupedStream#cogroup(Aggregator) cogroup(...)}.
  *
  * @param <K> Type of keys
- * @param <VOut> Type of values after agg
+ * @param <VAgg> Type of values after agg
  */
-public interface CogroupedKStream<K, VOut> {
+public interface CogroupedKStream<K, VAgg> {
 
     /**
      * Add an already {@link KGroupedStream grouped KStream} to this {@code CogroupedKStream}.
      * <p>
      * The added {@link KGroupedStream grouped KStream} must have the same number of partitions as all existing
      * streams of this {@code CogroupedKStream}.
-     * If this is not the case, you would need to call {@link KStream#through(String)} before
-     * {@link KStream#groupByKey() grouping} the {@link KStream}, using a pre-created topic with the "correct" number of
-     * partitions.
+     * If this is not the case, you would need to call {@link KStream#repartition(Repartitioned)} before
+     * {@link KStream#groupByKey() grouping} the {@link KStream} and specify the "correct" number of
+     * partitions via {@link Repartitioned} parameter.
      * <p>
      * The specified {@link Aggregator} is applied in the actual {@link #aggregate(Initializer) aggregation} step for
      * each input record and computes a new aggregate using the current aggregate (or for the very first record per key
      * using the initial intermediate aggregation result provided via the {@link Initializer} that is passed into
      * {@link #aggregate(Initializer)}) and the record's value.
      *
-     * @param groupedStream a group stream
-     * @param aggregator    an {@link Aggregator} that computes a new aggregate result
-     * @param <VIn> Type of input values
+     * @param groupedStream
+     *        a group stream
+     * @param aggregator
+     *        an {@link Aggregator} that computes a new aggregate result
+     *
+     * @param <V> Type of input values
+     *
      * @return a {@code CogroupedKStream}
      */
-    <VIn> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, VIn> groupedStream,
-                                            final Aggregator<? super K, ? super VIn, VOut> aggregator);
+    <V> CogroupedKStream<K, VAgg> cogroup(final KGroupedStream<K, V> groupedStream,
+                                          final Aggregator<? super K, ? super V, VAgg> aggregator);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -77,22 +82,24 @@ public interface CogroupedKStream<K, VOut> {
      * same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
-     * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * KeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
-     * String key = "some-key";
-     * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(storeQueryParams);
+     * K key = "some-key";
+     * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore}) will be backed by
+     * an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -102,12 +109,14 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result. Cannot be {@code null}.
+     * @param initializer
+     *        an {@link Initializer} that computes an initial intermediate aggregation
+     *        result. Cannot be {@code null}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, VOut> aggregate(final Initializer<VOut> initializer);
+    KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -126,22 +135,24 @@ public interface CogroupedKStream<K, VOut> {
      * same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
-     * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * KeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
-     * String key = "some-key";
-     * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(storeQueryParams);
+     * K key = "some-key";
+     * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore}) will be backed by
+     * an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -151,13 +162,15 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result. Cannot be {@code null}.
-     * @param named        name the processor. Cannot be {@code null}.
+     * @param initializer
+     *        an {@link Initializer} that computes an initial intermediate aggregation result. Cannot be {@code null}.
+     * @param named
+     *        name the processor. Cannot be {@code null}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+    KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
                               final Named named);
 
     /**
@@ -176,22 +189,24 @@ public interface CogroupedKStream<K, VOut> {
      * same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
-     * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
-     * <pre>
+     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
+     * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * KeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
-     * String key = "some-key";
-     * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(storeQueryParams);
+     * K key = "some-key";
+     * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what
+     * is specified in the parameter {@code materialized}) will be backed by an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -201,15 +216,16 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result. Cannot be {@code null}.
-     * @param materialized an instance of {@link Materialized} used to materialize a state store.
-     *                     Cannot be {@code null}.
+     * @param initializer
+     *        an {@link Initializer} that computes an initial intermediate aggregation result. Cannot be {@code null}.
+     * @param materialized
+     *        an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                              final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+    KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
+                              final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -228,22 +244,24 @@ public interface CogroupedKStream<K, VOut> {
      * same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
-     * To query the local {@link KeyValueStore} it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
-     * <pre>
+     * To query the local {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
+     * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * KeyValueStore<String, Long> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<String, Long>keyValueStore());
-     * String key = "some-key";
-     * Long aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(storeQueryParams);
+     * K key = "some-key";
+     * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
-     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what
+     * is specified in the parameter {@code materialized}) will be backed by an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot
      * contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -253,16 +271,53 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param initializer  an {@link Initializer} that computes an initial intermediate aggregation
-     *                     result. Cannot be {@code null}.
-     * @param materialized an instance of {@link Materialized} used to materialize a state store.
-     *                     Cannot be {@code null}.
-     * @param named        name the processors. Cannot be {@code null}.
+     * @param initializer
+     *        an {@link Initializer} that computes an initial intermediate aggregation result. Cannot be {@code null}.
+     * @param materialized
+     *        an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
+     * @param named
+     *        name the processors. Cannot be {@code null}.
+     *
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+    KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
                               final Named named,
-                              final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+                              final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
+     * aggregations.
+     *
+     * @param windows
+     *        the specification of the aggregation {@link Windows}
+     *
+     * @param <W>     the window type
+     *
+     * @return an instance of {@link TimeWindowedCogroupedKStream}
+     */
+    <W extends Window> TimeWindowedCogroupedKStream<K, VAgg> windowedBy(final Windows<W> windows);
+
+    /**
+     * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform sliding
+     * windowed aggregations.
+     *
+     * @param windows
+     *        the specification of the aggregation {@link SlidingWindows}
+     *
+     * @return an instance of {@link TimeWindowedCogroupedKStream}
+     */
+    TimeWindowedCogroupedKStream<K, VAgg> windowedBy(final SlidingWindows windows);
+
+    /**
+     * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
+     * windowed aggregations.
+     *
+     * @param windows
+     *        the specification of the aggregation {@link SessionWindows}
+     *
+     * @return an instance of {@link SessionWindowedCogroupedKStream}
+     */
+    SessionWindowedCogroupedKStream<K, VAgg> windowedBy(final SessionWindows windows);
 
 }

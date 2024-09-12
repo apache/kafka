@@ -17,23 +17,27 @@
 
 package kafka.coordinator.group
 
+import java.util.Properties
+import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
-import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
-import org.apache.kafka.common.TopicPartition
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig, KafkaRequestHandler}
+import kafka.utils.CoreUtils
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
-import org.easymock.EasyMock
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.common.RequestLocal
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.when
 
 import scala.collection._
 import scala.concurrent.duration.Duration
@@ -42,58 +46,58 @@ import scala.concurrent.{Await, Future, Promise, TimeoutException}
 class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[GroupMember] {
 
   private val protocolType = "consumer"
+  private val protocolName = "range"
   private val metadata = Array[Byte]()
-  private val protocols = List(("range", metadata))
-
+  private val protocols = List((protocolName, metadata))
   private val nGroups = nThreads * 10
   private val nMembersPerGroup = nThreads * 5
   private val numPartitions = 2
+  private var metrics: Metrics = _
 
   private val allOperations = Seq(
       new JoinGroupOperation,
       new SyncGroupOperation,
+      new OffsetFetchOperation,
       new CommitOffsetsOperation,
       new HeartbeatOperation,
       new LeaveGroupOperation
-    )
-  private val allOperationsWithTxn = Seq(
-    new JoinGroupOperation,
-    new SyncGroupOperation,
-    new CommitTxnOffsetsOperation,
-    new CompleteTxnOperation,
-    new HeartbeatOperation,
-    new LeaveGroupOperation
   )
 
+  var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = _
+  var rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance] = _
   var groupCoordinator: GroupCoordinator = _
 
-  @Before
+  @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
-      .andReturn(Some(numPartitions))
-      .anyTimes()
-    EasyMock.replay(zkClient)
+    when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
+      .thenReturn(Some(numPartitions))
 
-    serverProps.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
-    serverProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
-    serverProps.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
+    serverProps.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, ConsumerMinSessionTimeout.toString)
+    serverProps.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, ConsumerMaxSessionTimeout.toString)
+    serverProps.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupInitialRebalanceDelay.toString)
 
     val config = KafkaConfig.fromProps(serverProps)
 
-    val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
-    val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
+    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
+    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(false)
+    metrics = new Metrics
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, metrics)
+    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions),
+      enableMetadataExpiration = false)
+
+    // Transactional appends attempt to schedule to the request handler thread using
+    // a non request handler thread. Set this to avoid error.
+    KafkaRequestHandler.setBypassThreadCheck(true)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     try {
-      if (groupCoordinator != null)
-        groupCoordinator.shutdown()
+      CoreUtils.swallow(groupCoordinator.shutdown(), this)
+      CoreUtils.swallow(metrics.close(), this)
     } finally {
       super.tearDown()
     }
@@ -112,19 +116,69 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   @Test
   def testConcurrentTxnGoodPathSequence(): Unit = {
-    verifyConcurrentOperations(createGroupMembers, allOperationsWithTxn)
+    verifyConcurrentOperations(createGroupMembers, Seq(
+      new JoinGroupOperation,
+      new SyncGroupOperation,
+      new OffsetFetchOperation,
+      new CommitTxnOffsetsOperation,
+      new CompleteTxnOperation,
+      new HeartbeatOperation,
+      new LeaveGroupOperation
+    ))
   }
 
   @Test
   def testConcurrentRandomSequence(): Unit = {
-    verifyConcurrentRandomSequences(createGroupMembers, allOperationsWithTxn)
+    /**
+     * handleTxnCommitOffsets does not complete delayed requests now so it causes error if handleTxnCompletion is executed
+     * before completing delayed request. In random mode, we use this global lock to prevent such an error.
+     */
+    val lock = new ReentrantLock()
+    verifyConcurrentRandomSequences(createGroupMembers, Seq(
+      new JoinGroupOperation,
+      new SyncGroupOperation,
+      new OffsetFetchOperation,
+      new CommitTxnOffsetsOperation(lock = Some(lock)),
+      new CompleteTxnOperation(lock = Some(lock)),
+      new HeartbeatOperation,
+      new LeaveGroupOperation
+    ))
+  }
+
+  @Test
+  def testConcurrentJoinGroupEnforceGroupMaxSize(): Unit = {
+    val groupMaxSize = 1
+    val newProperties = new Properties
+    newProperties.put(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, groupMaxSize.toString)
+    val config = KafkaConfig.fromProps(serverProps, newProperties)
+
+    if (groupCoordinator != null)
+      groupCoordinator.shutdown()
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory,
+      rebalancePurgatory, timer.time, new Metrics())
+    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions),
+      enableMetadataExpiration = false)
+
+    val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
+      .members
+    val joinOp = new JoinGroupOperation()
+
+    verifyConcurrentActions(members.toSet.map(joinOp.actionNoVerify))
+
+    val errors = members.map { member =>
+      val joinGroupResult = joinOp.await(member, DefaultRebalanceTimeout)
+      joinGroupResult.error
+    }
+
+    assertEquals(groupMaxSize, errors.count(_ == Errors.NONE))
+    assertEquals(members.size-groupMaxSize, errors.count(_ == Errors.GROUP_MAX_SIZE_REACHED))
   }
 
   abstract class GroupOperation[R, C] extends Operation {
     val responseFutures = new ConcurrentHashMap[GroupMember, Future[R]]()
 
     def setUpCallback(member: GroupMember): C = {
-      val responsePromise = Promise[R]
+      val responsePromise = Promise[R]()
       val responseFuture = responsePromise.future
       responseFutures.put(member, responseFuture)
       responseCallback(responsePromise)
@@ -154,16 +208,16 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
   }
 
-
   class JoinGroupOperation extends GroupOperation[JoinGroupCallbackParams, JoinGroupCallback] {
     override def responseCallback(responsePromise: Promise[JoinGroupCallbackParams]): JoinGroupCallback = {
       val callback: JoinGroupCallback = responsePromise.success(_)
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: JoinGroupCallback): Unit = {
-      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false, "clientId", "clientHost",
-       DefaultRebalanceTimeout, DefaultSessionTimeout,
-       protocolType, protocols, responseCallback)
+      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false,
+        supportSkippingAssignment = false, "clientId", "clientHost", DefaultRebalanceTimeout,
+        DefaultSessionTimeout, protocolType, protocols, responseCallback)
+      replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val joinGroupResult = await(member, DefaultRebalanceTimeout)
@@ -176,21 +230,24 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   class SyncGroupOperation extends GroupOperation[SyncGroupCallbackParams, SyncGroupCallback] {
     override def responseCallback(responsePromise: Promise[SyncGroupCallbackParams]): SyncGroupCallback = {
       val callback: SyncGroupCallback = syncGroupResult =>
-        responsePromise.success(syncGroupResult.memberAssignment, syncGroupResult.error)
+        responsePromise.success(syncGroupResult.error, syncGroupResult.memberAssignment)
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: SyncGroupCallback): Unit = {
       if (member.leader) {
         groupCoordinator.handleSyncGroup(member.groupId, member.generationId, member.memberId,
-          member.groupInstanceId, member.group.assignment, responseCallback)
+          Some(protocolType), Some(protocolName), member.groupInstanceId, member.group.assignment, responseCallback)
       } else {
         groupCoordinator.handleSyncGroup(member.groupId, member.generationId, member.memberId,
-          member.groupInstanceId, Map.empty[String, Array[Byte]], responseCallback)
+          Some(protocolType), Some(protocolName), member.groupInstanceId, Map.empty[String, Array[Byte]], responseCallback)
       }
+      replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
-       val result = await(member, DefaultSessionTimeout)
-       assertEquals(Errors.NONE, result._2)
+      val result = await(member, DefaultSessionTimeout)
+      assertEquals(Errors.NONE, result._1)
+      assertNotNull(result._2)
+      assertEquals(0, result._2.length)
     }
   }
 
@@ -202,22 +259,42 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def runWithCallback(member: GroupMember, responseCallback: HeartbeatCallback): Unit = {
       groupCoordinator.handleHeartbeat(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, responseCallback)
+      replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val error = await(member, DefaultSessionTimeout)
        assertEquals(Errors.NONE, error)
     }
   }
+
+  class OffsetFetchOperation extends GroupOperation[OffsetFetchCallbackParams, OffsetFetchCallback] {
+    override def responseCallback(responsePromise: Promise[OffsetFetchCallbackParams]): OffsetFetchCallback = {
+      val callback: OffsetFetchCallback = (error, offsets) => responsePromise.success(error, offsets)
+      callback
+    }
+    override def runWithCallback(member: GroupMember, responseCallback: OffsetFetchCallback): Unit = {
+      val (error, partitionData) = groupCoordinator.handleFetchOffsets(member.groupId, requireStable = true, None)
+      replicaManager.tryCompleteActions()
+      responseCallback(error, partitionData)
+    }
+    override def awaitAndVerify(member: GroupMember): Unit = {
+      val result = await(member, 500)
+      assertEquals(Errors.NONE, result._1)
+      assertEquals(Map.empty, result._2)
+    }
+  }
+
   class CommitOffsetsOperation extends GroupOperation[CommitOffsetCallbackParams, CommitOffsetCallback] {
     override def responseCallback(responsePromise: Promise[CommitOffsetCallbackParams]): CommitOffsetCallback = {
       val callback: CommitOffsetCallback = offsets => responsePromise.success(offsets)
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
-      val tp = new TopicPartition("topic", 0)
-      val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
+      val offsets = immutable.Map(tip -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, offsets, responseCallback)
+      replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val offsets = await(member, 500)
@@ -225,27 +302,32 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
   }
 
-  class CommitTxnOffsetsOperation extends CommitOffsetsOperation {
+  class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends CommitOffsetsOperation {
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
-      val tp = new TopicPartition("topic", 0)
-      val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val offsets = immutable.Map(new TopicIdPartition(Uuid.randomUuid(), 0, "topic") -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       val producerId = 1000L
       val producerEpoch : Short = 2
       // When transaction offsets are appended to the log, transactions may be scheduled for
       // completion. Since group metadata locks are acquired for transaction completion, include
       // this in the callback to test that there are no deadlocks.
-      def callbackWithTxnCompletion(errors: Map[TopicPartition, Errors]): Unit = {
+      def callbackWithTxnCompletion(errors: Map[TopicIdPartition, Errors]): Unit = {
         val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
         groupCoordinator.groupManager.scheduleHandleTxnCompletion(producerId,
           offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
         responseCallback(errors)
       }
-      groupCoordinator.handleTxnCommitOffsets(member.group.groupId,
-          producerId, producerEpoch, offsets, callbackWithTxnCompletion)
+      lock.foreach(_.lock())
+      try {
+        // Since the replica manager is mocked we can use a dummy value for transactionalId.
+        groupCoordinator.handleTxnCommitOffsets(member.group.groupId, "dummy-txn-id", producerId, producerEpoch,
+          JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty, JoinGroupRequest.UNKNOWN_GENERATION_ID,
+          offsets, callbackWithTxnCompletion, RequestLocal.noCaching, ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
+        replicaManager.tryCompleteActions()
+      } finally lock.foreach(_.unlock())
     }
   }
 
-  class CompleteTxnOperation extends GroupOperation[CompleteTxnCallbackParams, CompleteTxnCallback] {
+  class CompleteTxnOperation(lock: Option[Lock] = None) extends GroupOperation[CompleteTxnCallbackParams, CompleteTxnCallback] {
     override def responseCallback(responsePromise: Promise[CompleteTxnCallbackParams]): CompleteTxnCallback = {
       val callback: CompleteTxnCallback = error => responsePromise.success(error)
       callback
@@ -253,9 +335,13 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def runWithCallback(member: GroupMember, responseCallback: CompleteTxnCallback): Unit = {
       val producerId = 1000L
       val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
-      groupCoordinator.groupManager.handleTxnCompletion(producerId,
-        offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
-      responseCallback(Errors.NONE)
+      lock.foreach(_.lock())
+      try {
+        groupCoordinator.groupManager.handleTxnCompletion(producerId,
+          offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
+        responseCallback(Errors.NONE)
+      } finally lock.foreach(_.unlock())
+
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
       val error = await(member, 500)
@@ -288,12 +374,14 @@ object GroupCoordinatorConcurrencyTest {
 
   type JoinGroupCallbackParams = JoinGroupResult
   type JoinGroupCallback = JoinGroupResult => Unit
-  type SyncGroupCallbackParams = (Array[Byte], Errors)
+  type SyncGroupCallbackParams = (Errors, Array[Byte])
   type SyncGroupCallback = SyncGroupResult => Unit
   type HeartbeatCallbackParams = Errors
   type HeartbeatCallback = Errors => Unit
-  type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
-  type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
+  type OffsetFetchCallbackParams = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData])
+  type OffsetFetchCallback = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) => Unit
+  type CommitOffsetCallbackParams = Map[TopicIdPartition, Errors]
+  type CommitOffsetCallback = Map[TopicIdPartition, Errors] => Unit
   type LeaveGroupCallbackParams = LeaveGroupResult
   type LeaveGroupCallback = LeaveGroupResult => Unit
   type CompleteTxnCallbackParams = Errors
@@ -308,11 +396,11 @@ object GroupCoordinatorConcurrencyTest {
   class Group(val groupId: String, nMembers: Int,
       groupCoordinator: GroupCoordinator, replicaManager: TestReplicaManager) {
     val groupPartitionId = groupCoordinator.partitionFor(groupId)
-    groupCoordinator.groupManager.addPartitionOwnership(groupPartitionId)
+    groupCoordinator.groupManager.addOwnedPartition(groupPartitionId)
     val members = (0 until nMembers).map { i =>
       new GroupMember(this, groupPartitionId, i == 0)
     }
-    def assignment = members.map { m => (m.memberId, Array[Byte]()) }.toMap
+    def assignment: Map[String, Array[Byte]] = members.map { m => (m.memberId, Array[Byte]()) }.toMap
   }
 
   class GroupMember(val group: Group, val groupPartitionId: Int, val leader: Boolean) extends CoordinatorMember {

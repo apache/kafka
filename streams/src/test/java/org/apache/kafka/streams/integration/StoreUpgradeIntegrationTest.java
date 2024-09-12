@@ -27,8 +27,9 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -39,14 +40,17 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+
+import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
@@ -54,38 +58,50 @@ import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
-@Category({IntegrationTest.class})
+@Tag("integration")
 public class StoreUpgradeIntegrationTest {
-    private static String inputStream;
     private static final String STORE_NAME = "store";
+    private String inputStream;
 
     private KafkaStreams kafkaStreams;
-    private static int testCounter = 0;
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @Before
-    public void createTopics() throws Exception {
-        inputStream = "input-stream-" + testCounter;
+    @BeforeAll
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterAll
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
+    public String safeTestName;
+
+    @BeforeEach
+    public void createTopics(final TestInfo testInfo) throws Exception {
+        safeTestName = safeUniqueTestName(testInfo);
+        inputStream = "input-stream-" + safeTestName;
         CLUSTER.createTopic(inputStream);
     }
 
     private Properties props() {
         final Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "addId-" + testCounter++);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return streamsConfiguration;
     }
 
-    @After
+    @AfterEach
     public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30L));
@@ -332,8 +348,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, V> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.keyValueStore());
+                    final ReadOnlyKeyValueStore<K, V> store = IntegrationTestUtils.getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
+
+                    if (store == null) {
+                        return false;
+                    }
+
                     try (final KeyValueIterator<K, V> all = store.all()) {
                         final List<KeyValue<K, V>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -357,8 +377,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore());
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null)
+                        return false;
+
                     final ValueAndTimestamp<Long> count = store.get(key);
                     return count.value() == value && count.timestamp() == timestamp;
                 } catch (final Exception swallow) {
@@ -368,7 +392,8 @@ public class StoreUpgradeIntegrationTest {
                 }
             },
             60_000L,
-            "Could not get expected result in time.");
+            5_000L,
+            () -> "Could not get expected result in time.");
     }
 
     private <K> void verifyCountWithSurrogateTimestamp(final K key,
@@ -376,8 +401,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore());
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null)
+                        return false;
+
                     final ValueAndTimestamp<Long> count = store.get(key);
                     return count.value() == value && count.timestamp() == -1L;
                 } catch (final Exception swallow) {
@@ -406,8 +435,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore());
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null)
+                        return false;
+
                     try (final KeyValueIterator<K, ValueAndTimestamp<V>> all = store.all()) {
                         final List<KeyValue<K, ValueAndTimestamp<V>>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -441,8 +474,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore());
+                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
+
+                    if (store == null)
+                        return false;
+
                     try (final KeyValueIterator<K, ValueAndTimestamp<V>> all = store.all()) {
                         final List<KeyValue<K, ValueAndTimestamp<V>>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -492,8 +529,8 @@ public class StoreUpgradeIntegrationTest {
 
 
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
-            new KafkaStreams(streamsBuilderForOldStore.build(), props()),
-            new KafkaStreams(streamsBuilderForNewStore.build(), props()),
+            streamsBuilderForOldStore,
+            streamsBuilderForNewStore,
             false);
     }
 
@@ -528,17 +565,17 @@ public class StoreUpgradeIntegrationTest {
             .<Integer, Integer>stream(inputStream)
             .process(TimestampedWindowedProcessor::new, STORE_NAME);
 
-        final Properties props = props();
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
-            new KafkaStreams(streamsBuilderForOldStore.build(), props),
-            new KafkaStreams(streamsBuilderForNewStore.build(), props),
+            streamsBuilderForOldStore,
+            streamsBuilderForNewStore,
             true);
     }
 
-    private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final KafkaStreams kafkaStreamsOld,
-                                                                           final KafkaStreams kafkaStreamsNew,
+    private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final StreamsBuilder streamsBuilderForOldStore,
+                                                                           final StreamsBuilder streamsBuilderForNewStore,
                                                                            final boolean persistentStore) throws Exception {
-        kafkaStreams = kafkaStreamsOld;
+        final Properties props = props();
+        kafkaStreams =  new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
@@ -582,7 +619,7 @@ public class StoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
 
-        kafkaStreams = kafkaStreamsNew;
+        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
         verifyWindowedCountWithTimestamp(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L, lastUpdateKeyOne);
@@ -807,8 +844,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyWindowStore<K, V> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.windowStore());
+                    final ReadOnlyWindowStore<K, V> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.windowStore());
+
+                    if (store == null)
+                        return false;
+
                     try (final KeyValueIterator<Windowed<K>, V> all = store.all()) {
                         final List<KeyValue<Windowed<K>, V>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -831,8 +872,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedWindowStore());
+                    final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
+
+                    if (store == null)
+                        return false;
+
                     final ValueAndTimestamp<Long> count = store.fetch(key.key(), key.window().start());
                     return count.value() == value && count.timestamp() == -1L;
                 } catch (final Exception swallow) {
@@ -851,8 +896,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedWindowStore());
+                    final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
+
+                    if (store == null)
+                        return false;
+
                     final ValueAndTimestamp<Long> count = store.fetch(key.key(), key.window().start());
                     return count.value() == value && count.timestamp() == timestamp;
                 } catch (final Exception swallow) {
@@ -881,8 +930,12 @@ public class StoreUpgradeIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    final ReadOnlyWindowStore<K, ValueAndTimestamp<V>> store =
-                        kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedWindowStore());
+                    final ReadOnlyWindowStore<K, ValueAndTimestamp<V>> store = IntegrationTestUtils
+                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
+
+                    if (store == null)
+                        return false;
+
                     try (final KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> all = store.all()) {
                         final List<KeyValue<Windowed<K>, ValueAndTimestamp<V>>> storeContent = new LinkedList<>();
                         while (all.hasNext()) {
@@ -900,123 +953,107 @@ public class StoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
-    private static class KeyValueProcessor implements Processor<Integer, Integer> {
+    private static class KeyValueProcessor implements Processor<Integer, Integer, Void, Void> {
         private KeyValueStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            store = (KeyValueStore<Integer, Long>) context.getStateStore(STORE_NAME);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             final long newCount;
 
-            final Long oldCount = store.get(key);
+            final Long oldCount = store.get(record.key());
             if (oldCount != null) {
                 newCount = oldCount + 1L;
             } else {
                 newCount = 1L;
             }
 
-            store.put(key, newCount);
+            store.put(record.key(), newCount);
         }
 
-        @Override
-        public void close() {}
     }
 
-    private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer> {
-        private ProcessorContext context;
+    private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer, Void, Void> {
         private TimestampedKeyValueStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            this.context = context;
-            store = (TimestampedKeyValueStore<Integer, Long>) context.getStateStore(STORE_NAME);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             final long newCount;
 
-            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.get(key);
+            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.get(record.key());
             final long newTimestamp;
 
             if (oldCountWithTimestamp == null) {
                 newCount = 1L;
-                newTimestamp = context.timestamp();
+                newTimestamp = record.timestamp();
             } else {
                 newCount = oldCountWithTimestamp.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), context.timestamp());
+                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), record.timestamp());
             }
 
-            store.put(key, ValueAndTimestamp.make(newCount, newTimestamp));
+            store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp));
         }
 
-        @Override
-        public void close() {}
     }
 
-    private static class WindowedProcessor implements Processor<Integer, Integer> {
+    private static class WindowedProcessor implements Processor<Integer, Integer, Void, Void> {
         private WindowStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            store = (WindowStore<Integer, Long>) context.getStateStore(STORE_NAME);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             final long newCount;
 
-            final Long oldCount = store.fetch(key, key < 10 ? 0L : 100000L);
+            final Long oldCount = store.fetch(record.key(), record.key() < 10 ? 0L : 100000L);
             if (oldCount != null) {
                 newCount = oldCount + 1L;
             } else {
                 newCount = 1L;
             }
 
-            store.put(key, newCount, key < 10 ? 0L : 100000L);
+            store.put(record.key(), newCount, record.key() < 10 ? 0L : 100000L);
         }
 
-        @Override
-        public void close() {}
     }
 
-    private static class TimestampedWindowedProcessor implements Processor<Integer, Integer> {
-        private ProcessorContext context;
+    private static class TimestampedWindowedProcessor implements Processor<Integer, Integer, Void, Void> {
         private TimestampedWindowStore<Integer, Long> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            this.context = context;
-            store = (TimestampedWindowStore<Integer, Long>) context.getStateStore(STORE_NAME);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(STORE_NAME);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             final long newCount;
 
-            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.fetch(key, key < 10 ? 0L : 100000L);
+            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.fetch(record.key(), record.key() < 10 ? 0L : 100000L);
             final long newTimestamp;
 
             if (oldCountWithTimestamp == null) {
                 newCount = 1L;
-                newTimestamp = context.timestamp();
+                newTimestamp = record.timestamp();
             } else {
                 newCount = oldCountWithTimestamp.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), context.timestamp());
+                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), record.timestamp());
             }
 
-            store.put(key, ValueAndTimestamp.make(newCount, newTimestamp), key < 10 ? 0L : 100000L);
+            store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp), record.key() < 10 ? 0L : 100000L);
         }
 
-        @Override
-        public void close() {}
     }
 }

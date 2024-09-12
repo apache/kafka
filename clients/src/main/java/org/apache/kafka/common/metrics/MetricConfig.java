@@ -25,6 +25,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class MetricConfig {
 
+    public static final int DEFAULT_NUM_SAMPLES = 2;
+
     private Quota quota;
     private int samples;
     private long eventWindow;
@@ -33,9 +35,8 @@ public class MetricConfig {
     private Sensor.RecordingLevel recordingLevel;
 
     public MetricConfig() {
-        super();
         this.quota = null;
-        this.samples = 2;
+        this.samples = DEFAULT_NUM_SAMPLES;
         this.eventWindow = Long.MAX_VALUE;
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
         this.tags = new LinkedHashMap<>();

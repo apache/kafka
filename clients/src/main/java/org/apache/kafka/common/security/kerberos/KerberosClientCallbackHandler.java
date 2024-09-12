@@ -19,6 +19,9 @@ package org.apache.kafka.common.security.kerberos;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 
+import java.util.List;
+import java.util.Map;
+
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.PasswordCallback;
@@ -26,8 +29,6 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Callback handler for SASL/GSSAPI clients.

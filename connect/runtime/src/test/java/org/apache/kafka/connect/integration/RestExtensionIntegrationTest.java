@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -23,51 +24,53 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
-import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.After;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import java.io.IOException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.core.Response;
+
+import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_EXTENSION_CLASSES_CONFIG;
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.REST_EXTENSION_CLASSES_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * A simple integration test to ensure that REST extensions are registered correctly.
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class RestExtensionIntegrationTest {
 
     private static final long REST_EXTENSION_REGISTRATION_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
     private static final long CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
+    private static final int NUM_WORKERS = 1;
 
     private EmbeddedConnectCluster connect;
 
     @Test
-    public void testRestExtensionApi() throws IOException, InterruptedException {
+    public void testRestExtensionApi() throws InterruptedException {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
-            .numWorkers(1)
+            .numWorkers(NUM_WORKERS)
             .numBrokers(1)
             .workerProps(workerProps)
             .build();
@@ -97,6 +100,8 @@ public class RestExtensionIntegrationTest {
             connectorHandle.taskHandle(connectorHandle.name() + "-0");
             StartAndStopLatch connectorStartLatch = connectorHandle.expectedStarts(1);
             connect.configureConnector(connectorHandle.name(), connectorProps);
+            connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorHandle.name(), 1,
+                    "Connector tasks did not start in time.");
             connectorStartLatch.await(CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
             String workerId = String.format("%s:%d", worker.url().getHost(), worker.url().getPort());
@@ -128,9 +133,9 @@ public class RestExtensionIntegrationTest {
         }
     }
 
-    @After
+    @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
         IntegrationTestRestExtension.instance = null;
     }
@@ -138,8 +143,9 @@ public class RestExtensionIntegrationTest {
     private boolean extensionIsRegistered() {
         try {
             String extensionUrl = connect.endpointForResource("integration-test-rest-extension/registered");
-            return "true".equals(connect.executeGet(extensionUrl));
-        } catch (ConnectRestException | IOException e) {
+            Response response = connect.requestGet(extensionUrl);
+            return response.getStatus() < BAD_REQUEST.getStatusCode();
+        } catch (ConnectException e) {
             return false;
         }
     }

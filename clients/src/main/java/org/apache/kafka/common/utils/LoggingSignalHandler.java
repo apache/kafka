@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
@@ -36,7 +37,6 @@ public class LoggingSignalHandler {
 
     private final Constructor<?> signalConstructor;
     private final Class<?> signalHandlerClass;
-    private final Class<?> signalClass;
     private final Method signalHandleMethod;
     private final Method signalGetNameMethod;
     private final Method signalHandlerHandleMethod;
@@ -47,7 +47,7 @@ public class LoggingSignalHandler {
      * @throws ReflectiveOperationException if the underlying API has changed in an incompatible manner.
      */
     public LoggingSignalHandler() throws ReflectiveOperationException {
-        signalClass = Class.forName("sun.misc.Signal");
+        Class<?> signalClass = Class.forName("sun.misc.Signal");
         signalConstructor = signalClass.getConstructor(String.class);
         signalHandlerClass = Class.forName("sun.misc.SignalHandler");
         signalHandlerHandleMethod = signalHandlerClass.getMethod("handle", signalClass);
@@ -75,8 +75,12 @@ public class LoggingSignalHandler {
     private Object createSignalHandler(final Map<String, Object> jvmSignalHandlers) {
         InvocationHandler invocationHandler = new InvocationHandler() {
 
-            private String getName(Object signal) throws ReflectiveOperationException {
-                return (String) signalGetNameMethod.invoke(signal);
+            private String getName(Object signal) throws Throwable {
+                try {
+                    return (String) signalGetNameMethod.invoke(signal);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
             }
 
             private void handle(Object signalHandler, Object signal) throws ReflectiveOperationException {

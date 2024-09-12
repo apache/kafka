@@ -21,13 +21,15 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -36,10 +38,10 @@ import java.util.SimpleTimeZone;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KeyValueSegmentsTest {
 
@@ -52,20 +54,21 @@ public class KeyValueSegmentsTest {
     private File stateDirectory;
     private final String storeName = "test";
 
-    @Before
+    @BeforeEach
     public void createContext() {
         stateDirectory = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(
+        context = new InternalMockProcessorContext<>(
             stateDirectory,
             Serdes.String(),
             Serdes.Long(),
-            new NoOpRecordCollector(),
+            new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
         segments = new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        segments.openExisting(context, -1L);
     }
 
-    @After
+    @AfterEach
     public void close() {
         segments.close();
     }
@@ -130,7 +133,7 @@ public class KeyValueSegmentsTest {
     public void shouldGetSegmentForTimestamp() {
         final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
-        assertEquals(segment, segments.getSegmentForTimestamp(0L));
+        assertEquals(segment, segments.segmentForTimestamp(0L));
     }
 
     @Test
@@ -154,6 +157,7 @@ public class KeyValueSegmentsTest {
     @Test
     public void shouldOpenExistingSegments() {
         segments = new KeyValueSegments("test",  METRICS_SCOPE, 4, 1);
+        segments.openExisting(context, -1L);
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
         segments.getOrCreateSegmentIfLive(2, context, -1L);
@@ -165,11 +169,11 @@ public class KeyValueSegmentsTest {
         segments = new KeyValueSegments("test",  METRICS_SCOPE, 4, 1);
         segments.openExisting(context, -1L);
 
-        assertTrue(segments.getSegmentForTimestamp(0).isOpen());
-        assertTrue(segments.getSegmentForTimestamp(1).isOpen());
-        assertTrue(segments.getSegmentForTimestamp(2).isOpen());
-        assertTrue(segments.getSegmentForTimestamp(3).isOpen());
-        assertTrue(segments.getSegmentForTimestamp(4).isOpen());
+        assertTrue(segments.segmentForTimestamp(0).isOpen());
+        assertTrue(segments.segmentForTimestamp(1).isOpen());
+        assertTrue(segments.segmentForTimestamp(2).isOpen());
+        assertTrue(segments.segmentForTimestamp(3).isOpen());
+        assertTrue(segments.segmentForTimestamp(4).isOpen());
     }
 
     @Test
@@ -185,11 +189,31 @@ public class KeyValueSegmentsTest {
         segments.getOrCreateSegmentIfLive(3, context, streamTime);
         segments.getOrCreateSegmentIfLive(4, context, streamTime);
 
-        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL);
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
         assertEquals(2, segments.get(2).id);
+    }
+
+    @Test
+    public void shouldGetSegmentsWithinBackwardTimeRange() {
+        updateStreamTimeAndCreateSegment(0);
+        updateStreamTimeAndCreateSegment(1);
+        updateStreamTimeAndCreateSegment(2);
+        updateStreamTimeAndCreateSegment(3);
+        final long streamTime = updateStreamTimeAndCreateSegment(4);
+        segments.getOrCreateSegmentIfLive(0, context, streamTime);
+        segments.getOrCreateSegmentIfLive(1, context, streamTime);
+        segments.getOrCreateSegmentIfLive(2, context, streamTime);
+        segments.getOrCreateSegmentIfLive(3, context, streamTime);
+        segments.getOrCreateSegmentIfLive(4, context, streamTime);
+
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
+        assertEquals(3, segments.size());
+        assertEquals(0, segments.get(2).id);
+        assertEquals(1, segments.get(1).id);
+        assertEquals(2, segments.get(0).id);
     }
 
     @Test
@@ -200,11 +224,26 @@ public class KeyValueSegmentsTest {
         updateStreamTimeAndCreateSegment(1);
         updateStreamTimeAndCreateSegment(3);
 
-        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL);
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
         assertEquals(2, segments.get(2).id);
+    }
+
+    @Test
+    public void shouldGetSegmentsWithinTimeBackwardRangeOutOfOrder() {
+        updateStreamTimeAndCreateSegment(4);
+        updateStreamTimeAndCreateSegment(2);
+        updateStreamTimeAndCreateSegment(0);
+        updateStreamTimeAndCreateSegment(1);
+        updateStreamTimeAndCreateSegment(3);
+
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
+        assertEquals(3, segments.size());
+        assertEquals(2, segments.get(0).id);
+        assertEquals(1, segments.get(1).id);
+        assertEquals(0, segments.get(2).id);
     }
 
     @Test
@@ -266,7 +305,7 @@ public class KeyValueSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File oldSegment = new File(storeDirectoryPath + File.separator + storeName + "-" + formatter.format(new Date(segmentId * segmentInterval)));
             //noinspection ResultOfMethodCallIgnored
-            oldSegment.createNewFile();
+            Files.createFile(oldSegment.toPath());
         }
 
         segments.openExisting(context, -1L);
@@ -288,7 +327,7 @@ public class KeyValueSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File oldSegment = new File(storeDirectoryPath + File.separator + storeName + ":" + segmentId * (RETENTION_PERIOD / (NUM_SEGMENTS - 1)));
             //noinspection ResultOfMethodCallIgnored
-            oldSegment.createNewFile();
+            Files.createFile(oldSegment.toPath());
         }
 
         segments.openExisting(context, -1L);
@@ -303,11 +342,11 @@ public class KeyValueSegmentsTest {
     public void shouldClearSegmentsOnClose() {
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.close();
-        assertThat(segments.getSegmentForTimestamp(0), is(nullValue()));
+        assertThat(segments.segmentForTimestamp(0), is(nullValue()));
     }
 
     private void verifyCorrectSegments(final long first, final int numSegments) {
-        final List<KeyValueSegment> result = this.segments.segments(0, Long.MAX_VALUE);
+        final List<KeyValueSegment> result = this.segments.segments(0, Long.MAX_VALUE, true);
         assertEquals(numSegments, result.size());
         for (int i = 0; i < numSegments; i++) {
             assertEquals(i + first, result.get(i).id);

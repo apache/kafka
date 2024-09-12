@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
+
+import java.nio.ByteBuffer;
 
 public class ExpireDelegationTokenRequest extends AbstractRequest {
 
@@ -33,18 +33,14 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public ExpireDelegationTokenRequest(Struct struct, short version) {
-        super(ApiKeys.EXPIRE_DELEGATION_TOKEN, version);
-        this.data = new ExpireDelegationTokenRequestData(struct, version);
-    }
-
     public static ExpireDelegationTokenRequest parse(ByteBuffer buffer, short version) {
-        return new ExpireDelegationTokenRequest(ApiKeys.EXPIRE_DELEGATION_TOKEN.parseRequest(version, buffer), version);
+        return new ExpireDelegationTokenRequest(
+            new ExpireDelegationTokenRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public ExpireDelegationTokenRequestData data() {
+        return data;
     }
 
     @Override

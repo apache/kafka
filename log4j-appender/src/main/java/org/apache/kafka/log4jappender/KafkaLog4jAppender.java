@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LoggingEvent;
@@ -32,27 +33,34 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-import static org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.MAX_BLOCK_MS_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.BATCH_SIZE_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.MAX_BLOCK_MS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.RETRIES_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_KERBEROS_SERVICE_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_MECHANISM;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_KERBEROS_SERVICE_NAME;
+import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
 
 /**
- * A log4j appender that produces log messages to Kafka
+ * A log4j appender that produces log messages to Kafka.
+ * This appender is deprecated and users should migrate to the log4j2 appender
+ * @see <a href="https://logging.apache.org/log4j/2.x/manual/appenders.html#KafkaAppender">KafkaAppender</a>
  */
+@Deprecated
 public class KafkaLog4jAppender extends AppenderSkeleton {
 
     private String brokerList;
@@ -70,10 +78,13 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     private String clientJaasConf;
     private String kerb5ConfPath;
     private Integer maxBlockMs;
+    private String sslEngineFactoryClass;
 
     private int retries = Integer.MAX_VALUE;
     private int requiredNumAcks = 1;
     private int deliveryTimeoutMs = 120000;
+    private int lingerMs = 0;
+    private int batchSize = 16384;
     private boolean ignoreExceptions = true;
     private boolean syncSend;
     private Producer<byte[], byte[]> producer;
@@ -96,6 +107,22 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
 
     public void setRequiredNumAcks(int requiredNumAcks) {
         this.requiredNumAcks = requiredNumAcks;
+    }
+
+    public int getLingerMs() {
+        return lingerMs;
+    }
+
+    public void setLingerMs(int lingerMs) {
+        this.lingerMs = lingerMs;
+    }
+
+    public int getBatchSize() {
+        return batchSize;
+    }
+
+    public void setBatchSize(int batchSize) {
+        this.batchSize = batchSize;
     }
 
     public int getRetries() {
@@ -242,6 +269,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.maxBlockMs = maxBlockMs;
     }
 
+    public String getSslEngineFactoryClass() {
+        return sslEngineFactoryClass;
+    }
+
+    public void setSslEngineFactoryClass(String sslEngineFactoryClass) {
+        this.sslEngineFactoryClass = sslEngineFactoryClass;
+    }
+
     @Override
     public void activateOptions() {
         // check for config parameter validity
@@ -258,22 +293,34 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         props.put(ACKS_CONFIG, Integer.toString(requiredNumAcks));
         props.put(RETRIES_CONFIG, retries);
         props.put(DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
+        props.put(LINGER_MS_CONFIG, lingerMs);
+        props.put(BATCH_SIZE_CONFIG, batchSize);
+        // Disable idempotence to avoid deadlock when the producer network thread writes a log line while interacting
+        // with the TransactionManager, see KAFKA-13761 for more information.
+        props.put(ENABLE_IDEMPOTENCE_CONFIG, false);
 
         if (securityProtocol != null) {
             props.put(SECURITY_PROTOCOL_CONFIG, securityProtocol);
         }
-        if (securityProtocol != null && securityProtocol.contains("SSL") && sslTruststoreLocation != null &&
-            sslTruststorePassword != null) {
+
+        if (securityProtocol != null && (securityProtocol.contains("SSL") || securityProtocol.contains("SASL"))) {
+            if (sslEngineFactoryClass != null) {
+                props.put(SSL_ENGINE_FACTORY_CLASS_CONFIG, sslEngineFactoryClass);
+            }
+        }
+
+        if (securityProtocol != null && securityProtocol.contains("SSL") && sslTruststoreLocation != null && sslTruststorePassword != null) {
             props.put(SSL_TRUSTSTORE_LOCATION_CONFIG, sslTruststoreLocation);
             props.put(SSL_TRUSTSTORE_PASSWORD_CONFIG, sslTruststorePassword);
 
             if (sslKeystoreType != null && sslKeystoreLocation != null &&
-                sslKeystorePassword != null) {
+                    sslKeystorePassword != null) {
                 props.put(SSL_KEYSTORE_TYPE_CONFIG, sslKeystoreType);
                 props.put(SSL_KEYSTORE_LOCATION_CONFIG, sslKeystoreLocation);
                 props.put(SSL_KEYSTORE_PASSWORD_CONFIG, sslKeystorePassword);
             }
         }
+
         if (securityProtocol != null && securityProtocol.contains("SASL") && saslKerberosServiceName != null && clientJaasConfPath != null) {
             props.put(SASL_KERBEROS_SERVICE_NAME, saslKerberosServiceName);
             System.setProperty("java.security.auth.login.config", clientJaasConfPath);
@@ -294,6 +341,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         this.producer = getKafkaProducer(props);
+        LogLog.warn("log4j-appender is deprecated and will be removed in Kafka 4.0.");
         LogLog.debug("Kafka producer connected to " + brokerList);
         LogLog.debug("Logging for topic: " + topic);
     }
@@ -306,8 +354,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     protected void append(LoggingEvent event) {
         String message = subAppend(event);
         LogLog.debug("[" + new Date(event.getTimeStamp()) + "]" + message);
-        Future<RecordMetadata> response = producer.send(
-            new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
+        Future<RecordMetadata> response;
+        try {
+            response = producer.send(new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
+        } catch (IllegalStateException e) {
+            // The producer has been closed
+            LogLog.debug("Exception while sending to Kafka", e);
+            return;
+        }
         if (syncSend) {
             try {
                 response.get();
@@ -327,7 +381,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     public void close() {
         if (!this.closed) {
             this.closed = true;
-            producer.close();
+            if (producer != null) {
+                producer.close();
+            }
         }
     }
 

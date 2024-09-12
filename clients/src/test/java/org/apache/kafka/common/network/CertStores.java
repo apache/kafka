@@ -19,10 +19,14 @@ package org.apache.kafka.common.network;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.test.TestSslUtils.SslConfigsBuilder;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,12 +36,15 @@ public class CertStores {
             SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
             SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-            SslConfigs.SSL_KEY_PASSWORD_CONFIG);
+            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
+            SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
 
     public static final Set<String> TRUSTSTORE_PROPS = Utils.mkSet(
             SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
-            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
 
     private final Map<String, Object> sslConfig;
 
@@ -46,19 +53,28 @@ public class CertStores {
     }
 
     public CertStores(boolean server, String commonName, String sanHostName) throws Exception {
-        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsName(sanHostName));
-    }
-
-    public CertStores(boolean server, String commonName, InetAddress hostAddress) throws Exception {
-        this(server, commonName, new TestSslUtils.CertificateBuilder().sanIpAddress(hostAddress));
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsNames(sanHostName));
     }
 
     private CertStores(boolean server, String commonName, TestSslUtils.CertificateBuilder certBuilder) throws Exception {
-        String name = server ? "server" : "client";
-        Mode mode = server ? Mode.SERVER : Mode.CLIENT;
-        File truststoreFile = File.createTempFile(name + "TS", ".jks");
-        sslConfig = TestSslUtils.createSslConfig(!server, true, mode, truststoreFile, name, commonName, certBuilder);
+        this(server, commonName, "RSA", certBuilder, false);
     }
+
+    private CertStores(boolean server, String commonName, String keyAlgorithm, TestSslUtils.CertificateBuilder certBuilder, boolean usePem) throws Exception {
+        String name = server ? "server" : "client";
+        ConnectionMode connectionMode = server ? ConnectionMode.SERVER : ConnectionMode.CLIENT;
+        File truststoreFile = usePem ? null : TestUtils.tempFile(name + "TS", ".jks");
+        sslConfig = new SslConfigsBuilder(connectionMode)
+                .useClientCert(!server)
+                .certAlias(name)
+                .cn(commonName)
+                .createNewTrustStore(truststoreFile)
+                .certBuilder(certBuilder)
+                .algorithm(keyAlgorithm)
+                .usePem(usePem)
+                .build();
+    }
+
 
     public Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {
         Map<String, Object> config = new HashMap<>(sslConfig);
@@ -86,5 +102,53 @@ public class CertStores {
             props.put(propName, sslConfig.get(propName));
         }
         return props;
+    }
+
+    public static class Builder {
+        private final boolean isServer;
+        private final List<String> sanDns;
+        private String cn;
+        private InetAddress sanIp;
+        private String keyAlgorithm;
+        private boolean usePem;
+
+        public Builder(boolean isServer) {
+            this.isServer = isServer;
+            this.sanDns = new ArrayList<>();
+            this.keyAlgorithm = "RSA";
+        }
+
+        public Builder cn(String cn) {
+            this.cn = cn;
+            return this;
+        }
+
+        public Builder addHostName(String hostname) {
+            this.sanDns.add(hostname);
+            return this;
+        }
+
+        public Builder hostAddress(InetAddress hostAddress) {
+            this.sanIp = hostAddress;
+            return this;
+        }
+
+        public Builder keyAlgorithm(String keyAlgorithm) {
+            this.keyAlgorithm = keyAlgorithm;
+            return this;
+        }
+
+        public Builder usePem(boolean usePem) {
+            this.usePem = usePem;
+            return this;
+        }
+
+        public CertStores build() throws Exception {
+            TestSslUtils.CertificateBuilder certBuilder = new TestSslUtils.CertificateBuilder()
+                .sanDnsNames(sanDns.toArray(new String[0]));
+            if (sanIp != null)
+                certBuilder = certBuilder.sanIpAddress(sanIp);
+            return new CertStores(isServer, cn, keyAlgorithm, certBuilder, usePem);
+        }
     }
 }

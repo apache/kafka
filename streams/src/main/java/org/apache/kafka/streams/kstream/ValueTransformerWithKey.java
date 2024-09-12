@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import java.time.Duration;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -24,6 +23,8 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+
+import java.time.Duration;
 
 /**
  * The {@code ValueTransformerWithKey} interface for stateful mapping of a value to a new value (with possible new type).
@@ -75,14 +76,21 @@ public interface ValueTransformerWithKey<K, V, VR> {
     void init(final ProcessorContext context);
 
     /**
-     * Transform the given [key and ]value to a new value.
+     * Transform the given [key and] value to a new value.
      * Additionally, any {@link StateStore} that is {@link KStream#transformValues(ValueTransformerWithKeySupplier, String...)
      * attached} to this operator can be accessed and modified arbitrarily (cf.
      * {@link ProcessorContext#getStateStore(String)}).
      * <p>
-     * Note, that using {@link ProcessorContext#forward(Object, Object)} or
+     * Note that using {@link ProcessorContext#forward(Object, Object)} or
      * {@link ProcessorContext#forward(Object, Object, To)} is not allowed within {@code transform} and
      * will result in an {@link StreamsException exception}.
+     * <p>
+     * Note that if a {@code ValueTransformerWithKey} is used in a {@link KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
+     * (or any other overload of {@code KTable#transformValues(...)}) operation,
+     * then the provided {@link ProcessorContext} from {@link #init(ProcessorContext)}
+     * does not guarantee that all context information will be available when {@code transform()}
+     * is executed, as it might be executed "out-of-band" due to some internal optimizations
+     * applied by the Kafka Streams DSL.
      *
      * @param readOnlyKey the read-only key
      * @param value       the value to be transformed

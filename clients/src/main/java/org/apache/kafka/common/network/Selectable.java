@@ -17,8 +17,11 @@
 package org.apache.kafka.common.network;
 
 
+import org.apache.kafka.common.memory.MemoryPool;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +64,7 @@ public interface Selectable {
      * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
      * @param send The request to send
      */
-    void send(Send send);
+    void send(NetworkSend send);
 
     /**
      * Do I/O. Reads, writes, connection establishment, etc.
@@ -73,12 +76,16 @@ public interface Selectable {
     /**
      * The list of sends that completed on the last {@link #poll(long) poll()} call.
      */
-    List<Send> completedSends();
+    List<NetworkSend> completedSends();
 
     /**
-     * The list of receives that completed on the last {@link #poll(long) poll()} call.
+     * The collection of receives that completed on the last {@link #poll(long) poll()} call.
+     *
+     * Note that the caller of this method assumes responsibility to close the NetworkReceive resources which may be
+     * backed by a {@link MemoryPool}. In such scenarios (when NetworkReceive uses a {@link MemoryPool}), it is necessary
+     * to close the {@link NetworkReceive} to prevent any memory leaks.
      */
-    List<NetworkReceive> completedReceives();
+    Collection<NetworkReceive> completedReceives();
 
     /**
      * The connections that finished disconnecting on the last {@link #poll(long) poll()}

@@ -29,8 +29,10 @@ import java.util.Collection;
 @InterfaceStability.Evolving
 public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
 
+    private boolean retryOnQuotaViolation = true;
+
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */
@@ -40,4 +42,18 @@ public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
         return this;
     }
 
+    /**
+     * Set to true if quota violation should be automatically retried.
+     */
+    public DeleteTopicsOptions retryOnQuotaViolation(boolean retryOnQuotaViolation) {
+        this.retryOnQuotaViolation = retryOnQuotaViolation;
+        return this;
+    }
+
+    /**
+     * Returns true if quota violation should be automatically retried.
+     */
+    public boolean shouldRetryOnQuotaViolation() {
+        return retryOnQuotaViolation;
+    }
 }

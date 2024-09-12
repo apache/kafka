@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -72,7 +73,7 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
 
         AdminMetadataManager metadataManager = new AdminMetadataManager(new LogContext(),
                 adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
+                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), false);
         this.mockClient = new MockClient(time, new MockClient.MockMetadataUpdater() {
             @Override
             public List<Node> fetchNodes() {
@@ -113,7 +114,10 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
 
     @Override
     public void close() {
-        this.adminClient.close();
+        // tell the admin client to close now
+        this.adminClient.close(Duration.ZERO);
+        // block for up to a minute until the internal threads shut down.
+        this.adminClient.close(Duration.ofMinutes(1));
     }
 
     static Map<String, Object> clientConfigs(String... overrides) {

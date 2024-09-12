@@ -17,25 +17,20 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.junit.Test;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableProcessorNodeTest {
-    private static class TestProcessor extends AbstractProcessor<String, String> {
-        @Override
-        public void init(final ProcessorContext context) {
-        }
+    private static class TestProcessor implements Processor<String, String, String, String> {
 
         @Override
-        public void process(final String key, final String value) {
+        public void process(final Record<String, String> record) {
         }
 
-        @Override
-        public void close() {
-        }
     }
 
     @Test
@@ -48,13 +43,13 @@ public class TableProcessorNodeTest {
         );
 
         final String asString = node.toString();
-        final String expected = "storeBuilder=null";
+        final String expected = "storeFactory=null";
         assertTrue(
-            String.format(
-                "Expected toString to return string with \"%s\", received: %s",
-                expected,
-                asString),
-            asString.contains(expected)
+                asString.contains(expected),
+                String.format(
+                        "Expected toString to return string with \"%s\", received: %s",
+                        expected,
+                        asString)
         );
     }
 }

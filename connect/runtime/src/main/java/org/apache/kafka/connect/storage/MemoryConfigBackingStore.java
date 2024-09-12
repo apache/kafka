@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,9 +33,15 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An implementation of ConfigBackingStore that stores Kafka Connect connector configurations in-memory (i.e. configs
+ * aren't persisted and will be wiped if the worker is restarted).
+ */
 public class MemoryConfigBackingStore implements ConfigBackingStore {
 
-    private Map<String, ConnectorState> connectors = new HashMap<>();
+    private static final Logger log = LoggerFactory.getLogger(MemoryConfigBackingStore.class);
+
+    private final Map<String, ConnectorState> connectors = new HashMap<>();
     private UpdateListener updateListener;
     private WorkerConfigTransformer configTransformer;
 
@@ -57,6 +66,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
         Map<String, TargetState> connectorTargetStates = new HashMap<>();
         Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = new HashMap<>();
 
         for (Map.Entry<String, ConnectorState> connectorStateEntry : connectors.entrySet()) {
             String connector = connectorStateEntry.getKey();
@@ -65,6 +75,9 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
             connectorConfigs.put(connector, connectorState.connConfig);
             connectorTargetStates.put(connector, connectorState.targetState);
             taskConfigs.putAll(connectorState.taskConfigs);
+            if (connectorState.appliedConnConfig != null) {
+                appliedConnectorConfigs.put(connector, connectorState.appliedConnConfig);
+            }
         }
 
         return new ClusterConfigState(
@@ -74,8 +87,13 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
                 connectorConfigs,
                 connectorTargetStates,
                 taskConfigs,
-                Collections.<String>emptySet(),
-                configTransformer);
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                appliedConnectorConfigs,
+                Collections.emptySet(),
+                Collections.emptySet(),
+                configTransformer
+        );
     }
 
     @Override
@@ -84,12 +102,16 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
-    public synchronized void putConnectorConfig(String connector, Map<String, String> properties) {
+    public synchronized void putConnectorConfig(String connector, Map<String, String> properties, TargetState targetState) {
         ConnectorState state = connectors.get(connector);
         if (state == null)
-            connectors.put(connector, new ConnectorState(properties));
-        else
+            connectors.put(connector, new ConnectorState(properties, targetState));
+        else {
             state.connConfig = properties;
+            if (targetState != null) {
+                state.targetState = targetState;
+            }
+        }
 
         if (updateListener != null)
             updateListener.onConnectorConfigUpdate(connector);
@@ -111,6 +133,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
         HashSet<ConnectorTaskId> taskIds = new HashSet<>(state.taskConfigs.keySet());
         state.taskConfigs.clear();
+        state.appliedConnConfig = null;
 
         if (updateListener != null)
             updateListener.onTaskConfigUpdate(taskIds);
@@ -124,6 +147,8 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
         Map<ConnectorTaskId, Map<String, String>> taskConfigsMap = taskConfigListAsMap(connector, configs);
         state.taskConfigs = taskConfigsMap;
+
+        state.applyConfig();
 
         if (updateListener != null)
             updateListener.onTaskConfigUpdate(taskConfigsMap.keySet());
@@ -139,14 +164,30 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         if (connectorState == null)
             throw new IllegalArgumentException("No connector `" + connector + "` configured");
 
+        TargetState prevState = connectorState.targetState;
         connectorState.targetState = state;
 
-        if (updateListener != null)
+        if (updateListener != null && !state.equals(prevState))
             updateListener.onConnectorTargetStateChange(connector);
     }
 
     @Override
     public void putSessionKey(SessionKey sessionKey) {
+        // no-op
+    }
+
+    @Override
+    public void putRestartRequest(RestartRequest restartRequest) {
+        // no-op
+    }
+
+    @Override
+    public void putTaskCountRecord(String connector, int taskCount) {
+        // no-op
+    }
+
+    @Override
+    public void putLoggerLevel(String namespace, String level) {
         // no-op
     }
 
@@ -159,11 +200,22 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         private TargetState targetState;
         private Map<String, String> connConfig;
         private Map<ConnectorTaskId, Map<String, String>> taskConfigs;
+        private AppliedConnectorConfig appliedConnConfig;
 
-        public ConnectorState(Map<String, String> connConfig) {
-            this.targetState = TargetState.STARTED;
+        /**
+         * @param connConfig the connector's configuration
+         * @param targetState the connector's initial {@link TargetState}; may be {@code null} in which case the default initial target state
+         * {@link TargetState#STARTED} will be used
+         */
+        public ConnectorState(Map<String, String> connConfig, TargetState targetState) {
+            this.targetState = targetState == null ? TargetState.STARTED : targetState;
             this.connConfig = connConfig;
             this.taskConfigs = new HashMap<>();
+            this.appliedConnConfig = null;
+        }
+
+        public void applyConfig() {
+            this.appliedConnConfig = new AppliedConnectorConfig(connConfig);
         }
     }
 

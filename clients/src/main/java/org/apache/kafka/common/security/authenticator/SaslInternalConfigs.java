@@ -21,7 +21,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 public class SaslInternalConfigs {
     /**
      * The server (broker) specifies a positive session length in milliseconds to a
-     * SASL client when {@link BrokerSecurityConfigs#CONNECTIONS_MAX_REAUTH_MS} is
+     * SASL client when {@link BrokerSecurityConfigs#CONNECTIONS_MAX_REAUTH_MS_CONFIG} is
      * positive as per <a href=
      * "https://cwiki.apache.org/confluence/display/KAFKA/KIP-368%3A+Allow+SASL+Connections+to+Periodically+Re-Authenticate">KIP
      * 368: Allow SASL Connections to Periodically Re-Authenticate</a>. The session

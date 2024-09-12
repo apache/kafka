@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import java.util.Map;
 
-public interface RecordCollector extends AutoCloseable {
+public interface RecordCollector {
 
     <K, V> void send(final String topic,
                      final K key,
@@ -33,7 +33,9 @@ public interface RecordCollector extends AutoCloseable {
                      final Integer partition,
                      final Long timestamp,
                      final Serializer<K> keySerializer,
-                     final Serializer<V> valueSerializer);
+                     final Serializer<V> valueSerializer,
+                     final String processorNodeId,
+                     final InternalProcessorContext<Void, Void> context);
 
     <K, V> void send(final String topic,
                      final K key,
@@ -42,13 +44,16 @@ public interface RecordCollector extends AutoCloseable {
                      final Long timestamp,
                      final Serializer<K> keySerializer,
                      final Serializer<V> valueSerializer,
+                     final String processorNodeId,
+                     final InternalProcessorContext<Void, Void> context,
                      final StreamPartitioner<? super K, ? super V> partitioner);
 
     /**
-     * Initialize the collector with a producer.
-     * @param producer the producer that should be used by this collector
+     * Initialize the internal {@link Producer}; note this function should be made idempotent
+     *
+     * @throws org.apache.kafka.common.errors.TimeoutException if producer initializing txn id timed out
      */
-    void init(final Producer<byte[], byte[]> producer);
+    void initialize();
 
     /**
      * Flush the internal {@link Producer}.
@@ -56,9 +61,14 @@ public interface RecordCollector extends AutoCloseable {
     void flush();
 
     /**
-     * Close the internal {@link Producer}.
+     * Clean close the internal {@link Producer}.
      */
-    void close();
+    void closeClean();
+
+    /**
+     * Dirty close the internal {@link Producer}.
+     */
+    void closeDirty();
 
     /**
      * The last acked offsets from the internal {@link Producer}.
@@ -70,6 +80,8 @@ public interface RecordCollector extends AutoCloseable {
     /**
      * A supplier of a {@link RecordCollectorImpl} instance.
      */
+    // TODO: after we have done KAFKA-9088 we should just add this function
+    // to InternalProcessorContext interface
     interface Supplier {
         /**
          * Get the record collector.

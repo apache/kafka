@@ -2,9 +2,9 @@
 <?xml-stylesheet type="text/xsl"?>
 <rdf:RDF xml:lang="en"
          xmlns="http://usefulinc.com/ns/doap#"
-         xmlns:rdf="https://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:asfext="https://projects.apache.org/ns/asfext#"
-         xmlns:foaf="https://xmlns.com/foaf/0.1/">
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:asfext="http://projects.apache.org/ns/asfext#"
+         xmlns:foaf="http://xmlns.com/foaf/0.1/">
 <!--
     Licensed to the Apache Software Foundation (ASF) under one or more
     contributor license agreements.  See the NOTICE file distributed with
@@ -33,7 +33,7 @@
     <mailing-list rdf:resource="https://kafka.apache.org/contact.html" />
     <download-page rdf:resource="https://kafka.apache.org/downloads.html" />
     <programming-language>Scala</programming-language>
-    <category rdf:resource="https://projects.apache.org/projects.html?category#big-data" />
+    <category rdf:resource="http://projects.apache.org/category/big-data" />
     <repository>
       <SVNRepository>
         <location rdf:resource="https://gitbox.apache.org/repos/asf/kafka.git"/>

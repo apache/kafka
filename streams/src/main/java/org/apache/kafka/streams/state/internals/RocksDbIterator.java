@@ -20,28 +20,29 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.state.KeyValueIterator;
+
 import org.rocksdb.RocksIterator;
 
 import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.function.Consumer;
 
-class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements KeyValueIterator<Bytes, byte[]> {
+class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements ManagedKeyValueIterator<Bytes, byte[]> {
 
     private final String storeName;
     private final RocksIterator iter;
-    private final Set<KeyValueIterator<Bytes, byte[]>> openIterators;
+    private final Consumer<RocksIterator> advanceIterator;
 
     private volatile boolean open = true;
 
     private KeyValue<Bytes, byte[]> next;
+    private Runnable closeCallback = null;
 
     RocksDbIterator(final String storeName,
                     final RocksIterator iter,
-                    final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+                    final boolean forward) {
         this.storeName = storeName;
         this.iter = iter;
-        this.openIterators = openIterators;
+        this.advanceIterator = forward ? RocksIterator::next : RocksIterator::prev;
     }
 
     @Override
@@ -53,12 +54,12 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     }
 
     @Override
-    public KeyValue<Bytes, byte[]> makeNext() {
+    protected KeyValue<Bytes, byte[]> makeNext() {
         if (!iter.isValid()) {
             return allDone();
         } else {
             next = getKeyValue();
-            iter.next();
+            advanceIterator.accept(iter);
             return next;
         }
     }
@@ -69,7 +70,11 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
 
     @Override
     public synchronized void close() {
-        openIterators.remove(this);
+        if (closeCallback == null) {
+            throw new IllegalStateException("RocksDbIterator expects close callback to be set immediately upon creation");
+        }
+        closeCallback.run();
+
         iter.close();
         open = false;
     }
@@ -80,5 +85,10 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
             throw new NoSuchElementException();
         }
         return next.key;
+    }
+
+    @Override
+    public synchronized void onClose(final Runnable closeCallback) {
+        this.closeCallback = closeCallback;
     }
 }

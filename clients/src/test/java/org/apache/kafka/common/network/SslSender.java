@@ -16,24 +16,27 @@
  */
 package org.apache.kafka.common.network;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+
 public class SslSender extends Thread {
 
+    private final String tlsProtocol;
     private final InetSocketAddress serverAddress;
     private final byte[] payload;
     private final CountDownLatch handshaked = new CountDownLatch(1);
 
-    public SslSender(InetSocketAddress serverAddress, byte[] payload) {
+    @SuppressWarnings("this-escape")
+    public SslSender(String tlsProtocol, InetSocketAddress serverAddress, byte[] payload) {
+        this.tlsProtocol = tlsProtocol;
         this.serverAddress = serverAddress;
         this.payload = payload;
         setDaemon(true);
@@ -43,7 +46,7 @@ public class SslSender extends Thread {
     @Override
     public void run() {
         try {
-            SSLContext sc = SSLContext.getInstance("TLSv1.2");
+            SSLContext sc = SSLContext.getInstance(tlsProtocol);
             sc.init(null, new TrustManager[]{new NaiveTrustManager()}, new java.security.SecureRandom());
             try (SSLSocket connection = (SSLSocket) sc.getSocketFactory().createSocket(serverAddress.getAddress(), serverAddress.getPort())) {
                 OutputStream os = connection.getOutputStream();
@@ -66,12 +69,12 @@ public class SslSender extends Thread {
      */
     private static class NaiveTrustManager implements X509TrustManager {
         @Override
-        public void checkClientTrusted(X509Certificate[] x509Certificates, String s) throws CertificateException {
+        public void checkClientTrusted(X509Certificate[] x509Certificates, String s) {
             //nop
         }
 
         @Override
-        public void checkServerTrusted(X509Certificate[] x509Certificates, String s) throws CertificateException {
+        public void checkServerTrusted(X509Certificate[] x509Certificates, String s) {
             //nop
         }
 

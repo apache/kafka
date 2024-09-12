@@ -19,15 +19,16 @@ package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.health.ConnectorType;
-import org.apache.kafka.connect.runtime.WorkerTest;
-import org.junit.Assert;
+import org.apache.kafka.connect.runtime.SampleSourceConnector;
 
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 public abstract class BaseConnectorClientConfigOverridePolicyTest {
 
-    protected abstract ConnectorClientConfigOverridePolicy  policyToTest();
+    protected abstract ConnectorClientConfigOverridePolicy policyToTest();
 
     protected void testValidOverride(Map<String, Object> clientConfig) {
         List<ConfigValue> configValues = configValues(clientConfig);
@@ -43,17 +44,17 @@ public abstract class BaseConnectorClientConfigOverridePolicyTest {
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             "test",
             ConnectorType.SOURCE,
-            WorkerTest.WorkerTestConnector.class,
+            SampleSourceConnector.class,
             clientConfig,
             ConnectorClientConfigRequest.ClientType.PRODUCER);
         return policyToTest().validate(connectorClientConfigRequest);
     }
 
     protected void assertNoError(List<ConfigValue> configValues) {
-        Assert.assertTrue(configValues.stream().allMatch(configValue -> configValue.errorMessages().size() == 0));
+        assertTrue(configValues.stream().allMatch(configValue -> configValue.errorMessages().isEmpty()));
     }
 
     protected void assertError(List<ConfigValue> configValues) {
-        Assert.assertTrue(configValues.stream().anyMatch(configValue -> configValue.errorMessages().size() > 0));
+        assertTrue(configValues.stream().anyMatch(configValue -> !configValue.errorMessages().isEmpty()));
     }
 }

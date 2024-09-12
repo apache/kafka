@@ -29,13 +29,13 @@ import org.apache.kafka.connect.errors.DataException;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 
@@ -46,28 +46,6 @@ public class ConnectHeaders implements Headers {
 
     private static final int EMPTY_HASH = Objects.hash(new LinkedList<>());
 
-    /**
-     * An immutable and therefore sharable empty iterator.
-     */
-    private static final Iterator<Header> EMPTY_ITERATOR = new Iterator<Header>() {
-        @Override
-        public boolean hasNext() {
-            return false;
-        }
-
-        @Override
-        public Header next() {
-            throw new NoSuchElementException();
-        }
-
-        @Override
-        public void remove() {
-            throw new IllegalStateException();
-        }
-    };
-
-
-    // This field is set lazily, but once set to a list it is never set back to null
     private LinkedList<Header> headers;
 
     public ConnectHeaders() {
@@ -85,6 +63,7 @@ public class ConnectHeaders implements Headers {
         } else {
             headers = new LinkedList<>();
             for (Header header : original) {
+                Objects.requireNonNull(header, "Unable to add a null header.");
                 headers.add(header);
             }
         }
@@ -97,7 +76,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public boolean isEmpty() {
-        return headers == null ? true : headers.isEmpty();
+        return headers == null || headers.isEmpty();
     }
 
     @Override
@@ -265,10 +244,8 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Iterator<Header> iterator() {
-        if (headers != null) {
-            return headers.iterator();
-        }
-        return EMPTY_ITERATOR;
+        return headers == null ? Collections.emptyIterator() :
+            headers.iterator();
     }
 
     @Override

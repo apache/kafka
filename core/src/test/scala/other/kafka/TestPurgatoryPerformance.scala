@@ -21,14 +21,13 @@ import java.lang.management.ManagementFactory
 import java.lang.management.OperatingSystemMXBean
 import java.util.Random
 import java.util.concurrent._
-
 import joptsimple._
 import kafka.server.{DelayedOperation, DelayedOperationPurgatory}
-import kafka.utils._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.util.{CommandLineUtils, ShutdownableThread}
 
 import scala.math._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * This is a benchmark test of the purgatory.
@@ -91,7 +90,7 @@ object TestPurgatoryPerformance {
     val pct50 = options.valueOf(pct50Opt).doubleValue
     val verbose = options.valueOf(verboseOpt).booleanValue
 
-    val gcMXBeans = ManagementFactory.getGarbageCollectorMXBeans().asScala.sortBy(_.getName)
+    val gcMXBeans = ManagementFactory.getGarbageCollectorMXBeans.asScala.sortBy(_.getName)
     val osMXBean = ManagementFactory.getOperatingSystemMXBean
     val latencySamples = new LatencySamples(1000000, pct75, pct50)
     val intervalSamples = new IntervalSamples(1000000, requestRate)
@@ -173,7 +172,7 @@ object TestPurgatoryPerformance {
   //   mu: the mean of the underlying normal distribution (not the mean of this log-normal distribution)
   //   sigma: the standard deviation of the underlying normal distribution (not the stdev of this log-normal distribution)
   private class LogNormalDistribution(mu: Double, sigma: Double) {
-    val rand = new Random
+    private val rand = new Random
     def next(): Double = {
       val n = rand.nextGaussian() * sigma + mu
       math.exp(n)
@@ -183,7 +182,7 @@ object TestPurgatoryPerformance {
   // exponential distribution (http://en.wikipedia.org/wiki/Exponential_distribution)
   //  lambda : the rate parameter of the exponential distribution
   private class ExponentialDistribution(lambda: Double) {
-    val rand = new Random
+    private val rand = new Random
     def next(): Double = {
       math.log(1d - rand.nextDouble()) / (- lambda)
     }
@@ -256,7 +255,7 @@ object TestPurgatoryPerformance {
 
   private class CompletionQueue {
     private[this] val delayQueue = new DelayQueue[Scheduled]()
-    private[this] val thread = new ShutdownableThread(name = "completion thread", isInterruptible = false) {
+    private[this] val thread = new ShutdownableThread("completion thread", false) {
       override def doWork(): Unit = {
         val scheduled = delayQueue.poll(100, TimeUnit.MILLISECONDS)
         if (scheduled != null) {
@@ -270,7 +269,7 @@ object TestPurgatoryPerformance {
       delayQueue.offer(new Scheduled(operation))
     }
 
-    def shutdown() = {
+    def shutdown(): Unit = {
       thread.shutdown()
     }
 

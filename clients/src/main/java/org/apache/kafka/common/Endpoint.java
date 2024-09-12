@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common;
 
-import java.util.Objects;
-import java.util.Optional;
-
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Represents a broker endpoint.

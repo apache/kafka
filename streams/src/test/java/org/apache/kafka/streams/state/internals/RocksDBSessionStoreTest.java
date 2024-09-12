@@ -16,60 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.HashSet;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.Stores;
-import org.junit.Test;
-
-import java.util.Arrays;
-
-import static java.time.Duration.ofMillis;
-import static org.junit.Assert.assertEquals;
-
-public class RocksDBSessionStoreTest extends SessionBytesStoreTest {
-
-    private static final String STORE_NAME = "rocksDB session store";
+public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
 
     @Override
-    <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
-                                                 final Serde<K> keySerde,
-                                                 final Serde<V> valueSerde) {
-        return Stores.sessionStoreBuilder(
-            Stores.persistentSessionStore(
-                STORE_NAME,
-                ofMillis(retentionPeriod)),
-            keySerde,
-            valueSerde).build();
-    }
-
-    @Override
-    String getMetricsScope() {
-        return new RocksDbSessionBytesStoreSupplier(null, 0).metricsScope();
-    }
-
-    @Override
-    void setClassLoggerToDebug() {
-        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
-    }
-
-    @Test
-    public void shouldRemoveExpired() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, SEGMENT_INTERVAL)), 2L);
-        sessionStore.put(new Windowed<>("a", new SessionWindow(10, SEGMENT_INTERVAL)), 3L);
-
-        // Advance stream time to expire the first record
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 2 * SEGMENT_INTERVAL)), 4L);
-
-        try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
-        ) {
-            assertEquals(valuesToSet(iterator), new HashSet<>(Arrays.asList(2L, 3L, 4L)));
-        }
+    StoreType storeType() {
+        return StoreType.RocksDBSessionStore;
     }
 }

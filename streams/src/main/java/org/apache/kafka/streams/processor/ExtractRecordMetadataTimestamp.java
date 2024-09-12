@@ -39,7 +39,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  *
  * @see FailOnInvalidTimestamp
  * @see LogAndSkipOnInvalidTimestamp
- * @see UsePreviousTimeOnInvalidTimestamp
+ * @see UsePartitionTimeOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
 abstract class ExtractRecordMetadataTimestamp implements TimestampExtractor {

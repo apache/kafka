@@ -19,5 +19,5 @@ IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
         set KAFKA_HEAP_OPTS=-Xmx512M
 )
 
-"%~dp0kafka-run-class.bat" kafka.tools.StreamsResetter %*
+"%~dp0kafka-run-class.bat" org.apache.kafka.tools.StreamsResetter %*
 EndLocal

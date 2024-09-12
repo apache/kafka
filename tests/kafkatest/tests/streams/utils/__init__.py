@@ -13,4 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from util import verify_running, verify_stopped, stop_processors, extract_generation_from_logs
+from .util import verify_running, verify_stopped, stop_processors, extract_generation_from_logs, extract_generation_id

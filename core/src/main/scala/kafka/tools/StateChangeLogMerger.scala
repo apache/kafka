@@ -23,12 +23,13 @@ import scala.util.matching.Regex
 import collection.mutable
 import java.util.Date
 import java.text.SimpleDateFormat
+import kafka.utils.{CoreUtils, Logging}
 
-import kafka.utils.{CommandLineUtils, CoreUtils, Exit, Logging}
 import java.io.{BufferedOutputStream, OutputStream}
 import java.nio.charset.StandardCharsets
-
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.server.util.CommandLineUtils
 
 /**
  * A utility that merges the state change logs (possibly obtained from different brokers and over multiple days).
@@ -44,20 +45,20 @@ import org.apache.kafka.common.internals.Topic
  * 3. Start time from when the logs should be merged
  * 4. End time until when the logs should be merged
  */
-
+@deprecated(since = "3.6")
 object StateChangeLogMerger extends Logging {
-
   val dateFormatString = "yyyy-MM-dd HH:mm:ss,SSS"
   val topicPartitionRegex = new Regex("\\[(" + Topic.LEGAL_CHARS + "+),( )*([0-9]+)\\]")
   val dateRegex = new Regex("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3}")
   val dateFormat = new SimpleDateFormat(dateFormatString)
   var files: List[String] = List()
-  var topic: String = null
+  var topic: String = _
   var partitions: List[Int] = List()
-  var startDate: Date = null
-  var endDate: Date = null
+  var startDate: Date = _
+  var endDate: Date = _
 
   def main(args: Array[String]): Unit = {
+    println("WARNING: This tool is deprecated and will be removed in the next major release.")
 
     // Parse input arguments.
     val parser = new OptionParser(false)
@@ -88,8 +89,8 @@ object StateChangeLogMerger extends Logging {
                               .ofType(classOf[String])
                               .defaultsTo("9999-12-31 23:59:59,999")
                               
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "A tool for merging the log files from several brokers to reconnstruct a unified history of what happened.")
+    if (args.isEmpty)
+      CommandLineUtils.printUsageAndExit(parser, "A tool for merging the log files from several brokers to reconnstruct a unified history of what happened.")
 
 
     val options = parser.parse(args : _*)
@@ -137,7 +138,7 @@ object StateChangeLogMerger extends Logging {
      */
     val pqueue = new mutable.PriorityQueue[LineIterator]()(dateBasedOrdering)
     val output: OutputStream = new BufferedOutputStream(System.out, 1024*1024)
-    val lineIterators = files.map(scala.io.Source.fromFile(_).getLines)
+    val lineIterators = files.map(scala.io.Source.fromFile(_).getLines())
     var lines: List[LineIterator] = List()
 
     for (itr <- lineIterators) {
@@ -166,7 +167,7 @@ object StateChangeLogMerger extends Logging {
    */
   def getNextLine(itr: Iterator[String]): LineIterator = {
     while (itr != null && itr.hasNext) {
-      val nextLine = itr.next
+      val nextLine = itr.next()
       dateRegex.findFirstIn(nextLine).foreach { d =>
         val date = dateFormat.parse(d)
         if ((date.equals(startDate) || date.after(startDate)) && (date.equals(endDate) || date.before(endDate))) {
@@ -192,5 +193,4 @@ object StateChangeLogMerger extends Logging {
       secondDate.compareTo(firstDate)
     }
   }
-
 }

@@ -20,14 +20,33 @@ package kafka.utils
 import java.util
 import java.util.Locale
 
+import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.{Level, LogManager, Logger}
 
 import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 
 object Log4jController {
   val ROOT_LOGGER = "root"
+
+  private def resolveLevel(logger: Logger): String = {
+    var name = logger.getName
+    var level = logger.getLevel
+    while (level == null) {
+      val index = name.lastIndexOf(".")
+      if (index > 0) {
+        name = name.substring(0, index)
+        val ancestor = existingLogger(name)
+        if (ancestor != null) {
+          level = ancestor.getLevel
+        }
+      } else {
+        level = existingLogger(ROOT_LOGGER).getLevel
+      }
+    }
+    level.toString
+  }
 
   /**
     * Returns a map of the log4j loggers and their assigned log level.
@@ -42,8 +61,7 @@ object Log4jController {
     while (loggers.hasMoreElements) {
       val logger = loggers.nextElement().asInstanceOf[Logger]
       if (logger != null) {
-        val level = if (logger.getLevel != null) logger.getLevel.toString else rootLoggerLvl
-        logs.put(logger.getName, level)
+        logs.put(logger.getName, resolveLevel(logger))
       }
     }
     logs
@@ -54,7 +72,7 @@ object Log4jController {
     */
   def logLevel(loggerName: String, logLevel: String): Boolean = {
     val log = existingLogger(loggerName)
-    if (!loggerName.trim.isEmpty && !logLevel.trim.isEmpty && log != null) {
+    if (!Utils.isBlank(loggerName) && !Utils.isBlank(logLevel) && log != null) {
       log.setLevel(Level.toLevel(logLevel.toUpperCase(Locale.ROOT)))
       true
     }
@@ -63,7 +81,7 @@ object Log4jController {
 
   def unsetLogLevel(loggerName: String): Boolean = {
     val log = existingLogger(loggerName)
-    if (!loggerName.trim.isEmpty && log != null) {
+    if (!Utils.isBlank(loggerName) && log != null) {
       log.setLevel(null)
       true
     }
@@ -87,9 +105,10 @@ object Log4jController {
 class Log4jController extends Log4jControllerMBean {
 
   def getLoggers: util.List[String] = {
-    Log4jController.loggers.map {
+    // we replace scala collection by java collection so mbean client is able to deserialize it without scala library.
+    new util.ArrayList[String](Log4jController.loggers.map {
       case (logger, level) => s"$logger=$level"
-    }.toList.asJava
+    }.toSeq.asJava)
   }
 
 
@@ -100,7 +119,7 @@ class Log4jController extends Log4jControllerMBean {
       if (level != null)
         log.getLevel.toString
       else
-        Log4jController.existingLogger(Log4jController.ROOT_LOGGER).getLevel.toString
+        Log4jController.resolveLevel(log)
     }
     else "No such logger."
   }

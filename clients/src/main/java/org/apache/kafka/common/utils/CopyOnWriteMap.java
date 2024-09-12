@@ -24,7 +24,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * A simple read-optimized map implementation that synchronizes only writes and does a full copy on each modification
+ * A simple read-optimized map implementation that synchronizes only writes and does a full copy on each modification.
+ * <p>
+ * Through the {@link org.apache.kafka.jmh.util.ConcurrentMapBenchmark}, we observed that in scenarios where
+ * write operations (i.e. computeIfAbsent) constitute 10%, the get performance of CopyOnWriteMap is lower compared to
+ * ConcurrentHashMap. However, when iterating over entrySet and values, CopyOnWriteMap performs better than ConcurrentHashMap.
  */
 public class CopyOnWriteMap<K, V> implements ConcurrentMap<K, V> {
 
@@ -85,7 +89,7 @@ public class CopyOnWriteMap<K, V> implements ConcurrentMap<K, V> {
 
     @Override
     public synchronized V put(K k, V v) {
-        Map<K, V> copy = new HashMap<K, V>(this.map);
+        Map<K, V> copy = new HashMap<>(this.map);
         V prev = copy.put(k, v);
         this.map = Collections.unmodifiableMap(copy);
         return prev;
@@ -93,14 +97,14 @@ public class CopyOnWriteMap<K, V> implements ConcurrentMap<K, V> {
 
     @Override
     public synchronized void putAll(Map<? extends K, ? extends V> entries) {
-        Map<K, V> copy = new HashMap<K, V>(this.map);
+        Map<K, V> copy = new HashMap<>(this.map);
         copy.putAll(entries);
         this.map = Collections.unmodifiableMap(copy);
     }
 
     @Override
     public synchronized V remove(Object key) {
-        Map<K, V> copy = new HashMap<K, V>(this.map);
+        Map<K, V> copy = new HashMap<>(this.map);
         V prev = copy.remove(key);
         this.map = Collections.unmodifiableMap(copy);
         return prev;

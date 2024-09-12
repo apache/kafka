@@ -17,11 +17,11 @@
 
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.utils.Time;
+
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.kafka.common.utils.Time;
 
 public class StartAndStopCounter {
 
@@ -70,6 +70,10 @@ public class StartAndStopCounter {
      */
     public int stops() {
         return stopCounter.get();
+    }
+
+    public StartsAndStops countsSnapshot() {
+        return new StartsAndStops(starts(), stops());
     }
 
     /**

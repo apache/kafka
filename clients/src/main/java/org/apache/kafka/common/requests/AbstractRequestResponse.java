@@ -16,5 +16,9 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.protocol.ApiMessage;
+
 public interface AbstractRequestResponse {
+
+    ApiMessage data();
 }

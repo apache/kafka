@@ -22,17 +22,20 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
-import org.junit.Before;
-import org.junit.Test;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FilteredCacheIteratorTest {
 
@@ -48,7 +51,6 @@ public class FilteredCacheIteratorTest {
         }
     };
 
-    @SuppressWarnings("unchecked")
     private final KeyValueStore<Bytes, LRUCacheEntry> store = new GenericInMemoryKeyValueStore<>("my-store");
     private final KeyValue<Bytes, LRUCacheEntry> firstEntry = KeyValue.pair(Bytes.wrap("a".getBytes()),
                                                                             new LRUCacheEntry("1".getBytes()));
@@ -62,7 +64,7 @@ public class FilteredCacheIteratorTest {
     private FilteredCacheIterator allIterator;
     private FilteredCacheIterator firstEntryIterator;
 
-    @Before
+    @BeforeEach
     public void before() {
         store.putAll(entries);
         final HasNextCondition allCondition = new HasNextCondition() {
@@ -121,12 +123,12 @@ public class FilteredCacheIteratorTest {
     @Test
     public void shouldFilterEntriesNotMatchingHasNextCondition() {
         final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toList(firstEntryIterator);
-        assertThat(keyValues, equalTo(asList(firstEntry)));
+        assertThat(keyValues, equalTo(Collections.singletonList(firstEntry)));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowUnsupportedOperationExeceptionOnRemove() {
-        allIterator.remove();
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnRemove() {
+        assertThrows(UnsupportedOperationException.class, () -> allIterator.remove());
     }
 
 }

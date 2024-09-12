@@ -21,14 +21,19 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
-import org.junit.Test;
+import org.apache.kafka.streams.state.Stores;
+
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 
@@ -38,6 +43,7 @@ import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SuppressTopologyTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
@@ -147,7 +153,7 @@ public class SuppressTopologyTest {
         anonymousNodeBuilder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(5L)))
+            .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(5L), ofMillis(5L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled())
             .suppress(untilWindowCloses(unbounded()))
             .toStream()
@@ -165,7 +171,7 @@ public class SuppressTopologyTest {
         namedNodeBuilder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(5L)))
+            .windowedBy(SessionWindows.ofInactivityGapAndGrace(ofMillis(5L), ofMillis(5L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled())
             .suppress(untilWindowCloses(unbounded()).withName("myname"))
             .toStream()
@@ -207,5 +213,34 @@ public class SuppressTopologyTest {
 
         // without the name, the suppression node does not increment the topology index
         assertThat(namedNodeTopology, is(NAMED_INTERMEDIATE_TOPOLOGY));
+    }
+
+    @Test
+    public void shouldThrowOnSuppressForMaterializedVersionedTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Object, Object> versionedTable = builder.table(
+            "input",
+            Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
+        );
+
+        assertThrows(
+            TopologyException.class,
+            () -> versionedTable.suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()))
+        );
+    }
+
+    @Test
+    public void shouldThrowOnSuppressForNonMaterializedVersionedTable() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(
+                "input",
+                Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
+        ).filter((k, v) -> true)
+        .suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()));
+
+        assertThrows(
+            TopologyException.class,
+            builder::build
+        );
     }
 }

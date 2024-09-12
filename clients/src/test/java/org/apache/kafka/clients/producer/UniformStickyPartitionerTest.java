@@ -19,26 +19,29 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UniformStickyPartitionerTest {
-    private final static Node[] NODES = new Node[] {
+    private static final Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
         new Node(2, "localhost", 101)
     };
 
-    private final static String TOPIC_A = "TOPIC_A";
-    private final static String TOPIC_B = "TOPIC_B";
+    private static final String TOPIC_A = "TOPIC_A";
+    private static final String TOPIC_B = "TOPIC_B";
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testRoundRobinWithUnavailablePartitions() {
         // Intentionally make the partition list not in partition order to test the edge
@@ -55,10 +58,10 @@ public class UniformStickyPartitionerTest {
         int part = 0;
         Partitioner partitioner = new UniformStickyPartitioner();
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.emptySet(), Collections.emptySet());
         for (int i = 0; i < 50; i++) {
             part = partitioner.partition("test", null, null, null, null, cluster);
-            assertTrue("We should never choose a leader-less node in round robin", part == 0 || part == 2);
+            assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
             else
@@ -68,22 +71,23 @@ public class UniformStickyPartitionerTest {
         partitioner.onNewBatch("test", cluster, part);       
         for (int i = 1; i <= 50; i++) {
             part = partitioner.partition("test", null, null, null, null, cluster);
-            assertTrue("We should never choose a leader-less node in round robin", part == 0 || part == 2);
+            assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
             else
                 countForPart2++;
         }
-        assertEquals("The distribution between two available partitions should be even", countForPart0, countForPart2);
+        assertEquals(countForPart0, countForPart2, "The distribution between two available partitions should be even");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void testRoundRobinWithKeyBytes() throws InterruptedException {
+    public void testRoundRobinWithKeyBytes() {
         List<PartitionInfo> allPartitions = asList(new PartitionInfo(TOPIC_A, 0, NODES[0], NODES, NODES),
                 new PartitionInfo(TOPIC_A, 1, NODES[1], NODES, NODES), new PartitionInfo(TOPIC_A, 2, NODES[1], NODES, NODES),
                 new PartitionInfo(TOPIC_B, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+                Collections.emptySet(), Collections.emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
@@ -140,14 +144,15 @@ public class UniformStickyPartitionerTest {
         assertEquals(30, partitionCount.get(oldPart).intValue());
         assertEquals(60, partitionCount.get(newPart).intValue());
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Test
-    public void testRoundRobinWithNullKeyBytes() throws InterruptedException {
+    public void testRoundRobinWithNullKeyBytes() {
         List<PartitionInfo> allPartitions = asList(new PartitionInfo(TOPIC_A, 0, NODES[0], NODES, NODES),
                 new PartitionInfo(TOPIC_A, 1, NODES[1], NODES, NODES), new PartitionInfo(TOPIC_A, 2, NODES[1], NODES, NODES),
                 new PartitionInfo(TOPIC_B, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+                Collections.emptySet(), Collections.emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
@@ -204,4 +209,3 @@ public class UniformStickyPartitionerTest {
         assertEquals(60, partitionCount.get(newPart).intValue());
     }
 }
-

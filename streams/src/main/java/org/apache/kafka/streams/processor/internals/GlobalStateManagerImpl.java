@@ -17,31 +17,37 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+
 import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,59 +55,74 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.processor.internals.RecordDeserializer.handleDeserializationFailure;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
 public class GlobalStateManagerImpl implements GlobalStateManager {
+    private static final long NO_DEADLINE = -1L;
+
+    private final Time time;
     private final Logger log;
-    private final boolean eosEnabled;
-    private final ProcessorTopology topology;
-    private final Consumer<byte[], byte[]> globalConsumer;
     private final File baseDir;
-    private final StateDirectory stateDirectory;
-    private final Set<String> globalStoreNames = new HashSet<>();
-    private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
-    private final StateRestoreListener stateRestoreListener;
-    private InternalProcessorContext globalProcessorContext;
-    private final int retries;
-    private final long retryBackoffMs;
-    private final Duration pollTime;
-    private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+    private final long taskTimeoutMs;
+    private final ProcessorTopology topology;
     private final OffsetCheckpoint checkpointFile;
+    private final Duration pollMsPlusRequestTimeout;
+    private final Consumer<byte[], byte[]> globalConsumer;
+    private final StateRestoreListener stateRestoreListener;
     private final Map<TopicPartition, Long> checkpointFileCache;
+    private final Map<String, String> storeToChangelogTopic;
+    private final Set<String> globalStoreNames = new HashSet<>();
+    private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+    private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
+    private InternalProcessorContext globalProcessorContext;
+    private DeserializationExceptionHandler deserializationExceptionHandler;
 
     public GlobalStateManagerImpl(final LogContext logContext,
+                                  final Time time,
                                   final ProcessorTopology topology,
                                   final Consumer<byte[], byte[]> globalConsumer,
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
-        eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+        this.time = time;
+        this.topology = topology;
         baseDir = stateDirectory.globalStateDir();
+        storeToChangelogTopic = topology.storeToChangelogTopic();
         checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointFileCache = new HashMap<>();
 
         // Find non persistent store's topics
-        final Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
         for (final StateStore store : topology.globalStateStores()) {
+            globalStoreNames.add(store.name());
             if (!store.persistent()) {
-                globalNonPersistentStoresTopics.add(storeToChangelogTopic.get(store.name()));
+                globalNonPersistentStoresTopics.add(changelogFor(store.name()));
             }
         }
 
         log = logContext.logger(GlobalStateManagerImpl.class);
-        this.topology = topology;
         this.globalConsumer = globalConsumer;
-        this.stateDirectory = stateDirectory;
         this.stateRestoreListener = stateRestoreListener;
-        retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
-        retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
-        pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+
+        final Map<String, Object> consumerProps = config.getGlobalConsumerConfigs("dummy");
+        // need to add mandatory configs; otherwise `QuietConsumerConfig` throws
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        final int requestTimeoutMs = new ClientUtils.QuietConsumerConfig(consumerProps)
+            .getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        pollMsPlusRequestTimeout = Duration.ofMillis(
+            config.getLong(StreamsConfig.POLL_MS_CONFIG) + requestTimeoutMs
+        );
+        taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
+        deserializationExceptionHandler = config.deserializationExceptionHandler();
     }
 
     @Override
@@ -112,174 +133,115 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     @Override
     public Set<String> initialize() {
         try {
-            if (!stateDirectory.lockGlobalState()) {
-                throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir));
-            }
-        } catch (final IOException e) {
-            throw new LockException(String.format("Failed to lock the global state directory: %s", baseDir), e);
-        }
-
-        try {
             checkpointFileCache.putAll(checkpointFile.read());
         } catch (final IOException e) {
-            try {
-                stateDirectory.unlockGlobalState();
-            } catch (final IOException e1) {
-                log.error("Failed to unlock the global state directory", e);
-            }
             throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
         }
 
-        final List<StateStore> stateStores = topology.globalStateStores();
-        final Map<String, String> storeNameToChangelog = topology.storeToChangelogTopic();
         final Set<String> changelogTopics = new HashSet<>();
-        for (final StateStore stateStore : stateStores) {
-            globalStoreNames.add(stateStore.name());
-            final String sourceTopic = storeNameToChangelog.get(stateStore.name());
+        for (final StateStore stateStore : topology.globalStateStores()) {
+            final String sourceTopic = storeToChangelogTopic.get(stateStore.name());
             changelogTopics.add(sourceTopic);
-            stateStore.init(globalProcessorContext, stateStore);
+            stateStore.init((StateStoreContext) globalProcessorContext, stateStore);
         }
 
         // make sure each topic-partition from checkpointFileCache is associated with a global state store
         checkpointFileCache.keySet().forEach(tp -> {
             if (!changelogTopics.contains(tp.topic())) {
-                log.error("Encountered a topic-partition in the global checkpoint file not associated with any global" +
-                    " state store, topic-partition: {}, checkpoint file: {}. If this topic-partition is no longer valid," +
-                    " an application reset and state store directory cleanup will be required.",
-                    tp.topic(), checkpointFile.toString());
-                try {
-                    stateDirectory.unlockGlobalState();
-                } catch (final IOException e) {
-                    log.error("Failed to unlock the global state directory", e);
-                }
+                log.error(
+                    "Encountered a topic-partition in the global checkpoint file not associated with any global" +
+                        " state store, topic-partition: {}, checkpoint file: {}. If this topic-partition is no longer valid," +
+                        " an application reset and state store directory cleanup will be required.",
+                    tp.topic(),
+                    checkpointFile
+                );
                 throw new StreamsException("Encountered a topic-partition not associated with any global state store");
             }
         });
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
-    @Override
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {
-        StateManagerUtil.reinitializeStateStoresForPartitions(
-            log,
-            eosEnabled,
-            baseDir,
-            globalStores,
-            topology.storeToChangelogTopic(),
-            partitions,
-            processorContext,
-            checkpointFile,
-            checkpointFileCache
-        );
-
-        globalConsumer.assign(partitions);
-        globalConsumer.seekToBeginning(partitions);
-    }
-
-    @Override
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     @Override
-    public StateStore getStore(final String name) {
-        return getGlobalStore(name);
+    public StateStore store(final String name) {
+        return globalStore(name);
     }
 
     public File baseDir() {
         return baseDir;
     }
 
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
+    @Override
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback,
+                              final CommitCallback ignored) {
+        log.info("Restoring state for global store {}", store.name());
 
+        // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
+        // fail-crash; in this case we would not need to immediately close the state store before throwing
         if (globalStores.containsKey(store.name())) {
+            store.close();
             throw new IllegalArgumentException(String.format("Global Store %s has already been registered", store.name()));
         }
 
         if (!globalStoreNames.contains(store.name())) {
+            store.close();
             throw new IllegalArgumentException(String.format("Trying to register store %s that is not a known global store", store.name()));
         }
+
+        // register the store first, so that if later an exception is thrown then eventually while we call `close`
+        // on the state manager this state store would be closed as well
+        globalStores.put(store.name(), Optional.of(store));
 
         if (stateRestoreCallback == null) {
             throw new IllegalArgumentException(String.format("The stateRestoreCallback provided for store %s was null", store.name()));
         }
 
-        log.info("Restoring state for global store {}", store.name());
         final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
-        Map<TopicPartition, Long> highWatermarks = null;
+        final Map<TopicPartition, Long> highWatermarks = retryUntilSuccessOrThrowOnTaskTimeout(
+            () -> globalConsumer.endOffsets(topicPartitions),
+            String.format(
+                "Failed to get offsets for partitions %s. The broker may be transiently unavailable at the moment.",
+                topicPartitions
+            )
+        );
 
-        int attempts = 0;
-        while (highWatermarks == null) {
-            try {
-                highWatermarks = globalConsumer.endOffsets(topicPartitions);
-            } catch (final TimeoutException retryableException) {
-                if (++attempts > retries) {
-                    log.error("Failed to get end offsets for topic partitions of global store {} after {} retry attempts. " +
-                        "You can increase the number of retries via configuration parameter `retries`.",
-                        store.name(),
-                        retries,
-                        retryableException);
-                    throw new StreamsException(String.format("Failed to get end offsets for topic partitions of global store %s after %d retry attempts. " +
-                            "You can increase the number of retries via configuration parameter `retries`.", store.name(), retries),
-                        retryableException);
-                }
-                log.debug("Failed to get end offsets for partitions {}, backing off for {} ms to retry (attempt {} of {})",
-                    topicPartitions,
-                    retryBackoffMs,
-                    attempts,
-                    retries,
-                    retryableException);
-                Utils.sleep(retryBackoffMs);
-            }
-        }
         try {
-            restoreState(
-                stateRestoreCallback,
-                topicPartitions,
-                highWatermarks,
-                store.name(),
-                converterForStore(store)
-            );
-            globalStores.put(store.name(), Optional.of(store));
+            final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory = topology
+                .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
+            if (reprocessFactory.isPresent()) {
+                reprocessState(
+                    topicPartitions,
+                    highWatermarks,
+                    reprocessFactory.get(),
+                    store.name());
+            } else {
+                restoreState(
+                    stateRestoreCallback,
+                    topicPartitions,
+                    highWatermarks,
+                    store.name(),
+                    converterForStore(store)
+                );
+            }
         } finally {
             globalConsumer.unsubscribe();
         }
-
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
-        final String sourceTopic = topology.storeToChangelogTopic().get(store.name());
-        List<PartitionInfo> partitionInfos;
-        int attempts = 0;
-        while (true) {
-            try {
-                partitionInfos = globalConsumer.partitionsFor(sourceTopic);
-                break;
-            } catch (final TimeoutException retryableException) {
-                if (++attempts > retries) {
-                    log.error("Failed to get partitions for topic {} after {} retry attempts due to timeout. " +
-                            "The broker may be transiently unavailable at the moment. " +
-                            "You can increase the number of retries via configuration parameter `retries`.",
-                        sourceTopic,
-                        retries,
-                        retryableException);
-                    throw new StreamsException(String.format("Failed to get partitions for topic %s after %d retry attempts due to timeout. " +
-                        "The broker may be transiently unavailable at the moment. " +
-                        "You can increase the number of retries via configuration parameter `retries`.", sourceTopic, retries),
-                        retryableException);
-                }
-                log.debug("Failed to get partitions for topic {} due to timeout. The broker may be transiently unavailable at the moment. " +
-                        "Backing off for {} ms to retry (attempt {} of {})",
-                    sourceTopic,
-                    retryBackoffMs,
-                    attempts,
-                    retries,
-                    retryableException);
-                Utils.sleep(retryBackoffMs);
-            }
-        }
+        final String sourceTopic = storeToChangelogTopic.get(store.name());
+
+        final List<PartitionInfo> partitionInfos = retryUntilSuccessOrThrowOnTaskTimeout(
+            () -> globalConsumer.partitionsFor(sourceTopic),
+            String.format(
+                "Failed to get partitions for topic %s. The broker may be transiently unavailable at the moment.",
+                sourceTopic
+            )
+        );
 
         if (partitionInfos == null || partitionInfos.isEmpty()) {
             throw new StreamsException(String.format("There are no partitions available for topic %s when initializing global store %s", sourceTopic, store.name()));
@@ -292,21 +254,117 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return topicPartitions;
     }
 
+    //Visible for testing
+    public void setDeserializationExceptionHandler(final DeserializationExceptionHandler deserializationExceptionHandler) {
+        this.deserializationExceptionHandler = deserializationExceptionHandler;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void reprocessState(final List<TopicPartition> topicPartitions,
+                                final Map<TopicPartition, Long> highWatermarks,
+                                final InternalTopologyBuilder.ReprocessFactory reprocessFactory,
+                                final String storeName) {
+        final Processor source = reprocessFactory.processorSupplier().get();
+        source.init(globalProcessorContext);
+
+        for (final TopicPartition topicPartition : topicPartitions) {
+            long currentDeadline = NO_DEADLINE;
+
+            globalConsumer.assign(Collections.singletonList(topicPartition));
+            long offset;
+            final Long checkpoint = checkpointFileCache.get(topicPartition);
+            if (checkpoint != null) {
+                globalConsumer.seek(topicPartition, checkpoint);
+                offset = checkpoint;
+            } else {
+                globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
+                offset = getGlobalConsumerOffset(topicPartition);
+            }
+            final Long highWatermark = highWatermarks.get(topicPartition);
+            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+
+            long restoreCount = 0L;
+
+            while (offset < highWatermark) {
+                // we add `request.timeout.ms` to `poll.ms` because `poll.ms` might be too short
+                // to give a fetch request a fair chance to actually complete and we don't want to
+                // start `task.timeout.ms` too early
+                //
+                // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
+                //      `poll(pollMS)` without adding the request timeout and do a more precise
+                //      timeout handling
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
+                if (records.isEmpty()) {
+                    currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
+                } else {
+                    currentDeadline = NO_DEADLINE;
+                }
+
+                for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
+                    final ProcessorRecordContext recordContext =
+                        new ProcessorRecordContext(
+                            record.timestamp(),
+                            record.offset(),
+                            record.partition(),
+                            record.topic(),
+                            record.headers());
+                    globalProcessorContext.setRecordContext(recordContext);
+
+                    try {
+                        if (record.key() != null) {
+                            source.process(new Record<>(
+                                reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
+                                reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
+                                record.timestamp(),
+                                record.headers()));
+                            restoreCount++;
+                        }
+                    } catch (final RuntimeException deserializationException) {
+                        handleDeserializationFailure(
+                            deserializationExceptionHandler,
+                            globalProcessorContext,
+                            deserializationException,
+                            record,
+                            log,
+                            droppedRecordsSensor(
+                                Thread.currentThread().getName(),
+                                globalProcessorContext.taskId().toString(),
+                                globalProcessorContext.metrics()
+                            ),
+                            null
+                        );
+                    }
+                }
+
+                offset = getGlobalConsumerOffset(topicPartition);
+
+                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreCount);
+            }
+            stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
+            checkpointFileCache.put(topicPartition, offset);
+
+        }
+    }
+
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
                               final List<TopicPartition> topicPartitions,
                               final Map<TopicPartition, Long> highWatermarks,
                               final String storeName,
                               final RecordConverter recordConverter) {
         for (final TopicPartition topicPartition : topicPartitions) {
+            long currentDeadline = NO_DEADLINE;
+
             globalConsumer.assign(Collections.singletonList(topicPartition));
+            long offset;
             final Long checkpoint = checkpointFileCache.get(topicPartition);
             if (checkpoint != null) {
                 globalConsumer.seek(topicPartition, checkpoint);
+                offset = checkpoint;
             } else {
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
+                offset = getGlobalConsumerOffset(topicPartition);
             }
 
-            long offset = globalConsumer.position(topicPartition);
             final Long highWatermark = highWatermarks.get(topicPartition);
             final RecordBatchingStateRestoreCallback stateRestoreAdapter =
                 StateRestoreCallbackAdapter.adapt(stateRestoreCallback);
@@ -315,31 +373,88 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             long restoreCount = 0L;
 
             while (offset < highWatermark) {
-                try {
-                    final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
-                    final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
-                    for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
-                        if (record.key() != null) {
-                            restoreRecords.add(recordConverter.convert(record));
-                        }
-                    }
-                    offset = globalConsumer.position(topicPartition);
-                    stateRestoreAdapter.restoreBatch(restoreRecords);
-                    stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
-                    restoreCount += restoreRecords.size();
-                } catch (final InvalidOffsetException recoverableException) {
-                    log.warn("Restoring GlobalStore {} failed due to: {}. Deleting global store to recreate from scratch.",
-                        storeName,
-                        recoverableException.toString());
-                    reinitializeStateStoresForPartitions(recoverableException.partitions(), globalProcessorContext);
-
-                    stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
-                    restoreCount = 0L;
+                // we add `request.timeout.ms` to `poll.ms` because `poll.ms` might be too short
+                // to give a fetch request a fair chance to actually complete and we don't want to
+                // start `task.timeout.ms` too early
+                //
+                // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
+                //      `poll(pollMS)` without adding the request timeout and do a more precise
+                //      timeout handling
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
+                if (records.isEmpty()) {
+                    currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
+                } else {
+                    currentDeadline = NO_DEADLINE;
                 }
+
+                final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
+                for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
+                    if (record.key() != null) {
+                        restoreRecords.add(recordConverter.convert(record));
+                    }
+                }
+
+                offset = getGlobalConsumerOffset(topicPartition);
+
+                stateRestoreAdapter.restoreBatch(restoreRecords);
+                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
+                restoreCount += restoreRecords.size();
             }
             stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
             checkpointFileCache.put(topicPartition, offset);
         }
+    }
+
+    private long getGlobalConsumerOffset(final TopicPartition topicPartition) {
+        return retryUntilSuccessOrThrowOnTaskTimeout(
+            () -> globalConsumer.position(topicPartition),
+            String.format(
+                "Failed to get position for partition %s. The broker may be transiently unavailable at the moment.",
+                topicPartition
+            )
+        );
+    }
+
+    private <R> R retryUntilSuccessOrThrowOnTaskTimeout(final Supplier<R> supplier,
+                                                        final String errorMessage) {
+        long deadlineMs = NO_DEADLINE;
+
+        do {
+            try {
+                return supplier.get();
+            } catch (final TimeoutException retriableException) {
+                if (taskTimeoutMs == 0L) {
+                    throw new StreamsException(
+                        String.format(
+                            "Retrying is disabled. You can enable it by setting `%s` to a value larger than zero.",
+                            StreamsConfig.TASK_TIMEOUT_MS_CONFIG
+                        ),
+                        retriableException
+                    );
+                }
+
+                deadlineMs = maybeUpdateDeadlineOrThrow(deadlineMs);
+
+                log.warn(errorMessage, retriableException);
+            }
+        } while (true);
+    }
+
+    private long maybeUpdateDeadlineOrThrow(final long currentDeadlineMs) {
+        final long currentWallClockMs = time.milliseconds();
+
+        if (currentDeadlineMs == NO_DEADLINE) {
+            final long newDeadlineMs = currentWallClockMs + taskTimeoutMs;
+            return newDeadlineMs < 0L ? Long.MAX_VALUE : newDeadlineMs;
+        } else if (currentWallClockMs >= currentDeadlineMs) {
+            throw new TimeoutException(String.format(
+                "Global task did not make progress to restore state within %d ms. Adjust `%s` if needed.",
+                currentWallClockMs - currentDeadlineMs + taskTimeoutMs,
+                StreamsConfig.TASK_TIMEOUT_MS_CONFIG
+            ));
+        }
+
+        return currentDeadlineMs;
     }
 
     @Override
@@ -363,44 +478,43 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
     }
 
-
     @Override
-    public void close(final boolean clean) throws IOException {
-        try {
-            if (globalStores.isEmpty()) {
-                return;
-            }
-            final StringBuilder closeFailed = new StringBuilder();
-            for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
-                if (entry.getValue().isPresent()) {
-                    log.debug("Closing global storage engine {}", entry.getKey());
-                    try {
-                        entry.getValue().get().close();
-                    } catch (final RuntimeException e) {
-                        log.error("Failed to close global state store {}", entry.getKey(), e);
-                        closeFailed.append("Failed to close global state store:")
-                                   .append(entry.getKey())
-                                   .append(". Reason: ")
-                                   .append(e)
-                                   .append("\n");
-                    }
-                    globalStores.put(entry.getKey(), Optional.empty());
-                } else {
-                    log.info("Skipping to close non-initialized store {}", entry.getKey());
+    public void close() {
+        if (globalStores.isEmpty()) {
+            return;
+        }
+        final StringBuilder closeFailed = new StringBuilder();
+        for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
+            if (entry.getValue().isPresent()) {
+                log.debug("Closing global storage engine {}", entry.getKey());
+                try {
+                    entry.getValue().get().close();
+                } catch (final RuntimeException e) {
+                    log.error("Failed to close global state store {}", entry.getKey(), e);
+                    closeFailed.append("Failed to close global state store:")
+                        .append(entry.getKey())
+                        .append(". Reason: ")
+                        .append(e)
+                        .append("\n");
                 }
+                globalStores.put(entry.getKey(), Optional.empty());
+            } else {
+                log.info("Skipping to close non-initialized store {}", entry.getKey());
             }
-            if (closeFailed.length() > 0) {
-                throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
-            }
-        } finally {
-            stateDirectory.unlockGlobalState();
+        }
+
+        if (closeFailed.length() > 0) {
+            throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
         }
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+    public void updateChangelogOffsets(final Map<TopicPartition, Long> offsets) {
         checkpointFileCache.putAll(offsets);
+    }
 
+    @Override
+    public void checkpoint() {
         final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
 
         // Skip non persistent store
@@ -414,14 +528,23 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         try {
             checkpointFile.write(filteredOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to {} for global stores: {}", checkpointFile, e);
+            log.warn("Failed to write offset checkpoint file to {} for global stores." +
+                " This may occur if OS cleaned the state.dir in case when it is located in the (default) ${java.io.tmpdir}/kafka-streams directory." +
+                " Changing the location of state.dir may resolve the problem", checkpointFile, e);
         }
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
+    public TaskType taskType() {
+        return TaskType.GLOBAL;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> changelogOffsets() {
         return Collections.unmodifiableMap(checkpointFileCache);
     }
 
-
+    public final String changelogFor(final String storeName) {
+        return storeToChangelogTopic.get(storeName);
+    }
 }

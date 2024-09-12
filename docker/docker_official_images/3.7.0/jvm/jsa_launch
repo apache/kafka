@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+KAFKA_CLUSTER_ID="$(opt/kafka/bin/kafka-storage.sh random-uuid)"
+TOPIC="test-topic"
+
+KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=storage.jsa" opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c opt/kafka/config/kraft/server.properties
+
+KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=kafka.jsa" opt/kafka/bin/kafka-server-start.sh opt/kafka/config/kraft/server.properties &
+
+check_timeout() {
+    if [ $TIMEOUT -eq 0 ]; then
+        echo "Server startup timed out"
+        exit 1
+    fi
+    echo "Check will timeout in $(( TIMEOUT-- )) seconds"
+    sleep 1
+}
+
+opt/kafka/bin/kafka-topics.sh --create --topic $TOPIC --bootstrap-server localhost:9092
+[ $? -eq 0 ] || exit 1
+
+echo "test" | opt/kafka/bin/kafka-console-producer.sh --topic $TOPIC --bootstrap-server localhost:9092
+[ $? -eq 0 ] || exit 1
+
+opt/kafka/bin/kafka-console-consumer.sh --topic $TOPIC --from-beginning --bootstrap-server localhost:9092 --max-messages 1 --timeout-ms 20000
+[ $? -eq 0 ] || exit 1
+
+opt/kafka/bin/kafka-server-stop.sh
+
+# Wait until jsa file is generated
+TIMEOUT=20
+until [ -f /kafka.jsa ]
+do
+    check_timeout
+done

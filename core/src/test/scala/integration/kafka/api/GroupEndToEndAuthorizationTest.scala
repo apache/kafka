@@ -17,18 +17,19 @@
 package kafka.api
 
 import kafka.api.GroupEndToEndAuthorizationTest._
-import kafka.utils.JaasTestUtils
+import kafka.security.JaasTestUtils
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SaslAuthenticationContext}
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SaslAuthenticationContext}
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 
 object GroupEndToEndAuthorizationTest {
   val GroupPrincipalType = "Group"
   val ClientGroup = "testGroup"
-  class GroupPrincipalBuilder extends KafkaPrincipalBuilder {
+  class GroupPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       context match {
         case ctx: SaslAuthenticationContext =>
-          if (ctx.server.getAuthorizationID == JaasTestUtils.KafkaScramUser)
+          if (ctx.server.getAuthorizationID == JaasTestUtils.KAFKA_SCRAM_USER)
             new KafkaPrincipal(GroupPrincipalType, ClientGroup)
           else
             new KafkaPrincipal(GroupPrincipalType, ctx.server.getAuthorizationID)
@@ -40,7 +41,7 @@ object GroupEndToEndAuthorizationTest {
 }
 
 class GroupEndToEndAuthorizationTest extends SaslScramSslEndToEndAuthorizationTest {
-  override val kafkaPrincipalType = GroupPrincipalType
-  override val clientPrincipal = ClientGroup
+  override val clientPrincipal = new KafkaPrincipal(GroupPrincipalType, ClientGroup)
+  override val kafkaPrincipal = new KafkaPrincipal(GroupPrincipalType, JaasTestUtils.KAFKA_SCRAM_ADMIN)
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[GroupPrincipalBuilder].getName)
 }

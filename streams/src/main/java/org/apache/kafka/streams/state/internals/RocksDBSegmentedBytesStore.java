@@ -23,6 +23,6 @@ public class RocksDBSegmentedBytesStore extends AbstractRocksDBSegmentedBytesSto
                                final long retention,
                                final long segmentInterval,
                                final KeySchema keySchema) {
-        super(name, metricsScope, keySchema, new KeyValueSegments(name, metricsScope, retention, segmentInterval));
+        super(name, metricsScope, retention, keySchema, new KeyValueSegments(name, metricsScope, retention, segmentInterval));
     }
 }

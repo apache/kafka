@@ -32,7 +32,7 @@ public class NewPartitionReassignment {
      * @throws IllegalArgumentException if no replicas are supplied
      */
     public NewPartitionReassignment(List<Integer> targetReplicas) {
-        if (targetReplicas == null || targetReplicas.size() == 0)
+        if (targetReplicas == null || targetReplicas.isEmpty())
             throw new IllegalArgumentException("Cannot create a new partition reassignment without any replicas");
         this.targetReplicas = Collections.unmodifiableList(new ArrayList<>(targetReplicas));
     }

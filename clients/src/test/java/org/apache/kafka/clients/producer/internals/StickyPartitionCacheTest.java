@@ -19,25 +19,26 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class StickyPartitionCacheTest {
-    private final static Node[] NODES = new Node[] {
+    private static final Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
         new Node(2, "localhost", 101),
         new Node(11, "localhost", 102)
     };
-    final static String TOPIC_A = "topicA";
-    final static String TOPIC_B = "topicB";
-    final static String TOPIC_C = "topicC";
+    static final String TOPIC_A = "topicA";
+    static final String TOPIC_B = "topicB";
+    static final String TOPIC_C = "topicC";
 
     @Test
     public void testStickyPartitionCache() {
@@ -66,7 +67,7 @@ public class StickyPartitionCacheTest {
         int changedPartA3 = stickyPartitionCache.nextPartition(TOPIC_A, testCluster, partA);
         assertEquals(changedPartA3, changedPartA2);
 
-        // Check that the we can still use the partitioner when there is only one partition
+        // Check that we can still use the partitioner when there is only one partition
         int changedPartB = stickyPartitionCache.nextPartition(TOPIC_B, testCluster, partB);
         assertEquals(changedPartB, stickyPartitionCache.partition(TOPIC_B, testCluster));
     }

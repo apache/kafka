@@ -13,11 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
-from kafkatest.services.kafka import TopicPartition
+from kafkatest.services.kafka import TopicPartition, quorum
 
 class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
@@ -47,7 +48,15 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
             "Mismatched assignment: %s" % assignment
 
     @cluster(num_nodes=4)
-    def rolling_update_test(self):
+    @matrix(
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def rolling_update_test(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Verify rolling updates of partition assignment strategies works correctly. In this
         test, we use a rolling restart to change the group's assignment strategy from "range" 
@@ -70,7 +79,7 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
         consumer.start_node(consumer.nodes[0])
         self.await_all_members(consumer)
         self._verify_range_assignment(consumer)
-        
+
         # now restart the other node and verify that we have switched to round-robin
         consumer.stop_node(consumer.nodes[1])
         consumer.start_node(consumer.nodes[1])

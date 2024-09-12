@@ -16,6 +16,15 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,13 +38,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.source.SourceRecord;
-import org.apache.kafka.connect.source.SourceTask;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * FileStreamSourceTask reads from stdin or a file.
  */
@@ -48,12 +50,21 @@ public class FileStreamSourceTask extends SourceTask {
     private String filename;
     private InputStream stream;
     private BufferedReader reader = null;
-    private char[] buffer = new char[1024];
+    private char[] buffer;
     private int offset = 0;
-    private String topic = null;
-    private int batchSize = FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE;
+    private String topic;
+    private int batchSize;
 
     private Long streamOffset;
+
+    public FileStreamSourceTask() {
+        this(1024);
+    }
+
+    /* visible for testing */
+    FileStreamSourceTask(int initialBufferSize) {
+        buffer = new char[initialBufferSize];
+    }
 
     @Override
     public String version() {
@@ -62,17 +73,16 @@ public class FileStreamSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> props) {
-        filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
+        AbstractConfig config = new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, props);
+        filename = config.getString(FileStreamSourceConnector.FILE_CONFIG);
         if (filename == null || filename.isEmpty()) {
             stream = System.in;
             // Tracking offset for stdin doesn't make sense
             streamOffset = null;
             reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
         }
-        // Missing topic or parsing error is not possible because we've parsed the config in the
-        // Connector
-        topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
-        batchSize = Integer.parseInt(props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG));
+        topic = config.getString(FileStreamSourceConnector.TOPIC_CONFIG);
+        batchSize = config.getInt(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG);
     }
 
     @Override
@@ -137,16 +147,12 @@ public class FileStreamSourceTask extends SourceTask {
 
                 if (nread > 0) {
                     offset += nread;
-                    if (offset == buffer.length) {
-                        char[] newbuf = new char[buffer.length * 2];
-                        System.arraycopy(buffer, 0, newbuf, 0, buffer.length);
-                        buffer = newbuf;
-                    }
-
                     String line;
+                    boolean foundOneLine = false;
                     do {
                         line = extractLine();
                         if (line != null) {
+                            foundOneLine = true;
                             log.trace("Read a line from {}", logFilename());
                             if (records == null)
                                 records = new ArrayList<>();
@@ -158,6 +164,13 @@ public class FileStreamSourceTask extends SourceTask {
                             }
                         }
                     } while (line != null);
+
+                    if (!foundOneLine && offset == buffer.length) {
+                        char[] newbuf = new char[buffer.length * 2];
+                        System.arraycopy(buffer, 0, newbuf, 0, buffer.length);
+                        log.info("Increased buffer from {} to {}", buffer.length, newbuf.length);
+                        buffer = newbuf;
+                    }
                 }
             }
 
@@ -230,5 +243,10 @@ public class FileStreamSourceTask extends SourceTask {
 
     private String logFilename() {
         return filename == null ? "stdin" : filename;
+    }
+
+    /* visible for testing */
+    int bufferSize() {
+        return buffer.length;
     }
 }

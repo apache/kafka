@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.config;
 
-import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -32,8 +31,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -52,9 +53,12 @@ import java.util.regex.Pattern;
  * <pre>
  * ConfigDef defs = new ConfigDef();
  *
- * defs.define(&quot;config_with_default&quot;, Type.STRING, &quot;default string value&quot;, &quot;Configuration with default value.&quot;);
- * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), &quot;Configuration with user provided validator.&quot;);
- * defs.define(&quot;config_with_dependents&quot;, Type.INT, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
+ * // check {@link #define(String, Type, Object, Importance, String)} for more details.
+ * defs.define(&quot;config_with_default&quot;, Type.STRING, &quot;default string value&quot;, Importance.High, &quot;Configuration with default value.&quot;);
+ * // check {@link #define(String, Type, Object, Validator, Importance, String)} for more details.
+ * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), Importance.High, &quot;Configuration with user provided validator.&quot;);
+ * // check {@link #define(String, Type, Importance, String, String, int, Width, String, List) define(String, Type, Importance, String, String, int, Width, String, List&lt;String&gt;)} for more details.
+ * defs.define(&quot;config_with_dependents&quot;, Type.INT, Importance.LOW, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, Width.SHORT, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
  *
  * Map&lt;String, String&gt; props = new HashMap&lt;&gt;();
  * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
@@ -66,9 +70,9 @@ import java.util.regex.Pattern;
  * // will return default value of 42
  * int anotherConfig = (Integer) configs.get(&quot;config_with_validator&quot;);
  *
- * To validate the full configuration, use:
- * List&lt;Config&gt; configs = defs.validate(props);
- * The {@link Config} contains updated configuration information given the current configuration values.
+ * // To validate the full configuration, use:
+ * List&lt;ConfigValue&gt; configValues = defs.validate(props);
+ * // The {@link ConfigValue} contains updated configuration information given the current configuration values.
  * </pre>
  * <p/>
  * This class can be used standalone or in combination with {@link AbstractConfig} which provides some additional
@@ -148,7 +152,30 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, null));
+    }
+
+    /**
+     * Define a new configuration
+     * @param name               the name of the config parameter
+     * @param type               the type of the config
+     * @param defaultValue       the default value to use if this config isn't present
+     * @param validator          the validator to use in checking the correctness of the config
+     * @param importance         the importance of this config
+     * @param documentation      the documentation string for the config
+     * @param group              the group this config belongs to
+     * @param orderInGroup       the order of this config in the group
+     * @param width              the width of the config
+     * @param displayName        the name suitable for display
+     * @param dependents         the configurations that are dependents of this configuration
+     * @param recommender        the recommender provides valid values given the parent configuration values
+     * @param alternativeString  the string which will be used to override the string of defaultValue
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender,
+                            String alternativeString) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, alternativeString));
     }
 
     /**
@@ -207,7 +234,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName) {
-        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
     }
 
     /**
@@ -283,7 +310,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName) {
-        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
     }
 
     /**
@@ -355,7 +382,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
     }
 
     /**
@@ -386,6 +413,21 @@ public class ConfigDef {
     }
 
     /**
+     * Define a new configuration with no special validation logic
+     * @param name              The name of the config parameter
+     * @param type              The type of the config
+     * @param defaultValue      The default value to use if this config isn't present
+     * @param importance        The importance of this config: is this something you will likely need to change.
+     * @param documentation     The documentation string for the config
+     * @param alternativeString The string which will be used to override the string of defaultValue
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation, String alternativeString) {
+        return define(name, type, defaultValue, null, importance, documentation, null, -1, Width.NONE,
+                name, Collections.emptyList(), null, alternativeString);
+    }
+
+    /**
      * Define a new configuration with no default value and no special validation logic
      * @param name          The name of the config parameter
      * @param type          The type of the config
@@ -403,11 +445,26 @@ public class ConfigDef {
      * @param name              The name of the config parameter
      * @param type              The type of the config
      * @param defaultValue      The default value to use if this config isn't present
-     * @param importance
+     * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
-        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
+        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.emptyList(), null, true, null));
+    }
+
+    /**
+     * Define a new internal configuration. Internal configuration won't show up in the docs and aren't
+     * intended for general use.
+     * @param name              The name of the config parameter
+     * @param type              The type of the config
+     * @param defaultValue      The default value to use if this config isn't present
+     * @param validator         The validator to use in checking the correctness of the config
+     * @param importance        The importance of this config (i.e. is this something you will likely need to change?)
+     * @param documentation     The documentation string for the config
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.emptyList(), null, true, null));
     }
 
     /**
@@ -458,7 +515,7 @@ public class ConfigDef {
         // Check all configurations are defined
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
         if (!undefinedConfigKeys.isEmpty()) {
-            String joined = Utils.join(undefinedConfigKeys, ",");
+            String joined = undefinedConfigKeys.stream().map(String::toString).collect(Collectors.joining(","));
             throw new ConfigException("Some configurations in are referred in the dependents, but not defined: " + joined);
         }
         // parse all known keys
@@ -709,14 +766,7 @@ public class ConfigDef {
                     if (value instanceof Class)
                         return value;
                     else if (value instanceof String) {
-                        ClassLoader contextOrKafkaClassLoader = Utils.getContextOrKafkaClassLoader();
-                        // Use loadClass here instead of Class.forName because the name we use here may be an alias
-                        // and not match the name of the class that gets loaded. If that happens, Class.forName can
-                        // throw an exception.
-                        Class<?> klass = contextOrKafkaClassLoader.loadClass(trimmed);
-                        // Invoke forName here with the true name of the requested class to cause class
-                        // initialization to take place.
-                        return Class.forName(klass.getName(), true, contextOrKafkaClassLoader);
+                        return Utils.loadClass(trimmed, Object.class);
                     } else
                         throw new ConfigException(name, value, "Expected a Class instance or class name.");
                 default:
@@ -749,7 +799,7 @@ public class ConfigDef {
                 return parsedValue.toString();
             case LIST:
                 List<?> valueList = (List<?>) parsedValue;
-                return Utils.join(valueList, ",");
+                return valueList.stream().map(Object::toString).collect(Collectors.joining(","));
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
                 return clazz.getName();
@@ -783,10 +833,66 @@ public class ConfigDef {
     }
 
     /**
-     * The config types
+     * The type for a configuration value
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
+        /**
+         * Used for boolean values. Values can be provided as a Boolean object or as a String with values
+         * <code>true</code> or <code>false</code> (this is not case-sensitive), otherwise a {@link ConfigException} is
+         * thrown.
+         */
+        BOOLEAN,
+        /**
+         * Used for string values. Values must be provided as a String object, otherwise a {@link ConfigException} is
+         * thrown.
+         */
+        STRING,
+        /**
+         * Used for numerical values within the Java Integer range. Values must be provided as a Integer object or as
+         * a String being a valid Integer value, otherwise a {@link ConfigException} is thrown.
+         */
+        INT,
+        /**
+         * Used for numerical values within the Java Short range. Values must be provided as a Short object or as
+         * a String being a valid Short value, otherwise a {@link ConfigException} is thrown.
+         */
+        SHORT,
+        /**
+         * Used for numerical values within the Java Long range. Values must be provided as a Long object, as an Integer
+         * object or as a String being a valid Long value, otherwise a {@link ConfigException} is thrown.
+         */
+        LONG,
+        /**
+         * Used for numerical values within the Java Double range. Values must be provided as a Number object, as a
+         * Double object or as a String being a valid Double value, otherwise a {@link ConfigException} is thrown.
+         */
+        DOUBLE,
+        /**
+         * Used for list values. Values must be provided as a List object, as a String object, otherwise a
+         * {@link ConfigException} is thrown. When the value is provided as a String it must use commas to separate the
+         * different entries (for example: <code>first-entry, second-entry</code>) and an empty String maps to an empty List.
+         */
+        LIST,
+        /**
+         * Used for values that implement a Kafka interface. Values must be provided as a Class object or as a
+         * String object, otherwise a {@link ConfigException} is thrown. When the value is provided as a String it must
+         * be the binary name of the Class.
+         */
+        CLASS,
+        /**
+         * Used for string values containing sensitive data such as a password or key. The values of configurations with
+         * of this type are not included in logs and instead replaced with "[hidden]". Values must be provided as a
+         * String object, otherwise a {@link ConfigException} is thrown.
+         */
+        PASSWORD;
+
+        /**
+         * Whether this type contains sensitive data such as a password or key.
+         * @return true if the type is {@link #PASSWORD}
+         */
+        public boolean isSensitive() {
+            return this == PASSWORD;
+        }
     }
 
     /**
@@ -938,13 +1044,13 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (!validStrings.contains(s)) {
-                throw new ConfigException(name, o, "String must be one of: " + Utils.join(validStrings, ", "));
+                throw new ConfigException(name, o, "String must be one of: " + String.join(", ", validStrings));
             }
 
         }
 
         public String toString() {
-            return "[" + Utils.join(validStrings, ", ") + "]";
+            return "[" + String.join(", ", validStrings) + "]";
         }
     }
 
@@ -966,12 +1072,12 @@ public class ConfigDef {
         public void ensureValid(String name, Object o) {
             String s = (String) o;
             if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
-                throw new ConfigException(name, o, "String must be one of (case insensitive): " + Utils.join(validStrings, ", "));
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + String.join(", ", validStrings));
             }
         }
 
         public String toString() {
-            return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
+            return "(case insensitive) [" + String.join(", ", validStrings) + "]";
         }
     }
 
@@ -1041,7 +1147,7 @@ public class ConfigDef {
                 if (desc.length() > 0) {
                     desc.append(',').append(' ');
                 }
-                desc.append(String.valueOf(v));
+                desc.append(v);
             }
             return desc.toString();
         }
@@ -1092,12 +1198,39 @@ public class ConfigDef {
             }
 
             if (!foundIllegalCharacters.isEmpty()) {
-                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
+                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " +
+                        foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(", ")));
             }
         }
 
         public String toString() {
             return "non-empty string without ISO control characters";
+        }
+    }
+
+    public static class ListSize implements Validator {
+        final int maxSize;
+
+        private ListSize(final int maxSize) {
+            this.maxSize = maxSize;
+        }
+
+        public static ListSize atMostOfSize(final int maxSize) {
+            return new ListSize(maxSize);
+        }
+
+        @Override
+        public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
+            List<String> values = (List<String>) value;
+            if (values.size() > maxSize) {
+                throw new ConfigException(name, value, "exceeds maximum list size of [" + maxSize + "].");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "List containing maximum of " + maxSize + " elements";
         }
     }
 
@@ -1115,18 +1248,30 @@ public class ConfigDef {
         public final List<String> dependents;
         public final Recommender recommender;
         public final boolean internalConfig;
+        public final String alternativeString;
 
+        // This constructor is present for backward compatibility reasons.
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
                          List<String> dependents, Recommender recommender,
                          boolean internalConfig) {
+            this(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName,
+                dependents, recommender, internalConfig, null);
+        }
+
+        private ConfigKey(String name, Type type, Object defaultValue, Validator validator,
+                         Importance importance, String documentation, String group,
+                         int orderInGroup, Width width, String displayName,
+                         List<String> dependents, Recommender recommender,
+                         boolean internalConfig, String alternativeString) {
             this.name = name;
             this.type = type;
-            this.defaultValue = NO_DEFAULT_VALUE.equals(defaultValue) ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+            boolean hasDefault = !NO_DEFAULT_VALUE.equals(defaultValue);
+            this.defaultValue = hasDefault ? parseType(name, defaultValue, type) : NO_DEFAULT_VALUE;
             this.validator = validator;
             this.importance = importance;
-            if (this.validator != null && hasDefault())
+            if (this.validator != null && hasDefault)
                 this.validator.ensureValid(name, this.defaultValue);
             this.documentation = documentation;
             this.dependents = dependents;
@@ -1136,6 +1281,7 @@ public class ConfigDef {
             this.displayName = displayName;
             this.recommender = recommender;
             this.internalConfig = internalConfig;
+            this.alternativeString = alternativeString;
         }
 
         public boolean hasDefault() {
@@ -1166,8 +1312,15 @@ public class ConfigDef {
                     String defaultValueStr = convertToString(key.defaultValue, key.type);
                     if (defaultValueStr.isEmpty())
                         return "\"\"";
-                    else
-                        return defaultValueStr;
+                    else {
+                        String suffix = "";
+                        if (key.name.endsWith(".bytes")) {
+                            suffix = niceMemoryUnits(((Number) key.defaultValue).longValue());
+                        } else if (key.name.endsWith(".ms")) {
+                            suffix = niceTimeUnits(((Number) key.defaultValue).longValue());
+                        }
+                        return defaultValueStr + suffix;
+                    }
                 } else
                     return "";
             case "Valid Values":
@@ -1179,8 +1332,53 @@ public class ConfigDef {
         }
     }
 
+    static String niceMemoryUnits(long bytes) {
+        long value = bytes;
+        int i = 0;
+        while (value != 0 && i < 4) {
+            if (value % 1024L == 0) {
+                value /= 1024L;
+                i++;
+            } else {
+                break;
+            }
+        }
+        String resultFormat = " (" + value + " %s" + (value == 1 ? ")" : "s)");
+        switch (i) {
+            case 1:
+                return String.format(resultFormat, "kibibyte");
+            case 2:
+                return String.format(resultFormat, "mebibyte");
+            case 3:
+                return String.format(resultFormat, "gibibyte");
+            case 4:
+                return String.format(resultFormat, "tebibyte");
+            default:
+                return "";
+        }
+    }
+
+    static String niceTimeUnits(long millis) {
+        long value = millis;
+        long[] divisors = {1000, 60, 60, 24};
+        String[] units = {"second", "minute", "hour", "day"};
+        int i = 0;
+        while (value != 0 && i < 4) {
+            if (value % divisors[i] == 0) {
+                value /= divisors[i];
+                i++;
+            } else {
+                break;
+            }
+        }
+        if (i > 0) {
+            return " (" + value + " " + units[i - 1] + (value > 1 ? "s)" : ")");
+        }
+        return "";
+    }
+
     public String toHtmlTable() {
-        return toHtmlTable(Collections.<String, String>emptyMap());
+        return toHtmlTable(Collections.emptyMap());
     }
 
     private void addHeader(StringBuilder builder, String headerName) {
@@ -1301,11 +1499,15 @@ public class ConfigDef {
      */
     private void getConfigKeyRst(ConfigKey key, StringBuilder b) {
         b.append("``").append(key.name).append("``").append("\n");
-        for (String docLine : key.documentation.split("\n")) {
-            if (docLine.length() == 0) {
-                continue;
+        if (key.documentation != null) {
+            for (String docLine : key.documentation.split("\n")) {
+                if (docLine.length() == 0) {
+                    continue;
+                }
+                b.append("  ").append(docLine).append("\n\n");
             }
-            b.append("  ").append(docLine).append("\n\n");
+        } else {
+            b.append("\n");
         }
         b.append("  * Type: ").append(getConfigValue(key, "Type")).append("\n");
         if (key.hasDefault()) {
@@ -1372,7 +1574,8 @@ public class ConfigDef {
                     key.displayName,
                     embeddedDependents(keyPrefix, key.dependents),
                     embeddedRecommender(keyPrefix, key.recommender),
-                    key.internalConfig));
+                    key.internalConfig,
+                    key.alternativeString));
         }
     }
 
@@ -1381,16 +1584,8 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return new Validator() {
-            public void ensureValid(String name, Object value) {
-                base.ensureValid(name.substring(keyPrefix.length()), value);
-            }
-
-            @Override
-            public String toString() {
-                return base.toString();
-            }
-        };
+        return ConfigDef.LambdaValidator.with(
+            (name, value) -> base.ensureValid(name.substring(keyPrefix.length()), value), base::toString);
     }
 
     /**
@@ -1438,7 +1633,16 @@ public class ConfigDef {
     }
 
     public String toHtml() {
-        return toHtml(Collections.<String, String>emptyMap());
+        return toHtml(Collections.emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * @param headerDepth The top level header depth in the generated HTML.
+     * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
+     */
+    public String toHtml(int headerDepth, Function<String, String> idGenerator) {
+        return toHtml(headerDepth, idGenerator, Collections.emptyMap());
     }
 
     /**
@@ -1446,28 +1650,49 @@ public class ConfigDef {
      * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
      * will be included in the config details with the value of the update mode. Default
      * mode is "read-only".
-     * @param dynamicUpdateModes Config name -&gt; update mode mapping
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping.
      */
     public String toHtml(Map<String, String> dynamicUpdateModes) {
+        return toHtml(4, Function.identity(), dynamicUpdateModes);
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param headerDepth The top level header depth in the generated HTML.
+     * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping.
+     */
+    public String toHtml(int headerDepth, Function<String, String> idGenerator,
+                         Map<String, String> dynamicUpdateModes) {
         boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
         b.append("<ul class=\"config-list\">\n");
-
         for (ConfigKey key : configs) {
             if (key.internalConfig) {
                 continue;
             }
-            b.append("<li>");
-            b.append("<b>");
-            b.append(key.name);
-            b.append("</b>: ");
-            b.append(key.documentation);
-            b.append("<br/>");
-            // details
-            b.append("<ul class=\"horizontal-list\">");
+            b.append("<li>\n");
+            b.append(String.format("<h%1$d>" +
+                    "<a id=\"%3$s\"></a><a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
+                    "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
+            b.append("<p>");
+            if (key.documentation != null) {
+                b.append(key.documentation.replaceAll("\n", "<br>"));
+            }
+            b.append("</p>\n");
+
+            b.append("<table>" +
+                    "<tbody>\n");
             for (String detail : headers()) {
                 if (detail.equals("Name") || detail.equals("Description")) continue;
+                if (detail.equals("Default") && key.alternativeString != null) {
+                    addConfigDetail(b, detail, key.alternativeString);
+                    continue;
+                }
                 addConfigDetail(b, detail, getConfigValue(key, detail));
             }
             if (hasUpdateModes) {
@@ -1476,7 +1701,7 @@ public class ConfigDef {
                     updateMode = "read-only";
                 addConfigDetail(b, "Update Mode", updateMode);
             }
-            b.append("</ul>");
+            b.append("</tbody></table>\n");
             b.append("</li>\n");
         }
         b.append("</ul>\n");
@@ -1484,7 +1709,10 @@ public class ConfigDef {
     }
 
     private static void addConfigDetail(StringBuilder builder, String name, String value) {
-        builder.append("<li><b>" + name + "</b>: " + value + "</li>");
+        builder.append("<tr>" +
+                "<th>" + name + ":</th>" +
+                "<td>" + value + "</td>" +
+                "</tr>\n");
     }
 
 }

@@ -28,8 +28,23 @@
   // Version 7 offsetCommitRequest supports a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 8 is the first flexible version.
-  "validVersions": "0-8",
+  //
+  // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The response is
+  // the same as version 8 but can return STALE_MEMBER_EPOCH when the new consumer group protocol is used and
+  // GROUP_ID_NOT_FOUND when the group does not exist for both protocols.
+  "validVersions": "0-9",
   "flexibleVersions": "8+",
+  // Supported errors:
+  // - GROUP_AUTHORIZATION_FAILED (version 0+)
+  // - NOT_COORDINATOR (version 0+)
+  // - COORDINATOR_NOT_AVAILABLE (version 0+)
+  // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
+  // - ILLEGAL_GENERATION (version 1+)
+  // - UNKNOWN_MEMBER_ID (version 1+)
+  // - INVALID_COMMIT_OFFSET_SIZE (version 0+)
+  // - FENCED_MEMBER_EPOCH (version 7+)
+  // - GROUP_ID_NOT_FOUND (version 9+)
+  // - STALE_MEMBER_EPOCH (version 9+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

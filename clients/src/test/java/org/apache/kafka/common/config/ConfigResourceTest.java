@@ -17,17 +17,19 @@
 
 package org.apache.kafka.common.config;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ConfigResourceTest {
     @Test
     public void shouldGetTypeFromId() {
         assertEquals(ConfigResource.Type.TOPIC, ConfigResource.Type.forId((byte) 2));
         assertEquals(ConfigResource.Type.BROKER, ConfigResource.Type.forId((byte) 4));
+        assertEquals(ConfigResource.Type.CLIENT_METRICS, ConfigResource.Type.forId((byte) 16));
+        assertEquals(ConfigResource.Type.GROUP, ConfigResource.Type.forId((byte) 32));
     }
 
     @Test
@@ -40,6 +42,6 @@ public class ConfigResourceTest {
     @Test
     public void shouldRoundTripEveryType() {
         Arrays.stream(ConfigResource.Type.values()).forEach(type ->
-            assertEquals(type.toString(), type, ConfigResource.Type.forId(type.id())));
+            assertEquals(type, ConfigResource.Type.forId(type.id()), type.toString()));
     }
 }

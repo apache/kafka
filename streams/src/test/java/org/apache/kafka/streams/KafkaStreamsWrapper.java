@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.streams;
 
-import java.util.Properties;
-
-import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 
 /**
  *  This class allows to access the {@link KafkaStreams} a {@link StreamThread.StateListener} object.
@@ -30,6 +31,10 @@ public class KafkaStreamsWrapper extends KafkaStreams {
     public KafkaStreamsWrapper(final Topology topology,
                                final Properties props) {
         super(topology, props);
+    }
+
+    public List<StreamThread> streamThreads() {
+        return new ArrayList<>(threads);
     }
 
     /**

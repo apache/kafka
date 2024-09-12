@@ -42,7 +42,7 @@ public class PunctuationQueue {
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    boolean mayPunctuate(final long timestamp, final PunctuationType type, final ProcessorNodePunctuator processorNodePunctuator) {
+    boolean maybePunctuate(final long timestamp, final PunctuationType type, final ProcessorNodePunctuator processorNodePunctuator) {
         synchronized (pq) {
             boolean punctuated = false;
             PunctuationSchedule top = pq.peek();
@@ -64,6 +64,24 @@ public class PunctuationQueue {
             }
 
             return punctuated;
+        }
+    }
+
+    /**
+     * Returns true if there is a schedule ready to be punctuated.
+     */
+    boolean canPunctuate(final long timestamp) {
+        synchronized (pq) {
+            PunctuationSchedule top = pq.peek();
+            while (top != null && top.timestamp <= timestamp) {
+                if (!top.isCancelled()) {
+                    return true;
+                }
+                // Side-effect: removes cancelled schedules (not externally visible)
+                pq.poll();
+                top = pq.peek();
+            }
+            return false;
         }
     }
 

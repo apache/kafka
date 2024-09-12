@@ -17,9 +17,13 @@
 
 package test.plugins;
 
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.Map;
 import java.util.HashMap;
+
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigChangeCallback;
@@ -30,16 +34,20 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
 /**
- * Samples data about its initialization environment for later analysis
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>Samples data about its initialization environment for later analysis.
  */
-public class SamplingConfigProvider extends SamplingTestPlugin implements ConfigProvider {
+public final class SamplingConfigProvider implements SamplingTestPlugin, ConfigProvider {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
+  private static List<SamplingTestPlugin> instances;
   private final ClassLoader classloader;
   private Map<String, SamplingTestPlugin> samples;
 
   static {
     STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+    instances = Collections.synchronizedList(new ArrayList<>());
   }
 
   {
@@ -57,6 +65,11 @@ public class SamplingConfigProvider extends SamplingTestPlugin implements Config
   public ConfigData get(String path, Set<String> keys) {
     logMethodCall(samples);
     return null;
+  }
+
+  public SamplingConfigProvider() {
+    logMethodCall(samples);
+    instances.add(this);
   }
 
   @Override
@@ -97,5 +110,11 @@ public class SamplingConfigProvider extends SamplingTestPlugin implements Config
   @Override
   public Map<String, SamplingTestPlugin> otherSamples() {
     return samples;
+  }
+
+
+  @Override
+  public List<SamplingTestPlugin> allInstances() {
+    return instances;
   }
 }

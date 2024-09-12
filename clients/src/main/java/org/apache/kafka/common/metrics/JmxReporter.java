@@ -18,9 +18,23 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Sanitizer;
+import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.lang.management.ManagementFactory;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import javax.management.Attribute;
 import javax.management.AttributeList;
@@ -32,20 +46,34 @@ import javax.management.MBeanInfo;
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
-import java.lang.management.ManagementFactory;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Register metrics in JMX as dynamic mbeans based on the metric names
  */
 public class JmxReporter implements MetricsReporter {
 
+    public static final String METRICS_CONFIG_PREFIX = "metrics.jmx.";
+
+    public static final String EXCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "exclude";
+    public static final String EXCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "blacklist";
+
+    public static final String INCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "include";
+    public static final String INCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "whitelist";
+
+
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(INCLUDE_CONFIG,
+                                                                         INCLUDE_CONFIG_ALIAS,
+                                                                         EXCLUDE_CONFIG,
+                                                                         EXCLUDE_CONFIG_ALIAS);
+
+    public static final String DEFAULT_INCLUDE = ".*";
+    public static final String DEFAULT_EXCLUDE = "";
+
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
     private String prefix;
     private final Map<String, KafkaMbean> mbeans = new HashMap<>();
+    private Predicate<String> mbeanPredicate = s -> true;
 
     public JmxReporter() {
         this("");
@@ -53,21 +81,56 @@ public class JmxReporter implements MetricsReporter {
 
     /**
      * Create a JMX reporter that prefixes all metrics with the given string.
+     *  @deprecated Since 2.6.0. Use {@link JmxReporter#JmxReporter()}
+     *  Initialize JmxReporter with {@link JmxReporter#contextChange(MetricsContext)}
+     *  Populate prefix by adding _namespace/prefix key value pair to {@link MetricsContext}
      */
+    @Deprecated
     public JmxReporter(String prefix) {
-        this.prefix = prefix;
+        this.prefix = prefix != null ? prefix : "";
     }
 
     @Override
-    public void configure(Map<String, ?> configs) {}
+    public void configure(Map<String, ?> configs) {
+        reconfigure(configs);
+    }
+
+    @Override
+    public Set<String> reconfigurableConfigs() {
+        return RECONFIGURABLE_CONFIGS;
+    }
+
+    @Override
+    public void validateReconfiguration(Map<String, ?> configs) throws ConfigException {
+        compilePredicate(configs);
+    }
+
+    @Override
+    public void reconfigure(Map<String, ?> configs) {
+        synchronized (LOCK) {
+            this.mbeanPredicate = JmxReporter.compilePredicate(configs);
+
+            mbeans.forEach((name, mbean) -> {
+                if (mbeanPredicate.test(name)) {
+                    reregister(mbean);
+                } else {
+                    unregister(mbean);
+                }
+            });
+        }
+    }
 
     @Override
     public void init(List<KafkaMetric> metrics) {
         synchronized (LOCK) {
             for (KafkaMetric metric : metrics)
                 addAttribute(metric);
-            for (KafkaMbean mbean : mbeans.values())
-                reregister(mbean);
+
+            mbeans.forEach((name, mbean) -> {
+                if (mbeanPredicate.test(name)) {
+                    reregister(mbean);
+                }
+            });
         }
     }
 
@@ -78,8 +141,10 @@ public class JmxReporter implements MetricsReporter {
     @Override
     public void metricChange(KafkaMetric metric) {
         synchronized (LOCK) {
-            KafkaMbean mbean = addAttribute(metric);
-            reregister(mbean);
+            String mbeanName = addAttribute(metric);
+            if (mbeanName != null && mbeanPredicate.test(mbeanName)) {
+                reregister(mbeans.get(mbeanName));
+            }
         }
     }
 
@@ -93,7 +158,7 @@ public class JmxReporter implements MetricsReporter {
                 if (mbean.metrics.isEmpty()) {
                     unregister(mbean);
                     mbeans.remove(mBeanName);
-                } else
+                } else if (mbeanPredicate.test(mBeanName))
                     reregister(mbean);
             }
         }
@@ -107,7 +172,7 @@ public class JmxReporter implements MetricsReporter {
         return mbean;
     }
 
-    private KafkaMbean addAttribute(KafkaMetric metric) {
+    private String addAttribute(KafkaMetric metric) {
         try {
             MetricName metricName = metric.metricName();
             String mBeanName = getMBeanName(prefix, metricName);
@@ -115,7 +180,7 @@ public class JmxReporter implements MetricsReporter {
                 mbeans.put(mBeanName, new KafkaMbean(mBeanName));
             KafkaMbean mbean = this.mbeans.get(mBeanName);
             mbean.setAttribute(metricName.name(), metric);
-            return mbean;
+            return mBeanName;
         } catch (JMException e) {
             throw new KafkaException("Error creating mbean attribute for metricName :" + metric.metricName(), e);
         }
@@ -131,7 +196,7 @@ public class JmxReporter implements MetricsReporter {
         mBeanName.append(":type=");
         mBeanName.append(metricName.group());
         for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
-            if (entry.getKey().length() <= 0 || entry.getValue().length() <= 0)
+            if (entry.getKey().isEmpty() || entry.getValue().isEmpty())
                 continue;
             mBeanName.append(",");
             mBeanName.append(entry.getKey());
@@ -244,4 +309,50 @@ public class JmxReporter implements MetricsReporter {
 
     }
 
+    public static Predicate<String> compilePredicate(Map<String, ?> originalConfig) {
+        Map<String, ?> configs = ConfigUtils.translateDeprecatedConfigs(
+            originalConfig, new String[][]{{INCLUDE_CONFIG, INCLUDE_CONFIG_ALIAS},
+                                           {EXCLUDE_CONFIG, EXCLUDE_CONFIG_ALIAS}});
+        String include = (String) configs.get(INCLUDE_CONFIG);
+        String exclude = (String) configs.get(EXCLUDE_CONFIG);
+
+        if (include == null) {
+            include = DEFAULT_INCLUDE;
+        }
+
+        if (exclude == null) {
+            exclude = DEFAULT_EXCLUDE;
+        }
+
+        try {
+            Pattern includePattern = Pattern.compile(include);
+            Pattern excludePattern = Pattern.compile(exclude);
+
+            return s -> includePattern.matcher(s).matches()
+                        && !excludePattern.matcher(s).matches();
+        } catch (PatternSyntaxException e) {
+            throw new ConfigException("JMX filter for configuration" + METRICS_CONFIG_PREFIX
+                                      + ".(include/exclude) is not a valid regular expression");
+        }
+    }
+
+    @Override
+    public void contextChange(MetricsContext metricsContext) {
+        String namespace = metricsContext.contextLabels().get(MetricsContext.NAMESPACE);
+        Objects.requireNonNull(namespace);
+        synchronized (LOCK) {
+            if (!mbeans.isEmpty()) {
+                throw new IllegalStateException("JMX MetricsContext can only be updated before JMX metrics are created");
+            }
+
+            // prevent prefix from getting reset back to empty for backwards compatibility
+            // with the deprecated JmxReporter(String prefix) constructor, in case contextChange gets called
+            // via one of the Metrics() constructor with a default empty MetricsContext()
+            if (namespace.isEmpty()) {
+                return;
+            }
+
+            prefix = namespace;
+        }
+    }
 }

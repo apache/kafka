@@ -18,8 +18,6 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.utils import validate_delivery
 
-import time
-
 class ProduceConsumeValidateTest(Test):
     """This class provides a shared template for tests which follow the common pattern of:
 
@@ -56,20 +54,15 @@ class ProduceConsumeValidateTest(Test):
         if (self.consumer_init_timeout_sec > 0):
             self.logger.debug("Waiting %ds for the consumer to initialize.",
                               self.consumer_init_timeout_sec)
-            start = int(time.time())
             wait_until(lambda: self.consumer.alive(self.consumer.nodes[0]) is True,
                        timeout_sec=self.consumer_init_timeout_sec,
                        err_msg="Consumer process took more than %d s to fork" %\
                        self.consumer_init_timeout_sec)
-            end = int(time.time())
-            remaining_time = self.consumer_init_timeout_sec - (end - start)
-            if remaining_time < 0 :
-                remaining_time = 0
-            if self.consumer.new_consumer:
-                wait_until(lambda: self.consumer.has_partitions_assigned(self.consumer.nodes[0]) is True,
-                           timeout_sec=remaining_time,
-                           err_msg="Consumer process took more than %d s to have partitions assigned" %\
-                           remaining_time)
+
+        # If consuming only latest messages, wait for offset reset to ensure all messages are consumed
+        if not self.consumer.from_beginning:
+            self.consumer.wait_for_offset_reset(self.consumer.nodes[0], self.topic, self.num_partitions)
+
 
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5,

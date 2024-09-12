@@ -15,7 +15,7 @@
 
 //
 // An example task specification for running a producer benchmark in Trogdor.
-// See TROGDOR.md for details.
+// See trogdor/README.md for details.
 //
 
 {

@@ -17,29 +17,42 @@
 
 package test.plugins;
 
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 
 /**
- * Samples data about its initialization environment for later analysis
+ * Fake plugin class for testing classloading isolation.
+ * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
+ * <p>Samples data about its initialization environment for later analysis.
  */
-public class SamplingConverter extends SamplingTestPlugin implements Converter {
+public final class SamplingConverter implements SamplingTestPlugin, Converter {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
+  private static List<SamplingTestPlugin> instances;
   private final ClassLoader classloader;
   private Map<String, SamplingTestPlugin> samples;
 
   static {
     STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+    instances = Collections.synchronizedList(new ArrayList<>());
   }
 
   {
     samples = new HashMap<>();
     classloader = Thread.currentThread().getContextClassLoader();
+  }
+
+  public SamplingConverter() {
+    logMethodCall(samples);
+    instances.add(this);
   }
 
   @Override
@@ -72,5 +85,10 @@ public class SamplingConverter extends SamplingTestPlugin implements Converter {
   @Override
   public Map<String, SamplingTestPlugin> otherSamples() {
     return samples;
+  }
+
+  @Override
+  public List<SamplingTestPlugin> allInstances() {
+    return instances;
   }
 }

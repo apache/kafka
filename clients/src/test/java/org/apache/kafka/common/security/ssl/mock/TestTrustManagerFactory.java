@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.security.ssl.mock;
 
+import java.net.Socket;
+import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+
 import javax.net.ssl.ManagerFactoryParameters;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactorySpi;
 import javax.net.ssl.X509ExtendedTrustManager;
-import java.net.Socket;
-import java.security.KeyStore;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
 
 public class TestTrustManagerFactory extends TrustManagerFactorySpi {
     public static final String ALGORITHM = "TestAlgorithm";
@@ -46,15 +46,13 @@ public class TestTrustManagerFactory extends TrustManagerFactorySpi {
 
     public static class TestTrustManager extends X509ExtendedTrustManager {
 
-        public static final String ALIAS = "TestAlias";
-
         @Override
-        public void checkClientTrusted(X509Certificate[] x509Certificates, String s) throws CertificateException {
+        public void checkClientTrusted(X509Certificate[] x509Certificates, String s) {
 
         }
 
         @Override
-        public void checkServerTrusted(X509Certificate[] x509Certificates, String s) throws CertificateException {
+        public void checkServerTrusted(X509Certificate[] x509Certificates, String s) {
 
         }
 
@@ -64,25 +62,24 @@ public class TestTrustManagerFactory extends TrustManagerFactorySpi {
         }
 
         @Override
-        public void checkClientTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
+        public void checkClientTrusted(X509Certificate[] x509Certificates, String s, Socket socket) {
 
         }
 
         @Override
-        public void checkServerTrusted(X509Certificate[] x509Certificates, String s, Socket socket) throws CertificateException {
+        public void checkServerTrusted(X509Certificate[] x509Certificates, String s, Socket socket) {
 
         }
 
         @Override
-        public void checkClientTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
+        public void checkClientTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) {
 
         }
 
         @Override
-        public void checkServerTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) throws CertificateException {
+        public void checkServerTrusted(X509Certificate[] x509Certificates, String s, SSLEngine sslEngine) {
 
         }
     }
 
 }
-

@@ -17,46 +17,58 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.StoreBuilder;
 
-public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn> {
+import java.util.Set;
 
-    private final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier;
+public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
-    public KStreamFlatTransform(final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier) {
+    @SuppressWarnings("deprecation")
+    private final org.apache.kafka.streams.kstream.TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier;
+
+    @SuppressWarnings("deprecation")
+    public KStreamFlatTransform(final org.apache.kafka.streams.kstream.TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier) {
         this.transformerSupplier = transformerSupplier;
     }
 
     @Override
-    public Processor<KIn, VIn> get() {
+    public Processor<KIn, VIn, KOut, VOut> get() {
         return new KStreamFlatTransformProcessor<>(transformerSupplier.get());
     }
 
-    public static class KStreamFlatTransformProcessor<KIn, VIn, KOut, VOut> extends AbstractProcessor<KIn, VIn> {
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return transformerSupplier.stores();
+    }
 
-        private final Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer;
+    public static class KStreamFlatTransformProcessor<KIn, VIn, KOut, VOut> extends ContextualProcessor<KIn, VIn, KOut, VOut> {
 
-        public KStreamFlatTransformProcessor(final Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer) {
+        @SuppressWarnings("deprecation")
+        private final org.apache.kafka.streams.kstream.Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer;
+
+        @SuppressWarnings("deprecation")
+        public KStreamFlatTransformProcessor(final org.apache.kafka.streams.kstream.Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer) {
             this.transformer = transformer;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<KOut, VOut> context) {
             super.init(context);
-            transformer.init(context);
+            transformer.init((InternalProcessorContext<KOut, VOut>) context);
         }
 
         @Override
-        public void process(final KIn key, final VIn value) {
-            final Iterable<KeyValue<KOut, VOut>> pairs = transformer.transform(key, value);
+        public void process(final Record<KIn, VIn> record) {
+            final Iterable<KeyValue<KOut, VOut>> pairs = transformer.transform(record.key(), record.value());
             if (pairs != null) {
                 for (final KeyValue<KOut, VOut> pair : pairs) {
-                    context().forward(pair.key, pair.value);
+                    context().forward(record.withKey(pair.key).withValue(pair.value));
                 }
             }
         }

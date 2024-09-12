@@ -30,7 +30,7 @@ import scala.collection.Seq
   * in a DelayedFuturePurgatory purgatory. This is used for ACL updates using async Authorizers.
   */
 class DelayedFuture[T](timeoutMs: Long,
-                       futures: List[CompletableFuture[T]],
+                       futures: Seq[CompletableFuture[T]],
                        responseCallback: () => Unit)
   extends DelayedOperation(timeoutMs) {
 
@@ -76,10 +76,10 @@ class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
     new ThreadFactory {
       override def newThread(r: Runnable): Thread = new KafkaThread(s"DelayedExecutor-$purgatoryName", r, true)
     })
-  val purgatoryKey = new Object
+  private val purgatoryKey = new Object
 
   def tryCompleteElseWatch[T](timeoutMs: Long,
-                              futures: List[CompletableFuture[T]],
+                              futures: Seq[CompletableFuture[T]],
                               responseCallback: () => Unit): DelayedFuture[T] = {
     val delayedFuture = new DelayedFuture[T](timeoutMs, futures, responseCallback)
     val done = purgatory.tryCompleteElseWatch(delayedFuture, Seq(purgatoryKey))
@@ -92,9 +92,11 @@ class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
     delayedFuture
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     executor.shutdownNow()
     executor.awaitTermination(60, TimeUnit.SECONDS)
     purgatory.shutdown()
   }
+
+  def isShutdown: Boolean = executor.isShutdown
 }

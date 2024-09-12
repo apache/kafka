@@ -16,10 +16,11 @@
  */
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.metadata.LeaderAndIsr
 
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 case class ElectionResult(topicPartition: TopicPartition, leaderAndIsr: Option[LeaderAndIsr], liveReplicas: Seq[Int])
 
@@ -28,19 +29,27 @@ object Election {
   private def leaderForOffline(partition: TopicPartition,
                                leaderAndIsrOpt: Option[LeaderAndIsr],
                                uncleanLeaderElectionEnabled: Boolean,
+                               isLeaderRecoverySupported: Boolean,
                                controllerContext: ControllerContext): ElectionResult = {
 
     val assignment = controllerContext.partitionReplicaAssignment(partition)
     val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition))
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
-        val isr = leaderAndIsr.isr
+        val isr = leaderAndIsr.isr.asScala.map(_.toInt)
         val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(
           assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
         val newLeaderAndIsrOpt = leaderOpt.map { leader =>
           val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
           else List(leader)
-          leaderAndIsr.newLeaderAndIsr(leader, newIsr)
+          val newIsrAsJava = newIsr.map(Integer.valueOf).asJava
+          if (!isr.contains(leader) && isLeaderRecoverySupported) {
+            // The new leader is not in the old ISR so mark the partition a RECOVERING
+            leaderAndIsr.newRecoveringLeaderAndIsr(leader, newIsrAsJava)
+          } else {
+            // Elect a new leader but keep the previous leader recovery state
+            leaderAndIsr.newLeaderAndIsr(leader, newIsrAsJava)
+          }
         }
         ElectionResult(partition, newLeaderAndIsrOpt, liveReplicas)
 
@@ -53,7 +62,8 @@ object Election {
    * Elect leaders for new or offline partitions.
    *
    * @param controllerContext Context with the current state of the cluster
-   * @param partitionsWithUncleanLeaderElectionState A sequence of tuples representing the partitions
+   * @param isLeaderRecoverySupported true leader recovery is support and should be set if election is unclean
+   * @param partitionsWithUncleanLeaderRecoveryState A sequence of tuples representing the partitions
    *                                                 that need election, their leader/ISR state, and whether
    *                                                 or not unclean leader election is enabled
    *
@@ -61,11 +71,12 @@ object Election {
    */
   def leaderForOffline(
     controllerContext: ControllerContext,
-    partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)]
+    isLeaderRecoverySupported: Boolean,
+    partitionsWithUncleanLeaderRecoveryState: Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)]
   ): Seq[ElectionResult] = {
-    partitionsWithUncleanLeaderElectionState.map {
+    partitionsWithUncleanLeaderRecoveryState.map {
       case (partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled) =>
-        leaderForOffline(partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled, controllerContext)
+        leaderForOffline(partition, leaderAndIsrOpt, uncleanLeaderElectionEnabled, isLeaderRecoverySupported, controllerContext)
     }
   }
 
@@ -75,7 +86,7 @@ object Election {
     val targetReplicas = controllerContext.partitionFullReplicaAssignment(partition).targetReplicas
     val liveReplicas = targetReplicas.filter(replica => controllerContext.isReplicaOnline(replica, partition))
     val isr = leaderAndIsr.isr
-    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(targetReplicas, isr, liveReplicas.toSet)
+    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(targetReplicas, isr.asScala.map(_.toInt), liveReplicas.toSet)
     val newLeaderAndIsrOpt = leaderOpt.map(leader => leaderAndIsr.newLeader(leader))
     ElectionResult(partition, newLeaderAndIsrOpt, targetReplicas)
   }
@@ -102,7 +113,7 @@ object Election {
     val assignment = controllerContext.partitionReplicaAssignment(partition)
     val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition))
     val isr = leaderAndIsr.isr
-    val leaderOpt = PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment, isr, liveReplicas.toSet)
+    val leaderOpt = PartitionLeaderElectionAlgorithms.preferredReplicaPartitionLeaderElection(assignment, isr.asScala.map(_.toInt), liveReplicas.toSet)
     val newLeaderAndIsrOpt = leaderOpt.map(leader => leaderAndIsr.newLeader(leader))
     ElectionResult(partition, newLeaderAndIsrOpt, assignment)
   }
@@ -130,10 +141,10 @@ object Election {
     val assignment = controllerContext.partitionReplicaAssignment(partition)
     val liveOrShuttingDownReplicas = assignment.filter(replica =>
       controllerContext.isReplicaOnline(replica, partition, includeShuttingDownBrokers = true))
-    val isr = leaderAndIsr.isr
+    val isr = leaderAndIsr.isr.asScala.map(_.toInt)
     val leaderOpt = PartitionLeaderElectionAlgorithms.controlledShutdownPartitionLeaderElection(assignment, isr,
       liveOrShuttingDownReplicas.toSet, shuttingDownBrokerIds)
-    val newIsr = isr.filter(replica => !shuttingDownBrokerIds.contains(replica))
+    val newIsr = isr.filter(replica => !shuttingDownBrokerIds.contains(replica)).map(Integer.valueOf).asJava
     val newLeaderAndIsrOpt = leaderOpt.map(leader => leaderAndIsr.newLeaderAndIsr(leader, newIsr))
     ElectionResult(partition, newLeaderAndIsrOpt, liveOrShuttingDownReplicas)
   }

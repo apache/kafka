@@ -17,21 +17,33 @@
 
 package kafka.server
 
-import java.util.Properties
-
-import kafka.log.LogConfig._
+import java.util.AbstractMap.SimpleImmutableEntry
+import java.util.{Collections, Properties}
+import java.util.Map.Entry
 import kafka.server.KafkaConfig.fromProps
-import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
-import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.common.message.BrokerRegistrationRequestData
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
+import org.apache.kafka.controller.ControllerRequestContextUtil
+import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.quota.QuotaType
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 /**
   * This is the main test which ensure Replication Quotas work correctly.
@@ -42,28 +54,29 @@ import scala.collection.JavaConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
-class ReplicationQuotasTest extends ZooKeeperTestHarness {
-  def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100)
-
+class ReplicationQuotasTest extends QuorumTestHarness {
   val msg100KB = new Array[Byte](100000)
-  var brokers: Seq[KafkaServer] = null
+  val listenerName: ListenerName = ListenerName.forSecurityProtocol(PLAINTEXT)
+  var brokers: Seq[KafkaBroker] = _
   val topic = "topic1"
-  var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     producer.close()
     shutdownServers(brokers)
     super.tearDown()
   }
 
-  @Test
-  def shouldBootstrapTwoBrokersWithLeaderThrottle(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def shouldBootstrapTwoBrokersWithLeaderThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(true)
   }
 
-  @Test
-  def shouldBootstrapTwoBrokersWithFollowerThrottle(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def shouldBootstrapTwoBrokersWithFollowerThrottle(quorum: String): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(false)
   }
 
@@ -76,7 +89,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       * regular replication works as expected.
       */
 
-    brokers = (100 to 105).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    brokers = (100 to 105).map { id => createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull))) }
 
     //Given six partitions, led on nodes 0,1,2,3,4,5 but with followers on node 6,7 (not started yet)
     //And two extra partitions 6,7, which we don't intend on throttling.
@@ -90,31 +103,54 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       6 -> Seq(100, 106), //Not Throttled
       7 -> Seq(101, 107) //Not Throttled
     )
-    TestUtils.createTopic(zkClient, topic, assignment, brokers)
 
     val msg = msg100KB
     val msgCount = 100
     val expectedDuration = 10 //Keep the test to N seconds
     var throttle: Long = msgCount * msg.length / expectedDuration
-    if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate for each of the two follower brokers
+    //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to
+    //replicate for each of the two follower brokers.
+    if (!leaderThrottle) throttle = throttle * 3
 
-    //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
-    (100 to 107).foreach { brokerId =>
-      adminZkClient.changeBrokerConfig(Seq(brokerId),
-        propsWith(
-          (DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString),
-          (DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.toString)
-        ))
+    Using(createAdminClient(brokers, listenerName)) { admin =>
+      if (isKRaftTest()) {
+        (106 to 107).foreach(registerBroker)
+      }
+      admin.createTopics(List(new NewTopic(topic, assignment.map(a => a._1.asInstanceOf[Integer] ->
+        a._2.map(_.asInstanceOf[Integer]).toList.asJava).asJava)).asJava).all().get()
+      //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
+      (100 to 107).foreach { brokerId =>
+        if (isKRaftTest()) {
+          val entry = new SimpleImmutableEntry[AlterConfigOp.OpType, String](SET, throttle.toString)
+            .asInstanceOf[Entry[AlterConfigOp.OpType, String]]
+          controllerServer.controller.incrementalAlterConfigs(
+            ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
+            Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
+              QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
+              QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
+            false
+          ).get()
+        } else {
+          adminZkClient.changeBrokerConfig(Seq(brokerId),
+            propsWith(
+              (QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString),
+              (QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString)
+            ))
+        }
+      }
+      //Either throttle the six leaders or the two followers
+      val configEntry = if (leaderThrottle)
+        new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105")
+      else
+        new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107")
+
+      admin.incrementalAlterConfigs(
+        Map(new ConfigResource(TOPIC, topic) -> Seq(new AlterConfigOp(configEntry, SET)).asJavaCollection).asJava
+      ).all().get()
     }
 
-    //Either throttle the six leaders or the two followers
-    if (leaderThrottle)
-      adminZkClient.changeTopicConfig(topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100,1:101,2:102,3:103,4:104,5:105" ))
-    else
-      adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
-
     //Add data equally to each partition
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
@@ -134,7 +170,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Check that throttled config correctly migrated to the new brokers
     (106 to 107).foreach { brokerId =>
-      assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound())
+      assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound)
     }
     if (!leaderThrottle) {
       (0 to 2).foreach { partition => assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(tp(partition))) }
@@ -154,32 +190,32 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     //Check the times for throttled/unthrottled are each side of what we expect
     val throttledLowerBound = expectedDuration * 1000 * 0.9
     val throttledUpperBound = expectedDuration * 1000 * 3
-    assertTrue(s"Expected $unthrottledTook < $throttledLowerBound", unthrottledTook < throttledLowerBound)
-    assertTrue(s"Expected $throttledTook > $throttledLowerBound", throttledTook > throttledLowerBound)
-    assertTrue(s"Expected $throttledTook < $throttledUpperBound", throttledTook < throttledUpperBound)
+    assertTrue(unthrottledTook < throttledLowerBound, s"Expected $unthrottledTook < $throttledLowerBound")
+    assertTrue(throttledTook > throttledLowerBound, s"Expected $throttledTook > $throttledLowerBound")
+    assertTrue(throttledTook < throttledUpperBound, s"Expected $throttledTook < $throttledUpperBound")
 
     // Check the rate metric matches what we expect.
     // In a short test the brokers can be read unfairly, so assert against the average
     val rateUpperBound = throttle * 1.1
     val rateLowerBound = throttle * 0.5
-    val rate = if (leaderThrottle) avRate(LeaderReplication, 100 to 105) else avRate(FollowerReplication, 106 to 107)
-    assertTrue(s"Expected ${rate} < $rateUpperBound", rate < rateUpperBound)
-    assertTrue(s"Expected ${rate} > $rateLowerBound", rate > rateLowerBound)
+    val rate = if (leaderThrottle) avRate(QuotaType.LEADER_REPLICATION, 100 to 105) else avRate(QuotaType.FOLLOWER_REPLICATION, 106 to 107)
+    assertTrue(rate < rateUpperBound, s"Expected $rate < $rateUpperBound")
+    assertTrue(rate > rateLowerBound, s"Expected $rate > $rateLowerBound")
   }
 
   def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
 
-  @Test
-  def shouldThrottleOldSegments(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def shouldThrottleOldSegments(quorum: String): Unit = {
     /**
       * Simple test which ensures throttled replication works when the dataset spans many segments
       */
 
     //2 brokers with 1MB Segment Size & 1 partition
-    val config: Properties = createBrokerConfig(100, zkConnect)
+    val config: Properties = createBrokerConfig(100, zkConnectOrNull)
     config.put("log.segment.bytes", (1024 * 1024).toString)
-    brokers = Seq(createServer(fromProps(config)))
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    brokers = Seq(createBroker(fromProps(config)))
 
     //Write 20MBs and throttle at 5MB/s
     val msg = msg100KB
@@ -187,46 +223,58 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val expectedDuration = 4
     val throttle: Long = msg.length * msgCount / expectedDuration
 
-    //Set the throttle to only limit leader
-    adminZkClient.changeBrokerConfig(Seq(100), propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString))
-    adminZkClient.changeTopicConfig(topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100"))
-
+    Using(createAdminClient(brokers, listenerName)) { admin =>
+      if (isKRaftTest()) {
+        registerBroker(101)
+      }
+      admin.createTopics(
+        List(new NewTopic(topic, Collections.singletonMap(0, List(100, 101).map(_.asInstanceOf[Integer]).asJava))).asJava
+      ).all().get()
+      //Set the throttle to only limit leader
+      val configs = Map(
+        new ConfigResource(BROKER, "100") ->
+          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, throttle.toString), SET)).asJavaCollection,
+        new ConfigResource(TOPIC, topic) ->
+          Seq(new AlterConfigOp(new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"), SET)).asJavaCollection
+      ).asJava
+      admin.incrementalAlterConfigs(configs).all().get()
+    }
     //Add data
     addData(msgCount, msg)
 
     //Start the new broker (and hence start replicating)
     debug("Starting new broker")
-    brokers = brokers :+ createServer(fromProps(createBrokerConfig(101, zkConnect)))
+    brokers = brokers :+ createBroker(fromProps(createBrokerConfig(101, zkConnectOrNull)))
     val start = System.currentTimeMillis()
 
     waitForOffsetsToMatch(msgCount, 0, 101)
 
     val throttledTook = System.currentTimeMillis() - start
 
-    assertTrue(s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms",
-      throttledTook > expectedDuration * 1000 * 0.9)
-    assertTrue(s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms",
-      throttledTook < expectedDuration * 1000 * 1.5)
+    assertTrue(throttledTook > expectedDuration * 1000 * 0.9,
+      s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms")
+    assertTrue(throttledTook < expectedDuration * 1000 * 1.5,
+      s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms")
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 0)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }
 
   private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Unit = {
     waitUntilTrue(() => {
-      offset == brokerFor(brokerId).getLogManager.getLog(new TopicPartition(topic, partitionId))
+      offset == brokerFor(brokerId).logManager.getLog(new TopicPartition(topic, partitionId))
         .map(_.logEndOffset).getOrElse(0)
     }, s"Offsets did not match for partition $partitionId on broker $brokerId", 60000)
   }
 
-  private def brokerFor(id: Int): KafkaServer = brokers.filter(_.config.brokerId == id).head
+  private def brokerFor(id: Int): KafkaBroker = brokers.filter(_.config.brokerId == id).head
 
   def createBrokers(brokerIds: Seq[Int]): Unit = {
     brokerIds.foreach { id =>
-      brokers = brokers :+ createServer(fromProps(createBrokerConfig(id, zkConnect)))
+      brokers = brokers :+ createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull)))
     }
   }
 
@@ -234,8 +282,36 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     brokers.map(brokerFor).map(measuredRate(_, replicationType)).sum / brokers.length
   }
 
-  private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
+  private def measuredRate(broker: KafkaBroker, repType: QuotaType): Double = {
     val metricName = broker.metrics.metricName("byte-rate", repType.toString)
     broker.metrics.metrics.asScala(metricName).metricValue.asInstanceOf[Double]
+  }
+
+  private def registerBroker(id: Int): Unit = {
+    val listeners = new ListenerCollection()
+    listeners.add(new Listener().setName(PLAINTEXT.name).setHost("localhost").setPort(9092 + id))
+    val features = new BrokerRegistrationRequestData.FeatureCollection()
+    features.add(new BrokerRegistrationRequestData.Feature()
+      .setName(MetadataVersion.FEATURE_NAME)
+      .setMinSupportedVersion(MetadataVersion.latestProduction().featureLevel())
+      .setMaxSupportedVersion(MetadataVersion.latestTesting().featureLevel()))
+    Features.PRODUCTION_FEATURES.forEach { feature =>
+      features.add(new BrokerRegistrationRequestData.Feature()
+        .setName(feature.featureName())
+        .setMinSupportedVersion(feature.minimumProduction())
+        .setMaxSupportedVersion(feature.latestTesting()))
+    }
+    controllerServer.controller.registerBroker(
+      ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
+      new BrokerRegistrationRequestData()
+        .setBrokerId(id)
+        .setClusterId(controllerServer.clusterId)
+        .setIncarnationId(Uuid.randomUuid())
+        .setListeners(listeners)
+        .setLogDirs(Collections.singletonList(
+          Uuid.fromString(s"TESTBROKER${Integer.toString(100000 + id).substring(1)}DIRAAAA")
+        ))
+        .setFeatures(features)
+    ).get()
   }
 }

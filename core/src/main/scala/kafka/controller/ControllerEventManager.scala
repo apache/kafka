@@ -17,23 +17,24 @@
 
 package kafka.controller
 
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
-import java.util.concurrent.locks.ReentrantLock
+import com.yammer.metrics.core.Timer
 
-import com.yammer.metrics.core.Gauge
-import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import java.util
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
+import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.ShutdownableThread
+import kafka.utils.Logging
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection._
-import scala.collection.JavaConverters._
 
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
-  val EventQueueTimeMetricName = "EventQueueTimeMs"
-  val EventQueueSizeMetricName = "EventQueueSize"
+  private val EventQueueTimeMetricName = "EventQueueTimeMs"
+  private val EventQueueSizeMetricName = "EventQueueSize"
 }
 
 trait ControllerEventProcessor {
@@ -43,8 +44,8 @@ trait ControllerEventProcessor {
 
 class QueuedEvent(val event: ControllerEvent,
                   val enqueueTimeMs: Long) {
-  val processingStarted = new CountDownLatch(1)
-  val spent = new AtomicBoolean(false)
+  private val processingStarted = new CountDownLatch(1)
+  private val spent = new AtomicBoolean(false)
 
   def process(processor: ControllerEventProcessor): Unit = {
     if (spent.getAndSet(true))
@@ -71,25 +72,21 @@ class QueuedEvent(val event: ControllerEvent,
 class ControllerEventManager(controllerId: Int,
                              processor: ControllerEventProcessor,
                              time: Time,
-                             rateAndTimeMetrics: Map[ControllerState, KafkaTimer]) extends KafkaMetricsGroup {
+                             rateAndTimeMetrics: Map[ControllerState, Timer],
+                             eventQueueTimeTimeoutMs: Long = 300000) {
   import ControllerEventManager._
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[QueuedEvent]
   // Visible for test
-  private[controller] val thread = new ControllerEventThread(ControllerEventThreadName)
+  private[controller] var thread = new ControllerEventThread(ControllerEventThreadName)
 
-  private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
+  private val eventQueueTimeHist = metricsGroup.newHistogram(EventQueueTimeMetricName)
 
-  newGauge(
-    EventQueueSizeMetricName,
-    new Gauge[Int] {
-      def value: Int = {
-        queue.size()
-      }
-    }
-  )
+  metricsGroup.newGauge(EventQueueSizeMetricName, () => queue.size)
 
   def state: ControllerState = _state
 
@@ -101,8 +98,8 @@ class ControllerEventManager(controllerId: Int,
       clearAndPut(ShutdownEventThread)
       thread.awaitShutdown()
     } finally {
-      removeMetric(EventQueueTimeMetricName)
-      removeMetric(EventQueueSizeMetricName)
+      metricsGroup.removeMetric(EventQueueTimeMetricName)
+      metricsGroup.removeMetric(EventQueueSizeMetricName)
     }
   }
 
@@ -113,18 +110,23 @@ class ControllerEventManager(controllerId: Int,
   }
 
   def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock) {
-    queue.asScala.foreach(_.preempt(processor))
-    queue.clear()
+    val preemptedEvents = new util.ArrayList[QueuedEvent]()
+    queue.drainTo(preemptedEvents)
+    preemptedEvents.forEach(_.preempt(processor))
     put(event)
   }
 
   def isEmpty: Boolean = queue.isEmpty
 
-  class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
-    logIdent = s"[ControllerEventThread controllerId=$controllerId] "
+  class ControllerEventThread(name: String)
+    extends ShutdownableThread(
+      name, false, s"[ControllerEventThread controllerId=$controllerId] ")
+      with Logging {
+
+    logIdent = logPrefix
 
     override def doWork(): Unit = {
-      val dequeued = queue.take()
+      val dequeued = pollFromEventQueue()
       dequeued.event match {
         case ShutdownEventThread => // The shutting down of the thread has been initiated at this point. Ignore this event.
         case controllerEvent =>
@@ -136,7 +138,7 @@ class ControllerEventManager(controllerId: Int,
             def process(): Unit = dequeued.process(processor)
 
             rateAndTimeMetrics.get(state) match {
-              case Some(timer) => timer.time { process() }
+              case Some(timer) => timer.time(() => process())
               case None => process()
             }
           } catch {
@@ -145,6 +147,21 @@ class ControllerEventManager(controllerId: Int,
 
           _state = ControllerState.Idle
       }
+    }
+  }
+
+  private def pollFromEventQueue(): QueuedEvent = {
+    val count = eventQueueTimeHist.count()
+    if (count != 0) {
+      val event  = queue.poll(eventQueueTimeTimeoutMs, TimeUnit.MILLISECONDS)
+      if (event == null) {
+        eventQueueTimeHist.clear()
+        queue.take()
+      } else {
+        event
+      }
+    } else {
+      queue.take()
     }
   }
 

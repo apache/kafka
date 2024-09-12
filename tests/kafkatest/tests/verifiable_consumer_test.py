@@ -40,7 +40,7 @@ class VerifiableConsumerTest(KafkaTest):
 
     def _partitions(self, assignment):
         partitions = []
-        for parts in assignment.itervalues():
+        for parts in assignment.values():
             partitions += parts
         return partitions
 
@@ -54,10 +54,11 @@ class VerifiableConsumerTest(KafkaTest):
         return super(VerifiableConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
 
     def setup_consumer(self, topic, static_membership=False, enable_autocommit=False,
-                       assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor", **kwargs):
+                       assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor", group_remote_assignor="range", **kwargs):
         return VerifiableConsumer(self.test_context, self.num_consumers, self.kafka,
                                   topic, self.group_id, static_membership=static_membership, session_timeout_sec=self.session_timeout_sec,
                                   assignment_strategy=assignment_strategy, enable_autocommit=enable_autocommit,
+                                  group_remote_assignor=group_remote_assignor,
                                   log_level="TRACE", **kwargs)
 
     def setup_producer(self, topic, max_messages=-1, throughput=500):
@@ -85,3 +86,12 @@ class VerifiableConsumerTest(KafkaTest):
         
     def await_all_members(self, consumer):
         self.await_members(consumer, self.num_consumers)
+
+    def await_all_members_stabilized(self, topic, num_partitions, consumer, timeout_sec):
+        # Wait until the group is in STABLE state and the consumers reconcile to a valid assignment
+        wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="stable"),
+                   timeout_sec=timeout_sec,
+                   err_msg="Timed out waiting for group %s to transition to STABLE state." % self.group_id)
+        wait_until(lambda: self.valid_assignment(topic, num_partitions, consumer.current_assignment()),
+                   timeout_sec=timeout_sec,
+                   err_msg="Timeout awaiting for the consumers to reconcile to a valid assignment.")

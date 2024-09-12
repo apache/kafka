@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.examples.pageview;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -34,9 +30,15 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -46,32 +48,31 @@ import java.util.concurrent.CountDownLatch;
  * using specific data types (here: JSON POJO; but can also be Avro specific bindings, etc.) for serdes
  * in Kafka Streams.
  *
- * In this example, we join a stream of pageviews (aka clickstreams) that reads from a topic named "streams-pageview-input"
+ * <p>In this example, we join a stream of pageviews (aka clickstreams) that reads from a topic named "streams-pageview-input"
  * with a user profile table that reads from a topic named "streams-userprofile-input", where the data format
  * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
  *
- * Before running this example you must create the input topics and the output topic (e.g. via
+ * <p>Before running this example you must create the input topics and the output topic (e.g. via
  * bin/kafka-topics --create ...), and write some data to the input topics (e.g. via
  * bin/kafka-console-producer). Otherwise you won't see any data arriving in the output topic.
  *
- * The inputs for this example are:
+ * <p>The inputs for this example are:
  * - Topic: streams-pageview-input
  *   Key Format: (String) USER_ID
  *   Value Format: (JSON) {"_t": "pv", "user": (String USER_ID), "page": (String PAGE_ID), "timestamp": (long ms TIMESTAMP)}
- *
+ * <p>
  * - Topic: streams-userprofile-input
  *   Key Format: (String) USER_ID
  *   Value Format: (JSON) {"_t": "up", "region": (String REGION), "timestamp": (long ms TIMESTAMP)}
  *
- * To observe the results, read the output topic (e.g., via bin/kafka-console-consumer)
+ * <p>To observe the results, read the output topic (e.g., via bin/kafka-console-consumer)
  * - Topic: streams-pageviewstats-typed-output
  *   Key Format: (JSON) {"_t": "wpvbr", "windowStart": (long ms WINDOW_TIMESTAMP), "region": (String REGION)}
  *   Value Format: (JSON) {"_t": "rc", "count": (long REGION_COUNT), "region": (String REGION)}
  *
- * Note, the "_t" field is necessary to help Jackson identify the correct class for deserialization in the
+ * <p>Note, the "_t" field is necessary to help Jackson identify the correct class for deserialization in the
  * generic {@link JSONSerde}. If you instead specify a specific serde per class, you won't need the extra "_t" field.
  */
-@SuppressWarnings({"WeakerAccess", "unused"})
 public class PageViewTypedDemo {
 
     /**
@@ -144,29 +145,29 @@ public class PageViewTypedDemo {
     }
 
     // POJO classes
-    static public class PageView implements JSONSerdeCompatible {
+    public static class PageView implements JSONSerdeCompatible {
         public String user;
         public String page;
         public Long timestamp;
     }
 
-    static public class UserProfile implements JSONSerdeCompatible {
+    public static class UserProfile implements JSONSerdeCompatible {
         public String region;
         public Long timestamp;
     }
 
-    static public class PageViewByRegion implements JSONSerdeCompatible {
+    public static class PageViewByRegion implements JSONSerdeCompatible {
         public String user;
         public String page;
         public String region;
     }
 
-    static public class WindowedPageViewByRegion implements JSONSerdeCompatible {
+    public static class WindowedPageViewByRegion implements JSONSerdeCompatible {
         public long windowStart;
         public String region;
     }
 
-    static public class RegionCount implements JSONSerdeCompatible {
+    public static class RegionCount implements JSONSerdeCompatible {
         public long count;
         public String region;
     }
@@ -177,11 +178,9 @@ public class PageViewTypedDemo {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, JSONSerde.class);
-        props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, JSONSerde.class);
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, JSONSerde.class);
-        props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, JSONSerde.class);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -191,6 +190,8 @@ public class PageViewTypedDemo {
         final KStream<String, PageView> views = builder.stream("streams-pageview-input", Consumed.with(Serdes.String(), new JSONSerde<>()));
 
         final KTable<String, UserProfile> users = builder.table("streams-userprofile-input", Consumed.with(Serdes.String(), new JSONSerde<>()));
+
+        final Duration duration24Hours = Duration.ofHours(24);
 
         final KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
             .leftJoin(users, (view, profile) -> {
@@ -207,7 +208,7 @@ public class PageViewTypedDemo {
             })
             .map((user, viewRegion) -> new KeyValue<>(viewRegion.region, viewRegion))
             .groupByKey(Grouped.with(Serdes.String(), new JSONSerde<>()))
-            .windowedBy(TimeWindows.of(Duration.ofDays(7)).advanceBy(Duration.ofSeconds(1)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(7), duration24Hours).advanceBy(Duration.ofSeconds(1)))
             .count()
             .toStream()
             .map((key, value) -> {
@@ -223,7 +224,7 @@ public class PageViewTypedDemo {
             });
 
         // write to the result topic
-        regionCount.to("streams-pageviewstats-typed-output");
+        regionCount.to("streams-pageviewstats-typed-output", Produced.with(new JSONSerde<>(), new JSONSerde<>()));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);

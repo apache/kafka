@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.record;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ControlRecordTypeTest {
 
@@ -38,11 +40,21 @@ public class ControlRecordTypeTest {
     public void testParseUnknownVersion() {
         ByteBuffer buffer = ByteBuffer.allocate(32);
         buffer.putShort((short) 5);
-        buffer.putShort(ControlRecordType.ABORT.type);
+        buffer.putShort(ControlRecordType.ABORT.type());
         buffer.putInt(23432); // some field added in version 5
         buffer.flip();
         ControlRecordType type = ControlRecordType.parse(buffer);
         assertEquals(ControlRecordType.ABORT, type);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = ControlRecordType.class)
+    public void testRoundTrip(ControlRecordType expected) {
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
+        buffer.putShort(expected.type());
+        buffer.flip();
+
+        assertEquals(expected, ControlRecordType.parse(buffer));
+    }
 }

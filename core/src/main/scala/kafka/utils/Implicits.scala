@@ -20,7 +20,8 @@ package kafka.utils
 import java.util
 import java.util.Properties
 
-import scala.collection.JavaConverters._
+import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 /**
   * In order to have these implicits in scope, add the following import:
@@ -43,6 +44,23 @@ object Implicits {
 
     def ++=(map: collection.Map[String, AnyRef]): Unit =
       (properties: util.Hashtable[AnyRef, AnyRef]).putAll(map.asJava)
+
+  }
+
+  /**
+   * Exposes `forKeyValue` which maps to `foreachEntry` in Scala 2.13 and `foreach` in Scala 2.12
+   * (with the help of scala.collection.compat). `foreachEntry` avoids the tuple allocation and
+   * is more efficient.
+   *
+   * This was not named `foreachEntry` to avoid `unused import` warnings in Scala 2.13 (the implicit
+   * would not be triggered in Scala 2.13 since `Map.foreachEntry` would have precedence).
+   */
+  @nowarn("cat=unused-imports")
+  implicit class MapExtensionMethods[K, V](private val self: scala.collection.Map[K, V]) extends AnyVal {
+    import scala.collection.compat._
+    def forKeyValue[U](f: (K, V) => U): Unit = {
+      self.foreachEntry { (k, v) => f(k, v) }
+    }
 
   }
 

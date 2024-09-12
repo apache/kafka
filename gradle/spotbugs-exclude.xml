@@ -24,22 +24,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 -->
 <FindBugsFilter>
 
-    <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->
-    <Match>
-        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
-    </Match>
-
-    <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->
-    <Match>
-        <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
-    </Match>
-
     <Match>
         <!-- Disable warnings about mutable objects and the use of public fields.
             EI_EXPOSE_REP: May expose internal representation by returning reference to mutable object
             EI_EXPOSE_REP2: May expose internal representation by incorporating reference to mutable object
-            MS_PKGPROTECT: Field should be package protected -->
-        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT"/>
+            MS_PKGPROTECT: Field should be package protected
+            MS_EXPOSE_REP: Public static method may expose internal representation by returning array
+            EI_EXPOSE_STATIC_REP2: May expose internal static state by storing a mutable object into a static field -->
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT,EI_EXPOSE_STATIC_REP2,MS_EXPOSE_REP"/>
     </Match>
 
     <Match>
@@ -52,6 +44,21 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Disable warnings about the lack of equals() when compareTo() is implemented.
             EQ_COMPARETO_USE_OBJECT_EQUALS: This class defines a compareTo method but no equals() method -->
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
+    </Match>
+
+    <Match>
+        <!-- Disable warnings about constructors that throw exceptions.
+            CT_CONSTRUCTOR_THROW: Be wary of letting constructors throw exceptions -->
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <Match>
+        <!-- Disable warnings about identifiers that conflict with standard library identifiers.
+            PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_CLASS_NAMES: Do not reuse public identifiers from JSL as class name
+            PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_FIELD_NAMES: Do not reuse public identifiers from JSL as field name
+            PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_METHOD_NAMES: Do not reuse public identifiers from JSL as method name
+            -->
+        <Bug pattern="PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_CLASS_NAMES,PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_FIELD_NAMES,PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_METHOD_NAMES"/>
     </Match>
 
     <Match>
@@ -78,7 +85,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             NP_ALWAYS_NULL: Null pointer dereference
             MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code
             IC_INIT_CIRCULARITY: Initialization circularity
-            SE_NO_SUITABLE_CONSTRUCTOR: Class is Serializable but its superclass doesn't define a void constructor -->
+            SE_NO_SUITABLE_CONSTRUCTOR: Class is Serializable but its superclass doesn't define a void constructor
+            PA_PUBLIC_MUTABLE_OBJECT_ATTRIBUTE: Mutable object-type field is public -->
         <Source name="~.*\.scala" />
         <Or>
             <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
@@ -100,12 +108,39 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="MS_CANNOT_BE_FINAL"/>
             <Bug pattern="IC_INIT_CIRCULARITY"/>
             <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
+            <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+            <Bug pattern="SSD_DO_NOT_USE_INSTANCE_LOCK_ON_SHARED_STATIC_DATA"/>
+            <Bug pattern="PA_PUBLIC_MUTABLE_OBJECT_ATTRIBUTE"/>
         </Or>
+    </Match>
+
+    <Match>
+        <!-- disabled due to too many false positives
+            RV_EXCEPTION_NOT_THROWN: Exception created and dropped rather than thrown -->
+        <Bug pattern="RV_EXCEPTION_NOT_THROWN"/>
+    </Match>
+
+    <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
+    <Match>
+        <Class name="org.apache.kafka.common.compress.Lz4BlockOutputStream"/>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+    </Match>
+
+    <!-- false positive, see https://github.com/spotbugs/spotbugs/issues/1001 -->
+    <Match>
+        <Class name="org.apache.kafka.common.internals.KafkaFutureImpl"/>
+        <Bug pattern="NP_NONNULL_PARAM_VIOLATION"/>
     </Match>
 
     <Match>
         <!-- Suppression for the equals() for extension methods. -->
         <Class name="kafka.api.package$ElectLeadersRequestOps"/>
+        <Bug pattern="EQ_UNUSUAL"/>
+    </Match>
+
+    <Match>
+        <!-- Suppression for the equals() for extension methods. -->
+        <Class name="kafka.utils.Implicits$MapExtensionMethods"/>
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
@@ -123,14 +158,29 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Scala doesn't have checked exceptions so one cannot catch RuntimeException and rely
+             on the compiler to fail if the code is changed to call a method that throws Exception.
+             Given that, this bug pattern doesn't make sense for Scala code. -->
+        <Or>
+            <Class name="kafka.log.Log"/>
+            <Class name="kafka.log.LocalLog$"/>
+        </Or>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <Match>
         <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
         <Class name="kafka.tools.StateChangeLogMerger$"/>
         <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
     </Match>
 
     <Match>
-        <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
-        <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
+        <Or>
+            <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
+            <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
+            <!-- Java's own Map#compute forces this pattern on us -->
+            <Class name="org.apache.kafka.streams.query.Position"/>
+        </Or>
         <Bug pattern="BX_UNBOXING_IMMEDIATELY_REBOXED"/>
     </Match>
 
@@ -145,6 +195,19 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
         <Source name="ControllerContext.scala"/>
         <Package name="kafka.controller"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- offsets is a lazy val and it confuses spotBugs with its locking scheme -->
+        <Class name="kafka.server.checkpoints.LazyOffsetCheckpointMap"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="ReplicaManager.scala"/>
+        <Package name="kafka.server"/>
         <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
     </Match>
 
@@ -167,6 +230,27 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Source name="AdminZkClient.scala"/>
         <Package name="kafka.zk"/>
         <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="AuthHelper.scala"/>
+        <Package name="kafka.server"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="KafkaApis.scala"/>
+        <Package name="kafka.server"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Keeping this class for compatibility. It's deprecated and will be removed in the next major release -->
+        <Source name="MessageFormatter.scala"/>
+        <Package name="kafka.common"/>
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_INTERFACE"/>
     </Match>
 
     <Match>
@@ -200,17 +284,37 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Suppress some minor warnings about machine-generated code for
-             benchmarking. -->
-        <Or>
-            <Package name="org.apache.kafka.jmh.cache.generated"/>
-            <Package name="org.apache.kafka.jmh.common.generated"/>
-            <Package name="org.apache.kafka.jmh.record.generated"/>
-            <Package name="org.apache.kafka.jmh.producer.generated"/>
-            <Package name="org.apache.kafka.jmh.partition.generated"/>
-            <Package name="org.apache.kafka.jmh.fetchsession.generated"/>
-            <Package name="org.apache.kafka.jmh.fetcher.generated"/>
-        </Or>
+        <!-- Suppress warning about missing reflexive and symmetric properties of equal.
+             This equals method is used as a value filter for Jackson. -->
+        <Class name="org.apache.kafka.connect.runtime.rest.entities.PluginInfo$NoVersionFilter"/>
+        <Method name="equals"/>
+        <Bug pattern="EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress aggressive and unnecessary warnings about switch fallthrough -->
+        <Class name="org.apache.kafka.connect.runtime.rest.resources.LoggingResource" />
+        <Method name="setLevel" />
+        <Bug pattern="SF_SWITCH_FALLTHROUGH" />
+    </Match>
+
+    <Match>
+        <!-- Converting to an optional boolean intentionally returns null on null input. -->
+        <Class name="org.apache.kafka.connect.data.Values"/>
+        <Method name="convertToBoolean"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some minor warnings about machine-generated code for benchmarking. -->
+        <Package name="~org\.apache\.kafka\.jmh\..*\.jmh_generated"/>
+    </Match>
+
+    <Match>
+        <!-- JMH benchmarks often have fields that are modified by the framework.
+            SS_SHOULD_BE_STATIC: Unread field: should this field be static? -->
+        <Package name="~org\.apache\.kafka\.jmh\..*"/>
+        <Bug pattern="SS_SHOULD_BE_STATIC"/>
     </Match>
 
     <Match>
@@ -218,6 +322,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Or>
             <Package name="org.apache.kafka.common.message"/>
             <Package name="org.apache.kafka.streams.internals.generated"/>
+            <Package name="kafka.internals.generated"/>
         </Or>
         <Bug pattern="MS_MUTABLE_ARRAY"/>
     </Match>
@@ -226,7 +331,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->
-        <Class name="org.apache.kafka.connect.runtime.WorkerSourceTask"/>
+        <Class name="org.apache.kafka.connect.runtime.AbstractWorkerSourceTask"/>
         <Method name="execute"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
     </Match>
@@ -245,7 +350,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.connect.runtime.WorkerConnector"/>
         <Or>
             <Method name="doStart"/>
-            <Method name="pause"/>
         </Or>
         <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
     </Match>
@@ -255,6 +359,20 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"/>
         <Method name="authenticate"/>
         <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
+    <Match>
+        <!-- False positive - the volatile read is guarded by a lock. -->
+        <Class name="org.apache.kafka.storage.internals.log.AbstractIndex"/>
+        <Method name="incrementEntries"/>
+        <Bug pattern="VO_VOLATILE_INCREMENT"/>
+    </Match>
+
+    <Match>
+        <!-- False positive - `ScheduledThreadPoolExecutor.getQueue()` specifies via its javadoc that its elements are of type `ScheduledFuture` -->
+        <Class name="org.apache.kafka.server.util.KafkaScheduler"/>
+        <Method name="taskRunning"/>
+        <Bug pattern="GC_UNRELATED_TYPES"/>
     </Match>
 
     <Match>
@@ -297,6 +415,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Public mutable fields are intentional in some Streams classes.
+         PA_PUBLIC_PRIMITIVE_ATTRIBUTE: Primitive field is public -->
+        <Or>
+            <Class name="org.apache.kafka.streams.kstream.Materialized"/>
+            <Class name="org.apache.kafka.streams.state.internals.LeftOrRightValueDeserializer"/>
+        </Or>
+        <Bug pattern="PA_PUBLIC_PRIMITIVE_ATTRIBUTE"/>
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about locks not being released on all paths.
              This happens because there is an 'if' statement that checks if we have the lock before
              releasing it. -->
@@ -321,20 +449,28 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppress a warning about ignoring the return value of await.
+             This is done intentionally because we use other clues to determine
+             if the wait was cut short.  -->
+        <Package name="org.apache.kafka.queue"/>
+        <Source name="KafkaEventQueue.java"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    </Match>
+
+    <Match>
         <!-- Suppress warnings about implementing compareTo but not equals. -->
         <Class name="org.apache.kafka.streams.processor.internals.Stamped"/>
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
     </Match>
 
     <Match>
-        <!-- TODO: fix this (see KAFKA-4996) -->
-        <Or>
-            <Package name="org.apache.kafka.streams.state.internals"/>
+        <!-- Suppress warning about applicationID that gets initialized before
+        any other threads are created, but is used in synchronized and
+        unsynchronized methods because it comes from the configs,
+        passed through rewriteTopology. -->
             <Package name="org.apache.kafka.streams.processor.internals"/>
-            <Package name="org.apache.kafka.streams.processor"/>
-            <Package name="org.apache.kafka.streams"/>
-        </Or>
-        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+            <Source name="InternalTopologyBuilder.java"/>
+            <Bug pattern="IS2_INCONSISTENT_SYNC"/>
     </Match>
 
     <Match>
@@ -355,18 +491,19 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Ignore spurious warning about inconsistent synchronization on a currentFetch.
+             Locking is consistent but does not use synchronized methods. All accesses
+             are performed in the application thread once it has acquired the lock. -->
+        <Package name="org.apache.kafka.clients.consumer.internals" />
+        <Source name="ShareConsumerImpl.java" />
+        <Bug pattern="IS2_INCONSISTENT_SYNC" />
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about an unreleased lock. -->
         <Class name="kafka.utils.timer.SystemTimer"/>
         <Method name="add"/>
         <Bug pattern="UL_UNRELEASED_LOCK_EXCEPTION_PATH"/>
-    </Match>
-
-    <Match>
-        <!-- Suppress a warning about an intentional infinite loop. -->
-        <Package name="kafka.utils"/>
-        <Source name="Throttler.scala"/>
-        <Method name="main"/>
-        <Bug pattern="IL_INFINITE_LOOP"/>
     </Match>
 
     <Match>
@@ -375,12 +512,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Package name="org.apache.kafka.trogdor.workload"/>
         <Source name="RoundTripWorker.java"/>
         <Bug pattern="NN_NAKED_NOTIFY"/>
-    </Match>
-
-    <Match>
-        <Package name="org.apache.kafka.streams.scala"/>
-        <Source name="FunctionConversions.scala"/>
-        <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
     <Match>
@@ -415,9 +546,67 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
 
     <Match>
+        <!-- Boolean deserializer intentionally returns null on null input. -->
+        <Class name="org.apache.kafka.common.serialization.BooleanDeserializer"/>
+        <Method name="deserialize"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <Match>
+        <!-- False positive - null is allow in SortedMap -->
+        <Class name="org.apache.kafka.streams.processor.internals.assignment.Graph"/>
+        <Bug pattern="NP_NONNULL_PARAM_VIOLATION"/>
+    </Match>
+
+    <Match>
         <!-- Suppress a warning about ignoring return value because this is intentional. -->
         <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
         <Method name="get"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+    <Match>
+        <!-- False positive - the field is used in other modules and its unit test -->
+        <Class name="org.apache.kafka.common.utils.PrimitiveRef$LongRef"/>
+        <Field name="value"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.acl.generated"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings related to jmh generated code -->
+        <Package name="org.apache.kafka.jmh.metadata.generated"/>
+    </Match>
+
+    <Match>
+        <Package name="org.apache.kafka.common.security.oauthbearer.secured" />
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_SUPERCLASS"/>
+    </Match>
+
+    <Match>
+        <Class name="org.apache.kafka.jmh.util.ByteUtilsBenchmark$BaseBenchmarkState" />
+        <!-- Suppress warning because JMH code is used to instantiate Random() once per Trial. This is done to ensure
+             that all benchmarks run with same seed for Random. -->
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about await not being in a loop - we expect the loop to be outside the method. -->
+        <Class name="org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager"/>
+        <Bug pattern="WA_AWAIT_NOT_IN_LOOP"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress the warnings about the caller not using the return value from Consumer. KafkaConsumer now
+             delegates all API calls to an internal instance of Consumer, which confuses SpotBugs. -->
+        <Or>
+            <Class name="org.apache.kafka.tools.ClientCompatibilityTest"/>
+            <Class name="org.apache.kafka.tools.StreamsResetter"/>
+        </Or>
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
     </Match>
 

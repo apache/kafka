@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix, parametrize
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
 from kafkatest.services.performance import latency, compute_aggregate_throughput
 from kafkatest.services.zookeeper import ZookeeperService
@@ -31,10 +31,11 @@ class PerformanceServiceTest(Test):
         self.num_records = 10000
         self.topic = "topic"
 
-        self.zk = ZookeeperService(test_context, 1)
+        self.zk = ZookeeperService(test_context, 1) if quorum.for_test(test_context) == quorum.zk else None
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     @cluster(num_nodes=5)
     # We are keeping 0.8.2 here so that we don't inadvertently break support for it. Since this is just a sanity check,
@@ -43,8 +44,9 @@ class PerformanceServiceTest(Test):
     @parametrize(version=str(LATEST_0_9), new_consumer=False)
     @parametrize(version=str(LATEST_0_9))
     @parametrize(version=str(LATEST_1_1), new_consumer=False)
-    @parametrize(version=str(DEV_BRANCH))
-    def test_version(self, version=str(LATEST_0_9), new_consumer=True):
+    @cluster(num_nodes=5)
+    @matrix(version=[str(DEV_BRANCH)], metadata_quorum=quorum.all)
+    def test_version(self, version=str(LATEST_0_9), new_consumer=True, metadata_quorum=quorum.zk):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
         number of messages. The actual stats here are pretty meaningless since the number of messages is quite small.
@@ -67,6 +69,7 @@ class PerformanceServiceTest(Test):
                 'buffer.memory': 64*1024*1024})
         self.producer_perf.run()
         producer_perf_data = compute_aggregate_throughput(self.producer_perf)
+        assert producer_perf_data['records_per_sec'] > 0
 
         # check basic run of end to end latency
         self.end_to_end = EndToEndLatencyService(
@@ -82,6 +85,7 @@ class PerformanceServiceTest(Test):
         self.consumer_perf.group = "test-consumer-group"
         self.consumer_perf.run()
         consumer_perf_data = compute_aggregate_throughput(self.consumer_perf)
+        assert consumer_perf_data['records_per_sec'] > 0
 
         return {
             "producer_performance": producer_perf_data,

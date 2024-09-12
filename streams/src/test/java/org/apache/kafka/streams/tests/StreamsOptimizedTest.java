@@ -19,6 +19,7 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -46,8 +47,8 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
 
+@SuppressWarnings("deprecation")
 public class StreamsOptimizedTest {
-
 
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
@@ -109,7 +110,7 @@ public class StreamsOptimizedTest {
 
 
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsOptimizedTest");
-        config.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
+        config.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.adminClientPrefix(AdminClientConfig.RETRIES_CONFIG), "100");
@@ -129,17 +130,15 @@ public class StreamsOptimizedTest {
             }
         });
 
+        streams.cleanUp();
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                System.out.println("closing Kafka Streams instance");
-                System.out.flush();
-                streams.close(Duration.ofMillis(5000));
-                System.out.println("OPTIMIZE_TEST Streams Stopped");
-                System.out.flush();
-            }
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
+            System.out.println("closing Kafka Streams instance");
+            System.out.flush();
+            streams.close(Duration.ofMillis(5000));
+            System.out.println("OPTIMIZE_TEST Streams Stopped");
+            System.out.flush();
         });
 
     }

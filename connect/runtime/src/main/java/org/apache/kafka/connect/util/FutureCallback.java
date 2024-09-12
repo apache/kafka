@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.connect.util;
 
+/**
+ * An implementation of {@link ConvertingFutureCallback} that doesn't do any conversion - i.e. the callback result is
+ * returned transparently via {@link #get}.
+ */
 public class FutureCallback<T> extends ConvertingFutureCallback<T, T> {
 
     public FutureCallback(Callback<T> underlying) {

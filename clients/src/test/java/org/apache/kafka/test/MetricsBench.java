@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.util.Arrays;
-
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -26,6 +24,8 @@ import org.apache.kafka.common.metrics.stats.Percentile;
 import org.apache.kafka.common.metrics.stats.Percentiles;
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
+
+import java.util.Arrays;
 
 public class MetricsBench {
 
@@ -49,8 +49,8 @@ public class MetricsBench {
             long start = System.nanoTime();
             for (int i = 0; i < iters; i++)
                 parent.record(i);
-            double ellapsed = (System.nanoTime() - start) / (double) iters;
-            System.out.println(String.format("%.2f ns per metric recording.", ellapsed));
+            double elapsed = (System.nanoTime() - start) / (double) iters;
+            System.out.printf("%.2f ns per metric recording.%n", elapsed);
         } finally {
             metrics.close();
         }

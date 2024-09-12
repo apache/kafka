@@ -12,36 +12,39 @@
   */
 package kafka.api
 
-import java.io.File
-import java.util.Locale
-
-import kafka.server.KafkaConfig
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.security.JaasTestUtils
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils.{isAclUnsecure, secureZkPaths}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{After, Before, Test}
+import org.apache.kafka.server.config.ZkConfigs
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api._
 
+import java.util.Locale
+
+@Timeout(600)
 class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   override protected def listenerName = new ListenerName("CLIENT")
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
-    s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
-  // disable secure acls of zkClient in ZooKeeperTestHarness
+    s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME}"
+  this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "false")
+  // disable secure acls of zkClient in QuorumTestHarness
   override protected def zkAclsEnabled = Some(false)
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  @Before
-  override def setUp(): Unit = {
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both, kafkaServerJaasEntryName))
-    super.setUp()
+    super.setUp(testInfo)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
@@ -53,6 +56,12 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
    */
   @Test
   def testZkAclsDisabled(): Unit = {
-    TestUtils.verifyUnsecureZkAcls(zkClient)
+    secureZkPaths(zkClient).foreach(path => {
+      if (zkClient.pathExists(path)) {
+        val acls = zkClient.getAcl(path)
+        assertEquals(1, acls.size, s"Invalid ACLs for $path $acls")
+        acls.foreach(isAclUnsecure)
+      }
+    })
   }
 }

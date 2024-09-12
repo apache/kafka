@@ -16,34 +16,62 @@
  */
 package org.apache.kafka.common.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.Set;
+import java.util.function.Consumer;
 
 public class Topic {
 
     public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
     public static final String TRANSACTION_STATE_TOPIC_NAME = "__transaction_state";
+    public static final String SHARE_GROUP_STATE_TOPIC_NAME = "__share_group_state";
+    public static final String CLUSTER_METADATA_TOPIC_NAME = "__cluster_metadata";
+    public static final TopicPartition CLUSTER_METADATA_TOPIC_PARTITION = new TopicPartition(
+        CLUSTER_METADATA_TOPIC_NAME,
+        0
+    );
     public static final String LEGAL_CHARS = "[a-zA-Z0-9._-]";
 
     private static final Set<String> INTERNAL_TOPICS = Collections.unmodifiableSet(
-            Utils.mkSet(GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME));
+            Utils.mkSet(GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME));
 
     private static final int MAX_NAME_LENGTH = 249;
 
     public static void validate(String topic) {
-        if (topic.isEmpty())
-            throw new InvalidTopicException("Topic name is illegal, it can't be empty");
-        if (topic.equals(".") || topic.equals(".."))
-            throw new InvalidTopicException("Topic name cannot be \".\" or \"..\"");
-        if (topic.length() > MAX_NAME_LENGTH)
-            throw new InvalidTopicException("Topic name is illegal, it can't be longer than " + MAX_NAME_LENGTH +
-                    " characters, topic name: " + topic);
-        if (!containsValidPattern(topic))
-            throw new InvalidTopicException("Topic name \"" + topic + "\" is illegal, it contains a character other than " +
-                    "ASCII alphanumerics, '.', '_' and '-'");
+        validate(topic, "Topic name", message -> {
+            throw new InvalidTopicException(message);
+        });
+    }
+
+    private static String detectInvalidTopic(String name) {
+        if (name.isEmpty())
+            return "the empty string is not allowed";
+        if (".".equals(name))
+            return "'.' is not allowed";
+        if ("..".equals(name))
+            return "'..' is not allowed";
+        if (name.length() > MAX_NAME_LENGTH)
+            return "the length of '" + name + "' is longer than the max allowed length " + MAX_NAME_LENGTH;
+        if (!containsValidPattern(name))
+            return "'" + name + "' contains one or more characters other than " +
+                "ASCII alphanumerics, '.', '_' and '-'";
+        return null;
+    }
+
+    public static boolean isValid(String name) {
+        String reasonInvalid = detectInvalidTopic(name);
+        return reasonInvalid == null;
+    }
+
+    public static void validate(String name, String logPrefix, Consumer<String> throwableConsumer) {
+        String reasonInvalid = detectInvalidTopic(name);
+        if (reasonInvalid != null) {
+            throwableConsumer.accept(logPrefix + " is invalid: " +  reasonInvalid);
+        }
     }
 
     public static boolean isInternal(String topic) {
@@ -61,6 +89,17 @@ public class Topic {
     }
 
     /**
+     * Unify topic name with a period ('.') or underscore ('_'), this is only used to check collision and will not
+     * be used to really change topic name.
+     *
+     * @param topic A topic to unify
+     * @return A unified topic name
+     */
+    public static String unifyCollisionChars(String topic) {
+        return topic.replace('.', '_');
+    }
+
+    /**
      * Returns true if the topicNames collide due to a period ('.') or underscore ('_') in the same position.
      *
      * @param topicA A topic to check for collision
@@ -68,7 +107,7 @@ public class Topic {
      * @return true if the topics collide
      */
     public static boolean hasCollision(String topicA, String topicB) {
-        return topicA.replace('.', '_').equals(topicB.replace('.', '_'));
+        return unifyCollisionChars(topicA).equals(unifyCollisionChars(topicB));
     }
 
     /**

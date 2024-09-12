@@ -22,6 +22,8 @@ import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImp
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.Map;
 
 public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
@@ -47,7 +49,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * Create a size-constrained buffer in terms of the maximum number of keys it will store.
          */
         static EagerBufferConfig maxRecords(final long recordLimit) {
-            return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE);
+            return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE, Collections.emptyMap());
         }
 
         /**
@@ -59,7 +61,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * Create a size-constrained buffer in terms of the maximum number of bytes it will use.
          */
         static EagerBufferConfig maxBytes(final long byteLimit) {
-            return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit);
+            return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit, Collections.emptyMap());
         }
 
         /**
@@ -118,12 +120,31 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * duplicate results downstream, but does not promise to eliminate them.
          */
         EagerBufferConfig emitEarlyWhenFull();
+
+        /**
+         * Disable the changelog for this suppression's internal buffer.
+         * This will turn off fault-tolerance for the suppression, and will result in data loss in the event of a rebalance.
+         * By default, the changelog is enabled.
+         * @return this
+         */
+        BC withLoggingDisabled();
+
+        /**
+         * Indicates that a changelog topic should be created containing the currently suppressed
+         * records. Due to the short-lived nature of records in this topic it is likely more
+         * compactable than changelog topics for KTables.
+         *
+         * @param config Configs that should be applied to the changelog. Note: Any unrecognized
+         *               configs will be ignored.
+         * @return this
+         */
+        BC withLoggingEnabled(final Map<String, String> config);
     }
 
     /**
      * Configure the suppression to emit only the "final results" from the window.
      *
-     * By default all Streams operators emit results whenever new results are available.
+     * By default, all Streams operators emit results whenever new results are available.
      * This includes windowed operations.
      *
      * This configuration will instead emit just one result per key for each window, guaranteeing
@@ -133,7 +154,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
      * To accomplish this, the operator will buffer events from the window until the window close (that is,
      * until the end-time passes, and additionally until the grace period expires). Since windowed operators
      * are required to reject out-of-order events for a window whose grace period is expired, there is an additional
-     * guarantee that the final results emitted from this suppression will match any queriable state upstream.
+     * guarantee that the final results emitted from this suppression will match any queryable state upstream.
      *
      * @param bufferConfig A configuration specifying how much space to use for buffering intermediate results.
      *                     This is required to be a "strict" config, since it would violate the "final results"
@@ -146,7 +167,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
     /**
      * Configure the suppression to wait {@code timeToWaitForMoreEvents} amount of time after receiving a record
-     * before emitting it further downstream. If another record for the same key arrives in the mean time, it replaces
+     * before emitting it further downstream. If another record for the same key arrives in the meantime, it replaces
      * the first record in the buffer but does <em>not</em> re-start the timer.
      *
      * @param timeToWaitForMoreEvents The amount of time to wait, per record, for new events.

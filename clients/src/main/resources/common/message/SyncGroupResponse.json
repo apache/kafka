@@ -24,13 +24,22 @@
   // Starting from version 3, syncGroupRequest supports a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 4 is the first flexible version.
-  "validVersions": "0-4",
+  //
+  // Starting from version 5, the broker sends back the Protocol Type and the Protocol Name
+  // to the client (KIP-559).
+  "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
+    { "name": "ProtocolType", "type": "string", "versions": "5+",
+      "nullableVersions": "5+", "default": "null", "ignorable": true,
+      "about": "The group protocol type." },
+    { "name": "ProtocolName", "type": "string", "versions": "5+",
+      "nullableVersions": "5+", "default": "null", "ignorable": true,
+      "about": "The group protocol name." },
     { "name": "Assignment", "type": "bytes", "versions": "0+",
       "about": "The member assignment." }
   ]

@@ -17,14 +17,14 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,12 +32,18 @@ public class GlobalStateManagerStub implements GlobalStateManager {
 
     private final Set<String> storeNames;
     private final Map<TopicPartition, Long> offsets;
+    private final File baseDirectory;
     public boolean initialized;
     public boolean closed;
+    public boolean flushed;
+    public boolean checkpointWritten;
 
-    public GlobalStateManagerStub(final Set<String> storeNames, final Map<TopicPartition, Long> offsets) {
+    public GlobalStateManagerStub(final Set<String> storeNames,
+                                  final Map<TopicPartition, Long> offsets,
+                                  final File baseDirectory) {
         this.storeNames = storeNames;
         this.offsets = offsets;
+        this.baseDirectory = baseDirectory;
     }
 
     @Override
@@ -50,44 +56,57 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {}
-
-    @Override
     public File baseDir() {
-        return null;
+        return baseDirectory;
     }
 
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {}
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback,
+                              final CommitCallback checkpoint) {}
 
     @Override
-    public void flush() {}
+    public void flush() {
+        flushed = true;
+    }
 
     @Override
-    public void close(final boolean clean) throws IOException {
-        this.offsets.putAll(offsets);
+    public void close() {
         closed = true;
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {
-        this.offsets.putAll(offsets);
+    public void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets) {
+        this.offsets.putAll(writtenOffsets);
     }
 
     @Override
-    public StateStore getGlobalStore(final String name) {
+    public void checkpoint() {
+        checkpointWritten = true;
+    }
+
+    @Override
+    public StateStore store(final String name) {
         return null;
     }
 
     @Override
-    public StateStore getStore(final String name) {
+    public StateStore globalStore(final String name) {
         return null;
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
+    public Map<TopicPartition, Long> changelogOffsets() {
         return offsets;
+    }
+
+    @Override
+    public TaskType taskType() {
+        return TaskType.GLOBAL;
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return null;
     }
 }

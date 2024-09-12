@@ -17,19 +17,17 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(120)
 public class MessageDataGeneratorTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testNullDefaults() throws Exception {
@@ -38,6 +36,29 @@ public class MessageDataGeneratorTest {
                 "  \"type\": \"request\",",
                 "  \"name\": \"FooBar\",",
                 "  \"validVersions\": \"0-2\",",
+                "  \"flexibleVersions\": \"none\",",
+                "  \"fields\": [",
+                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
+                "    { \"name\": \"field2\", \"type\": \"[]TestStruct\", \"versions\": \"1+\", ",
+                "    \"nullableVersions\": \"1+\", \"default\": \"null\", \"fields\": [",
+                "      { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" }",
+                "    ]},",
+                "    { \"name\": \"field3\", \"type\": \"bytes\", \"versions\": \"2+\", ",
+                "      \"nullableVersions\": \"2+\", \"default\": \"null\" }",
+                "  ]",
+                "}")), MessageSpec.class);
+        new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+    }
+
+    @Test
+    public void testNullDefaultsWithDeprecatedVersions() throws Exception {
+        MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                "{",
+                "  \"type\": \"request\",",
+                "  \"name\": \"FooBar\",",
+                "  \"validVersions\": \"0-4\",",
+                "  \"deprecatedVersions\": \"0-1\",",
+                "  \"flexibleVersions\": \"none\",",
                 "  \"fields\": [",
                 "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
                 "    { \"name\": \"field2\", \"type\": \"[]TestStruct\", \"versions\": \"1+\", ",
@@ -52,8 +73,8 @@ public class MessageDataGeneratorTest {
     }
 
     private void assertStringContains(String substring, String value) {
-        assertTrue("Expected string to contain '" + substring + "', but it was " + value,
-            value.contains(substring));
+        assertTrue(value.contains(substring),
+                   "Expected string to contain '" + substring + "', but it was " + value);
     }
 
     @Test
@@ -63,6 +84,7 @@ public class MessageDataGeneratorTest {
             "  \"type\": \"request\",",
             "  \"name\": \"FooBar\",",
             "  \"validVersions\": \"0-2\",",
+            "  \"flexibleVersions\": \"none\",",
             "  \"fields\": [",
             "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\", \"default\": \"null\" }",
             "  ]",
@@ -80,6 +102,7 @@ public class MessageDataGeneratorTest {
                 "  \"type\": \"request\",",
                 "  \"name\": \"FooBar\",",
                 "  \"validVersions\": \"0-2\",",
+                "  \"flexibleVersions\": \"none\",",
                 "  \"fields\": [",
                 "    { \"name\": \"field1\", \"type\": \"[]int32\", \"versions\": \"0+\", \"nullableVersions\": \"1+\", ",
                 "    \"default\": \"null\" }",
@@ -105,6 +128,7 @@ public class MessageDataGeneratorTest {
                     "  \"type\": \"request\",",
                     "  \"name\": \"FooBar\",",
                     "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
                     "  \"fields\": [",
                     "    { \"name\": \"_badName\", \"type\": \"[]int32\", \"versions\": \"0+\" }",
                     "  ]",
@@ -184,7 +208,7 @@ public class MessageDataGeneratorTest {
     }
 
     @Test
-    public void testInvalidTaggedVersionsNotASubetOfVersions() {
+    public void testInvalidTaggedVersionsNotASubsetOfVersions() {
         assertStringContains("taggedVersions must be a subset of versions",
             assertThrows(Throwable.class, () -> {
                 MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
@@ -254,6 +278,53 @@ public class MessageDataGeneratorTest {
                     "        \"tag\": 0, \"taggedVersions\": \"0+\" }",
                     "  ]",
                     "}")), MessageSpec.class);
+            }).getMessage());
+    }
+
+    @Test
+    public void testInvalidNullDefaultForNullableStruct() throws Exception {
+        MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"FooBar\",",
+            "  \"validVersions\": \"0\",",
+            "  \"flexibleVersions\": \"none\",",
+            "  \"fields\": [",
+            "    { \"name\": \"struct1\", \"type\": \"MyStruct\", \"versions\": \"0+\", \"nullableVersions\": \"0+\", ",
+            "      \"default\": \"not-null\", \"fields\": [",
+            "        { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\" }",
+            "      ]",
+            "    }",
+            "  ]",
+            "}")), MessageSpec.class);
+
+        assertStringContains("Invalid default for struct field struct1.  The only valid default for a struct field " +
+                "is the empty struct or null",
+            assertThrows(RuntimeException.class, () -> {
+                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+            }).getMessage());
+    }
+
+    @Test
+    public void testInvalidNullDefaultForPotentiallyNonNullableStruct() throws Exception {
+        MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"FooBar\",",
+            "  \"validVersions\": \"0-1\",",
+            "  \"flexibleVersions\": \"none\",",
+            "  \"fields\": [",
+            "    { \"name\": \"struct1\", \"type\": \"MyStruct\", \"versions\": \"0+\", \"nullableVersions\": \"1+\", ",
+            "      \"default\": \"null\", \"fields\": [",
+            "        { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\" }",
+            "      ]",
+            "    }",
+            "  ]",
+            "}")), MessageSpec.class);
+
+        assertStringContains("not all versions of this field are nullable",
+            assertThrows(RuntimeException.class, () -> {
+                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
             }).getMessage());
     }
 }

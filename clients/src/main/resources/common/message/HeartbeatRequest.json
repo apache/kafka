@@ -16,6 +16,7 @@
 {
   "apiKey": 12,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "HeartbeatRequest",
   // Version 1 and version 2 are the same as version 0.
   //

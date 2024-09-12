@@ -16,33 +16,40 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 
-import java.util.Map;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
+
 /** Top-level config describing replication flows between multiple Kafka clusters.
- *
+ *  <p>
  *  Supports cluster-level properties of the form cluster.x.y.z, and replication-level
  *  properties of the form source->target.x.y.z.
  *  e.g.
  *
+ * <pre>
  *      clusters = A, B, C
  *      A.bootstrap.servers = aaa:9092
  *      A.security.protocol = SSL
@@ -50,7 +57,7 @@ import java.util.stream.Collectors;
  *      A->B.enabled = true
  *      A->B.producer.client.id = "A-B-producer"
  *      --->%---
- *
+ * </pre>
  */
 public class MirrorMakerConfig extends AbstractConfig {
 
@@ -69,30 +76,62 @@ public class MirrorMakerConfig extends AbstractConfig {
     private static final String HEADER_CONVERTER_CLASS_CONFIG = "header.converter";
     private static final String BYTE_ARRAY_CONVERTER_CLASS =
         "org.apache.kafka.connect.converters.ByteArrayConverter";
-    private static final String REPLICATION_FACTOR = "replication.factor";
 
     static final String SOURCE_CLUSTER_PREFIX = "source.cluster.";
     static final String TARGET_CLUSTER_PREFIX = "target.cluster.";
+    static final String SOURCE_PREFIX = "source.";
+    static final String TARGET_PREFIX = "target.";
+    static final String ENABLE_INTERNAL_REST_CONFIG = "dedicated.mode.enable.internal.rest";
+    private static final String ENABLE_INTERNAL_REST_DOC =
+            "Whether to bring up an internal-only REST server that allows multi-node clusters to operate correctly.";
 
     private final Plugins plugins;
-   
-    public MirrorMakerConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props, true);
+
+    private final Map<String, String> rawProperties;
+
+    @SuppressWarnings("this-escape")
+    public MirrorMakerConfig(Map<String, String> props) {
+        super(config(), props, true);
         plugins = new Plugins(originalsStrings());
+
+        rawProperties = new HashMap<>(props);
     }
 
     public Set<String> clusters() {
         return new HashSet<>(getList(CLUSTERS_CONFIG));
     }
 
+    public boolean enableInternalRest() {
+        return getBoolean(ENABLE_INTERNAL_REST_CONFIG);
+    }
+
     public List<SourceAndTarget> clusterPairs() {
         List<SourceAndTarget> pairs = new ArrayList<>();
         Set<String> clusters = clusters();
+        Map<String, String> originalStrings = originalsStrings();
+        boolean globalHeartbeatsEnabled = MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED_DEFAULT;
+        if (originalStrings.containsKey(MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED)) {
+            globalHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED));
+        }
+
         for (String source : clusters) {
             for (String target : clusters) {
-                SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
                 if (!source.equals(target)) {
-                    pairs.add(sourceAndTarget);
+                    String clusterPairConfigPrefix = source + "->" + target + ".";
+                    boolean clusterPairEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + "enabled"));
+                    boolean clusterPairHeartbeatsEnabled = globalHeartbeatsEnabled;
+                    if (originalStrings.containsKey(clusterPairConfigPrefix + MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED)) {
+                        clusterPairHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + MirrorHeartbeatConfig.EMIT_HEARTBEATS_ENABLED));
+                    }
+
+                    // By default, all source->target Herder combinations are created even if `x->y.enabled=false`
+                    // Unless `emit.heartbeats.enabled=false` or `x->y.emit.heartbeats.enabled=false`
+                    // Reason for this behavior: for a given replication flow A->B with heartbeats, 2 herders are required :
+                    // B->A for the MirrorHeartbeatConnector (emits heartbeats into A for monitoring replication health)
+                    // A->B for the MirrorSourceConnector (actual replication flow)
+                    if (clusterPairEnabled || clusterPairHeartbeatsEnabled) {
+                        pairs.add(new SourceAndTarget(source, target));
+                    }
                 }
             }
         }
@@ -112,7 +151,6 @@ public class MirrorMakerConfig extends AbstractConfig {
     // loads properties of the form cluster.x.y.z
     Map<String, String> clusterProps(String cluster) {
         Map<String, String> props = new HashMap<>();
-        Map<String, String> strings = originalsStrings();
 
         props.putAll(stringsWithPrefixStripped(cluster + "."));
 
@@ -126,7 +164,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         }
 
         for (String k : MirrorClientConfig.CLIENT_CONFIG_DEF.names()) {
-            String v = strings.get(k);
+            String v = rawProperties.get(k);
             if (v != null) {
                 props.putIfAbsent("producer." + k, v);
                 props.putIfAbsent("consumer." + k, v);
@@ -139,10 +177,10 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     // loads worker configs based on properties of the form x.y.z and cluster.x.y.z 
-    Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
+    public Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = new HashMap<>();
         props.putAll(clusterProps(sourceAndTarget.target()));
-      
+
         // Accept common top-level configs that are otherwise ignored by MM2.
         // N.B. all other worker properties should be configured for specific herders,
         // e.g. primary->backup.client.id
@@ -154,12 +192,14 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix("header.converter"));
         props.putAll(stringsWithPrefix("task"));
         props.putAll(stringsWithPrefix("worker"));
- 
+        props.putAll(stringsWithPrefix("replication.policy"));
+
         // transform any expression like ${provider:path:key}, since the worker doesn't do so
         props = transform(props);
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
 
         // fill in reasonable defaults
+        props.putIfAbsent(CommonClientConfigs.CLIENT_ID_CONFIG, sourceAndTarget.toString());
         props.putIfAbsent(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
         props.putIfAbsent(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
                 + sourceAndTarget.source() + ".internal");
@@ -174,17 +214,38 @@ public class MirrorMakerConfig extends AbstractConfig {
         return props;
     }
 
+    Set<String> allConfigNames() {
+        Set<String> allNames = new HashSet<>();
+        List<ConfigDef> connectorConfigDefs = Arrays.asList(
+                MirrorCheckpointConfig.CONNECTOR_CONFIG_DEF,
+                MirrorSourceConfig.CONNECTOR_CONFIG_DEF,
+                MirrorHeartbeatConfig.CONNECTOR_CONFIG_DEF
+        );
+        for (ConfigDef cd : connectorConfigDefs) {
+            allNames.addAll(cd.names());
+        }
+        return allNames;
+    }
+
     // loads properties of the form cluster.x.y.z and source->target.x.y.z
-    Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class connectorClass) {
+    public Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         Map<String, String> props = new HashMap<>();
 
-        props.putAll(originalsStrings());
-        props.keySet().retainAll(MirrorConnectorConfig.CONNECTOR_CONFIG_DEF.names());
+        props.putAll(rawProperties);
+        props.keySet().retainAll(allConfigNames());
         
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
-        
-        props.putAll(withPrefix(SOURCE_CLUSTER_PREFIX, clusterProps(sourceAndTarget.source())));
-        props.putAll(withPrefix(TARGET_CLUSTER_PREFIX, clusterProps(sourceAndTarget.target())));
+        props.putAll(stringsWithPrefix("replication.policy"));
+
+        Map<String, String> sourceClusterProps = clusterProps(sourceAndTarget.source());
+        // attrs non prefixed with producer|consumer|admin
+        props.putAll(clusterConfigsWithPrefix(SOURCE_CLUSTER_PREFIX, sourceClusterProps));
+        // attrs prefixed with producer|consumer|admin
+        props.putAll(clientConfigsWithPrefix(SOURCE_PREFIX, sourceClusterProps));
+
+        Map<String, String> targetClusterProps = clusterProps(sourceAndTarget.target());
+        props.putAll(clusterConfigsWithPrefix(TARGET_CLUSTER_PREFIX, targetClusterProps));
+        props.putAll(clientConfigsWithPrefix(TARGET_PREFIX, targetClusterProps));
 
         props.putIfAbsent(NAME, connectorClass.getSimpleName());
         props.putIfAbsent(CONNECTOR_CLASS, connectorClass.getName());
@@ -223,33 +284,42 @@ public class MirrorMakerConfig extends AbstractConfig {
         providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
         return transformed;
     }
- 
-    protected static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
-            .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
-            // security support
-            .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                Type.STRING,
-                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                Importance.MEDIUM,
-                CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .withClientSslSupport()
-            .withClientSaslSupport();
+
+    protected static ConfigDef config() {
+        ConfigDef result = new ConfigDef()
+                .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
+                .define(ENABLE_INTERNAL_REST_CONFIG, Type.BOOLEAN, false, Importance.HIGH, ENABLE_INTERNAL_REST_DOC)
+                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
+                // security support
+                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                        Type.STRING,
+                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                        in(Utils.enumOptions(SecurityProtocol.class)),
+                        Importance.MEDIUM,
+                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .withClientSslSupport()
+                .withClientSaslSupport();
+        RestServerConfig.addInternalConfig(result);
+        return result;
+    }
 
     private Map<String, String> stringsWithPrefixStripped(String prefix) {
-        return originalsStrings().entrySet().stream()
-            .filter(x -> x.getKey().startsWith(prefix))
-            .collect(Collectors.toMap(x -> x.getKey().substring(prefix.length()), x -> x.getValue()));
+        return Utils.entriesWithPrefix(rawProperties, prefix);
     }
 
     private Map<String, String> stringsWithPrefix(String prefix) {
-        Map<String, String> strings = originalsStrings();
-        strings.keySet().removeIf(x -> !x.startsWith(prefix));
-        return strings;
-    } 
+        return Utils.entriesWithPrefix(rawProperties, prefix, false, true);
+    }
 
-    static Map<String, String> withPrefix(String prefix, Map<String, String> props) {
+    static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
-            .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
+                .filter(x -> !x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
+                .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
+    }
+
+    static Map<String, String> clientConfigsWithPrefix(String prefix, Map<String, String> props) {
+        return props.entrySet().stream()
+                .filter(x -> x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
+                .collect(Collectors.toMap(x -> prefix + x.getKey(), Entry::getValue));
     }
 }

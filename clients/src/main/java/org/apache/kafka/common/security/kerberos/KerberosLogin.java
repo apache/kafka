@@ -16,22 +16,15 @@
  */
 package org.apache.kafka.common.security.kerberos;
 
-import javax.security.auth.kerberos.KerberosPrincipal;
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.Configuration;
-import javax.security.auth.login.LoginContext;
-import javax.security.auth.login.LoginException;
-import javax.security.auth.kerberos.KerberosTicket;
-import javax.security.auth.Subject;
-
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.AbstractLogin;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +34,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+
+import javax.security.auth.Subject;
+import javax.security.auth.kerberos.KerberosPrincipal;
+import javax.security.auth.kerberos.KerberosTicket;
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.Configuration;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
 
 /**
  * This class is responsible for refreshing Kerberos credentials for
@@ -164,12 +165,12 @@ public class KerberosLogin extends AbstractLogin {
                     // We should not allow the ticket to expire, but we should take into consideration
                     // minTimeBeforeRelogin. Will not sleep less than minTimeBeforeRelogin, unless doing so
                     // would cause ticket expiration.
-                    if ((nextRefresh > expiry) || (now + minTimeBeforeRelogin > expiry)) {
-                        // expiry is before next scheduled refresh).
+                    if ((nextRefresh > expiry) || (minTimeBeforeRelogin > expiry - now)) {
+                        // expiry is before next scheduled refresh.
                         log.info("[Principal={}]: Refreshing now because expiry is before next scheduled refresh time.", principal);
                         nextRefresh = now;
                     } else {
-                        if (nextRefresh < (now + minTimeBeforeRelogin)) {
+                        if (nextRefresh - now < minTimeBeforeRelogin) {
                             // next scheduled refresh is sooner than (now + MIN_TIME_BEFORE_LOGIN).
                             Date until = new Date(nextRefresh);
                             Date newUntil = new Date(now + minTimeBeforeRelogin);
@@ -213,6 +214,7 @@ public class KerberosLogin extends AbstractLogin {
                             break;
                         } catch (Exception e) {
                             if (retry > 0) {
+                                log.warn("[Principal={}]: Error when trying to renew with TicketCache, but will retry ", principal, e);
                                 --retry;
                                 // sleep for 10 seconds
                                 try {
@@ -237,6 +239,7 @@ public class KerberosLogin extends AbstractLogin {
                             break;
                         } catch (LoginException le) {
                             if (retry > 0) {
+                                log.warn("[Principal={}]: Error when trying to re-Login, but will retry ", principal, le);
                                 --retry;
                                 // sleep for 10 seconds.
                                 try {
@@ -344,7 +347,7 @@ public class KerberosLogin extends AbstractLogin {
      * Re-login a principal. This method assumes that {@link #login()} has happened already.
      * @throws javax.security.auth.login.LoginException on a failure
      */
-    private void reLogin() throws LoginException {
+    protected void reLogin() throws LoginException {
         if (!isKrbTicket) {
             return;
         }
@@ -360,14 +363,27 @@ public class KerberosLogin extends AbstractLogin {
             lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per
             //the Java kerberos login module code, only the kerberos credentials
-            //are cleared
-            loginContext.logout();
+            //are cleared. If previous logout succeeded but login failed, we shouldn't
+            //logout again since duplicate logout causes NPE from Java 9 onwards.
+            if (subject != null && !subject.getPrincipals().isEmpty()) {
+                logout();
+            }
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
             loginContext = new LoginContext(contextName(), subject, null, configuration());
             log.info("Initiating re-login for {}", principal);
-            loginContext.login();
+            login(loginContext);
         }
+    }
+
+    // Visibility to override for testing
+    protected void login(LoginContext loginContext) throws LoginException {
+        loginContext.login();
+    }
+
+    // Visibility to override for testing
+    protected void logout() throws LoginException {
+        loginContext.logout();
     }
 
     private long currentElapsedTime() {

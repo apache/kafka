@@ -18,12 +18,12 @@ package org.apache.kafka.streams.processor.internals;
 
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.Collection;
 import java.util.Map;
 
 public class StateManagerStub implements StateManager {
@@ -34,35 +34,44 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {}
-
-    @Override
-    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {}
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback,
+                              final CommitCallback checkpoint) {}
 
     @Override
     public void flush() {}
 
     @Override
-    public void close(final boolean clean) throws IOException {}
+    public void close() {}
 
     @Override
-    public StateStore getGlobalStore(final String name) {
+    public StateStore store(final String name) {
         return null;
     }
 
     @Override
-    public StateStore getStore(final String name) {
+    public StateStore globalStore(final String name) {
         return null;
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointed() {
+    public Map<TopicPartition, Long> changelogOffsets() {
         return null;
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {}
+    public void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets) {}
 
+    @Override
+    public void checkpoint() {}
+
+    @Override
+    public TaskType taskType() {
+        return null;
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return null;
+    }
 }

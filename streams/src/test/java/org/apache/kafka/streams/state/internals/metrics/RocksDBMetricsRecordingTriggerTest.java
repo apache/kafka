@@ -16,60 +16,63 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
-import org.junit.Before;
-import org.junit.Test;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.resetToDefault;
-import static org.easymock.EasyMock.verify;
-import static org.junit.Assert.assertThrows;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBMetricsRecordingTriggerTest {
 
-    private final static String STORE_NAME1 = "store-name1";
-    private final static String STORE_NAME2 = "store-name2";
-    private final static TaskId TASK_ID1 = new TaskId(1, 2);
-    private final static TaskId TASK_ID2 = new TaskId(2, 4);
-    private final RocksDBMetricsRecorder recorder1 = niceMock(RocksDBMetricsRecorder.class);
-    private final RocksDBMetricsRecorder recorder2 = niceMock(RocksDBMetricsRecorder.class);
+    private static final String STORE_NAME1 = "store-name1";
+    private static final String STORE_NAME2 = "store-name2";
+    private static final TaskId TASK_ID1 = new TaskId(1, 2);
+    private static final TaskId TASK_ID2 = new TaskId(2, 4);
+    @Mock
+    private RocksDBMetricsRecorder recorder1;
+    @Mock
+    private RocksDBMetricsRecorder recorder2;
 
-    private final RocksDBMetricsRecordingTrigger recordingTrigger = new RocksDBMetricsRecordingTrigger();
 
-    @Before
-    public void setUp() {
-        expect(recorder1.storeName()).andStubReturn(STORE_NAME1);
-        expect(recorder1.taskId()).andStubReturn(TASK_ID1);
-        replay(recorder1);
-        expect(recorder2.storeName()).andStubReturn(STORE_NAME2);
-        expect(recorder2.taskId()).andStubReturn(TASK_ID2);
-        replay(recorder2);
+    private final Time time = new MockTime();
+    private final RocksDBMetricsRecordingTrigger recordingTrigger = new RocksDBMetricsRecordingTrigger(time);
+
+    private void setUp() {
+        when(recorder1.storeName()).thenReturn(STORE_NAME1);
+        when(recorder1.taskId()).thenReturn(TASK_ID1);
+        when(recorder2.storeName()).thenReturn(STORE_NAME2);
+        when(recorder2.taskId()).thenReturn(TASK_ID2);
     }
 
     @Test
     public void shouldTriggerAddedMetricsRecorders() {
+        setUp();
         recordingTrigger.addMetricsRecorder(recorder1);
         recordingTrigger.addMetricsRecorder(recorder2);
 
-        resetToDefault(recorder1);
-        recorder1.record();
-        replay(recorder1);
-        resetToDefault(recorder2);
-        recorder2.record();
-        replay(recorder2);
+        doNothing().when(recorder1).record(time.milliseconds());
+        doNothing().when(recorder2).record(time.milliseconds());
 
         recordingTrigger.run();
-
-        verify(recorder1);
-        verify(recorder2);
     }
 
     @Test
     public void shouldThrowIfRecorderToAddHasBeenAlreadyAdded() {
+        when(recorder1.storeName()).thenReturn(STORE_NAME1);
+        when(recorder1.taskId()).thenReturn(TASK_ID1);
+        
         recordingTrigger.addMetricsRecorder(recorder1);
-
         assertThrows(
             IllegalStateException.class,
             () -> recordingTrigger.addMetricsRecorder(recorder1)
@@ -78,6 +81,7 @@ public class RocksDBMetricsRecordingTriggerTest {
 
     @Test
     public void shouldThrowIfRecorderToRemoveCouldNotBeFound() {
+        setUp();
         recordingTrigger.addMetricsRecorder(recorder1);
         assertThrows(
             IllegalStateException.class,

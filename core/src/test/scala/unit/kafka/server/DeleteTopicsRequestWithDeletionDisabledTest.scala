@@ -18,20 +18,29 @@
 package kafka.server
 
 import java.util.Collections
-
 import kafka.utils._
 import org.apache.kafka.common.message.DeleteTopicsRequestData
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse}
-import org.junit.Assert._
-import org.junit.Test
+import org.apache.kafka.server.config.ServerConfigs
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.TestInfo
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
   override def brokerCount: Int = 1
 
+  override def kraftControllerConfigs(testInfo: TestInfo) = {
+    val props = super.kraftControllerConfigs(testInfo)
+    props.head.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "false")
+    props
+  }
+
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnect,
+    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull,
       enableControlledShutdown = false, enableDeleteTopic = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
@@ -39,8 +48,9 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
     props.map(KafkaConfig.fromProps)
   }
 
-  @Test
-  def testDeleteRecordsRequest(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteRecordsRequest(quorum: String): Unit = {
     val topic = "topic-1"
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
@@ -58,7 +68,11 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest): DeleteTopicsResponse = {
-    connectAndReceive[DeleteTopicsResponse](request, destination = controllerSocketServer)
+    connectAndReceive[DeleteTopicsResponse](
+      request,
+      controllerSocketServer,
+      if (isKRaftTest()) ListenerName.normalised("CONTROLLER") else listenerName
+    )
   }
 
 }

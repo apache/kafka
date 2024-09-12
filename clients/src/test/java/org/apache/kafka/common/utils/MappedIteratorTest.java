@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,14 +25,14 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MappedIteratorTest {
 
     @Test
     public void testStringToInteger() {
         List<String> list = asList("foo", "", "bar2", "baz45");
-        Function<String, Integer> mapper = s -> s.length();
+        Function<String, Integer> mapper = String::length;
 
         Iterable<Integer> mappedIterable = () -> new MappedIterator<>(list.iterator(), mapper);
         List<Integer> mapped = new ArrayList<>();
@@ -49,7 +49,7 @@ public class MappedIteratorTest {
     @Test
     public void testEmptyList() {
         List<String> list = emptyList();
-        Function<String, Integer> mapper = s -> s.length();
+        Function<String, Integer> mapper = String::length;
 
         Iterable<Integer> mappedIterable = () -> new MappedIterator<>(list.iterator(), mapper);
         List<Integer> mapped = new ArrayList<>();

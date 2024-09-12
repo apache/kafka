@@ -17,25 +17,36 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.easymock.EasyMock;
-import org.junit.Before;
-import org.junit.Test;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KStreamPrintTest {
 
     private ByteArrayOutputStream byteOutStream;
-    private Processor<Integer, String> printProcessor;
+    private Processor<Integer, String, Void, Void> printProcessor;
 
-    @Before
+    @Mock
+    private ProcessorContext<Void, Void> processorContext;
+
+    @BeforeEach
     public void setUp() {
         byteOutStream = new ByteArrayOutputStream();
 
@@ -45,14 +56,11 @@ public class KStreamPrintTest {
             "test-stream"));
 
         printProcessor = kStreamPrint.get();
-        final ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
-        EasyMock.replay(processorContext);
 
         printProcessor.init(processorContext);
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testPrintStreamWithProvidedKeyValueMapper() {
         final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
                 new KeyValue<>(0, "zero"),
@@ -67,7 +75,8 @@ public class KStreamPrintTest {
             "[test-stream]: 3, three"};
 
         for (final KeyValue<Integer, String> record: inputRecords) {
-            printProcessor.process(record.key, record.value);
+            final Record<Integer, String> r = new Record<>(record.key, record.value, 0L);
+            printProcessor.process(r);
         }
         printProcessor.close();
 

@@ -63,9 +63,14 @@ public enum ResourceType {
     /**
      * A token ID.
      */
-    DELEGATION_TOKEN((byte) 6);
+    DELEGATION_TOKEN((byte) 6),
 
-    private final static HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
+    /**
+     * A user principal
+     */
+    USER((byte) 7);
+
+    private static final HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
 
     static {
         for (ResourceType resourceType : ResourceType.values()) {

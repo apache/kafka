@@ -20,8 +20,16 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MaterializedTest {
 
@@ -32,23 +40,78 @@ public class MaterializedTest {
         Materialized.as("valid_name");
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldNotAllowInvalidTopicNames() {
-        Materialized.as("not:valid");
+        final String invalidName = "not:valid";
+        final TopologyException e = assertThrows(TopologyException.class,
+            () -> Materialized.as(invalidName));
+
+        assertEquals(e.getMessage(), "Invalid topology: Name \"" + invalidName +
+            "\" is illegal, it contains a character other than " + "ASCII alphanumerics, '.', '_' and '-'");
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfWindowBytesStoreSupplierIsNull() {
-        Materialized.as((WindowBytesStoreSupplier) null);
+        final NullPointerException e = assertThrows(NullPointerException.class,
+            () -> Materialized.as((WindowBytesStoreSupplier) null));
+
+        assertEquals(e.getMessage(), "supplier can't be null");
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfKeyValueBytesStoreSupplierIsNull() {
-        Materialized.as((KeyValueBytesStoreSupplier) null);
+        final NullPointerException e = assertThrows(NullPointerException.class,
+            () -> Materialized.as((KeyValueBytesStoreSupplier) null));
+
+        assertEquals(e.getMessage(), "supplier can't be null");
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldThrowNullPointerIfStoreTypeIsNull() {
+        final NullPointerException e = assertThrows(NullPointerException.class,
+            () -> Materialized.as((Materialized.StoreType) null));
+
+        assertEquals(e.getMessage(), "store type can't be null");
+    }
+
+    @Test
     public void shouldThrowNullPointerIfSessionBytesStoreSupplierIsNull() {
-        Materialized.as((SessionBytesStoreSupplier) null);
+        final NullPointerException e = assertThrows(NullPointerException.class,
+            () -> Materialized.as((SessionBytesStoreSupplier) null));
+
+        assertEquals(e.getMessage(), "supplier can't be null");
+    }
+
+    @Test
+    public void shouldThrowIllegalArgumentExceptionIfRetentionIsNegative() {
+        final IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> Materialized.as("valid-name").withRetention(Duration.of(-1, ChronoUnit.DAYS)));
+
+        assertEquals(e.getMessage(), "Retention must not be negative.");
+    }
+
+    @Test
+    public void shouldThrowIllegalArgumentExceptionIfStoreSupplierAndStoreTypeBothSet() {
+        final IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> Materialized.as(Stores.persistentKeyValueStore("test")).withStoreType(Materialized.StoreType.ROCKS_DB));
+
+        assertEquals(e.getMessage(), "Cannot set store type when store supplier is pre-configured.");
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionIfStoreNameExceedsMaxAllowedLength() {
+        final StringBuffer invalidStoreNameBuffer = new StringBuffer();
+        final int maxNameLength = 249;
+
+        for (int i = 0; i < maxNameLength + 1; i++) {
+            invalidStoreNameBuffer.append('a');
+        }
+
+        final String invalidStoreName = invalidStoreNameBuffer.toString();
+
+        final TopologyException e = assertThrows(TopologyException.class,
+            () -> Materialized.as(invalidStoreName));
+        assertEquals(e.getMessage(), "Invalid topology: Name is illegal, it can't be longer than " + maxNameLength +
+                " characters, name: " + invalidStoreName);
     }
 }

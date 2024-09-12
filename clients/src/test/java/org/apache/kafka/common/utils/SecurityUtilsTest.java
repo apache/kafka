@@ -17,43 +17,43 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.SecurityConfig;
-import org.apache.kafka.common.security.auth.SecurityProviderCreator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SecurityProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestPlainSaslServerProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestScramSaslServerProviderCreator;
-import org.hamcrest.MatcherAssert;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.security.Provider;
 import java.security.Security;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SecurityUtilsTest {
 
-    private SecurityProviderCreator testScramSaslServerProviderCreator = new TestScramSaslServerProviderCreator();
-    private SecurityProviderCreator testPlainSaslServerProviderCreator = new TestPlainSaslServerProviderCreator();
+    private final SecurityProviderCreator testScramSaslServerProviderCreator = new TestScramSaslServerProviderCreator();
+    private final SecurityProviderCreator testPlainSaslServerProviderCreator = new TestPlainSaslServerProviderCreator();
 
-    private Provider testScramSaslServerProvider = testScramSaslServerProviderCreator.getProvider();
-    private Provider testPlainSaslServerProvider = testPlainSaslServerProviderCreator.getProvider();
+    private final Provider testScramSaslServerProvider = testScramSaslServerProviderCreator.getProvider();
+    private final Provider testPlainSaslServerProvider = testPlainSaslServerProviderCreator.getProvider();
 
     private void clearTestProviders() {
         Security.removeProvider(testScramSaslServerProvider.getName());
         Security.removeProvider(testPlainSaslServerProvider.getName());
     }
 
-    @Before
+    @BeforeEach
     // Remove the providers if already added
     public void setUp() {
         clearTestProviders();
     }
 
     // Remove the providers after running test cases
-    @After
+    @AfterEach
     public void tearDown() {
         clearTestProviders();
     }
@@ -99,8 +99,9 @@ public class SecurityUtilsTest {
         int testScramSaslServerProviderIndex = getProviderIndexFromName(testScramSaslServerProvider.getName(), providers);
         int testPlainSaslServerProviderIndex = getProviderIndexFromName(testPlainSaslServerProvider.getName(), providers);
 
-        // validations
-        MatcherAssert.assertThat(testScramSaslServerProvider.getName() + " testProvider not found at expected index", testScramSaslServerProviderIndex == 0);
-        MatcherAssert.assertThat(testPlainSaslServerProvider.getName() + " testProvider not found at expected index", testPlainSaslServerProviderIndex == 1);
+        assertEquals(0, testScramSaslServerProviderIndex,
+            testScramSaslServerProvider.getName() + " testProvider not found at expected index");
+        assertEquals(1, testPlainSaslServerProviderIndex,
+            testPlainSaslServerProvider.getName() + " testProvider not found at expected index");
     }
 }

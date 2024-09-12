@@ -16,28 +16,14 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.connect.source.SourceRecord;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Objects;
-
 /**
- * Contains all the metadata related to the currently evaluating operation. Only one instance of this class is meant
- * to exist per task in a JVM.
+ * Contains all the metadata related to the currently evaluating operation, and associated with a particular
+ * sink or source record from the consumer or task, respectively. This class is not thread safe, and so once an
+ * instance is passed to a new thread, it should no longer be accessed by the previous thread.
  */
-class ProcessingContext {
+public class ProcessingContext<T> {
 
-    private Collection<ErrorReporter> reporters = Collections.emptyList();
-
-    private ConsumerRecord<byte[], byte[]> consumedMessage;
-    private SourceRecord sourceRecord;
-
-    /**
-     * The following fields need to be reset every time a new record is seen.
-     */
+    private final T original;
 
     private Stage position;
     private Class<?> klass;
@@ -45,47 +31,18 @@ class ProcessingContext {
     private Throwable error;
 
     /**
-     * Reset the internal fields before executing operations on a new record.
+     * Construct a context associated with the processing of a particular record
+     * @param original The original record before processing, as received from either Kafka or a Source Task
      */
-    private void reset() {
-        attempt = 0;
-        position = null;
-        klass = null;
-        error = null;
+    public ProcessingContext(T original) {
+        this.original = original;
     }
 
     /**
-     * Set the record consumed from Kafka in a sink connector.
-     *
-     * @param consumedMessage the record
+     * @return The original record before processing, as received from either Kafka or a Source Task
      */
-    public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
-        this.consumedMessage = consumedMessage;
-        reset();
-    }
-
-    /**
-     * @return the record consumed from Kafka. could be null
-     */
-    public ConsumerRecord<byte[], byte[]> consumerRecord() {
-        return consumedMessage;
-    }
-
-    /**
-     * @return the source record being processed.
-     */
-    public SourceRecord sourceRecord() {
-        return sourceRecord;
-    }
-
-    /**
-     * Set the source record being processed in the connect pipeline.
-     *
-     * @param record the source record
-     */
-    public void sourceRecord(SourceRecord record) {
-        this.sourceRecord = record;
-        reset();
+    public T original() {
+        return original;
     }
 
     /**
@@ -130,46 +87,6 @@ class ProcessingContext {
     }
 
     /**
-     * Report errors. Should be called only if an error was encountered while executing the operation.
-     */
-    public void report() {
-        for (ErrorReporter reporter: reporters) {
-            reporter.report(this);
-        }
-    }
-
-    @Override
-    public String toString() {
-        return toString(false);
-    }
-
-    public String toString(boolean includeMessage) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("Executing stage '");
-        builder.append(stage().name());
-        builder.append("' with class '");
-        builder.append(executingClass() == null ? "null" : executingClass().getName());
-        builder.append('\'');
-        if (includeMessage && sourceRecord() != null) {
-            builder.append(", where source record is = ");
-            builder.append(sourceRecord());
-        } else if (includeMessage && consumerRecord() != null) {
-            ConsumerRecord<byte[], byte[]> msg = consumerRecord();
-            builder.append(", where consumed record is ");
-            builder.append("{topic='").append(msg.topic()).append('\'');
-            builder.append(", partition=").append(msg.partition());
-            builder.append(", offset=").append(msg.offset());
-            if (msg.timestampType() == TimestampType.CREATE_TIME || msg.timestampType() == TimestampType.LOG_APPEND_TIME) {
-                builder.append(", timestamp=").append(msg.timestamp());
-                builder.append(", timestampType=").append(msg.timestampType());
-            }
-            builder.append("}");
-        }
-        builder.append('.');
-        return builder.toString();
-    }
-
-    /**
      * @param attempt the number of attempts made to execute the current operation.
      */
     public void attempt(int attempt) {
@@ -205,15 +122,4 @@ class ProcessingContext {
     public boolean failed() {
         return error() != null;
     }
-
-    /**
-     * Set the error reporters for this connector.
-     *
-     * @param reporters the error reporters (should not be null).
-     */
-    public void reporters(Collection<ErrorReporter> reporters) {
-        Objects.requireNonNull(reporters);
-        this.reporters = reporters;
-    }
-
 }

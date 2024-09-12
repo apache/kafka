@@ -16,43 +16,57 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SessionWindowedDeserializerTest {
-    private final SessionWindowedDeserializer<?> sessionWindowedDeserializer = new SessionWindowedDeserializer<>();
+    private final SessionWindowedDeserializer<?> sessionWindowedDeserializer = new SessionWindowedDeserializer<>(new StringDeserializer());
     private final Map<String, String> props = new HashMap<>();
 
-    @Before
-    public void setUp() {
-        props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
-        props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, Serdes.ByteArraySerde.class.getName());
-    }
-
     @Test
-    public void testWindowedKeyDeserializerNoArgConstructors() {
+    public void testSessionWindowedDeserializerConstructor() {
         sessionWindowedDeserializer.configure(props, true);
         final Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner);
-        assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
+        assertNotNull(inner, "Inner deserializer should be not null");
+        assertInstanceOf(StringDeserializer.class, inner, "Inner deserializer type should be StringDeserializer");
     }
 
     @Test
-    public void testWindowedValueDeserializerNoArgConstructors() {
-        sessionWindowedDeserializer.configure(props, false);
-        final Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner);
-        assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner instanceof ByteArrayDeserializer);
+    public void shouldSetWindowedInnerClassDeserialiserThroughConfig() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
+        final SessionWindowedDeserializer<?> deserializer = new SessionWindowedDeserializer<>();
+        deserializer.configure(props, false);
+        assertInstanceOf(ByteArrayDeserializer.class, deserializer.innerDeserializer());
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowInnerClassDeserialiserIsNotSet() {
+        final SessionWindowedDeserializer<?> deserializer = new SessionWindowedDeserializer<>();
+        assertThrows(IllegalArgumentException.class, () -> deserializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowErrorIfDeserialisersConflictInConstructorAndConfig() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
+        assertThrows(IllegalArgumentException.class, () -> sessionWindowedDeserializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenInvalidWindowInnerClassDeserialiserSupplied() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
+        assertThrows(ConfigException.class, () -> sessionWindowedDeserializer.configure(props, false));
     }
 }

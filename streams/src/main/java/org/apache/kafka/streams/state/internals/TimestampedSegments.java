@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 /**
@@ -31,24 +32,39 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
                         final long retentionPeriod,
                         final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
-        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }
 
     @Override
     public TimestampedSegment getOrCreateSegment(final long segmentId,
-                                                 final InternalProcessorContext context) {
+                                                 final ProcessorContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
             final TimestampedSegment newSegment =
-                new TimestampedSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+                new TimestampedSegment(segmentName(segmentId), name, segmentId, position, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
             }
 
-            newSegment.openDB(context);
+            newSegment.openDB(context.appConfigs(), context.stateDir());
             return newSegment;
         }
+    }
+
+    @Override
+    public TimestampedSegment getOrCreateSegmentIfLive(final long segmentId,
+                                                    final ProcessorContext context,
+                                                    final long streamTime) {
+        final TimestampedSegment segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
+        cleanupExpiredSegments(streamTime);
+        return segment;
+    }
+
+    @Override
+    public void openExisting(final ProcessorContext context, final long streamTime) {
+        metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
+        super.openExisting(context, streamTime);
     }
 }

@@ -18,11 +18,16 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.DirectoryEventHandler
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
                                  replicaManager: ReplicaManager,
                                  quotaManager: ReplicationQuotaManager,
-                                 brokerTopicStats: BrokerTopicStats)
+                                 brokerTopicStats: BrokerTopicStats,
+                                 directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
+                                )
   extends AbstractFetcherManager[ReplicaAlterLogDirsThread](
     name = s"ReplicaAlterLogDirsManager on broker ${brokerConfig.brokerId}",
     clientId = "ReplicaAlterLogDirs",
@@ -30,8 +35,24 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaAlterLogDirsThread = {
     val threadName = s"ReplicaAlterLogDirsThread-$fetcherId"
-    new ReplicaAlterLogDirsThread(threadName, sourceBroker, brokerConfig, failedPartitions, replicaManager,
-      quotaManager, brokerTopicStats)
+    val leader = new LocalLeaderEndPoint(sourceBroker, brokerConfig, replicaManager, quotaManager)
+    new ReplicaAlterLogDirsThread(threadName, leader, failedPartitions, replicaManager,
+      quotaManager, brokerTopicStats, brokerConfig.replicaFetchBackoffMs, directoryEventHandler)
+  }
+
+  override protected def addPartitionsToFetcherThread(fetcherThread: ReplicaAlterLogDirsThread,
+                                                      initialOffsetAndEpochs: collection.Map[TopicPartition, InitialFetchState]): Unit = {
+    val addedPartitions = fetcherThread.addPartitions(initialOffsetAndEpochs)
+    val (addedInitialOffsets, notAddedInitialOffsets) = initialOffsetAndEpochs.partition { case (tp, _) =>
+      addedPartitions.contains(tp)
+    }
+
+    if (addedInitialOffsets.nonEmpty)
+      info(s"Added log dir fetcher for partitions with initial offsets $addedInitialOffsets")
+
+    if (notAddedInitialOffsets.nonEmpty)
+      info(s"Failed to add log dir fetch for partitions ${notAddedInitialOffsets.keySet} " +
+        s"since the log dir reassignment has already completed")
   }
 
   def shutdown(): Unit = {

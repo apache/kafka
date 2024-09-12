@@ -52,7 +52,7 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
                               final boolean safeToDropTombstones) {
         this.name = name;
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
-        this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefintion.instance() : timeDefinition;
+        this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefinition.instance() : timeDefinition;
         this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigInternal) bufferConfig;
         this.safeToDropTombstones = safeToDropTombstones;
     }
@@ -67,7 +67,8 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
         return name;
     }
 
-    BufferConfigInternal bufferConfig() {
+    @SuppressWarnings("unchecked")
+    public <BC extends Suppressed.BufferConfig<BC>> BufferConfigInternal<BC> bufferConfig() {
         return bufferConfig;
     }
 

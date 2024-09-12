@@ -19,21 +19,24 @@ package kafka.cluster
 
 import java.nio.charset.StandardCharsets
 
-import kafka.utils.TestUtils
 import kafka.zk.BrokerIdZNode
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert.{assertEquals, assertNotEquals, assertNull}
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals}
+import org.junit.jupiter.api.Test
+
+import scala.jdk.CollectionConverters._
 
 class BrokerEndPointTest {
 
   @Test
   def testHashAndEquals(): Unit = {
-    val broker1 = TestUtils.createBroker(1, "myhost", 9092)
-    val broker2 = TestUtils.createBroker(1, "myhost", 9092)
-    val broker3 = TestUtils.createBroker(2, "myhost", 1111)
-    val broker4 = TestUtils.createBroker(1, "other", 1111)
+    val broker1 = new BrokerEndPoint(1, "myhost", 9092)
+    val broker2 = new BrokerEndPoint(1, "myhost", 9092)
+    val broker3 = new BrokerEndPoint(2, "myhost", 1111)
+    val broker4 = new BrokerEndPoint(1, "other", 1111)
 
     assertEquals(broker1, broker2)
     assertNotEquals(broker1, broker3)
@@ -150,70 +153,50 @@ class BrokerEndPointTest {
   }
 
   @Test
-  def testBrokerEndpointFromUri(): Unit = {
-    var connectionString = "localhost:9092"
-    var endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("localhost", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    //KAFKA-3719
-    connectionString = "local_host:9092"
-    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("local_host", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    // also test for ipv6
-    connectionString = "[::1]:9092"
-    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("::1", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    // test for ipv6 with % character
-    connectionString = "[fe80::b1da:69ca:57f7:63d8%3]:9092"
-    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("fe80::b1da:69ca:57f7:63d8%3", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    // add test for uppercase in hostname
-    connectionString = "MyHostname:9092"
-    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
-    assertEquals("MyHostname", endpoint.host)
-    assertEquals(9092, endpoint.port)
+  def testFromJsonV4WithNoFeatures(): Unit = {
+    val json = """{
+      "version":4,
+      "host":"localhost",
+      "port":9092,
+      "jmx_port":9999,
+      "timestamp":"2233345666",
+      "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+      "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
+      "rack":"dc1"
+    }"""
+    val broker = parseBrokerJson(1, json)
+    assertEquals(1, broker.id)
+    val brokerEndPoint = broker.brokerEndPoint(new ListenerName("CLIENT"))
+    assertEquals("host1", brokerEndPoint.host)
+    assertEquals(9092, brokerEndPoint.port)
+    assertEquals(Some("dc1"), broker.rack)
+    assertEquals(emptySupportedFeatures, broker.features)
   }
 
   @Test
-  def testEndpointFromUri(): Unit = {
-    var connectionString = "PLAINTEXT://localhost:9092"
-    var endpoint = EndPoint.createEndPoint(connectionString, None)
-    assertEquals("localhost", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    assertEquals("PLAINTEXT://localhost:9092", endpoint.connectionString)
-    // KAFKA-3719
-    connectionString = "PLAINTEXT://local_host:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
-    assertEquals("local_host", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    assertEquals("PLAINTEXT://local_host:9092", endpoint.connectionString)
-    // also test for default bind
-    connectionString = "PLAINTEXT://:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
-    assertNull(endpoint.host)
-    assertEquals(9092, endpoint.port)
-    assertEquals( "PLAINTEXT://:9092", endpoint.connectionString)
-    // also test for ipv6
-    connectionString = "PLAINTEXT://[::1]:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
-    assertEquals("::1", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    assertEquals("PLAINTEXT://[::1]:9092", endpoint.connectionString)
-    // test for ipv6 with % character
-    connectionString = "PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
-    assertEquals("fe80::b1da:69ca:57f7:63d8%3", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    assertEquals("PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:9092", endpoint.connectionString)
-    // test hostname
-    connectionString = "PLAINTEXT://MyHostname:9092"
-    endpoint = EndPoint.createEndPoint(connectionString, None)
-    assertEquals("MyHostname", endpoint.host)
-    assertEquals(9092, endpoint.port)
-    assertEquals("PLAINTEXT://MyHostname:9092", endpoint.connectionString)
+  def testFromJsonV5(): Unit = {
+    val json = """{
+      "version":5,
+      "host":"localhost",
+      "port":9092,
+      "jmx_port":9999,
+      "timestamp":"2233345666",
+      "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+      "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
+      "rack":"dc1",
+      "features": {"feature1": {"min_version": 1, "max_version": 2}, "feature2": {"min_version": 2, "max_version": 4}}
+    }"""
+    val broker = parseBrokerJson(1, json)
+    assertEquals(1, broker.id)
+    val brokerEndPoint = broker.brokerEndPoint(new ListenerName("CLIENT"))
+    assertEquals("host1", brokerEndPoint.host)
+    assertEquals(9092, brokerEndPoint.port)
+    assertEquals(Some("dc1"), broker.rack)
+    assertEquals(Features.supportedFeatures(
+      Map[String, SupportedVersionRange](
+        "feature1" -> new SupportedVersionRange(1, 2),
+        "feature2" -> new SupportedVersionRange(2, 4)).asJava),
+      broker.features)
   }
 
   private def parseBrokerJson(id: Int, jsonString: String): Broker =

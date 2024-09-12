@@ -19,7 +19,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import config_property
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum, consumer_group, TopicPartition
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
@@ -35,19 +35,20 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
     """
 
     def __init__(self, test_context):
+        self.num_zk = 1
         """:type test_context: ducktape.tests.test.TestContext"""
         super(ReassignPartitionsTest, self).__init__(test_context=test_context)
 
         self.topic = "test_topic"
         self.num_partitions = 20
-        self.zk = ZookeeperService(test_context, num_nodes=1)
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
         # We set the min.insync.replicas to match the replication factor because
         # it makes the test more stringent. If min.isr = 2 and
         # replication.factor=3, then the test would tolerate the failure of
         # reassignment for upto one replica per partition, which is not
         # desirable for this test in particular.
         self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk,
-                                  server_prop_overides=[
+                                  server_prop_overrides=[
                                       [config_property.LOG_ROLL_TIME_MS, "5000"],
                                       [config_property.LOG_RETENTION_CHECK_INTERVAL_MS, "5000"]
                                   ],
@@ -57,14 +58,16 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                                       'configs': {
                                           "min.insync.replicas": 3,
                                       }}
-                                  })
+                                  },
+                                  controller_num_nodes_override=self.num_zk)
         self.timeout_sec = 60
         self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def min_cluster_size(self):
         # Override this since we're adding services outside of the constructor
@@ -84,12 +87,24 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.logger.debug("Jumble partition assignment with seed " + str(seed))
         random.seed(seed)
         # The list may still be in order, but that's ok
-        shuffled_list = range(0, self.num_partitions)
+        shuffled_list = list(range(0, self.num_partitions))
         random.shuffle(shuffled_list)
 
         for i in range(0, self.num_partitions):
             partition_info["partitions"][i]["partition"] = shuffled_list[i]
         self.logger.debug("Jumbled partitions: " + str(partition_info))
+
+        def check_all_partitions():
+            acked_partitions = self.producer.acked_by_partition
+            for i in range(self.num_partitions):
+                if TopicPartition(self.topic, i) not in acked_partitions:
+                    return False
+            return True
+
+        # ensure all partitions have data so we don't hit OutOfOrderExceptions due to broker restarts
+        wait_until(check_all_partitions,
+                   timeout_sec=60,
+                   err_msg="Failed to produce to all partitions in 30s")
 
         # send reassign partitions command
         self.kafka.execute_reassign_partitions(partition_info)
@@ -129,9 +144,20 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         time.sleep(6)
 
     @cluster(num_nodes=8)
-    @matrix(bounce_brokers=[True, False],
-            reassign_from_offset_zero=[True, False])
-    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero):
+    @matrix(
+        bounce_brokers=[True, False],
+        reassign_from_offset_zero=[True, False],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        bounce_brokers=[True, False],
+        reassign_from_offset_zero=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """Reassign partitions tests.
         Setup: 1 zk, 4 kafka nodes, 1 topic with partitions=20, replication-factor=3,
         and min.insync.replicas=3
@@ -154,7 +180,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers,
                                         self.kafka, self.topic,
                                         consumer_timeout_ms=60000,
-                                        message_validator=is_int)
+                                        message_validator=is_int,
+                                        consumer_properties=consumer_group.maybe_set_group_protocol(group_protocol))
 
         self.enable_idempotence=True
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

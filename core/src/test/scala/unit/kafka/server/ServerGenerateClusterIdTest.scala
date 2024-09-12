@@ -17,37 +17,35 @@
 package kafka.server
 
 import java.io.File
-
-import kafka.common.{InconsistentBrokerMetadataException, InconsistentClusterIdException}
-
+import scala.collection.Seq
 import scala.concurrent._
-import ExecutionContext.Implicits._
 import scala.concurrent.duration._
+import ExecutionContext.Implicits._
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.assertThrows
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
-import scala.collection.Seq
+import java.util.Optional
 
-class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
-  var config1: KafkaConfig = null
-  var config2: KafkaConfig = null
-  var config3: KafkaConfig = null
+
+class ServerGenerateClusterIdTest extends QuorumTestHarness {
+  var config1: KafkaConfig = _
+  var config2: KafkaConfig = _
+  var config3: KafkaConfig = _
   var servers: Seq[KafkaServer] = Seq()
-  val brokerMetaPropsFile = "meta.properties"
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     config1 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
     config2 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(2, zkConnect))
     config3 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(3, zkConnect))
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -59,7 +57,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     // Make sure that the cluster id doesn't exist yet.
     assertFalse(zkClient.getClusterId.isDefined)
 
-    var server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    var server1 = createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     servers = Seq(server1)
 
     // Validate the cluster id
@@ -73,7 +71,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     assertEquals(zkClient.getClusterId, Some(clusterIdOnFirstBoot))
 
     // Restart the server check to confirm that it uses the clusterId generated previously
-    server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    server1 = createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     servers = Seq(server1)
 
     val clusterIdOnSecondBoot = server1.clusterId
@@ -90,13 +88,13 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
   @Test
   def testAutoGenerateClusterIdForKafkaClusterSequential(): Unit = {
-    val server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    val server1 = createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     val clusterIdFromServer1 = server1.clusterId
 
-    val server2 = TestUtils.createServer(config2, threadNamePrefix = Option(this.getClass.getName))
+    val server2 = createServer(config2, threadNamePrefix = Option(this.getClass.getName))
     val clusterIdFromServer2 = server2.clusterId
 
-    val server3 = TestUtils.createServer(config3, threadNamePrefix = Option(this.getClass.getName))
+    val server3 = createServer(config3, threadNamePrefix = Option(this.getClass.getName))
     val clusterIdFromServer3 = server3.clusterId
     servers = Seq(server1, server2, server3)
 
@@ -120,8 +118,8 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
   @Test
   def testAutoGenerateClusterIdForKafkaClusterParallel(): Unit = {
-    val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(TestUtils.createServer(config, threadNamePrefix = Option(this.getClass.getName))))
-    servers = Await.result(firstBoot, 100 second)
+    val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(createServer(config, threadNamePrefix = Option(this.getClass.getName))))
+    servers = Await.result(firstBoot, 100.second)
     val Seq(server1, server2, server3) = servers
 
     val clusterIdFromServer1 = server1.clusterId
@@ -137,7 +135,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
       server.startup()
       server
     })
-    servers = Await.result(secondBoot, 100 second)
+    servers = Await.result(secondBoot, 100.second)
     servers.foreach(server => assertEquals(clusterIdFromServer1, server.clusterId))
 
     servers.foreach(_.shutdown())
@@ -146,9 +144,9 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testConsistentClusterIdFromZookeeperAndFromMetaProps() = {
+  def testConsistentClusterIdFromZookeeperAndFromMetaProps(): Unit = {
     // Check at the first boot
-    val server = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    val server = createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     val clusterId = server.clusterId
 
     assertTrue(verifyBrokerMetadata(server.config.logDirs, clusterId))
@@ -167,15 +165,13 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testInconsistentClusterIdFromZookeeperAndFromMetaProps() = {
+  def testInconsistentClusterIdFromZookeeperAndFromMetaProps(): Unit = {
     forgeBrokerMetadata(config1.logDirs, config1.brokerId, "aclusterid")
 
     val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows[InconsistentClusterIdException] {
-      server.startup()
-    }
+    assertThrows(classOf[RuntimeException], () => server.startup())
 
     server.shutdown()
 
@@ -199,9 +195,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows[InconsistentBrokerMetadataException] {
-      server.startup()
-    }
+    assertThrows(classOf[RuntimeException], () => server.startup())
 
     server.shutdown()
 
@@ -215,21 +209,28 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
-    val checkpoint = new BrokerMetadataCheckpoint(
-      new File(logDir + File.separator + brokerMetaPropsFile))
-    checkpoint.write(BrokerMetadata(brokerId, Option(clusterId)))
+    val metaProps = new MetaProperties.Builder().
+      setVersion(MetaPropertiesVersion.V0).
+      setNodeId(brokerId).
+      setClusterId(clusterId).
+      build()
+    PropertiesUtils.writePropertiesFile(metaProps.toProperties,
+      new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
     for (logDir <- logDirs) {
-      val brokerMetadataOpt = new BrokerMetadataCheckpoint(
-        new File(logDir + File.separator + brokerMetaPropsFile)).read()
-      brokerMetadataOpt match {
-        case Some(brokerMetadata) =>
-          if (brokerMetadata.clusterId.isDefined && brokerMetadata.clusterId.get != clusterId) return false
-        case _ => return false
+      val properties = PropertiesUtils.readPropertiesFile(
+        new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath)
+      val metaProps = new MetaProperties.Builder(properties).build()
+      if (!metaProps.clusterId().equals(Optional.of(clusterId))) {
+        return false
       }
     }
     true
+  }
+
+  def createServer(config: KafkaConfig, threadNamePrefix: Option[String]): KafkaServer = {
+    TestUtils.createServer(config, Time.SYSTEM, threadNamePrefix)
   }
 }

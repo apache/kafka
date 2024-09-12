@@ -18,39 +18,16 @@ package kafka.server
 
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import scala.collection.Seq
-
 import kafka.server.Constants._
-import kafka.server.ReplicationQuotaManagerConfig._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics._
-
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.stats.SimpleRate
 import org.apache.kafka.common.utils.Time
-
-/**
-  * Configuration settings for quota management
-  *
-  * @param quotaBytesPerSecondDefault The default bytes per second quota allocated to internal replication
-  * @param numQuotaSamples            The number of samples to retain in memory
-  * @param quotaWindowSizeSeconds     The time span of each sample
-  *
-  */
-case class ReplicationQuotaManagerConfig(quotaBytesPerSecondDefault: Long = QuotaBytesPerSecondDefault,
-                                         numQuotaSamples: Int = DefaultNumQuotaSamples,
-                                         quotaWindowSizeSeconds: Int = DefaultQuotaWindowSizeSeconds)
-
-object ReplicationQuotaManagerConfig {
-  val QuotaBytesPerSecondDefault = Long.MaxValue
-  // Always have 10 whole windows + 1 current window
-  val DefaultNumQuotaSamples = 11
-  val DefaultQuotaWindowSizeSeconds = 1
-  // Purge sensors after 1 hour of inactivity
-  val InactiveSensorExpirationTimeSeconds = 3600
-}
+import org.apache.kafka.server.config.ReplicationQuotaManagerConfig
+import org.apache.kafka.server.quota.{QuotaType, SensorAccess}
 
 trait ReplicaQuota {
   def record(value: Long): Unit
@@ -76,10 +53,10 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
                               private val time: Time) extends Logging with ReplicaQuota {
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
-  private var quota: Quota = null
+  private var quota: Quota = _
   private val sensorAccess = new SensorAccess(lock, metrics)
   private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString,
-    s"Tracking byte-rate for ${replicationType}")
+    s"Tracking byte-rate for $replicationType")
 
   /**
     * Update the quota
@@ -107,7 +84,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
       sensor().checkQuotas()
     } catch {
       case qve: QuotaViolationException =>
-        trace("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor().name(), qve.metricName, qve.value, qve.bound))
+        trace(s"$replicationType: Quota violated for sensor (${sensor().name}), metric: (${qve.metric.metricName}), " +
+          s"metric-value: (${qve.value}), bound: (${qve.bound})")
         return true
     }
     false
@@ -133,12 +111,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param value
     */
   def record(value: Long): Unit = {
-    try {
-      sensor().record(value)
-    } catch {
-      case qve: QuotaViolationException =>
-        trace(s"Record: Quota violated, but ignored, for sensor (${sensor.name}), metric: (${qve.metricName}), value : (${qve.value}), bound: (${qve.bound}), recordedValue ($value)")
-    }
+    sensor().record(value.toDouble, time.milliseconds(), false)
   }
 
   /**
@@ -178,10 +151,10 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @return
     */
-  def upperBound(): Long = {
+  def upperBound: Long = {
     inReadLock(lock) {
       if (quota != null)
-        quota.bound().toLong
+        quota.bound.toLong
       else
         Long.MaxValue
     }
@@ -197,10 +170,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   private def sensor(): Sensor = {
     sensorAccess.getOrCreate(
       replicationType.toString,
-      InactiveSensorExpirationTimeSeconds,
-      rateMetricName,
-      Some(getQuotaMetricConfig(quota)),
-      new SimpleRate
+      ReplicationQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS,
+      sensor => sensor.add(rateMetricName, new SimpleRate, getQuotaMetricConfig(quota))
     )
   }
 }

@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -38,25 +37,26 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.ClassRule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -69,49 +69,50 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
-@RunWith(Parameterized.class)
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class SuppressionDurabilityIntegrationTest {
-    @ClassRule
+
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         3,
         mkProperties(mkMap()),
         0L
     );
+
+    @BeforeAll
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
+
+    @AfterAll
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
+
+    public TestInfo testInfo;
+
     private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
-    private static final int COMMIT_INTERVAL = 100;
-    private final boolean eosEnabled;
+    private static final long COMMIT_INTERVAL = 100L;
 
-    @Parameters(name = "{index}: eosEnabled={0}")
-    public static Collection<Object[]> parameters() {
-        return asList(
-            new Object[] {false},
-            new Object[] {true}
-        );
-    }
-
-    public SuppressionDurabilityIntegrationTest(final boolean eosEnabled) {
-        this.eosEnabled = eosEnabled;
-    }
-
-    @Test
-    public void shouldRecoverBufferAfterShutdown() {
-        final String testId = "-shouldRecoverBufferAfterShutdown";
-        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    public void shouldRecoverBufferAfterShutdown(final String processingGuarantee, final TestInfo testInfo) {
+        final String testId = safeUniqueTestName(testInfo);
+        final String appId = "appId_" + testId;
         final String input = "input" + testId;
         final String storeName = "counts";
         final String outputSuppressed = "output-suppressed" + testId;
@@ -140,22 +141,23 @@ public class SuppressionDurabilityIntegrationTest {
         final MetadataValidator metadataValidator = new MetadataValidator(input);
 
         suppressedCounts
-            .transform(metadataValidator)
+            .process(metadataValidator)
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
         valueCounts
             .toStream()
-            .transform(metadataValidator)
+            .process(metadataValidator)
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Properties streamsConfig = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE),
+            mkEntry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
+
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
 
         KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
         try {
@@ -246,11 +248,11 @@ public class SuppressionDurabilityIntegrationTest {
 
         } finally {
             driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            quietlyCleanStateAfterTest(CLUSTER, driver);
         }
     }
 
-    private static final class MetadataValidator implements TransformerSupplier<String, Long, KeyValue<String, Long>> {
+    private static final class MetadataValidator implements ProcessorSupplier<String, Long, String, Long> {
         private static final Logger LOG = LoggerFactory.getLogger(MetadataValidator.class);
         private final AtomicReference<Throwable> firstException = new AtomicReference<>();
         private final String topic;
@@ -260,29 +262,24 @@ public class SuppressionDurabilityIntegrationTest {
         }
 
         @Override
-        public Transformer<String, Long, KeyValue<String, Long>> get() {
-            return new Transformer<String, Long, KeyValue<String, Long>>() {
-                private ProcessorContext context;
+        public Processor<String, Long, String, Long> get() {
+            return new Processor<String, Long, String, Long>() {
+                private ProcessorContext<String, Long> context;
 
                 @Override
-                public void init(final ProcessorContext context) {
+                public void init(final ProcessorContext<String, Long> context) {
                     this.context = context;
                 }
 
                 @Override
-                public KeyValue<String, Long> transform(final String key, final Long value) {
+                public void process(final Record<String, Long> record) {
                     try {
-                        assertThat(context.topic(), equalTo(topic));
+                        assertThat(context.recordMetadata().get().topic(), equalTo(topic));
                     } catch (final Throwable e) {
                         firstException.compareAndSet(null, e);
                         LOG.error("Validation Failed", e);
                     }
-                    return new KeyValue<>(key, value);
-                }
-
-                @Override
-                public void close() {
-
+                    context.forward(record);
                 }
             };
         }

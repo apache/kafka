@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,7 +62,7 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
      * Create an assignment indicating responsibility for the given connector instances and task Ids.
      *
      * @param version Connect protocol version
-     * @param error error code for this assignment; {@code ConnectProtocol.Assignment.NO_ERROR}
+     * @param error error code for this assignment; {@link ConnectProtocol.Assignment#NO_ERROR}
      *              indicates no error during assignment
      * @param leader Connect group's leader Id; may be null only on the empty assignment
      * @param leaderUrl Connect group's leader URL; may be null only on the empty assignment
@@ -83,6 +84,20 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
         this.revokedTaskIds = Objects.requireNonNull(revokedTaskIds,
                 "Revoked task IDs may be empty but not null");
         this.delay = delay;
+    }
+
+    public static ExtendedAssignment duplicate(ExtendedAssignment assignment) {
+        return new ExtendedAssignment(
+                assignment.version(),
+                assignment.error(),
+                assignment.leader(),
+                assignment.leaderUrl(),
+                assignment.offset(),
+                new LinkedHashSet<>(assignment.connectors()),
+                new LinkedHashSet<>(assignment.tasks()),
+                new LinkedHashSet<>(assignment.revokedConnectors()),
+                new LinkedHashSet<>(assignment.revokedTasks()),
+                assignment.delay());
     }
 
     /**

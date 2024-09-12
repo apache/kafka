@@ -17,17 +17,19 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.errors.TopologyException;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class NamedTest {
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowExceptionGivenNullName() {
-        Named.as(null);
+        assertThrows(NullPointerException.class, () -> Named.as(null));
     }
 
     @Test

@@ -17,30 +17,32 @@
 
 package org.apache.kafka.connect.converters;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
-import org.junit.Before;
-import org.junit.Test;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Collections;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ByteArrayConverterTest {
     private static final String TOPIC = "topic";
     private static final byte[] SAMPLE_BYTES = "sample string".getBytes(StandardCharsets.UTF_8);
 
-    private ByteArrayConverter converter = new ByteArrayConverter();
+    private final ByteArrayConverter converter = new ByteArrayConverter();
 
-    @Before
+    @BeforeEach
     public void setUp() {
-        converter.configure(Collections.<String, String>emptyMap(), false);
+        converter.configure(Collections.emptyMap(), false);
     }
 
     @Test
@@ -59,14 +61,16 @@ public class ByteArrayConverterTest {
         );
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromConnectBadSchema() {
-        converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, SAMPLE_BYTES);
+        assertThrows(DataException.class,
+            () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, SAMPLE_BYTES));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromConnectInvalidValue() {
-        converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, 12);
+        assertThrows(DataException.class,
+            () -> converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, 12));
     }
 
     @Test
@@ -75,10 +79,33 @@ public class ByteArrayConverterTest {
     }
 
     @Test
+    public void testFromConnectByteBufferValue() {
+        ByteBuffer buffer = ByteBuffer.wrap(SAMPLE_BYTES);
+        assertArrayEquals(
+                SAMPLE_BYTES,
+                converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, buffer));
+
+        buffer.rewind();
+        buffer.get(); // Move the position
+        assertArrayEquals(
+                SAMPLE_BYTES,
+                converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, buffer));
+
+        buffer = null;
+        assertNull(converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, buffer));
+
+        byte[] emptyBytes = new byte[0];
+        buffer = ByteBuffer.wrap(emptyBytes);
+        assertArrayEquals(
+                emptyBytes,
+                converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, buffer));
+    }
+
+    @Test
     public void testToConnect() {
         SchemaAndValue data = converter.toConnectData(TOPIC, SAMPLE_BYTES);
         assertEquals(Schema.OPTIONAL_BYTES_SCHEMA, data.schema());
-        assertTrue(Arrays.equals(SAMPLE_BYTES, (byte[]) data.value()));
+        assertArrayEquals(SAMPLE_BYTES, (byte[]) data.value());
     }
 
     @Test
@@ -86,5 +113,10 @@ public class ByteArrayConverterTest {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(Schema.OPTIONAL_BYTES_SCHEMA, data.schema());
         assertNull(data.value());
+    }
+
+    @Test
+    public void testVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 }

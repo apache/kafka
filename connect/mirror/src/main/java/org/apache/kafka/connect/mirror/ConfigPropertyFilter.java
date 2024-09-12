@@ -19,13 +19,34 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Map;
 
 /** Defines which topic configuration properties should be replicated. */
 @InterfaceStability.Evolving
 public interface ConfigPropertyFilter extends Configurable, AutoCloseable {
 
+    /**
+     * Specifies whether to replicate the given topic configuration.
+     * Note that if a property has a default value on the source cluster,
+     * {@link #shouldReplicateSourceDefault(String)} will also be called to
+     * determine how that property should be synced.
+     */
     boolean shouldReplicateConfigProperty(String prop);
+
+    /**
+     * Specifies how to replicate the given topic configuration property
+     * that has a default value on the source cluster. Only invoked for properties
+     * that {@link #shouldReplicateConfigProperty(String)} has returned
+     * {@code true} for.
+     *
+     * @return {@code true} if the default value from the source topic should be synced
+     * to the target topic, and {@code false} if the default value for the target topic
+     * should be used instead
+     */
+    default boolean shouldReplicateSourceDefault(String prop) {
+        return false;
+    }
 
     default void close() {
         //nop

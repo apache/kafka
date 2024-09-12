@@ -17,41 +17,39 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(120)
 public class MessageGeneratorTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
-    public void testCapitalizeFirst() throws Exception {
+    public void testCapitalizeFirst() {
         assertEquals("", MessageGenerator.capitalizeFirst(""));
         assertEquals("AbC", MessageGenerator.capitalizeFirst("abC"));
     }
 
     @Test
-    public void testLowerCaseFirst() throws Exception {
+    public void testLowerCaseFirst() {
         assertEquals("", MessageGenerator.lowerCaseFirst(""));
         assertEquals("fORTRAN", MessageGenerator.lowerCaseFirst("FORTRAN"));
         assertEquals("java", MessageGenerator.lowerCaseFirst("java"));
     }
 
     @Test
-    public void testFirstIsCapitalized() throws Exception {
+    public void testFirstIsCapitalized() {
         assertFalse(MessageGenerator.firstIsCapitalized(""));
         assertTrue(MessageGenerator.firstIsCapitalized("FORTRAN"));
         assertFalse(MessageGenerator.firstIsCapitalized("java"));
     }
 
     @Test
-    public void testToSnakeCase() throws Exception {
+    public void testToSnakeCase() {
         assertEquals("", MessageGenerator.toSnakeCase(""));
         assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("FooBarBaz"));
         assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("fooBarBaz"));
@@ -59,14 +57,16 @@ public class MessageGeneratorTest {
     }
 
     @Test
-    public void stripSuffixTest() throws Exception {
+    public void stripSuffixTest() {
         assertEquals("FooBa", MessageGenerator.stripSuffix("FooBar", "r"));
         assertEquals("", MessageGenerator.stripSuffix("FooBar", "FooBar"));
         assertEquals("Foo", MessageGenerator.stripSuffix("FooBar", "Bar"));
-        try {
-            MessageGenerator.stripSuffix("FooBar", "Baz");
-            fail("expected exception");
-        } catch (RuntimeException e) {
-        }
+        assertThrows(RuntimeException.class, () -> MessageGenerator.stripSuffix("FooBar", "Baz"));
+    }
+
+    @Test
+    public void testConstants() {
+        assertEquals(MessageGenerator.UNSIGNED_SHORT_MAX, 0xFFFF);
+        assertEquals(MessageGenerator.UNSIGNED_INT_MAX, 0xFFFFFFFFL);
     }
 }

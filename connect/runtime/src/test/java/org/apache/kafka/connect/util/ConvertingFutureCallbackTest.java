@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.util;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
@@ -29,16 +29,17 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConvertingFutureCallbackTest {
 
     private ExecutorService executor;
 
-    @Before
+    @BeforeEach
     public void setup() {
         executor = Executors.newSingleThreadExecutor();
     }
@@ -95,11 +96,11 @@ public class ConvertingFutureCallbackTest {
         }
     }
   
-    @Test(expected = CancellationException.class)
-    public void shouldCancelBeforeGetIfMayCancelWhileRunning() throws Exception {
+    @Test
+    public void shouldCancelBeforeGetIfMayCancelWhileRunning() {
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
         assertTrue(testCallback.cancel(true));
-        testCallback.get();
+        assertThrows(CancellationException.class, testCallback::get);
     }
 
     @Test
@@ -151,8 +152,8 @@ public class ConvertingFutureCallbackTest {
         }
     }
 
-    @Test(expected = CancellationException.class)
-    public void shouldBlockUntilCancellation() throws Exception {
+    @Test
+    public void shouldBlockUntilCancellation() {
         AtomicReference<Exception> testThreadException = new AtomicReference<>();
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
         executor.submit(() -> {
@@ -164,10 +165,7 @@ public class ConvertingFutureCallbackTest {
             }
         });
         assertFalse(testCallback.isDone());
-        testCallback.get();
-        if (testThreadException.get() != null) {
-            throw testThreadException.get();
-        }
+        assertThrows(CancellationException.class, testCallback::get);
     }
 
     @Test
@@ -190,15 +188,13 @@ public class ConvertingFutureCallbackTest {
         assertTrue(testCallback.isDone());
         assertEquals(expectedConversion, testCallback.get());
         assertEquals(1, testCallback.numberOfConversions());
-        if (testThreadException.get() != null) {
-            throw testThreadException.get();
-        }
+        if (testThreadException.get() != null) assertThrows(CancellationException.class, testThreadException::get);
     }
   
     protected static class TestConvertingFutureCallback extends ConvertingFutureCallback<Object, Object> {
-        private AtomicInteger numberOfConversions = new AtomicInteger();
-        private CountDownLatch getInvoked = new CountDownLatch(1);
-        private CountDownLatch cancelInvoked = new CountDownLatch(1);
+        private final AtomicInteger numberOfConversions = new AtomicInteger();
+        private final CountDownLatch getInvoked = new CountDownLatch(1);
+        private final CountDownLatch cancelInvoked = new CountDownLatch(1);
     
         public int numberOfConversions() {
             return numberOfConversions.get();

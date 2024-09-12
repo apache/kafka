@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
 public class OAuthBearerValidationUtils {
     /**
@@ -175,8 +175,8 @@ public class OAuthBearerValidationUtils {
         for (String requiredScopeElement : requiredScope) {
             if (!tokenScope.contains(requiredScopeElement))
                 return OAuthBearerValidationResult.newFailure(String.format(
-                        "The provided scope (%s) was mising a required scope (%s).  All required scope elements: %s",
-                        String.valueOf(tokenScope), requiredScopeElement, requiredScope.toString()),
+                        "The provided scope (%s) was missing a required scope (%s).  All required scope elements: %s",
+                        tokenScope, requiredScopeElement, requiredScope),
                         requiredScope.toString(), null);
         }
         return OAuthBearerValidationResult.newSuccess();

@@ -22,7 +22,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,19 +35,22 @@ import java.util.List;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
-import static org.easymock.EasyMock.mock;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StateRestoreCallbackAdapterTest {
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnRestoreAll() {
-        adapt(mock(StateRestoreCallback.class)).restoreAll(null);
+        assertThrows(UnsupportedOperationException.class, () -> adapt(mock(StateRestoreCallback.class)).restoreAll(null));
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnRestore() {
-        adapt(mock(StateRestoreCallback.class)).restore(null, null);
+        assertThrows(UnsupportedOperationException.class, () -> adapt(mock(StateRestoreCallback.class)).restore(null, null));
     }
 
     @Test
