@@ -23,6 +23,7 @@ import os.path
 import sys
 from typing import Tuple, Optional, List, Iterable
 import xml.etree.ElementTree
+import html
 
 
 logger = logging.getLogger()
@@ -37,10 +38,14 @@ FLAKY = "FLAKY ⚠️ "
 SKIPPED = "SKIPPED 🙈"
 
 
-def get_env(key: str) -> str:
+def get_env(key: str, fn = str) -> Optional:
     value = os.getenv(key)
-    logger.debug(f"Read env {key}: {value}")
-    return value
+    if value is None:
+        logger.debug(f"Could not find env {key}")
+        return None
+    else:
+        logger.debug(f"Read env {key}: {value}")
+        return fn(value)
 
 
 @dataclasses.dataclass
@@ -95,6 +100,9 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
                 test_case_failed = False
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
+                if failure_message:
+                    failure_message = html.escape(failure_message)
+                    failure_message = failure_message.replace('\n', '<br>').replace('\r', '<br>')
                 failure_class = elem.get("type")
                 failure_stack_trace = elem.text
                 failure = partial_test_case(failure_message, failure_class, failure_stack_trace)
@@ -142,7 +150,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
     parser.add_argument("--path",
                         required=False,
-                        default="**/test-results/**/*.xml",
+                        default="build/junit-xml/**/*.xml",
                         help="Path to XML files. Glob patterns are supported.")
 
     if not os.getenv("GITHUB_WORKSPACE"):
@@ -248,12 +256,23 @@ if __name__ == "__main__":
             print(f"| {row_joined} |")
         print("\n</details>")
 
-    logger.debug(summary)
-    if total_failures > 0:
-        logger.debug(f"Failing this step due to {total_failures} test failures")
+    # Print special message if there was a timeout
+    exit_code = get_env("GRADLE_EXIT_CODE", int)
+    if exit_code == 124:
+        logger.debug(f"Gradle command timed out. These are partial results!")
+        logger.debug(summary)
+        logger.debug("Failing this step because the tests timed out.")
         exit(1)
-    elif total_errors > 0:
-        logger.debug(f"Failing this step due to {total_errors} test errors")
-        exit(1)
+    elif exit_code in (0, 1):
+        logger.debug(summary)
+        if total_failures > 0:
+            logger.debug(f"Failing this step due to {total_failures} test failures")
+            exit(1)
+        elif total_errors > 0:
+            logger.debug(f"Failing this step due to {total_errors} test errors")
+            exit(1)
+        else:
+            exit(0)
     else:
-        exit(0)
+        logger.debug(f"Gradle had unexpected exit code {exit_code}. Failing this step")
+        exit(1)

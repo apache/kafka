@@ -33,7 +33,7 @@ class ControllerIdMetricTest extends KafkaServerTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk"))
-  def testZkControllerId(): Unit = {
+  def testZkControllerId(quorum: String): Unit = {
     val server = servers.head
     TestUtils.retry(30000) {
       assertEquals(server.config.brokerId, server.getCurrentControllerIdFromOldController())
@@ -42,7 +42,7 @@ class ControllerIdMetricTest extends KafkaServerTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk"))
-  def testZkControllerIdWhenZnodeIsDeleted(): Unit = {
+  def testZkControllerIdWhenZnodeIsDeleted(quorum: String): Unit = {
     val server = servers.head
     TestUtils.retry(30000) {
       zkClient.deleteController(ZkVersion.MatchAnyVersion)
