@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.CoordinatorCommonConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
@@ -28,6 +29,7 @@ import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.security.PasswordEncoderConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
+import org.apache.kafka.server.share.ShareGroupConfig;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
@@ -49,6 +51,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             KRaftConfigs.CONFIG_DEF,
             SocketServerConfigs.CONFIG_DEF,
             ReplicationConfigs.CONFIG_DEF,
+            CoordinatorCommonConfig.COMMON_GROUP_COORDINATOR_CONFIG_DEF,
             GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
             GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
             GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,

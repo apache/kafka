@@ -40,6 +40,9 @@
 
     <subpackage name="coordinator">
         <subpackage name="common">
+
+            <allow pkg="org.apache.kafka.common" />
+
             <subpackage name="runtime">
                 <allow pkg="com.yammer.metrics.core" />
                 <allow pkg="org.apache.kafka.clients.consumer" />

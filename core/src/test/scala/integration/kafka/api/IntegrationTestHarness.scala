@@ -29,7 +29,7 @@ import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.common.CoordinatorCommonConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -72,7 +72,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       cfgs.foreach(_.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true"))
     }
     if (isShareGroupTest()) {
-      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share"))
+      cfgs.foreach(_.setProperty(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "Classic,Consumer,Share"))
       cfgs.foreach(_.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true"))
     }
 

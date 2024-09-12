@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
+package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.common.CoordinatorCommonConfig;
 
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -89,7 +89,7 @@ public class ShareGroupConfig {
     public ShareGroupConfig(AbstractConfig config) {
         // Share groups are enabled in two cases: 1) The internal configuration to enable it is
         // explicitly set; or 2) the share rebalance protocol is enabled.
-        Set<String> protocols = config.getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
+        Set<String> protocols = config.getList(CoordinatorCommonConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
             .stream().map(String::toUpperCase).collect(Collectors.toSet());
         isShareGroupEnabled = config.getBoolean(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG) ||
             protocols.contains(GroupType.SHARE.name());

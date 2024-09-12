@@ -68,8 +68,8 @@ import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
-import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
+import org.apache.kafka.common.{GroupType, Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
@@ -3838,7 +3838,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def isConsumerGroupProtocolEnabled(): Boolean = {
     groupCoordinator.isNewGroupCoordinator &&
-      config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) &&
+      config.groupCoordinatorRebalanceProtocols.contains(GroupType.CONSUMER) &&
       groupVersion().isConsumerRebalanceProtocolSupported
   }
 
