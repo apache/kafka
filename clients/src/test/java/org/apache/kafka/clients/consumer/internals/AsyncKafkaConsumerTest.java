@@ -38,6 +38,7 @@ import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
@@ -84,6 +85,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.mockito.verification.VerificationMode;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -140,6 +142,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1341,6 +1344,76 @@ public class AsyncKafkaConsumerTest {
         assertEquals(1, cb.invoked);
     }
 
+    @ParameterizedTest
+    @MethodSource("closeWithInterruptSource")
+    public void testCloseWithInterrupt(Duration timeout, boolean expectRebalanceComplete) {
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        consumer = spy(newConsumer(
+            mock(FetchBuffer.class),
+            mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            "group-id",
+            "client-id"));
+
+        final VerificationMode times;
+
+        if (expectRebalanceComplete) {
+            // This future is completed when the ConsumerRebalanceListener has been invoked and the
+            // ConsumerRebalanceListenerCallbackCompletedEvent has been enqueued.
+            CompletableFuture<Void> crlCallbackCompletedFuture = new CompletableFuture<>();
+
+            doAnswer(invocation -> {
+                // When an UnsubscribeEvent is enqueued, don't complete it immediately. Instead, enqueue the 'rebalance
+                // callback needed' event from the background thread.
+                SortedSet<TopicPartition> partitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+                partitions.addAll(subscriptions.assignedPartitions());
+                backgroundEventQueue.add(new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, partitions));
+
+                // Complete the unsubscribe event when the ConsumerRebalanceListenerCallbackCompletedEvent has been
+                // enqueued.
+                UnsubscribeEvent event = invocation.getArgument(0);
+                crlCallbackCompletedFuture.whenComplete((result, exception) -> {
+                    if (exception != null)
+                        event.future().completeExceptionally(exception);
+                    else
+                        event.future().complete(result);
+                });
+
+                return null;
+            }).when(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
+
+            doAnswer(invocation -> {
+                // This triggers the completion of the UnsubscribeEvent from above.
+                crlCallbackCompletedFuture.complete(null);
+                return null;
+            }).when(applicationEventHandler).add(ArgumentMatchers.isA(ConsumerRebalanceListenerCallbackCompletedEvent.class));
+
+            // We should enqueue the ConsumerRebalanceListenerCallbackCompletedEvent into the application thread once.
+            times = times(1);
+        } else {
+            // By skipping all of the above setup, the UnsubscribeEvent will time out, so we don't expect the
+            // ConsumerRebalanceListenerCallbackCompletedEvent to be enqueued at all.
+            times = never();
+        }
+
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(InterruptException.class, () -> consumer.close(timeout));
+        } finally {
+            Thread.interrupted();
+        }
+
+        verifyUnsubscribeEvent(subscriptions);
+        verify(applicationEventHandler, times).add(any(ConsumerRebalanceListenerCallbackCompletedEvent.class));
+    }
+
+    private static Stream<Arguments> closeWithInterruptSource() {
+        return Stream.of(
+            Arguments.of(Duration.ZERO, false),
+            Arguments.of(Duration.ofMillis(1000), true)
+        );
+    }
 
     @Test
     public void testInterceptorAutoCommitOnClose() {
