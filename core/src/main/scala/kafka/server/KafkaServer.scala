@@ -260,9 +260,6 @@ class KafkaServer(
 
         /* generate brokerId */
         config._brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
-        // Currently, we are migrating from ZooKeeper to KRaft. If broker.id.generation.enable is set to true,
-        // we must ensure that the nodeId synchronizes with the broker.id to prevent the nodeId from being -1,
-        // which would result in a failure during the migration.
         config._nodeId = config.brokerId
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
@@ -1135,6 +1132,10 @@ class KafkaServer(
    * @return The brokerId.
    */
   private def getOrGenerateBrokerId(metaPropsEnsemble: MetaPropertiesEnsemble): Int = {
+    if (config.migrationEnabled && config.brokerIdGenerationEnable) {
+      throw new RuntimeException("broker.id.generation.enable is incompatible with migration to ZK. " +
+        "Please disable it before enabling migration.")
+    }
     if (config.brokerId >= 0) {
       config.brokerId
     } else if (metaPropsEnsemble.nodeId().isPresent) {
