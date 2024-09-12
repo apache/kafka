@@ -62,6 +62,8 @@
             <allow pkg="org.apache.kafka.server.util.timer" />
             <allow pkg="org.apache.kafka.timeline" />
             <allow pkg="org.junit.jupiter.api" />
+            <allow pkg="org.junit.jupiter.params" />
+            <allow pkg="org.junit.jupiter.provider" />
             <allow pkg="org.mockito" />
             <allow pkg="org.slf4j" />
             <subpackage name="generated">

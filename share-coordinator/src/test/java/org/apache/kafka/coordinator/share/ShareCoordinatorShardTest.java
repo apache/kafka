@@ -45,12 +45,15 @@ import org.apache.kafka.server.group.share.SharePartitionKey;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -793,7 +796,7 @@ class ShareCoordinatorShardTest {
         verify(shard.getMetricsShard(), times(3)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
     }
 
-    private static class TestAttributes {
+    static class BatchTestHolder {
         final String testName;
         final List<PersisterStateBatch> curList;
         final List<PersisterStateBatch> newList;
@@ -801,7 +804,7 @@ class ShareCoordinatorShardTest {
         final long startOffset;
         final boolean shouldRun;
 
-        TestAttributes(String testName,
+        BatchTestHolder(String testName,
                        List<PersisterStateBatch> curList,
                        List<PersisterStateBatch> newList,
                        List<PersisterStateBatch> expectedResult,
@@ -809,7 +812,7 @@ class ShareCoordinatorShardTest {
             this(testName, curList, newList, expectedResult, startOffset, true);
         }
 
-        TestAttributes(String testName,
+        BatchTestHolder(String testName,
                        List<PersisterStateBatch> curList,
                        List<PersisterStateBatch> newList,
                        List<PersisterStateBatch> expectedResult,
@@ -822,13 +825,17 @@ class ShareCoordinatorShardTest {
             this.startOffset = startOffset;
             this.shouldRun = shouldRun;
         }
+
+        @Override
+        public String toString() {
+            return this.testName;
+        }
     }
 
-    @Test
     @SuppressWarnings({"MethodLength"})
-    public void testStateBatchCombine() {
-        List<TestAttributes> tests = Arrays.asList(
-            new TestAttributes(
+    private static Stream<BatchTestHolder> generator() {
+        return Stream.of(
+            new BatchTestHolder(
                 "New batch left and right offsets extend beyond current batch.",
                 Collections.singletonList(
                     new PersisterStateBatch(2, 10, (byte) 0, (short) 1)
@@ -842,7 +849,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left offset extends beyond current batch, right offset aligns.",
                 Collections.singletonList(
                     new PersisterStateBatch(2, 10, (byte) 0, (short) 1)
@@ -856,7 +863,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left offset aligns and right offset extends beyond current batch.",
                 Collections.singletonList(
                     new PersisterStateBatch(2, 10, (byte) 0, (short) 1)
@@ -870,7 +877,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left offset aligns and right offset smaller.",
                 Collections.singletonList(
                     new PersisterStateBatch(2, 10, (byte) 0, (short) 1)
@@ -885,7 +892,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left and right offsets align current batch.",
                 Collections.singletonList(
                     new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
@@ -899,7 +906,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left offset greater and right offset smaller",
                 Collections.singletonList(
                     new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
@@ -915,7 +922,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left offset greater and right offset aligns",
                 Collections.singletonList(
                     new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
@@ -930,7 +937,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left and right offsets smaller.",
                 Collections.singletonList(
                     new PersisterStateBatch(5, 10, (byte) 0, (short) 1)
@@ -945,7 +952,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left offset smaller and right offset aligns",
                 Collections.singletonList(
                     new PersisterStateBatch(5, 10, (byte) 0, (short) 1)
@@ -959,7 +966,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left and right offsets greater.",
                 Collections.singletonList(
                     new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
@@ -974,7 +981,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batch left offset greater and right offset aligns",
                 Collections.singletonList(
                     new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
@@ -989,7 +996,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "Multiple completely overlapping new batches",
                 Collections.singletonList(
                     new PersisterStateBatch(1, 10, (byte) 0, (short) 1)
@@ -1008,7 +1015,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "One left overlap new batch and two non overlapping batches.",
                 Collections.singletonList(
                     new PersisterStateBatch(111, 120, (byte) 0, (short) 1)
@@ -1027,7 +1034,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "Batches which are older than start offset are removed. " +
                     "Old means batch.lastOffset < startOffset",
                 Arrays.asList(
@@ -1045,7 +1052,7 @@ class ShareCoordinatorShardTest {
                 111
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "Handle overlapping batches within each list.",
                 Arrays.asList(
                     new PersisterStateBatch(100, 110, (byte) 0, (short) 1),
@@ -1066,7 +1073,7 @@ class ShareCoordinatorShardTest {
                 -1
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "Handle overlapping batches within each list with pruning.",
                 Arrays.asList(
                     new PersisterStateBatch(100, 110, (byte) 0, (short) 1),
@@ -1084,7 +1091,7 @@ class ShareCoordinatorShardTest {
                 120
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "Current batches with start offset midway are pruned.",
                 Collections.singletonList(
                     new PersisterStateBatch(100, 130, (byte) 0, (short) 1)
@@ -1096,7 +1103,7 @@ class ShareCoordinatorShardTest {
                 120
             ),
 
-            new TestAttributes(
+            new BatchTestHolder(
                 "New batches with start offset midway are pruned.",
                 Collections.emptyList(),
                 Collections.singletonList(
@@ -1108,12 +1115,19 @@ class ShareCoordinatorShardTest {
                 120
             )
         );
+    }
 
-        for (TestAttributes attrs : tests) {
-            if (attrs.shouldRun) {
-                assertEquals(attrs.expectedResult, ShareCoordinatorShard.combineStateBatches(attrs.curList, attrs.newList, attrs.startOffset),
-                    attrs.testName);
-            }
+    @ParameterizedTest
+    @MethodSource("generator")
+    public void testStateBatchCombine(BatchTestHolder test) {
+        if (test.shouldRun) {
+            assertEquals(test.expectedResult,
+                ShareCoordinatorShard.combineStateBatches(
+                    test.curList,
+                    test.newList,
+                    test.startOffset),
+                test.testName
+            );
         }
     }
 
