@@ -271,18 +271,35 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
         return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, gracePeriod);
     }
 
+
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
     public Duration gracePeriod() {
         return gracePeriod;
     }
 
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
     public Serde<K> keySerde() {
         return keySerde;
     }
 
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
     public Serde<VLeft> valueSerde() {
         return leftValueSerde;
     }
 
+    /**
+     * @deprecated since 4.0 and should not be used any longer.
+     */
+    @Deprecated
     public Serde<VRight> otherValueSerde() {
         return rightValueSerde;
     }
