@@ -341,8 +341,6 @@
               files="CoordinatorRuntime.java"/>
 
     <!-- share coordinator -->
-    <suppress checks="MethodLength"
-              files="ShareCoordinatorShardTest.java"/>
     <suppress checks="NPathComplexity"
               files="ShareCoordinatorShard.java"/>
     <suppress checks="CyclomaticComplexity"

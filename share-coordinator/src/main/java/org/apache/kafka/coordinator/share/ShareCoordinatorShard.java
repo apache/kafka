@@ -563,16 +563,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<PersisterStateBatch> newBatches,
         long startOffset
     ) {
-        // will take care of overlapping batches
-        List<PersisterStateBatch> modifiedNewBatches = mergeBatches(
-            pruneBatches(
-                getSortedList(newBatches),
-                startOffset
-            )
-        );
-
         List<PersisterStateBatch> combinedList = new ArrayList<>(batchesSoFar);
-        combinedList.addAll(modifiedNewBatches);
+        combinedList.addAll(newBatches);
 
         return mergeBatches(
             pruneBatches(
@@ -765,17 +757,17 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             List<PersisterStateBatch> prunedList = new ArrayList<>();
             batches.forEach(batch -> {
                 if (batch.firstOffset() >= startOffset) {
-                    // covers
+                    // covers:
                     //   ______
                     // | -> start offset
                     prunedList.add(batch);
                 } else if (batch.lastOffset() >= startOffset) {
-                    // covers
+                    // covers:
                     //  ________
                     //       | -> start offset
                     prunedList.add(new PersisterStateBatch(startOffset, batch.lastOffset(), batch.deliveryState(), batch.deliveryCount()));
                 }
-                // all other cases, the interval need not be touched.
+                // in all other cases, the batch is completely expired.
             });
             return prunedList;
         }

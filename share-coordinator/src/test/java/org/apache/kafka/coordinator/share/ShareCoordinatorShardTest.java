@@ -793,39 +793,40 @@ class ShareCoordinatorShardTest {
         verify(shard.getMetricsShard(), times(3)).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
     }
 
-    @Test
-    public void testStateBatchCombine() {
-        class TestAttributes {
-            final String testName;
-            final List<PersisterStateBatch> curList;
-            final List<PersisterStateBatch> newList;
-            final List<PersisterStateBatch> expectedResult;
-            final long startOffset;
-            final boolean shouldRun;
+    private static class TestAttributes {
+        final String testName;
+        final List<PersisterStateBatch> curList;
+        final List<PersisterStateBatch> newList;
+        final List<PersisterStateBatch> expectedResult;
+        final long startOffset;
+        final boolean shouldRun;
 
-            TestAttributes(String testName,
-                           List<PersisterStateBatch> curList,
-                           List<PersisterStateBatch> newList,
-                           List<PersisterStateBatch> expectedResult,
-                           long startOffset) {
-                this(testName, curList, newList, expectedResult, startOffset, true);
-            }
-
-            TestAttributes(String testName,
-                           List<PersisterStateBatch> curList,
-                           List<PersisterStateBatch> newList,
-                           List<PersisterStateBatch> expectedResult,
-                           long startOffset,
-                           boolean shouldRun) {
-                this.testName = testName;
-                this.curList = curList;
-                this.newList = newList;
-                this.expectedResult = expectedResult;
-                this.startOffset = startOffset;
-                this.shouldRun = shouldRun;
-            }
+        TestAttributes(String testName,
+                       List<PersisterStateBatch> curList,
+                       List<PersisterStateBatch> newList,
+                       List<PersisterStateBatch> expectedResult,
+                       long startOffset) {
+            this(testName, curList, newList, expectedResult, startOffset, true);
         }
 
+        TestAttributes(String testName,
+                       List<PersisterStateBatch> curList,
+                       List<PersisterStateBatch> newList,
+                       List<PersisterStateBatch> expectedResult,
+                       long startOffset,
+                       boolean shouldRun) {
+            this.testName = testName;
+            this.curList = curList;
+            this.newList = newList;
+            this.expectedResult = expectedResult;
+            this.startOffset = startOffset;
+            this.shouldRun = shouldRun;
+        }
+    }
+
+    @Test
+    @SuppressWarnings({"MethodLength"})
+    public void testStateBatchCombine() {
         List<TestAttributes> tests = Arrays.asList(
             new TestAttributes(
                 "New batch left and right offsets extend beyond current batch.",
@@ -1084,11 +1085,23 @@ class ShareCoordinatorShardTest {
             ),
 
             new TestAttributes(
-                "Batches with start offset midway are pruned.",
+                "Current batches with start offset midway are pruned.",
                 Collections.singletonList(
                     new PersisterStateBatch(100, 130, (byte) 0, (short) 1)
                 ),
                 Collections.emptyList(),
+                Collections.singletonList(
+                    new PersisterStateBatch(120, 130, (byte) 0, (short) 1)
+                ),
+                120
+            ),
+
+            new TestAttributes(
+                "New batches with start offset midway are pruned.",
+                Collections.emptyList(),
+                Collections.singletonList(
+                    new PersisterStateBatch(100, 130, (byte) 0, (short) 1)
+                ),
                 Collections.singletonList(
                     new PersisterStateBatch(120, 130, (byte) 0, (short) 1)
                 ),
