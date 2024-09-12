@@ -664,7 +664,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 acknowledgeRequestState.onSuccessfulAttempt(responseCompletionTimeMs);
                 acknowledgeRequestState.processingComplete();
 
-                metricsManager.recordLatency(resp.requestLatencyMs());
+                metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
             } else {
                 if (!acknowledgeRequestState.sessionHandler.handleResponse(response, resp.requestHeader().apiVersion())) {
                     // Received a response-level error code.
