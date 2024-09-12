@@ -3354,12 +3354,14 @@ public class StreamThreadTest {
         Mockito.verify(mainConsumer).poll(Duration.ZERO);
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldGetMainAndRestoreConsumerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
         getMainAndRestoreConsumerInstanceId(false, stateUpdaterEnabled, processingThreadsEnabled);
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldGetMainAndRestoreConsumerInstanceIdWithInternalTimeout(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
@@ -3387,20 +3389,22 @@ public class StreamThreadTest {
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> mainConsumerFuture = consumerInstanceIdFutures.get("clientId-StreamThread-1-consumer");
-        final Uuid mainConsumerUuid = mainConsumerFuture.get();
+        final Uuid mainConsumerUuid = mainConsumerFuture.get(5L, TimeUnit.SECONDS);
         assertThat(mainConsumerUuid, equalTo(consumerInstanceId));
 
         final KafkaFuture<Uuid> restoreConsumerFuture = consumerInstanceIdFutures.get("clientId-StreamThread-1-restore-consumer");
-        final Uuid restoreConsumerUuid = restoreConsumerFuture.get();
+        final Uuid restoreConsumerUuid = restoreConsumerFuture.get(5L, TimeUnit.SECONDS);
         assertThat(restoreConsumerUuid, equalTo(restoreInstanceId));
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldGetProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
         getProducerInstanceId(false, stateUpdaterEnabled, processingThreadsEnabled);
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldProducerInstanceIdAndInternalTimeout(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
@@ -3425,8 +3429,10 @@ public class StreamThreadTest {
         thread.maybeGetClientInstanceIds(); // triggers internal timeout; should not crash
         thread.maybeGetClientInstanceIds();
 
-        final KafkaFuture<Uuid> producerFuture = producerInstanceIdFutures.get().get("clientId-StreamThread-1-producer");
-        final Uuid producerUuid = producerFuture.get();
+        final KafkaFuture<Uuid> producerFuture = producerInstanceIdFutures
+            .get(5L, TimeUnit.SECONDS)
+            .get("clientId-StreamThread-1-producer");
+        final Uuid producerUuid = producerFuture.get(5L, TimeUnit.SECONDS);
         assertThat(producerUuid, equalTo(producerInstanceId));
     }
 
@@ -3441,7 +3447,10 @@ public class StreamThreadTest {
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
-        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        final ExecutionException error = assertThrows(
+            ExecutionException.class,
+            () -> future.get(5L, TimeUnit.SECONDS)
+        );
         assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
         assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
     }
@@ -3457,7 +3466,10 @@ public class StreamThreadTest {
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
-        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        final ExecutionException error = assertThrows(
+            ExecutionException.class,
+            () -> future.get(5L, TimeUnit.SECONDS)
+        );
         assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
         assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
     }
@@ -3484,6 +3496,7 @@ public class StreamThreadTest {
         assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldReturnNullIfMainConsumerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
@@ -3496,10 +3509,11 @@ public class StreamThreadTest {
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
-        final Uuid clientInstanceId = future.get();
+        final Uuid clientInstanceId = future.get(5L, TimeUnit.SECONDS);
         assertThat(clientInstanceId, equalTo(null));
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldReturnNullIfRestoreConsumerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
@@ -3513,10 +3527,11 @@ public class StreamThreadTest {
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
-        final Uuid clientInstanceId = future.get();
+        final Uuid clientInstanceId = future.get(5L, TimeUnit.SECONDS);
         assertThat(clientInstanceId, equalTo(null));
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldReturnNullIfProducerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
@@ -3527,15 +3542,18 @@ public class StreamThreadTest {
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
 
-        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread
+            .producersClientInstanceIds(Duration.ZERO)
+            .get(5L, TimeUnit.SECONDS);
 
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
-        final Uuid clientInstanceId = future.get();
+        final Uuid clientInstanceId = future.get(5L, TimeUnit.SECONDS);
         assertThat(clientInstanceId, equalTo(null));
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldTimeOutOnMainConsumerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
@@ -3551,7 +3569,10 @@ public class StreamThreadTest {
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
-        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        final ExecutionException error = assertThrows(
+            ExecutionException.class,
+            () -> future.get(5L, TimeUnit.SECONDS)
+        );
         assertThat(error.getCause(), instanceOf(TimeoutException.class));
         assertThat(
             error.getCause().getMessage(),
@@ -3559,7 +3580,7 @@ public class StreamThreadTest {
         );
     }
 
-
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldTimeOutOnRestoreConsumerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
@@ -3576,7 +3597,10 @@ public class StreamThreadTest {
 
         final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
 
-        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        final ExecutionException error = assertThrows(
+            ExecutionException.class,
+            () -> future.get(5L, TimeUnit.SECONDS)
+        );
         assertThat(error.getCause(), instanceOf(TimeoutException.class));
         assertThat(
             error.getCause().getMessage(),
@@ -3584,6 +3608,7 @@ public class StreamThreadTest {
         );
     }
 
+    @Timeout(30)
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
@@ -3595,14 +3620,19 @@ public class StreamThreadTest {
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
 
-        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread
+            .producersClientInstanceIds(Duration.ZERO)
+            .get(5L, TimeUnit.SECONDS);
 
         mockTime.sleep(1L);
 
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
-        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        final ExecutionException error = assertThrows(
+            ExecutionException.class,
+            () -> future.get(5L, TimeUnit.SECONDS)
+        );
         assertThat(error.getCause(), instanceOf(TimeoutException.class));
         assertThat(
             error.getCause().getMessage(),
