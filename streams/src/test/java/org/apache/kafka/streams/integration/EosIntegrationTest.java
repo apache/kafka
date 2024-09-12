@@ -561,7 +561,7 @@ public class EosIntegrationTest {
                 getMaxPerKey(expectedResultBeforeFailure),
                 "The state store content before failure do not match what expected");
 
-            //errorInjected.set(true);
+            errorInjected.set(true);
             writeInputData(dataAfterFailure);
 
             waitForCondition(
