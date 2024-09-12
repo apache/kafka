@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.server.DelayedActionQueue;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.ReplicaManager;
 
@@ -145,6 +146,11 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
 
+    /**
+     * The delayed actions queue is used to complete any pending delayed share fetch actions.
+     */
+    private final DelayedActionQueue delayedActionsQueue;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -195,6 +201,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.persister = persister;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
         this.delayedShareFetchPurgatory = new DelayedOperationPurgatory<>("ShareFetch", this.timer, this.replicaManager.localBrokerId(), shareFetchPurgatoryPurgeIntervalRequests, true, true);
+        this.delayedActionsQueue = new DelayedActionQueue();
     }
 
     // Visible for testing.
@@ -210,7 +217,8 @@ public class SharePartitionManager implements AutoCloseable {
             int maxInFlightMessages,
             Persister persister,
             Metrics metrics,
-            DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory
+            DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory,
+            DelayedActionQueue delayedActionsQueue
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -225,6 +233,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.persister = persister;
         this.shareGroupMetrics = new ShareGroupMetrics(Objects.requireNonNull(metrics), time);
         this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
+        this.delayedActionsQueue = delayedActionsQueue;
     }
 
     /**
@@ -524,6 +533,7 @@ public class SharePartitionManager implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        this.delayedActionsQueue.tryCompleteActions();
         this.delayedShareFetchPurgatory.shutdown();
         this.timer.close();
         this.persister.stop();
@@ -597,7 +607,7 @@ public class SharePartitionManager implements AutoCloseable {
                     new DelayedShareFetchKey(shareFetchPartitionData.groupId, topicIdPartition)));
 
             // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
-            addDelayedShareFetch(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap),
+            addDelayedShareFetch(new DelayedShareFetch(shareFetchPartitionData, replicaManager, partitionCacheMap, delayedActionsQueue, delayedShareFetchPurgatory),
                 delayedShareFetchWatchKeys);
 
             // Release the lock so that other threads can process the queue.
