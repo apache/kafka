@@ -349,7 +349,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         if (acknowledgeRequestState == null) {
             return false;
         } else if (acknowledgeRequestState.onClose()) {
-            return !acknowledgeRequestState.isCloseProcessed;
+            return !acknowledgeRequestState.isProcessed;
         } else {
             return !(acknowledgeRequestState.isEmpty());
         }
@@ -664,7 +664,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 acknowledgeRequestState.onSuccessfulAttempt(responseCompletionTimeMs);
                 acknowledgeRequestState.processingComplete();
 
-                metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
             } else {
                 if (!acknowledgeRequestState.sessionHandler.handleResponse(response, resp.requestHeader().apiVersion())) {
                     // Received a response-level error code.
@@ -714,7 +713,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
             }
 
-            metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
+            if (acknowledgeRequestState.isProcessed) {
+                metricsManager.recordLatency(resp.destination(), resp.requestLatencyMs());
+            }
         } finally {
             log.debug("Removing pending request for node {} - success", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
@@ -822,9 +823,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         private final AcknowledgeRequestType requestType;
 
         /**
-         * Boolean to indicate if the request has been processed, only applicable to close requests.
+         * Boolean to indicate if the request has been processed,
+         * Set to true once we process the response and do not retry the request.
+         * Initialized to false every time we build a request.
          */
-        private boolean isCloseProcessed;
+        private boolean isProcessed;
 
         AcknowledgeRequestState(LogContext logContext,
                                 String owner,
@@ -844,7 +847,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.inFlightAcknowledgements = new HashMap<>();
             this.incompleteAcknowledgements = new HashMap<>();
             this.requestType = acknowledgeRequestType;
-            this.isCloseProcessed = false;
+            this.isProcessed = false;
         }
 
         UnsentRequest buildRequest() {
@@ -865,6 +868,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             log.trace("Building acknowledgements to send : {}", finalAcknowledgementsToSend);
             nodesWithPendingRequests.add(nodeId);
+            isProcessed = false;
 
             BiConsumer<ClientResponse, Throwable> responseHandler = (clientResponse, error) -> {
                 if (error != null) {
@@ -967,9 +971,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         void processingComplete() {
             inFlightAcknowledgements.clear();
             resultHandler.completeIfEmpty();
-            if (onClose()) {
-                isCloseProcessed = true;
-            }
+            isProcessed = true;
         }
 
         /**
