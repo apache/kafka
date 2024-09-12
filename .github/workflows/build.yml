@@ -22,9 +22,13 @@ on:
         description: "Should the Gradle cache be read-only?"
         default: "true"
         type: string
-      github-actions-opt-in:
-        description: "Should we run the opt-in steps?"
+      gradle-cache-write-only:
+        description: "Should the Gradle cache be write-only?"
         default: "false"
+        type: string
+      is-public-fork:
+        description: "Is this CI run from a public fork?"
+        default: "true"
         type: string
 
 jobs:
@@ -52,13 +56,18 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Compile and validate
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
-        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
-        run: ./gradlew --build-cache --info --scan check -x test
+        # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
+        # --no-scan:      For public fork PRs, we won't attempt to publish the scan
+        run: |
+          ./gradlew --build-cache --info  \
+          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
+          check -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -69,8 +78,7 @@ jobs:
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
         # Avoid duplicate annotations, only run on java 21
-        # For now, limit to "gh-" PRs
-        if: ${{ inputs.github-actions-opt-in && failure() && matrix.java == '21' }}
+        if: ${{ failure() && matrix.java == '21' }}
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
@@ -81,8 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 17, 11 ]
-    if: ${{ inputs.github-actions-opt-in == 'true' }}
+        java: [ 17, 11 ]  # If we change these, make sure to adjust ci-complete.yml
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -94,21 +101,27 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
           develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
         # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
         # --continue:     Keep running even if a test fails
-        timeout-minutes: 180  # 3 hours
+        # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
+        id: junit-test
         run: |
-          ./gradlew --build-cache --scan --continue \
+          set +e
+          timeout 180m ./gradlew --build-cache --continue \
+          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
           -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
+          -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
+          -PcommitId=xxxxxxxxxxxxxxxx \
           test
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
       - name: Archive JUnit reports
-        if: always()
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
@@ -117,8 +130,14 @@ jobs:
             **/build/reports/tests/test/*
           if-no-files-found: ignore
       - name: Parse JUnit tests
-        if: always()
         run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
+          GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
+      - name: Archive Build Scan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-scan-test-${{ matrix.java }}
+          path: ~/.gradle/build-scan-data

@@ -92,35 +92,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, debugReplicaRequest)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testListOffsetsRequestOldestVersion(): Unit = {
-    val consumerRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-
-    val requireTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
-
-    val requestCommittedRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_COMMITTED)
-
-    val maxTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, true, false, false)
-
-    val requireEarliestLocalTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, true, false)
-
-    val requireTieredStorageTimestampRequestBuilder = ListOffsetsRequest.Builder
-      .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false, false, true)
-
-    assertEquals(0.toShort, consumerRequestBuilder.oldestAllowedVersion())
-    assertEquals(1.toShort, requireTimestampRequestBuilder.oldestAllowedVersion())
-    assertEquals(2.toShort, requestCommittedRequestBuilder.oldestAllowedVersion())
-    assertEquals(7.toShort, maxTimestampRequestBuilder.oldestAllowedVersion())
-    assertEquals(8.toShort, requireEarliestLocalTimestampRequestBuilder.oldestAllowedVersion())
-    assertEquals(9.toShort, requireTieredStorageTimestampRequestBuilder.oldestAllowedVersion())
-  }
-
   def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
     val listOffsetPartition = new ListOffsetsPartition()
       .setPartitionIndex(partition.partition)
