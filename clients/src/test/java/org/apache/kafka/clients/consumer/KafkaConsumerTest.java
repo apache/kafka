@@ -47,6 +47,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -69,6 +70,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -781,6 +783,54 @@ public class KafkaConsumerTest {
         final Queue<ClientRequest> requests = client.requests();
         assertEquals(0, requests.stream().filter(request -> request.apiKey().equals(ApiKeys.FETCH)).count());
     }
+
+    private boolean checkAyncConsumerIsJoiningReq(ClientRequest request) {
+        return ((ConsumerGroupHeartbeatRequestData) request.requestBuilder().build().data()).memberEpoch() ==
+                ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
+    }
+
+    // TODO: enabled after resolve KAFKA-17154
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void verifyNoJoiningGroupWithoutPoll(GroupProtocol groupProtocol) throws InterruptedException {
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
+
+        final Queue<ClientRequest> requestsBeforePoll = client.requests();
+
+        // Let thread sleep to make sure consumer does not send subscribe before poll
+        Thread.sleep(3000);
+
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            TestUtils.waitForCondition(() ->
+                            requestsBeforePoll.stream().noneMatch(request ->
+                                    request.apiKey() == ApiKeys.CONSUMER_GROUP_HEARTBEAT && checkAyncConsumerIsJoiningReq(request)),
+                    "Consumer send JOIN_GROUP before polling");
+        } else {
+            assertEquals(0, requestsBeforePoll.stream().filter(request -> request.apiKey().equals(ApiKeys.JOIN_GROUP)).count());
+        }
+
+        consumer.poll(Duration.ZERO);
+
+        final Queue<ClientRequest> requestsAfterPoll = client.requests();
+
+        if (groupProtocol == GroupProtocol.CONSUMER) {
+            TestUtils.waitForCondition(() ->
+                            requestsAfterPoll.stream().filter(request -> request.apiKey() == ApiKeys.CONSUMER_GROUP_HEARTBEAT &&
+                                    checkAyncConsumerIsJoiningReq(request)).count() == 1,
+                    "Consumer can't send JOIN_GROUP in time");
+        } else {
+            assertEquals(1, requestsAfterPoll.stream().filter(request -> request.apiKey().equals(ApiKeys.JOIN_GROUP)).count());
+        }
+    }
+
 
     // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
     //       Once it is implemented, this should use both group protocols.
