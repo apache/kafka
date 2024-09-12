@@ -55,10 +55,10 @@ public class JmxReporter implements MetricsReporter {
     public static final String METRICS_CONFIG_PREFIX = "metrics.jmx.";
 
     public static final String EXCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "exclude";
-    public static final String EXCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "blacklist";
+    public static final String EXCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX;
 
     public static final String INCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "include";
-    public static final String INCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "whitelist";
+    public static final String INCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX;
 
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(INCLUDE_CONFIG,
