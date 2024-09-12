@@ -17,7 +17,6 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -32,6 +31,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -48,14 +48,7 @@ public class LogSegmentsTest {
 
     /* create a segment with the given base offset */
     private LogSegment createSegment(Long offset) throws IOException {
-        // Create instances of the required components
-        FileRecords ms = FileRecords.open(LogFileUtils.logFile(logDir, offset));
-        LazyIndex<OffsetIndex> idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(logDir, offset), offset, 1000);
-        LazyIndex<TimeIndex> timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(logDir, offset), offset, 1500);
-        TransactionIndex txnIndex = new TransactionIndex(offset, LogFileUtils.transactionIndexFile(logDir, offset, ""));
-
-        // Create and return the LogSegment instance
-        return new LogSegment(ms, idx, timeIdx, txnIndex, offset, 10, 0, Time.SYSTEM);
+        return LogTestUtils.createSegment(offset, logDir, 10, Time.SYSTEM);
     }
 
     @BeforeEach
@@ -68,7 +61,7 @@ public class LogSegmentsTest {
         Utils.delete(logDir);
     }
 
-    private void assertEntry(LogSegment segment, java.util.Map.Entry<java.lang.Long, LogSegment> tested) {
+    private void assertEntry(LogSegment segment, Map.Entry<Long, LogSegment> tested) {
         assertEquals(segment.baseOffset(), tested.getKey());
         assertEquals(segment, tested.getValue());
     }
