@@ -444,14 +444,11 @@ abstract class AbstractFetcherThread(name: String,
             }
           }
         }
-        // If necessary to truncate the log, the truncation must be executed within the `partitionMapLock` to prevent other threads
-        // from preemptively acquiring the `partitionMapLock` and unexpectedly updating the fetch offset, leading to an inconsistency
-        // between the fetch offset and the actual local log end offset.
-        if (divergingEndOffsets.nonEmpty)
-          truncateOnFetchResponse(divergingEndOffsets)
       }
     }
 
+    if (divergingEndOffsets.nonEmpty)
+      truncateOnFetchResponse(divergingEndOffsets)
     if (partitionsWithError.nonEmpty) {
       handlePartitionsWithErrors(partitionsWithError, "processFetchRequest")
     }
