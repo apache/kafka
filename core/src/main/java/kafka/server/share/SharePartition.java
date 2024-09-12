@@ -1018,7 +1018,12 @@ public class SharePartition {
     }
 
     private void completeInitializationWithException(CompletableFuture<Void> future, Throwable exception) {
-        partitionState = SharePartitionState.FAILED;
+        lock.writeLock().lock();
+        try {
+            partitionState = SharePartitionState.FAILED;
+        } finally {
+            lock.writeLock().unlock();
+        }
         future.completeExceptionally(exception);
     }
 
