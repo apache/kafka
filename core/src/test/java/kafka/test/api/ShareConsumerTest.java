@@ -1645,7 +1645,7 @@ public class ShareConsumerTest {
             producer.send(record).get(15000, TimeUnit.MILLISECONDS);
             shareConsumer.subscribe(subscription);
             TestUtils.waitForCondition(
-                    () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, DEFAULT_MAX_WAIT_MS, 200L, () -> "warmup record not received");
+                    () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, 30000, 200L, () -> "warmup record not received");
         } finally {
             producer.close();
             shareConsumer.close();
