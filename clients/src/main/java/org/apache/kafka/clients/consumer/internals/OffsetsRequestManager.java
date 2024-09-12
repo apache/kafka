@@ -372,15 +372,15 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsets =
                     commitRequestManager.fetchOffsets(initializingPartitions, fetchCommittedDeadlineMs);
-            fetchOffsets.whenComplete((offsets, error) -> {
-                pendingOffsetFetchEvent = null;
-                // Update positions with the retrieved offsets and request reset for partitions that may still
-                // require a position after it
-                refreshOffsetsAndResetPositionsStillMissing(offsets, error, result);
-            });
-            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions, fetchOffsets);
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsetsAndRefresh =
+                    fetchOffsets.whenComplete((offsets, error) -> {
+                        pendingOffsetFetchEvent = null;
+                        // Update positions with the retrieved offsets
+                        refreshOffsets(offsets, error, result);
+                    });
+            pendingOffsetFetchEvent = new PendingFetchCommittedRequest(initializingPartitions, fetchOffsetsAndRefresh);
         } else {
-            // Reuse pending OffsetFetch request
+            // Reuse pending OffsetFetch request that will complete when positions are refreshed with the committed offsets retrieved
             pendingOffsetFetchEvent.result.whenComplete((__, error) -> {
                 if (error == null) {
                     result.complete(null);
@@ -394,20 +394,15 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     }
 
     /**
-     * Use the given committed offsets to update positions for partitions that still require it. If there are
-     * positions still missing, request to reset positions for them with the partition offsets retrieved from the
-     * leader.
+     * Use the given committed offsets to update positions for partitions that still require it.
      *
      * @param offsets Committed offsets to use to update positions for initializing partitions.
      * @param error   Error received in response to the OffsetFetch request. Will be null if the request was successful.
-     * @param result  Future to complete once all positions have been updated. If there are committed offsets for
-     *                all initializing partitions, this will complete right after the offsets are used to set the
-     *                positions in the subscription state. If there are partitions requiring positions for which there
-     *                are no offsets, this will complete when the request to reset positions completes.
+     * @param result  Future to complete once all positions have been updated with the given committed offsets
      */
-    private void refreshOffsetsAndResetPositionsStillMissing(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                             final Throwable error,
-                                                             final CompletableFuture<Void> result) {
+    private void refreshOffsets(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                final Throwable error,
+                                final CompletableFuture<Void> result) {
         if (error == null) {
 
             // Ensure we only set positions for the partitions that still require one (ex. some partitions may have
