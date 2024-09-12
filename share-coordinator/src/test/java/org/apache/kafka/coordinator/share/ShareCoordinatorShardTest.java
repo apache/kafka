@@ -801,17 +801,28 @@ class ShareCoordinatorShardTest {
             final List<PersisterStateBatch> newList;
             final List<PersisterStateBatch> expectedResult;
             final long startOffset;
+            final boolean shouldRun;
 
             TestAttributes(String testName,
                            List<PersisterStateBatch> curList,
                            List<PersisterStateBatch> newList,
                            List<PersisterStateBatch> expectedResult,
                            long startOffset) {
+                this(testName, curList, newList, expectedResult, startOffset, true);
+            }
+
+            TestAttributes(String testName,
+                           List<PersisterStateBatch> curList,
+                           List<PersisterStateBatch> newList,
+                           List<PersisterStateBatch> expectedResult,
+                           long startOffset,
+                           boolean shouldRun) {
                 this.testName = testName;
                 this.curList = curList;
                 this.newList = newList;
                 this.expectedResult = expectedResult;
                 this.startOffset = startOffset;
+                this.shouldRun = shouldRun;
             }
         }
 
@@ -1086,8 +1097,10 @@ class ShareCoordinatorShardTest {
         );
 
         for (TestAttributes attrs : tests) {
-            assertEquals(attrs.expectedResult, ShareCoordinatorShard.combineStateBatches(attrs.curList, attrs.newList, attrs.startOffset),
-                attrs.testName);
+            if (attrs.shouldRun) {
+                assertEquals(attrs.expectedResult, ShareCoordinatorShard.combineStateBatches(attrs.curList, attrs.newList, attrs.startOffset),
+                    attrs.testName);
+            }
         }
     }
 

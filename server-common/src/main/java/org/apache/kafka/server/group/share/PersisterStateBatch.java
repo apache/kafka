@@ -103,7 +103,11 @@ public class PersisterStateBatch implements Comparable {
         if (deltaFirst == 0) {
             int deltaLast = Long.compare(this.lastOffset(), that.lastOffset());
             if (deltaLast == 0) {
-                return this.deliveryCount() - that.deliveryCount();
+                int countDelta = this.deliveryCount() - that.deliveryCount();
+                if (countDelta == 0) {
+                    return Byte.compare(this.deliveryState(), that.deliveryState());
+                }
+                return countDelta;
             }
             return deltaLast;
         }

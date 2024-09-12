@@ -56,13 +56,14 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Queue;
-import java.util.Stack;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
@@ -563,97 +564,19 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long startOffset
     ) {
         // will take care of overlapping batches
-        Queue<PersisterStateBatch> batchQueue = new LinkedList<>(
-            mergeBatches(
-                pruneBatches(
-                    getSortedList(batchesSoFar),
-                    startOffset
-                )
-            ));
+        List<PersisterStateBatch> modifiedNewBatches = mergeBatches(
+            pruneBatches(
+                getSortedList(newBatches),
+                startOffset
+            )
+        );
 
-        // will take care of overlapping batches
-        List<PersisterStateBatch> modifiedNewBatches = new ArrayList<>(
-            mergeBatches(
-                pruneBatches(
-                    getSortedList(newBatches),
-                    startOffset
-                )
-            ));
+        List<PersisterStateBatch> combinedList = new ArrayList<>(batchesSoFar);
+        combinedList.addAll(modifiedNewBatches);
 
-        for (PersisterStateBatch batch : modifiedNewBatches) {
-            for (int i = 0; i < batchQueue.size(); i++) {
-                PersisterStateBatch cur = batchQueue.poll();
-                // cur batch under inspection has no overlap with the new one
-                // we will need to add to our result
-                if (batch.lastOffset() < cur.firstOffset() || batch.firstOffset() > cur.lastOffset()) {
-                    batchQueue.add(cur);
-                    continue;
-                }
-
-                // Covers cases where we need to create a new interval
-                // from the current one such that they do not
-                // overlap with the new one.
-                // Following cases will not produce any new records so need not be handled.
-                // cur:     ____      ______     ______       _____
-                // new: ________      ______     _________  _________
-                
-                
-                // covers
-                // cur:   ______   _____   _____   ______
-                // batch:   ___    _____   ___        ___
-                if (batch.firstOffset() >= cur.firstOffset() && batch.lastOffset() <= cur.lastOffset()) {
-                    // extra batch needs to be created
-                    if (batch.firstOffset() > cur.firstOffset()) {
-                        batchQueue.add(
-                            new PersisterStateBatch(
-                                cur.firstOffset(),
-                                batch.firstOffset() - 1,
-                                cur.deliveryState(),
-                                cur.deliveryCount()
-                            )
-                        );
-                    }
-
-                    // extra batch needs to be created
-                    if (batch.lastOffset() < cur.lastOffset()) {
-                        batchQueue.add(
-                            new PersisterStateBatch(
-                                batch.lastOffset() + 1,
-                                cur.lastOffset(),
-                                cur.deliveryState(),
-                                cur.deliveryCount()
-                            )
-                        );
-                    }
-                } else if (batch.firstOffset() < cur.firstOffset() && batch.lastOffset() < cur.lastOffset()) {
-                    // covers
-                    //  ______    
-                    //____ 
-                    batchQueue.add(new PersisterStateBatch(
-                        batch.lastOffset() + 1,
-                        cur.lastOffset(),
-                        cur.deliveryState(),
-                        cur.deliveryCount()
-                    ));
-                } else if (batch.firstOffset() > cur.firstOffset() && batch.lastOffset() > cur.lastOffset()) {
-                    // covers
-                    //  ______  
-                    //   _______    
-                    batchQueue.add(new PersisterStateBatch(
-                        cur.firstOffset(),
-                        batch.firstOffset() - 1,
-                        cur.deliveryState(),
-                        cur.deliveryCount()
-                    ));
-                }
-            }
-            batchQueue.add(batch);
-        }
-
-        // sort, prune and merge intervals
         return mergeBatches(
             pruneBatches(
-                getSortedList(batchQueue),
+                getSortedList(combinedList),
                 startOffset
             )
         );
@@ -666,35 +589,173 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     // assumes sorted input
-    private static List<PersisterStateBatch> mergeBatches(List<PersisterStateBatch> batches) {
+    static List<PersisterStateBatch> mergeBatches(List<PersisterStateBatch> batches) {
         if (batches.size() < 2) {
             return batches;
         }
-        Stack<PersisterStateBatch> stack = new Stack<>();
-        stack.add(batches.get(0));
+        TreeSet<PersisterStateBatch> stack = new TreeSet<>(batches);
+        List<PersisterStateBatch> pair = getOverlappingPair(stack);
+        while (!pair.isEmpty()) {
+            PersisterStateBatch last = pair.get(0);
+            PersisterStateBatch candidate = pair.get(1);
+            if (candidate == null) {
+                break;
+            }
 
-        for (PersisterStateBatch candidate : batches) {
-            PersisterStateBatch last = stack.peek();
-            if ((candidate.firstOffset() <= last.lastOffset() || // overlap
-                candidate.firstOffset() == last.lastOffset() + 1) &&  // contiguous
-                candidate.deliveryState() == last.deliveryState() &&
-                candidate.deliveryCount() == last.deliveryCount()) {
+            if (compareBatchState(candidate, last) == 0) {
+                stack.remove(last);  // remove older smaller interval
+                stack.remove(candidate);
+
                 last = new PersisterStateBatch(
                     last.firstOffset(),
                     // cover cases
-                    // ______   ________       _________
-                    //  ___       __________            _____
+                    // last:      ______   ________       _________
+                    // candidate:   ___       __________           _____
                     Math.max(candidate.lastOffset(), last.lastOffset()),
                     last.deliveryState(),
                     last.deliveryCount()
                 );
-                stack.pop();    // remove older smaller interval
+
                 stack.add(last);
-            } else {
-                stack.add(candidate);
+            } else if (candidate.firstOffset() <= last.lastOffset()) { // non contiguous overlap
+                // overlap and different state
+                // covers:
+                // case:        1        2          3            4          5           6
+                // last:        ______   _______    _______      _______    _______     ________
+                // candidate:   ______   ____       _________      ____        ____          _______
+                // max records: 1           2       2                3          2            2
+                // min records: 1           1       1                1          1            2
+
+                stack.remove(last);
+                if (candidate.firstOffset() == last.firstOffset()) {
+                    if (candidate.lastOffset() == last.lastOffset()) {   // case 1
+                        if (compareBatchState(candidate, last) < 0) {  // candidate is lower priority
+                            stack.add(last);
+                        } else {    // last is lower priority
+                            stack.add(candidate);
+                        }
+                    } else if (candidate.lastOffset() < last.lastOffset()) { // case 2
+                        if (compareBatchState(candidate, last) < 0) {
+                            stack.add(last);
+                        } else {    // last has lower priority
+                            stack.add(candidate);
+                            stack.add(new PersisterStateBatch(
+                                candidate.lastOffset() + 1,
+                                last.firstOffset(),
+                                last.deliveryState(),
+                                last.deliveryCount()
+                            ));
+                        }
+                    } else {    // case 3
+                        if (compareBatchState(candidate, last) < 0) {
+                            stack.add(last);
+                            stack.remove(candidate);
+                            stack.add(new PersisterStateBatch(
+                                last.lastOffset() + 1,
+                                candidate.lastOffset(),
+                                candidate.deliveryState(),
+                                candidate.deliveryCount()
+                            ));
+                        } else {    // last has lower priority
+                            stack.add(candidate);
+                        }
+                    }
+                } else {    // candidate.firstOffset() > last.lastOffset()
+                    if (candidate.lastOffset() < last.lastOffset()) {    // case 4
+                        if (compareBatchState(candidate, last) < 0) {
+                            stack.add(last);
+                            stack.remove(candidate);
+                        } else {
+                            stack.add(new PersisterStateBatch(
+                                last.firstOffset(),
+                                candidate.firstOffset() - 1,
+                                last.deliveryState(),
+                                last.deliveryCount()
+                            ));
+
+                            stack.add(candidate);
+
+                            stack.add(new PersisterStateBatch(
+                                candidate.lastOffset() + 1,
+                                last.lastOffset(),
+                                last.deliveryState(),
+                                last.deliveryCount()
+                            ));
+                        }
+                    } else if (candidate.lastOffset() == last.lastOffset()) {    // case 5
+                        if (compareBatchState(candidate, last) < 0) {
+                            stack.add(last);
+                            stack.remove(candidate);
+                        } else {
+                            stack.add(new PersisterStateBatch(
+                                last.firstOffset(),
+                                candidate.firstOffset() - 1,
+                                last.deliveryState(),
+                                last.deliveryCount()
+                            ));
+
+                            stack.add(candidate);
+                        }
+                    } else {    // case 6
+                        if (compareBatchState(candidate, last) < 0) {
+                            stack.add(last);
+                            stack.remove(candidate);
+
+                            stack.add(new PersisterStateBatch(
+                                last.lastOffset() + 1,
+                                candidate.lastOffset(),
+                                candidate.deliveryState(),
+                                candidate.deliveryCount()
+                            ));
+                        } else {
+                            stack.add(new PersisterStateBatch(
+                                last.firstOffset(),
+                                candidate.firstOffset() - 1,
+                                last.deliveryState(),
+                                last.deliveryCount()
+                            ));
+
+                            stack.add(candidate);
+                        }
+                    }
+                }
             }
+            pair = getOverlappingPair(stack);
         }
         return new ArrayList<>(stack);
+    }
+
+    private static List<PersisterStateBatch> getOverlappingPair(TreeSet<PersisterStateBatch> batchSet) {
+        Iterator<PersisterStateBatch> iter = batchSet.iterator();
+        PersisterStateBatch last = iter.next();
+        while (iter.hasNext()) {
+            PersisterStateBatch candidate = iter.next();
+            if (candidate.firstOffset() <= last.lastOffset() || // overlap
+                last.lastOffset() + 1 == candidate.firstOffset() && compareBatchState(last, candidate) == 0) {  // contiguous
+                return Arrays.asList(
+                    last,
+                    candidate
+                );
+            }
+            last = candidate;
+        }
+        return Collections.emptyList();
+    }
+
+    private static int compareBatchState(PersisterStateBatch b1, PersisterStateBatch b2) {
+        int countDelta = Short.compare(b1.deliveryCount(), b2.deliveryCount());
+
+        // Delivery state could be:
+        // 0 - AVAILABLE (non-terminal)
+        // 1 - ACQUIRED - should not be persisted yet
+        // 2 - ACKNOWLEDGED (terminal)
+        // 3 - ARCHIVING - not implemented in KIP-932 - non-terminal - leads only to ARCHIVED
+        // 4 - ARCHIVED (terminal)
+
+        if (countDelta == 0) {   // same delivery count
+            return Byte.compare(b1.deliveryState(), b2.deliveryState());
+        }
+        return countDelta;
     }
 
     // Any batches where the last offset is < the current start offset
