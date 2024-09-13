@@ -58,6 +58,7 @@ class Tasks implements TasksRegistry {
     private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
     private final Set<Task> pendingTasksToInit = new HashSet<>();
+    private final Set<TaskId> failedTaskIds = new HashSet<>();
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
@@ -179,6 +180,12 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public void addFailedTask(final Task task) {
+        failedTaskIds.add(task.id());
+        addTask(task);
+    }
+
+    @Override
     public synchronized void removeTask(final Task taskToRemove) {
         final TaskId taskId = taskToRemove.id();
 
@@ -196,6 +203,7 @@ class Tasks implements TasksRegistry {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
         }
+        failedTaskIds.remove(taskToRemove.id());
     }
 
     @Override
@@ -253,6 +261,7 @@ class Tasks implements TasksRegistry {
         activeTasksPerId.clear();
         standbyTasksPerId.clear();
         activeTasksPerPartition.clear();
+        failedTaskIds.clear();
     }
 
     // TODO: change return type to `StreamTask`
@@ -307,6 +316,17 @@ class Tasks implements TasksRegistry {
     @Override
     public synchronized Set<Task> allTasks() {
         return union(HashSet::new, new HashSet<>(activeTasksPerId.values()), new HashSet<>(standbyTasksPerId.values()));
+    }
+
+    @Override
+    public synchronized Set<Task> allNonFailedTasks() {
+        final Set<Task> nonFailedActiveTasks = activeTasksPerId.values().stream()
+            .filter(task -> !failedTaskIds.contains(task.id()))
+            .collect(Collectors.toSet());
+        final Set<Task> nonFailedStandbyTasks = standbyTasksPerId.values().stream()
+            .filter(task -> !failedTaskIds.contains(task.id()))
+            .collect(Collectors.toSet());
+        return union(HashSet::new, nonFailedActiveTasks, nonFailedStandbyTasks);
     }
 
     @Override
