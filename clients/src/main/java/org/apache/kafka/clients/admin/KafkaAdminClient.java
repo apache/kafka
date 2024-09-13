@@ -2573,7 +2573,7 @@ public class KafkaAdminClient extends AdminClient {
         final long now = time.milliseconds();
         final KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
         runnable.call(new Call("describeAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             DescribeAclsRequest.Builder createRequest(int timeoutMs) {
@@ -2620,7 +2620,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final CreateAclsRequestData data = new CreateAclsRequestData().setCreations(aclCreations);
         runnable.call(new Call("createAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             CreateAclsRequest.Builder createRequest(int timeoutMs) {
@@ -2672,7 +2672,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final DeleteAclsRequestData data = new DeleteAclsRequestData().setFilters(deleteAclsFilters);
         runnable.call(new Call("deleteAcls", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             DeleteAclsRequest.Builder createRequest(int timeoutMs) {

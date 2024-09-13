@@ -1374,7 +1374,13 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
         </tr>
         <tr>
             <td>--bootstrap-server</td>
-            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster. Only one of --bootstrap-server or --authorizer option must be specified.</td>
+            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster broker. Only one of --bootstrap-server, --bootstrap-controller, or --authorizer option must be specified.</td>
+            <td></td>
+            <td>Configuration</td>
+        </tr>
+        <tr>
+            <td>--bootstrap-controller</td>
+            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster controller. Only one of --bootstrap-server, --bootstrap-controller, or --authorizer option must be specified.</td>
             <td></td>
             <td>Configuration</td>
         </tr>
