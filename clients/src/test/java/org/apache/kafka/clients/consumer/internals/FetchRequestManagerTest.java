@@ -3446,7 +3446,7 @@ public class FetchRequestManagerTest {
 
         List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-        for (int i = 0 ; i < 10 ; i++) {
+        for (int i = 0; i < 10; i++) {
             CompletableFuture<Void> future = fetcher.createFetchRequests();
             assertNotNull(future);
             futures.add(future);
