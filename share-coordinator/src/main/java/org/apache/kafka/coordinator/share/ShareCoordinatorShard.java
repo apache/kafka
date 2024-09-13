@@ -56,7 +56,6 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -563,27 +562,26 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<PersisterStateBatch> newBatches,
         long startOffset
     ) {
-        List<PersisterStateBatch> combinedList = new ArrayList<>(batchesSoFar);
+        List<PersisterStateBatch> combinedList = new ArrayList<>(batchesSoFar.size() + newBatches.size());
+        combinedList.addAll(batchesSoFar);
         combinedList.addAll(newBatches);
+
+        // sort keeping delivery state in mind
+        combinedList.sort(PersisterStateBatch::compareTo);
+        pruneBatches(combinedList, startOffset);
 
         return mergeBatches(
             pruneBatches(
-                getSortedList(combinedList),
+                combinedList,
                 startOffset
             )
         );
     }
 
-    private static List<PersisterStateBatch> getSortedList(Collection<PersisterStateBatch> collection) {
-        List<PersisterStateBatch> finalList = new ArrayList<>(collection);
-        finalList.sort(PersisterStateBatch::compareTo);
-        return finalList;
-    }
-
     private static class BatchOverlapState {
-        private PersisterStateBatch last;
-        private PersisterStateBatch candidate;
-        private List<PersisterStateBatch> nonOverlapping;
+        private final PersisterStateBatch last;
+        private final PersisterStateBatch candidate;
+        private final List<PersisterStateBatch> nonOverlapping;
         public static final BatchOverlapState SENTINEL = new BatchOverlapState(null, null, Collections.emptyList());
 
         public BatchOverlapState(
@@ -628,7 +626,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return batches;
         }
         TreeSet<PersisterStateBatch> sortedBatches = new TreeSet<>(batches);
-        List<PersisterStateBatch> answer = new ArrayList<>();
+        List<PersisterStateBatch> finalBatches = new ArrayList<>(batches.size() * 2); // heuristic size
 
         BatchOverlapState overlapState = getOverlappingState(sortedBatches);
 
@@ -642,13 +640,18 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             // be checked once.
             if (overlapState.nonOverlapping() != null) {
                 overlapState.nonOverlapping().forEach(sortedBatches::remove);
-                answer.addAll(overlapState.nonOverlapping());
+                finalBatches.addAll(overlapState.nonOverlapping());
             }
 
             if (candidate == null) {
                 break;
             }
 
+            // overlap and same state (last.firstOffset <= candidate.firstOffset due to sort
+            // covers:
+            // case:        1        2          3            4          5           6
+            // last:        ______   _______    _______      _______   _______   ________
+            // candidate:   ______   ____       __________     ___        ____       _______
             if (compareBatchState(candidate, last) == 0) {
                 sortedBatches.remove(last);  // remove older smaller interval
                 sortedBatches.remove(candidate);
@@ -670,8 +673,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 // case:        1        2          3            4          5           6
                 // last:        ______   _______    _______      _______    _______     ________
                 // candidate:   ______   ____       _________      ____        ____          _______
-                // max records: 1           2       2                3          2            2
-                // min records: 1           1       1                1          1            2
+                // max batches: 1           2       2                3          2            2
+                // min batches: 1           1       1                1          1            2
 
                 sortedBatches.remove(last);
                 if (candidate.firstOffset() == last.firstOffset()) {
@@ -769,14 +772,14 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
             overlapState = getOverlappingState(sortedBatches);
         }
-        answer.addAll(sortedBatches);   // some non overlapping batches might have remained
-        return answer;
+        finalBatches.addAll(sortedBatches);   // some non overlapping batches might have remained
+        return finalBatches;
     }
 
     private static BatchOverlapState getOverlappingState(TreeSet<PersisterStateBatch> batchSet) {
         Iterator<PersisterStateBatch> iter = batchSet.iterator();
         PersisterStateBatch last = iter.next();
-        List<PersisterStateBatch> nonOverlapping = new ArrayList<>();
+        List<PersisterStateBatch> nonOverlapping = new ArrayList<>(batchSet.size());
         while (iter.hasNext()) {
             PersisterStateBatch candidate = iter.next();
             if (candidate.firstOffset() <= last.lastOffset() || // overlap
@@ -813,7 +816,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     // are now expired. We should remove them from the persister.
     private static List<PersisterStateBatch> pruneBatches(List<PersisterStateBatch> batches, long startOffset) {
         if (startOffset != -1) {
-            List<PersisterStateBatch> prunedList = new ArrayList<>();
+            List<PersisterStateBatch> prunedList = new ArrayList<>(batches.size());
             batches.forEach(batch -> {
                 if (batch.firstOffset() >= startOffset) {
                     // covers:
