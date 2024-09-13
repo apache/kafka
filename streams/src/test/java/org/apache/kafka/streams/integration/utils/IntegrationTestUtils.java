@@ -635,6 +635,19 @@ public class IntegrationTestUtils {
     }
 
     /**
+     * Wait until enough restoring tasks have been started
+     */
+    public static void waitForActiveRestoringTask(final KafkaStreams streams,
+                                                  final int expectedTasks,
+                                                  final long timeoutMilliseconds) throws Exception {
+        TestUtils.waitForCondition(() -> {
+            return streams.metrics().entrySet().stream()
+                    .filter(metric -> metric.getKey().name().equals("active-restoring-tasks"))
+                    .anyMatch(metric -> ((Number) metric.getValue().metricValue()).intValue() == expectedTasks);
+        }, timeoutMilliseconds, "Timed out waiting for active restoring task");
+    }
+
+    /**
      * Wait until enough data (consumer records) has been consumed.
      *
      * @param consumerConfig      Kafka Consumer configuration
