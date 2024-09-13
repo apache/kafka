@@ -97,7 +97,7 @@ jobs:
             echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
           fi
       - name: Handle failed publish
-        if: ${{ failed() && steps.publish-build-scan.outcome == 'failure' }}
+        if: ${{ failure() && steps.publish-build-scan.outcome == 'failure' }}
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
