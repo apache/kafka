@@ -120,6 +120,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -238,8 +239,12 @@ public class FetchRequestManagerTest {
     }
 
     private int sendFetches() {
+        return sendFetches(true);
+    }
+
+    private int sendFetches(boolean requestFetch) {
         offsetFetcher.validatePositionsOnMetadataChange();
-        return fetcher.sendFetches();
+        return fetcher.sendFetches(requestFetch);
     }
 
     @Test
@@ -3387,6 +3392,55 @@ public class FetchRequestManagerTest {
         assertTrue(subscriptions.isFetchable(tp1));
     }
 
+    @Test
+    public void testPollWithoutRequestFetch() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(0, sendFetches(false));
+    }
+
+    @Test
+    public void testPollWithRequestFetch() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        CompletableFuture<Void> future = fetcher.requestFetch();
+        assertNotNull(future);
+        assertFalse(future.isDone());
+
+        assertEquals(1, sendFetches(false));
+        assertTrue(future.isDone());
+
+        assertEquals(0, sendFetches(false));
+    }
+
+    @Test
+    public void testPollWithRedundantRequestFetch() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+
+        for (int i = 0 ; i < 10 ; i++) {
+            CompletableFuture<Void> future = fetcher.requestFetch();
+            assertNotNull(future);
+            futures.add(future);
+        }
+
+        assertEquals(0, futures.stream().filter(CompletableFuture::isDone).count());
+
+        assertEquals(1, sendFetches(false));
+        assertEquals(futures.size(), futures.stream().filter(CompletableFuture::isDone).count());
+
+    }
+
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
             TopicPartition topicPartition,
             Errors error,
@@ -3660,7 +3714,13 @@ public class FetchRequestManagerTest {
         }
 
         private int sendFetches() {
-            requestFetch();
+            return sendFetches(true);
+        }
+
+        private int sendFetches(boolean requestFetch) {
+            if (requestFetch)
+                requestFetch();
+
             NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);
             return pollResult.unsentRequests.size();
