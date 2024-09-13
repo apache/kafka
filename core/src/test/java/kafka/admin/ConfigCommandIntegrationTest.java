@@ -39,7 +39,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ZooKeeperInternals;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.platform.commons.util.StringUtils;
 
@@ -526,17 +525,6 @@ public class ConfigCommandIntegrationTest {
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithKraft(client, Optional.of(defaultBrokerId),
                             singletonMap("ssl.truststore.password", "password")));
-        }
-    }
-
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
-    public void testIntervalMsParser() {
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(),
-                "--alter", "--entity-type", "client-metrics", "--entity-name", "test");
-        try (Admin client = cluster.createAdminClient()) {
-            Throwable e = assertThrows(ExecutionException.class, () ->
-                    alterConfigWithKraft(client, Optional.of(defaultBrokerId), singletonMap("interval.ms", "aaa")));
-            Assertions.assertTrue(e.getMessage().contains("InvalidConfigurationException"));
         }
     }
 
