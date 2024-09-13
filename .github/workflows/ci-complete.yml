@@ -78,6 +78,7 @@ jobs:
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
           description: 'Could not find build scan'
@@ -98,6 +99,7 @@ jobs:
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
           description: 'The build scan failed to be published'
@@ -108,6 +110,7 @@ jobs:
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
           url: ${{ steps.publish-build-scan.outputs.build-scan-url }}
           description: 'The build scan was successfully published'
