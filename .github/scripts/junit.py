@@ -219,7 +219,7 @@ if __name__ == "__main__":
     logger.info(f"Finished processing {len(reports)} reports")
 
     # Print summary
-    report_url = get_env("REPORT_URL")
+    report_url = get_env("JUNIT_REPORT_URL")
     report_md = f"Download [HTML report]({report_url})."
     summary = (f"{total_run} tests cases run in {duration}. "
                f"{total_success} {PASSED}, {total_failures} {FAILED}, "
@@ -259,9 +259,10 @@ if __name__ == "__main__":
     # Print special message if there was a timeout
     exit_code = get_env("GRADLE_EXIT_CODE", int)
     if exit_code == 124:
+        thread_dump_url = get_env("THREAD_DUMP_URL")
         logger.debug(f"Gradle command timed out. These are partial results!")
         logger.debug(summary)
-        logger.debug("Failing this step because the tests timed out.")
+        logger.debug(f"Failing this step because the tests timed out. Download [thread dumps]({thread_dump_url}).")
         exit(1)
     elif exit_code in (0, 1):
         logger.debug(summary)

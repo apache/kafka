@@ -131,12 +131,24 @@ jobs:
           name: junit-reports-${{ matrix.java }}
           path: |
             **/build/reports/tests/test/*
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Archive Thread Dumps
+        id: thread-dump-upload-artifact
+        if: always() && steps.junit-test.outputs.exitcode == '124'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-thread-dumps-${{ matrix.java }}
+          path: |
+            thread-dumps/*
+          compression-level: 9
           if-no-files-found: ignore
       - name: Parse JUnit tests
         run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-          REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
+          JUNIT_REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
+          THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
           GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
       - name: Archive Build Scan
         if: always()
@@ -144,11 +156,5 @@ jobs:
         with:
           name: build-scan-test-${{ matrix.java }}
           path: ~/.gradle/build-scan-data
-      - name: Archive Thread Dumps
-        if: always() && steps.junit-test.outputs.exitcode == '124'
-        uses: actions/upload-artifact@v4
-        with:
-          name: junit-thread-dumps-${{ matrix.java }}
-          path: |
-            thread-dumps/*
+          compression-level: 9
           if-no-files-found: ignore
