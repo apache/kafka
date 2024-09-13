@@ -568,7 +568,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         // sort keeping delivery state in mind
         combinedList.sort(PersisterStateBatch::compareTo);
-        pruneBatches(combinedList, startOffset);
 
         return mergeBatches(
             pruneBatches(
