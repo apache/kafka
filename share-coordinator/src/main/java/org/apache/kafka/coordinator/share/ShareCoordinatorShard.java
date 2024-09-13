@@ -619,7 +619,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
     }
 
-    // assumes sorted input
     static List<PersisterStateBatch> mergeBatches(List<PersisterStateBatch> batches) {
         if (batches.size() < 2) {
             return batches;
@@ -648,9 +647,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
             // overlap and same state (last.firstOffset <= candidate.firstOffset due to sort
             // covers:
-            // case:        1        2          3            4          5           6
-            // last:        ______   _______    _______      _______   _______   ________
-            // candidate:   ______   ____       __________     ___        ____       _______
+            // case:        1        2          3            4          5           6          7 (contiguous)
+            // last:        ______   _______    _______      _______   _______   ________    _______
+            // candidate:   ______   ____       __________     ___        ____       _______        _______
             if (compareBatchState(candidate, last) == 0) {
                 sortedBatches.remove(last);  // remove older smaller interval
                 sortedBatches.remove(candidate);
