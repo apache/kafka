@@ -706,19 +706,15 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * This also adds the request to the list of unsentRequests.
      *
      * @param partitionsToValidate a map of topic-partition positions to validate
-     * @return A {@link CompletableFuture} which completes when the requests are
-     * complete.
 
      */
-    private CompletableFuture<Void> sendOffsetsForLeaderEpochRequestsAndValidatePositions(
+    private void sendOffsetsForLeaderEpochRequestsAndValidatePositions(
             Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
 
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
                 regroupFetchPositionsByLeader(partitionsToValidate);
 
         long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
-        final AtomicInteger expectedResponses = new AtomicInteger(0);
-        final CompletableFuture<Void> globalResult = new CompletableFuture<>();
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
         regrouped.forEach((node, fetchPositions) -> {
 
@@ -762,20 +758,10 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     }
                     offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
                 }
-                if (expectedResponses.decrementAndGet() == 0) {
-                    globalResult.complete(null);
-                }
             });
         });
 
-        if (unsentRequests.isEmpty()) {
-            globalResult.complete(null);
-        } else {
-            expectedResponses.set(unsentRequests.size());
-            requestsToSend.addAll(unsentRequests);
-        }
-
-        return globalResult;
+        requestsToSend.addAll(unsentRequests);
     }
 
     /**
