@@ -805,6 +805,9 @@ public class LogSegment implements Closeable {
                 if (logIfMissing) {
                     LOGGER.info("Failed to delete {} {} because it does not exist.", fileType, file.getAbsolutePath());
                 }
+                if (file.getParent() == null) {
+                    return null;
+                }
 
                 // During alter log dir, the log segment may be moved to a new directory, so async delete may fail.
                 // Fallback to delete the file in the new directory to avoid orphan file.
