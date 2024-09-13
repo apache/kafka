@@ -1131,6 +1131,14 @@ class ShareCoordinatorShardTest {
                     new PersisterStateBatch(120, 130, (byte) 0, (short) 1)
                 ),
                 120
+            ),
+
+            new BatchTestHolder(
+                "Both current and new batches empty.",
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                120
             )
         );
     }

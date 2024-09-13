@@ -28,8 +28,8 @@ import java.util.Objects;
 public class PersisterStateBatch implements Comparable {
     private final long firstOffset;
     private final long lastOffset;
-    private final byte deliveryState;
     private final short deliveryCount;
+    private final byte deliveryState;
 
     public PersisterStateBatch(long firstOffset, long lastOffset, byte deliveryState, short deliveryCount) {
         this.firstOffset = firstOffset;
@@ -77,13 +77,13 @@ public class PersisterStateBatch implements Comparable {
         PersisterStateBatch that = (PersisterStateBatch) o;
         return firstOffset == that.firstOffset &&
             lastOffset == that.lastOffset &&
-            deliveryState == that.deliveryState &&
-            deliveryCount == that.deliveryCount;
+            deliveryCount == that.deliveryCount &&
+            deliveryState == that.deliveryState;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(firstOffset, lastOffset, deliveryState, deliveryCount);
+        return Objects.hash(firstOffset, lastOffset, deliveryCount, deliveryState);
     }
 
     @Override

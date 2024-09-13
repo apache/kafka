@@ -541,7 +541,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setStateBatches(combineStateBatches(currentBatches, newData.stateBatches().stream()
                 .map(ShareCoordinatorShard::toPersisterStateBatch)
                 .collect(Collectors.toList()), newStartOffset))
-            .build();   
+            .build();
     }
 
     /**
@@ -642,7 +642,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
 
             if (candidate == null) {
-                break;
+                overlapState = BatchOverlapState.SENTINEL;
+                continue;
             }
 
             // overlap and same state (last.firstOffset <= candidate.firstOffset due to sort
@@ -676,13 +677,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
                 sortedBatches.remove(last);
                 if (candidate.firstOffset() == last.firstOffset()) {
-                    if (candidate.lastOffset() == last.lastOffset()) {   // case 1
-                        if (compareBatchState(candidate, last) < 0) {  // candidate is lower priority
-                            sortedBatches.add(last);
-                        } else {    // last is lower priority
-                            sortedBatches.add(candidate);
-                        }
-                    } else if (candidate.lastOffset() < last.lastOffset()) { // case 2
+                    // No special handling for case 1
+                    // here candidate can never have lower priority
+                    // since the treeset order takes that into account
+                    // and candidate is already in the treeset.
+
+                    if (candidate.lastOffset() < last.lastOffset()) { // case 2
                         if (compareBatchState(candidate, last) < 0) {
                             sortedBatches.add(last);
                         } else {    // last has lower priority
@@ -774,10 +774,26 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return finalBatches;
     }
 
-    private static BatchOverlapState getOverlappingState(TreeSet<PersisterStateBatch> batchSet) {
-        Iterator<PersisterStateBatch> iter = batchSet.iterator();
+    /**
+     * Accepts a sorted set of state batches and finds the first 2 batches which overlap.
+     * Overlap means that they have some offsets in common or they are contiguous with the same state.
+     * Along with the 2 overlapping batches, also returns a list of non overlapping intervals
+     * prefixing them. For example
+     * _____ ____  _____ _____      _____
+     *                      ______     __
+     * <---------------> <-------->
+     *  non-`overlapping   1st overlapping pair
+     *
+     * @param sortedBatches - TreeSet representing sorted set of {@link PersisterStateBatch}
+     * @return object of {@link BatchOverlapState} representing overlapping pair and non-overlapping prefix
+     */
+    private static BatchOverlapState getOverlappingState(TreeSet<PersisterStateBatch> sortedBatches) {
+        if (sortedBatches == null || sortedBatches.isEmpty()) {
+            return BatchOverlapState.SENTINEL;
+        }
+        Iterator<PersisterStateBatch> iter = sortedBatches.iterator();
         PersisterStateBatch last = iter.next();
-        List<PersisterStateBatch> nonOverlapping = new ArrayList<>(batchSet.size());
+        List<PersisterStateBatch> nonOverlapping = new ArrayList<>(sortedBatches.size());
         while (iter.hasNext()) {
             PersisterStateBatch candidate = iter.next();
             if (candidate.firstOffset() <= last.lastOffset() || // overlap
@@ -794,6 +810,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return new BatchOverlapState(null, null, nonOverlapping);
     }
 
+    /**
+     * Compares the state of 2 batches i.e. the deliveryCount and deliverState.
+     * Uses standard compareTo contract x < y => +int, x > y => -int, x == y => 0
+     * @param b1 - PersisterStateBatch to compare
+     * @param b2 - PersisterStateBatch to compare
+     * @return int representing comparison result.
+     */
     private static int compareBatchState(PersisterStateBatch b1, PersisterStateBatch b2) {
         int countDelta = Short.compare(b1.deliveryCount(), b2.deliveryCount());
 
