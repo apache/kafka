@@ -150,6 +150,7 @@ jobs:
           GITHUB_CONTEXT: ${{ toJson(github) }}
           STEPS_CONTEXT: ${{ toJson(steps) }}
       - name: Archive Thread Dumps
+        if: always() && steps.junit-test.outputs.exitcode == '124'
         uses: actions/upload-artifact@v4
         with:
           name: thread-dumps-${{ matrix.java }}
