@@ -72,7 +72,6 @@ public class StreamsProducer {
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
     private double oldProducerTotalBlockedTime = 0;
-    private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
     public StreamsProducer(final ProcessingMode processingMode,
                            final Producer<byte[], byte[]> producer,
@@ -198,10 +197,6 @@ public class StreamsProducer {
                 );
             }
         }
-    }
-
-    AtomicReference<KafkaException> sendException() {
-        return sendException;
     }
 
     Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record,
