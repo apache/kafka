@@ -25,7 +25,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -161,15 +160,6 @@ public class MeteredKeyValueStore<K, V>
 
     protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {
         return WrappingNullableUtils.prepareValueSerde(valueSerde, getter);
-    }
-
-
-    @Deprecated
-    protected void initStoreSerde(final ProcessorContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, this::prepareValueSerdeForStore);
     }
 
     protected void initStoreSerde(final StateStoreContext context) {

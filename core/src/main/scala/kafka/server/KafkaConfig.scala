@@ -44,7 +44,7 @@ import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareGroupConfig, ZkConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareCoordinatorConfig, ShareGroupConfig, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
@@ -237,6 +237,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private val _shareGroupConfig = new ShareGroupConfig(this)
   def shareGroupConfig: ShareGroupConfig = _shareGroupConfig
+
+  private val _shareCoordinatorConfig = new ShareCoordinatorConfig(this)
+  def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
 
   private val _transactionLogConfig = new TransactionLogConfig(this)
   private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
@@ -623,8 +626,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled
 
   /** ********* DelegationToken Configuration **************/
-  val delegationTokenSecretKey = Option(getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG))
-    .getOrElse(getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_CONFIG))
+  val delegationTokenSecretKey = getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG)
   val tokenAuthEnabled = delegationTokenSecretKey != null && delegationTokenSecretKey.value.nonEmpty
   val delegationTokenMaxLifeMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG)
   val delegationTokenExpiryTimeMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG)
