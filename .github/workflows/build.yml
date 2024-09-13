@@ -145,7 +145,7 @@ jobs:
           name: build-scan-test-${{ matrix.java }}
           path: ~/.gradle/build-scan-data
       - name: Archive Thread Dumps
-        if: steps.junit-test.outputs.exitcode == '124'
+        if: ${{ steps.junit-test.outputs.exitcode == '124' }}
         uses: actions/upload-artifact@v4
         with:
           name: thread-dumps-${{ matrix.java }}
