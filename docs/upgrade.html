@@ -34,7 +34,10 @@
                 interface to build custom readers for the <code>kafka-console-producer</code> tool.
             </li>
             <li> Remove <code>use.incremental.alter.configs</code>. The modified behavior is identical to the previous <code>required</code> configuration,
-                therefore users should ensure that target broker is at least 2.3.0</li>
+                therefore users should ensure that target broker is at least 2.3.0
+            </li>
+            <li> Remove <code>delegation.token.master.key</code>. please use <code>delegation.token.secret.key</code> instead of it.
+            </li>
             <li>
                 The <code>kafka.tools.DefaultMessageFormatter</code> class has been removed. Please use the <code>org.apache.kafka.tools.consumer.DefaultMessageFormatter</code> class instead.
             </li>
