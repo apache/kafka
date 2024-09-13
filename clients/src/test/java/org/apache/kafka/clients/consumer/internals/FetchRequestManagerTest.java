@@ -40,6 +40,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -138,6 +139,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -3393,7 +3395,7 @@ public class FetchRequestManagerTest {
     }
 
     @Test
-    public void testPollWithoutRequestFetch() {
+    public void testPollWithoutCreateFetchRequests() {
         buildFetcher();
 
         assignFromUser(singleton(tp0));
@@ -3403,13 +3405,13 @@ public class FetchRequestManagerTest {
     }
 
     @Test
-    public void testPollWithRequestFetch() {
+    public void testPollWithCreateFetchRequests() {
         buildFetcher();
 
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
-        CompletableFuture<Void> future = fetcher.requestFetch();
+        CompletableFuture<Void> future = fetcher.createFetchRequests();
         assertNotNull(future);
         assertFalse(future.isDone());
 
@@ -3420,7 +3422,23 @@ public class FetchRequestManagerTest {
     }
 
     @Test
-    public void testPollWithRedundantRequestFetch() {
+    public void testPollWithCreateFetchRequestsError() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        fetcher.setAuthenticationException(new AuthenticationException("Intentional error"));
+        CompletableFuture<Void> future = fetcher.createFetchRequests();
+        assertNotNull(future);
+        assertFalse(future.isDone());
+
+        assertDoesNotThrow(() -> sendFetches(false));
+        assertTrue(future.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testPollWithRedundantCreateFetchRequests() {
         buildFetcher();
 
         assignFromUser(singleton(tp0));
@@ -3429,7 +3447,7 @@ public class FetchRequestManagerTest {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
 
         for (int i = 0 ; i < 10 ; i++) {
-            CompletableFuture<Void> future = fetcher.requestFetch();
+            CompletableFuture<Void> future = fetcher.createFetchRequests();
             assertNotNull(future);
             futures.add(future);
         }
@@ -3694,6 +3712,7 @@ public class FetchRequestManagerTest {
     private class TestableFetchRequestManager<K, V> extends FetchRequestManager {
 
         private final FetchCollector<K, V> fetchCollector;
+        private AuthenticationException authenticationException;
 
         public TestableFetchRequestManager(LogContext logContext,
                                            Time time,
@@ -3709,17 +3728,36 @@ public class FetchRequestManagerTest {
             this.fetchCollector = fetchCollector;
         }
 
+        public void setAuthenticationException(AuthenticationException authenticationException) {
+            this.authenticationException = authenticationException;
+        }
+
+        @Override
+        protected boolean isUnavailable(Node node) {
+            if (authenticationException != null)
+                return true;
+
+            return super.isUnavailable(node);
+        }
+
+        @Override
+        protected void maybeThrowAuthFailure(Node node) {
+            if (authenticationException != null) {
+                AuthenticationException e = authenticationException;
+                authenticationException = null;
+                throw e;
+            }
+
+            super.maybeThrowAuthFailure(node);
+        }
+
         private Fetch<K, V> collectFetch() {
             return fetchCollector.collectFetch(fetchBuffer);
         }
 
-        private int sendFetches() {
-            return sendFetches(true);
-        }
-
         private int sendFetches(boolean requestFetch) {
             if (requestFetch)
-                requestFetch();
+                createFetchRequests();
 
             NetworkClientDelegate.PollResult pollResult = poll(time.milliseconds());
             networkClientDelegate.addAll(pollResult.unsentRequests);

@@ -123,8 +123,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((CommitOnCloseEvent) event);
                 return;
 
-            case FETCH:
-                process((FetchEvent) event);
+            case CREATE_FETCH_REQUESTS:
+                process((CreateFetchRequestsEvent) event);
                 return;
 
             case SHARE_FETCH:
@@ -165,8 +165,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
     }
 
-    private void process(final FetchEvent event) {
-        CompletableFuture<Void> future = requestManagers.fetchRequestManager.requestFetch();
+    private void process(final CreateFetchRequestsEvent event) {
+        CompletableFuture<Void> future = requestManagers.fetchRequestManager.createFetchRequests();
         future.whenComplete(complete(event.future()));
     }
 

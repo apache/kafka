@@ -19,8 +19,10 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
+import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
@@ -68,22 +70,18 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     }
 
     /**
-     * Request that a fetch request be issued to the cluster to pull down the next batch of records.
+     * Signals the {@link Consumer} wants requests be created for the broker nodes to fetch the next
+     * batch of records.
      *
-     * <p/>
-     *
-     * The returned {@link CompletableFuture} is {@link CompletableFuture#complete(Object) completed} when the
-     * fetch request(s) have been created and enqueued into the network client's outgoing send buffer.
-     * It is <em>not completed</em> when the network client has received the data.
-     *
-     * @return Future for which the caller can wait to ensure that the requests have been enqueued
+     * @see CreateFetchRequestsEvent
+     * @return Future on which the caller can wait to ensure that the requests have been created
      */
-    public CompletableFuture<Void> requestFetch() {
+    public CompletableFuture<Void> createFetchRequests() {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         if (pendingFetchRequestFuture != null) {
             // In this case, we have an outstanding fetch request, so chain the newly created future to be
-            // completed when the outstanding fetch request is completed.
+            // completed when the "pending" future is completed.
             pendingFetchRequestFuture.whenComplete((value, exception) -> {
                 if (exception != null) {
                     future.completeExceptionally(exception);
@@ -104,20 +102,25 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     @Override
     public PollResult poll(long currentTimeMs) {
         if (pendingFetchRequestFuture == null) {
-            // If no explicit request for fetching has been issued, just short-circuit.
+            // If no explicit request for creating fetch requests was issued, just short-circuit.
             return PollResult.EMPTY;
         }
 
         try {
-            return pollInternal(
+            PollResult result = pollInternal(
                 prepareFetchRequests(),
                 this::handleFetchSuccess,
                 this::handleFetchFailure
             );
-        } finally {
-            // Completing the future here means that the caller knows that the fetch request logic has been
-            // performed. See FetchEvent for more detail.
             pendingFetchRequestFuture.complete(null);
+            return result;
+        } catch (Throwable t) {
+            // A "dummy" poll result is returned here rather than rethrowing the error because any error
+            // that is thrown from any RequestManager.poll() method interrupts the polling of the other
+            // request managers.
+            pendingFetchRequestFuture.completeExceptionally(t);
+            return PollResult.EMPTY;
+        } finally {
             pendingFetchRequestFuture = null;
         }
     }

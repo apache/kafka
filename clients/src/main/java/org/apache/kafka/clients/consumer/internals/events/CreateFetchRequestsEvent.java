@@ -16,21 +16,18 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 
 /**
- * {@code FetchEvent} is sent from the consumer to signal that we want to issue a fetch request for the partitions
- * to which the consumer is currently subscribed.
- *
- * <p/>
- *
- * <em>Note</em>: this event is completed when the {@link FetchRequestManager} has finished performing the
- * fetch request process. It does not mean that the requests themselves have completed. The completion of this event
- * occurs regardless of the number of requests created; it may be the case that no fetch requests were created.
+ * {@code CreateFetchRequestsEvent} signals that the {@link Consumer} wants to issue fetch requests to the nodes
+ * for the partitions to which the consumer is currently subscribed. The event is completed when the
+ * {@link FetchRequestManager} has finished <em>creating</em> (i.e. not enqueuing, sending, or receiving)
+ * fetch requests (if any) to send to the broker nodes.
  */
-public class FetchEvent extends CompletableApplicationEvent<Void> {
+public class CreateFetchRequestsEvent extends CompletableApplicationEvent<Void> {
 
-    public FetchEvent(final long deadlineMs) {
-        super(Type.FETCH, deadlineMs);
+    public CreateFetchRequestsEvent(final long deadlineMs) {
+        super(Type.CREATE_FETCH_REQUESTS, deadlineMs);
     }
 }
