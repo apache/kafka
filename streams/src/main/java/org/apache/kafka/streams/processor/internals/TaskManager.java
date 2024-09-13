@@ -197,7 +197,7 @@ public class TaskManager {
             mainConsumer.pause(mainConsumer.assignment());
         } else {
             // All tasks that are owned by the task manager are ready and do not need to be paused
-            final Set<TopicPartition> partitionsNotToPause = tasks.allTasks()
+            final Set<TopicPartition> partitionsNotToPause = tasks.allNonFailedTasks()
                 .stream()
                 .flatMap(task -> task.inputPartitions().stream())
                 .collect(Collectors.toSet());
@@ -524,7 +524,7 @@ public class TaskManager {
                                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                                 final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                                 final Set<Task> tasksToCloseClean) {
-        for (final Task task : tasks.allTasks()) {
+        for (final Task task : tasks.allNonFailedTasks()) {
             if (!task.isActive()) {
                 throw new IllegalStateException("Standby tasks should only be managed by the state updater, " +
                     "but standby task " + task.id() + " is managed by the stream thread");
@@ -686,7 +686,7 @@ public class TaskManager {
         final Task task = removedTaskResult.task();
         if (removedTaskResult.exception().isPresent()) {
             failedTasks.put(task.id(), removedTaskResult.exception().get());
-            tasks.addTask(task);
+            tasks.addFailedTask(task);
             return null;
         }
         return task;
@@ -998,7 +998,7 @@ public class TaskManager {
                 addTaskToStateUpdater(task);
             } catch (final RuntimeException e) {
                 // need to add task back to the bookkeeping to be handled by the stream thread
-                tasks.addTask(task);
+                tasks.addFailedTask(task);
                 taskExceptions.put(task.id(), e);
             }
         }
@@ -1030,7 +1030,7 @@ public class TaskManager {
             final RuntimeException exception = exceptionAndTask.exception();
             final Task failedTask = exceptionAndTask.task();
             // need to add task back to the bookkeeping to be handled by the stream thread
-            tasks.addTask(failedTask);
+            tasks.addFailedTask(failedTask);
             taskExceptions.put(failedTask.id(), exception);
         }
 
