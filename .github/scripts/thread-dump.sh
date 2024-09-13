@@ -18,12 +18,13 @@ SLEEP_MINUTES=$(($TIMEOUT_MINUTES-5))
 echo "Dumping threads in $SLEEP_MINUTES minutes"
 sleep $(($SLEEP_MINUTES*60));
 
-echo "Dumping threads now..."
+echo "Timed out after $SLEEP_MINUTES minutes. Dumping threads now..."
+mkdir thread-dumps
 sleep 5;
 
 for GRADLE_WORKER_PID in `jps | grep GradleWorkerMain | awk -F" " '{print $1}'`;
 do
   echo "Thread Dump for GradleWorkerMain pid $GRADLE_WORKER_PID";
-  kill -3 $GRADLE_WORKER_PID;
-  sleep 10;
+  jstack $GRADLE_WORKER_PID > thread-dumps/GradleWorkerMain-$GRADLE_WORKER_PID.txt
+  sleep 5;
 done;

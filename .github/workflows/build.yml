@@ -111,7 +111,7 @@ jobs:
         # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
         id: junit-test
         env:
-          TIMEOUT_MINUTES: 180
+          TIMEOUT_MINUTES: 10
         run: |
           set +e
           ./.github/scripts/thread-dump.sh &
@@ -144,3 +144,11 @@ jobs:
         with:
           name: build-scan-test-${{ matrix.java }}
           path: ~/.gradle/build-scan-data
+      - name: Archive Thread Dumps
+        if: steps.junit-test.outputs.exitcode == 124
+        uses: actions/upload-artifact@v4
+        with:
+          name: thread-dumps-${{ matrix.java }}
+          path: |
+            thread-dumps/*
+          if-no-files-found: ignore
