@@ -1502,6 +1502,7 @@ class ReplicaManager(val config: KafkaConfig,
 
             val status = resultHolder match {
               case OffsetResultHolder(Some(found), _) =>
+                // This case is for normal topic that does not have remote storage.
                 var partitionResponse = buildErrorResponse(Errors.NONE, partition)
                 if (resultHolder.lastFetchableOffset.isDefined &&
                   found.offset >= resultHolder.lastFetchableOffset.get) {
@@ -1517,9 +1518,12 @@ class ReplicaManager(val config: KafkaConfig,
                 }
                 ListOffsetsPartitionStatus(Some(partitionResponse))
               case OffsetResultHolder(None, None) =>
+                // This is an empty offset response scenario
                 resultHolder.maybeOffsetsError.map(e => throw e)
                 ListOffsetsPartitionStatus(Some(buildErrorResponse(Errors.NONE, partition)))
               case OffsetResultHolder(None, Some(futureHolder)) =>
+                // This case is for topic enabled with remote storage and we want to search the timestamp in
+                // remote storage using async fashion.
                 ListOffsetsPartitionStatus(None, Some(futureHolder), resultHolder.lastFetchableOffset, resultHolder.maybeOffsetsError)
             }
             statusByPartition += topicPartition -> status
