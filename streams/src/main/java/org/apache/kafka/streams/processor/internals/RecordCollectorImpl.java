@@ -294,7 +294,7 @@ public class RecordCollectorImpl implements RecordCollector {
                         topic,
                         exception,
                         serializedRecord,
-                        context,
+                        context, // ok as-is; `null` check done inside `recordSendError(...)`
                         processorNodeId
                     );
 
