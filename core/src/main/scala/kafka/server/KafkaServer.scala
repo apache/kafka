@@ -1132,10 +1132,6 @@ class KafkaServer(
    * @return The brokerId.
    */
   private def getOrGenerateBrokerId(metaPropsEnsemble: MetaPropertiesEnsemble): Int = {
-    if (config.migrationEnabled && config.brokerIdGenerationEnable) {
-      throw new RuntimeException("broker.id.generation.enable is incompatible with migration to ZK. " +
-        "Please disable it before enabling migration.")
-    }
     if (config.brokerId >= 0) {
       config.brokerId
     } else if (metaPropsEnsemble.nodeId().isPresent) {

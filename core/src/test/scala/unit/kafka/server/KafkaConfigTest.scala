@@ -1885,6 +1885,17 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testMigrationCannotBeEnabledWithBrokerIdGeneration(): Unit = {
+    val props = TestUtils.createBrokerConfig(-1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort, logDirCount = 2)
+    props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    assertEquals(
+      "requirement failed: broker id generation is incompatible with migration to ZK. Please disable it before enabling migration",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+  }
+
+  @Test
   def testMigrationEnabledKRaftMode(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())

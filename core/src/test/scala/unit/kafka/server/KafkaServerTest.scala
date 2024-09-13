@@ -201,17 +201,4 @@ class KafkaServerTest extends QuorumTestHarness {
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }
-
-  @Test
-  def testGeneratedBrokerIdForbiddenDuringMigration(): Unit = {
-    val props = TestUtils.createBrokerConfig(-1, zkConnect)
-    props.put("reserved.broker.max.id", "2000")
-    props.put("zookeeper.metadata.migration.enable", "true")
-    props.put("controller.quorum.voters", "1@localhost:9092")
-    props.put("controller.listener.names", "CONTROLLER")
-    assertEquals("broker.id.generation.enable is incompatible with migration to ZK. Please disable it before enabling migration.",
-      assertThrows(classOf[RuntimeException],
-        () => TestUtils.createServer(KafkaConfig.fromProps(props))).
-          getMessage)
-  }
 }
