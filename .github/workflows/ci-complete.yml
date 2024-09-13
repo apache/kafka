@@ -37,13 +37,8 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 
 jobs:
   upload-build-scan:
-    # Skip this workflow if CI was run for anything other than "pull_request" (like "push").
-    # Skip this workflow if the PR was from apache/kafka. Those will have already published the build scan in CI.
-    # Skip this workflow if the run was skipped or cancelled
-    if: |
-      github.event.workflow_run.event == 'pull_request' && 
-      github.event.workflow_run.head_repository.full_name != 'apache/kafka' &&
-       (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+    # Skip this workflow if the CI run was skipped or cancelled
+    if: (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -86,14 +81,21 @@ jobs:
           state: 'error'
       - name: Publish Scan
         id: publish-build-scan
-        continue-on-error: true
         if: ${{ steps.download-build-scan.outcome == 'success' }}
         run: |
+          set +e
           ./gradlew --info buildScanPublishPrevious > gradle.out
-          SCAN_URL=$(grep '^https://.*$' gradle.out)
-          cat gradle.out
-          echo "Published build scan to $SCAN_URL" >> $GITHUB_STEP_SUMMARY
-          echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
+          exitcode="$?"
+          if [ $exitcode -ne 0 ]; then
+            cat gradle.out
+            echo "Failed to publish build scan" >> $GITHUB_STEP_SUMMARY
+            exit $exitcode
+          else
+            SCAN_URL=$(grep '^https://.*$' gradle.out)
+            cat gradle.out
+            echo "Published build scan to $SCAN_URL" >> $GITHUB_STEP_SUMMARY
+            echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
+          fi
       - name: Handle failed publish
         if: ${{ steps.publish-build-scan.outcome == 'failure' }}
         uses: ./.github/actions/gh-api-update-status
