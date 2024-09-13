@@ -278,14 +278,12 @@ public class RecordCollectorImpl implements RecordCollector {
                                 taskId.toString(),
                                 processorNodeId,
                                 topic,
-                                // no `null` check required, as `context` can only be null for changelogs what we check above
                                 context.metrics()
                             )
                         );
                         final long bytesProduced = producerRecordSizeInBytes(serializedRecord);
                         topicProducedSensor.record(
                             bytesProduced,
-                            // no `null` check required, as `context` can only be null for changelogs what we check above
                             context.currentSystemTimeMs()
                         );
                     }
@@ -294,7 +292,7 @@ public class RecordCollectorImpl implements RecordCollector {
                         topic,
                         exception,
                         serializedRecord,
-                        context, // ok as-is; `null` check done inside `recordSendError(...)`
+                        context,
                         processorNodeId
                     );
 
@@ -370,7 +368,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
         return recordContext != null ?
             new DefaultErrorHandlerContext(
-                null, // only required to pass for DeserializationExceptionHandler
+                context,
                 recordContext.topic(),
                 recordContext.partition(),
                 recordContext.offset(),
@@ -380,7 +378,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 recordContext.timestamp()
             ) :
             new DefaultErrorHandlerContext(
-                null, // only required to pass for DeserializationExceptionHandler
+                context,
                 null,
                 -1,
                 -1,

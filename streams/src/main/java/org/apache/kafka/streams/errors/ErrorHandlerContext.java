@@ -28,7 +28,10 @@ import org.apache.kafka.streams.processor.api.Record;
 
 
 /**
- * This interface allows user code to inspect the context of a record that has failed processing.
+ * This interface allows user code to inspect the context of a record that has failed during processing.
+ *
+ * <p> {@code ErrorHandlerContext} instances are passed into {@link DeserializationExceptionHandler},
+ * {@link ProcessingExceptionHandler}, or {@link ProductionExceptionHandler} dependent on what error occurred.
  */
 public interface ErrorHandlerContext {
     /**
