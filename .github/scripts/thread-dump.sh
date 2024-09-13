@@ -24,7 +24,12 @@ sleep 5;
 
 for GRADLE_WORKER_PID in `jps | grep GradleWorkerMain | awk -F" " '{print $1}'`;
 do
-  echo "Dumping threads for GradleWorkerMain pid $GRADLE_WORKER_PID";
-  jstack $GRADLE_WORKER_PID > thread-dumps/GradleWorkerMain-$GRADLE_WORKER_PID.txt
+  echo "Dumping threads for GradleWorkerMain pid $GRADLE_WORKER_PID into $FILENAME";
+  FILENAME="thread-dumps/GradleWorkerMain-$GRADLE_WORKER_PID.txt"
+  jstack $GRADLE_WORKER_PID > $FILENAME
+  if ! grep -q "kafka" $FILENAME; then
+    echo "No match for 'kafka' in thread dump file $FILENAME, discarding it."
+    rm $FILENAME;
+  fi;
   sleep 5;
 done;
