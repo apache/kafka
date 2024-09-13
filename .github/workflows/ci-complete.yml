@@ -62,7 +62,7 @@ jobs:
       - name: Download build scan archive
         id: download-build-scan
         uses: actions/download-artifact@v4
-        continue-on-error: true
+        continue-on-error: true  # Don't want this step to fail the overall workflow
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
@@ -97,7 +97,7 @@ jobs:
             echo "build-scan-url=$SCAN_URL" >> $GITHUB_OUTPUT
           fi
       - name: Handle failed publish
-        if: ${{ steps.publish-build-scan.outcome == 'failure' }}
+        if: ${{ failed() && steps.publish-build-scan.outcome == 'failure' }}
         uses: ./.github/actions/gh-api-update-status
         with:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
