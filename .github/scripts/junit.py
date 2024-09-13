@@ -263,9 +263,9 @@ if __name__ == "__main__":
         logger.debug(f"Gradle command timed out. These are partial results!")
         logger.debug(summary)
         if thread_dump_url:
-            print("The JUnit tests were cancelled due to a timeout.")
-            print(f"Thread dumps were generated before the job was cancelled. Download [thread dumps]({thread_dump_url})")
-            logger.debug(f"Failing this step because the tests timed out. Thread dumps were archived: {thread_dump_url}")
+            print("\nThe JUnit tests were cancelled due to a timeout. Thread dumps were generated before the job was cancelled. "
+                  "Download [thread dumps]({thread_dump_url}).\n")
+            logger.debug(f"Failing this step because the tests timed out. Thread dumps were taken and archived here: {thread_dump_url}")
         else:
             logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
         exit(1)

@@ -75,6 +75,7 @@ jobs:
           name: check-reports-${{ matrix.java }}
           path: |
             **/build/**/*.html
+          compression-level: 9
           if-no-files-found: ignore
       - name: Annotate checkstyle errors
         # Avoid duplicate annotations, only run on java 21
