@@ -24,7 +24,7 @@ def isCI = isGithubActions || isJenkins
 def currentJvm = JavaVersion.current()
 
 develocity {
-    server = "https://example.org"
+    server = "https://ge.apache.org"
     projectId = "kafka"
     buildScan {
         uploadInBackground = !isCI
