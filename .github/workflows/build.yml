@@ -111,7 +111,7 @@ jobs:
         # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
         id: junit-test
         env:
-          TIMEOUT_MINUTES: 180  # 3 hours
+          TIMEOUT_MINUTES: 6  # 3 hours
         run: |
           set +e
           ./.github/scripts/thread-dump.sh &
