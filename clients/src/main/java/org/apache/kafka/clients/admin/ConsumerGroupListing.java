@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupType;
 
@@ -26,11 +27,9 @@ import java.util.Optional;
 /**
  * A listing of a consumer group in the cluster.
  */
-public class ConsumerGroupListing {
-    private final String groupId;
+public class ConsumerGroupListing extends GroupListing {
     private final boolean isSimpleConsumerGroup;
     private final Optional<ConsumerGroupState> state;
-    private final Optional<GroupType> type;
 
     /**
      * Create an instance with the specified parameters.
@@ -67,17 +66,9 @@ public class ConsumerGroupListing {
         Optional<ConsumerGroupState> state,
         Optional<GroupType> type
     ) {
-        this.groupId = groupId;
+        super(groupId, type, isSimpleConsumerGroup ? "" : ConsumerProtocol.PROTOCOL_TYPE);
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.state = Objects.requireNonNull(state);
-        this.type = Objects.requireNonNull(type);
-    }
-
-    /**
-     * Consumer Group Id
-     */
-    public String groupId() {
-        return groupId;
     }
 
     /**
@@ -94,28 +85,17 @@ public class ConsumerGroupListing {
         return state;
     }
 
-    /**
-     * The type of the consumer group.
-     *
-     * @return An Optional containing the type, if available.
-     */
-    public Optional<GroupType> type() {
-        return type;
-    }
-
     @Override
     public String toString() {
-        return "(" +
-            "groupId='" + groupId + '\'' +
+        return "(" + toStringBase() +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
             ", state=" + state +
-            ", type=" + type +
             ')';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, isSimpleConsumerGroup(), state, type);
+        return super.hashCode() + Objects.hash(isSimpleConsumerGroup(), state);
     }
 
     @Override
@@ -123,9 +103,8 @@ public class ConsumerGroupListing {
         if (this == o) return true;
         if (!(o instanceof ConsumerGroupListing)) return false;
         ConsumerGroupListing that = (ConsumerGroupListing) o;
-        return isSimpleConsumerGroup() == that.isSimpleConsumerGroup() &&
-            Objects.equals(groupId, that.groupId) &&
-            Objects.equals(state, that.state) &&
-            Objects.equals(type, that.type);
+        return super.equals(o) &&
+            isSimpleConsumerGroup() == that.isSimpleConsumerGroup() &&
+            Objects.equals(state, that.state);
     }
 }

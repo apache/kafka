@@ -3489,6 +3489,138 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeDelegationTokenResult(tokensFuture);
     }
 
+    private static final class ListGroupsResults {
+        private final List<Throwable> errors;
+        private final HashMap<String, GroupListing> listings;
+        private final HashSet<Node> remaining;
+        private final KafkaFutureImpl<Collection<Object>> future;
+
+        ListGroupsResults(Collection<Node> leaders,
+                                  KafkaFutureImpl<Collection<Object>> future) {
+            this.errors = new ArrayList<>();
+            this.listings = new HashMap<>();
+            this.remaining = new HashSet<>(leaders);
+            this.future = future;
+            tryComplete();
+        }
+
+        synchronized void addError(Throwable throwable, Node node) {
+            ApiError error = ApiError.fromThrowable(throwable);
+            if (error.message() == null || error.message().isEmpty()) {
+                errors.add(error.error().exception("Error listing groups on " + node));
+            } else {
+                errors.add(error.error().exception("Error listing groups on " + node + ": " + error.message()));
+            }
+        }
+
+        synchronized void addListing(GroupListing listing) {
+            listings.put(listing.groupId(), listing);
+        }
+
+        synchronized void tryComplete(Node leader) {
+            remaining.remove(leader);
+            tryComplete();
+        }
+
+        private synchronized void tryComplete() {
+            if (remaining.isEmpty()) {
+                ArrayList<Object> results = new ArrayList<>(listings.values());
+                results.addAll(errors);
+                future.complete(results);
+            }
+        }
+    }
+
+    @Override
+    public ListGroupsResult listGroups(ListGroupsOptions options) {
+        final KafkaFutureImpl<Collection<Object>> all = new KafkaFutureImpl<>();
+        final long nowMetadata = time.milliseconds();
+        final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
+        runnable.call(new Call("findAllBrokers", deadline, new LeastLoadedNodeProvider()) {
+            @Override
+            MetadataRequest.Builder createRequest(int timeoutMs) {
+                return new MetadataRequest.Builder(new MetadataRequestData()
+                    .setTopics(Collections.emptyList())
+                    .setAllowAutoTopicCreation(true));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                MetadataResponse metadataResponse = (MetadataResponse) abstractResponse;
+                Collection<Node> nodes = metadataResponse.brokers();
+                if (nodes.isEmpty())
+                    throw new StaleMetadataException("Metadata fetch failed due to missing broker list");
+
+                HashSet<Node> allNodes = new HashSet<>(nodes);
+                final ListGroupsResults results = new ListGroupsResults(allNodes, all);
+
+                for (final Node node : allNodes) {
+                    final long nowList = time.milliseconds();
+                    runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
+                        @Override
+                        ListGroupsRequest.Builder createRequest(int timeoutMs) {
+                            List<String> groupTypes = options.types()
+                                .stream()
+                                .map(GroupType::toString)
+                                .collect(Collectors.toList());
+                            return new ListGroupsRequest.Builder(new ListGroupsRequestData()
+                                .setTypesFilter(groupTypes)
+                            );
+                        }
+
+                        private void maybeAddGroup(ListGroupsResponseData.ListedGroup group) {
+                            final String groupId = group.groupId();
+                            final GroupType type = group.groupType().isEmpty()
+                                ? GroupType.UNKNOWN
+                                : GroupType.parse(group.groupType());
+                            final String protocolType = group.protocolType();
+                            final GroupListing groupListing = new GroupListing(
+                                groupId,
+                                type,
+                                protocolType
+                            );
+                            results.addListing(groupListing);
+                        }
+
+                        @Override
+                        void handleResponse(AbstractResponse abstractResponse) {
+                            final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
+                            synchronized (results) {
+                                Errors error = Errors.forCode(response.data().errorCode());
+                                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
+                                    throw error.exception();
+                                } else if (error != Errors.NONE) {
+                                    results.addError(error.exception(), node);
+                                } else {
+                                    for (ListGroupsResponseData.ListedGroup group : response.data().groups()) {
+                                        maybeAddGroup(group);
+                                    }
+                                }
+                                results.tryComplete(node);
+                            }
+                        }
+
+                        @Override
+                        void handleFailure(Throwable throwable) {
+                            synchronized (results) {
+                                results.addError(throwable, node);
+                                results.tryComplete(node);
+                            }
+                        }
+                    }, nowList);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                KafkaException exception = new KafkaException("Failed to find brokers to send ListGroups", throwable);
+                all.complete(Collections.singletonList(exception));
+            }
+        }, nowMetadata);
+
+        return new ListGroupsResult(all);
+    }
+
     @Override
     public DescribeConsumerGroupsResult describeConsumerGroups(final Collection<String> groupIds,
                                                                final DescribeConsumerGroupsOptions options) {

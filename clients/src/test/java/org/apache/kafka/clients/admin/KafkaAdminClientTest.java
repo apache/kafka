@@ -2936,6 +2936,238 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testListGroups() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
+            AdminClientConfig.RETRIES_CONFIG, "2")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Empty metadata response should be retried
+            env.kafkaClient().prepareResponse(
+                RequestTestUtils.metadataResponse(
+                    Collections.emptyList(),
+                    env.cluster().clusterResource().clusterId(),
+                    -1,
+                    Collections.emptyList()));
+
+            env.kafkaClient().prepareResponse(
+                RequestTestUtils.metadataResponse(
+                    env.cluster().nodes(),
+                    env.cluster().clusterResource().clusterId(),
+                    env.cluster().controller().id(),
+                    Collections.emptyList()));
+
+            env.kafkaClient().prepareResponseFrom(
+                new ListGroupsResponse(
+                    new ListGroupsResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setGroups(asList(
+                            new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group-1")
+                                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                                .setGroupType(GroupType.CONSUMER.toString())
+                                .setGroupState("Stable"),
+                            new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group-connect-1")
+                                .setProtocolType("connector")
+                                .setGroupType(GroupType.CLASSIC.toString())
+                                .setGroupState("Stable")
+                        ))),
+                env.cluster().nodeById(0));
+
+            // handle retriable errors
+            env.kafkaClient().prepareResponseFrom(
+                new ListGroupsResponse(
+                    new ListGroupsResponseData()
+                        .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                        .setGroups(Collections.emptyList())
+                ),
+                env.cluster().nodeById(1));
+            env.kafkaClient().prepareResponseFrom(
+                new ListGroupsResponse(
+                    new ListGroupsResponseData()
+                        .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                        .setGroups(Collections.emptyList())
+                ),
+                env.cluster().nodeById(1));
+            env.kafkaClient().prepareResponseFrom(
+                new ListGroupsResponse(
+                    new ListGroupsResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setGroups(asList(
+                            new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group-2")
+                                .setProtocolType("anyproto")
+                                .setGroupType(GroupType.CLASSIC.toString())
+                                .setGroupState("Stable"),
+                            new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group-connect-2")
+                                .setProtocolType("connector")
+                                .setGroupType(GroupType.CLASSIC.toString())
+                                .setGroupState("Stable")
+                        ))),
+                env.cluster().nodeById(1));
+
+            env.kafkaClient().prepareResponseFrom(
+                new ListGroupsResponse(
+                    new ListGroupsResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setGroups(asList(
+                            new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group-3")
+                                .setProtocolType("share")
+                                .setGroupType(GroupType.SHARE.toString())
+                                .setGroupState("Stable"),
+                            new ListGroupsResponseData.ListedGroup()
+                                .setGroupId("group-connect-3")
+                                .setProtocolType("connector")
+                                .setGroupType(GroupType.CLASSIC.toString())
+                                .setGroupState("Stable")
+                        ))),
+                env.cluster().nodeById(2));
+
+            // fatal error
+            env.kafkaClient().prepareResponseFrom(
+                new ListGroupsResponse(
+                    new ListGroupsResponseData()
+                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                        .setGroups(Collections.emptyList())),
+                env.cluster().nodeById(3));
+
+            final ListGroupsResult result = env.adminClient().listGroups();
+            TestUtils.assertFutureError(result.all(), UnknownServerException.class);
+
+            Collection<GroupListing> listings = result.valid().get();
+            assertEquals(6, listings.size());
+
+            Set<String> groupIds = new HashSet<>();
+            for (GroupListing listing : listings) {
+                groupIds.add(listing.groupId());
+            }
+
+            assertEquals(Utils.mkSet("group-1", "group-connect-1", "group-2", "group-connect-2", "group-3", "group-connect-3"), groupIds);
+            assertEquals(1, result.errors().get().size());
+        }
+    }
+
+    @Test
+    public void testListGroupsMetadataFailure() throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+            AdminClientConfig.RETRIES_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Empty metadata causes the request to fail since we have no list of brokers
+            // to send the ListGroups requests to
+            env.kafkaClient().prepareResponse(
+                RequestTestUtils.metadataResponse(
+                    Collections.emptyList(),
+                    env.cluster().clusterResource().clusterId(),
+                    -1,
+                    Collections.emptyList()));
+
+            final ListGroupsResult result = env.adminClient().listGroups();
+            TestUtils.assertFutureError(result.all(), KafkaException.class);
+        }
+    }
+
+    @Test
+    public void testListGroupsEmptyProtocol() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+
+            env.kafkaClient().prepareResponseFrom(
+                new ListGroupsResponse(new ListGroupsResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setGroups(asList(
+                        new ListGroupsResponseData.ListedGroup()
+                            .setGroupId("group-1")
+                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                            .setGroupType(GroupType.CONSUMER.toString())
+                            .setGroupState("Stable"),
+                        new ListGroupsResponseData.ListedGroup()
+                            .setGroupId("group-2")
+                            .setGroupType(GroupType.CLASSIC.toString())
+                            .setGroupState("Empty")))),
+                env.cluster().nodeById(0));
+
+            final ListGroupsOptions options = new ListGroupsOptions();
+            final ListGroupsResult result = env.adminClient().listGroups(options);
+            Collection<GroupListing> listings = result.valid().get();
+
+            assertEquals(2, listings.size());
+            List<GroupListing> expected = new ArrayList<>();
+            expected.add(new GroupListing("group-2", GroupType.CLASSIC, ""));
+            expected.add(new GroupListing("group-1", GroupType.CONSUMER, ConsumerProtocol.PROTOCOL_TYPE));
+            assertEquals(expected, listings);
+            assertEquals(0, result.errors().get().size());
+        }
+    }
+
+    @Test
+    public void testListGroupsWithTypes() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Test with list consumer group options.
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+
+            env.kafkaClient().prepareResponseFrom(
+                expectListGroupsRequestWithFilters(Collections.emptySet(), singleton(GroupType.CONSUMER.toString())),
+                new ListGroupsResponse(new ListGroupsResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setGroups(asList(
+                        new ListGroupsResponseData.ListedGroup()
+                            .setGroupId("group-1")
+                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                            .setGroupState("Stable")
+                            .setGroupType(GroupType.CONSUMER.toString()),
+                        new ListGroupsResponseData.ListedGroup()
+                            .setGroupId("group-2")
+                            .setGroupState("Empty")
+                            .setGroupType(GroupType.CONSUMER.toString())))),
+                env.cluster().nodeById(0));
+
+            final ListGroupsOptions options = new ListGroupsOptions().withTypes(singleton(GroupType.CONSUMER));
+            final ListGroupsResult result = env.adminClient().listGroups(options);
+            Collection<GroupListing> listing = result.valid().get();
+
+            assertEquals(2, listing.size());
+            List<GroupListing> expected = new ArrayList<>();
+            expected.add(new GroupListing("group-2", GroupType.CONSUMER, ""));
+            expected.add(new GroupListing("group-1", GroupType.CONSUMER, ConsumerProtocol.PROTOCOL_TYPE));
+            assertEquals(expected, listing);
+            assertEquals(0, result.errors().get().size());
+        }
+    }
+
+    @Test
+    public void testListGroupsWithTypesOlderBrokerVersion() throws Exception {
+        ApiVersion listGroupV4 = new ApiVersion()
+            .setApiKey(ApiKeys.LIST_GROUPS.id)
+            .setMinVersion((short) 0)
+            .setMaxVersion((short) 4);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(listGroupV4)));
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+
+            // Check that we cannot set a type filter with an older broker.
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+            env.kafkaClient().prepareUnsupportedVersionResponse(request ->
+                request instanceof ListGroupsRequest && !((ListGroupsRequest) request).data().typesFilter().isEmpty()
+            );
+
+            ListGroupsOptions options = new ListGroupsOptions().withTypes(singleton(GroupType.CLASSIC));
+            ListGroupsResult result = env.adminClient().listGroups(options);
+            TestUtils.assertFutureThrows(result.all(), UnsupportedVersionException.class);
+        }
+    }
+
+    @Test
     public void testListConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
                 AdminClientConfig.RETRIES_CONFIG, "2")) {

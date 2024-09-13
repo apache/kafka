@@ -140,6 +140,16 @@ public class AdminClientTestUtils {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 
+    public static ListGroupsResult listGroupsResult(GroupListing... groups) {
+        return new ListGroupsResult(
+            KafkaFuture.completedFuture(Arrays.stream(groups)
+                .collect(Collectors.toList())));
+    }
+
+    public static ListGroupsResult listGroupsResult(KafkaException exception) {
+        return new ListGroupsResult(KafkaFuture.completedFuture(Collections.singleton(exception)));
+    }
+
     public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets) {
         Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> resultMap = offsets.entrySet().stream()
             .collect(Collectors.toMap(e -> CoordinatorKey.byGroupId(e.getKey()),
