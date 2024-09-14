@@ -95,7 +95,7 @@ public interface ProductionExceptionHandler extends Configurable {
          *
          * <p> Kafka Streams will raise an exception and the {@code StreamsThread} will fail.
          * No offsets (for {@link org.apache.kafka.streams.StreamsConfig#AT_LEAST_ONCE at-least-once}) or transactions
-         * (for {@link org.apache.kafka.streams.StreamsConfig#EXACTLY_ONCE_V2 }exactly-once) will be committed.
+         * (for {@link org.apache.kafka.streams.StreamsConfig#EXACTLY_ONCE_V2 exactly-once}) will be committed.
          */
         FAIL(1, "FAIL"),
         /** Retry the failed operation.
