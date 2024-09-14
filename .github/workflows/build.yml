@@ -107,7 +107,7 @@ jobs:
       - name: Test
         # Gradle flags
         # --build-cache:  Let Gradle restore the build cache
-        # --scan:         Attempt to publish build scans in PRs. This will only work on PRs from apache/kafka, not public forks.
+        # --no-scan:      Don't attempt to publish the scan yet. We want to archive it first.
         # --continue:     Keep running even if a test fails
         # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
         id: junit-test
@@ -116,8 +116,7 @@ jobs:
         run: |
           set +e
           ./.github/scripts/thread-dump.sh &
-          timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue \
-          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
+          timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
