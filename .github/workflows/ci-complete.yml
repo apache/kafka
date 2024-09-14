@@ -75,7 +75,7 @@ jobs:
           gh-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           commit_sha: ${{ github.event.workflow_run.head_sha }}
-          url: '${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}'
+          url: '${{ github.event.workflow_run.html_url }}'
           description: 'Could not find build scan'
           context: 'Gradle Build Scan / Java ${{ matrix.java }}'
           state: 'error'
