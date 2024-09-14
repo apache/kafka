@@ -55,6 +55,7 @@ maxTimestamp: int64
 producerId: int64
 producerEpoch: int16
 baseSequence: int32
+recordsCount: int32
 records: [Record]</code></pre>
     <p> Note that when compression is enabled, the compressed record data is serialized directly following the count of the number of records. </p>
 
