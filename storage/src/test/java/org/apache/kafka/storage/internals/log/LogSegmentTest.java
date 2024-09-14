@@ -58,11 +58,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class LogSegmentTest {
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
@@ -752,6 +755,38 @@ public class LogSegmentTest {
 
             segment.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes())));
             assertEquals(1000L, segment.getFirstBatchTimestamp());
+        }
+    }
+
+    @Test
+    public void testDeleteIfExistsWithGetParentIsNull() throws IOException {
+        FileRecords log = mock(FileRecords.class);
+        @SuppressWarnings("unchecked")
+        LazyIndex<OffsetIndex> lazyOffsetIndex = mock(LazyIndex.class);
+        @SuppressWarnings("unchecked")
+        LazyIndex<TimeIndex> lazyTimeIndex = mock(LazyIndex.class);
+        TransactionIndex transactionIndex = mock(TransactionIndex.class);
+
+
+        // Use Mockito's when().thenReturn() for stubbing
+        when(log.deleteIfExists()).thenReturn(true);
+        when(lazyOffsetIndex.deleteIfExists()).thenReturn(true);
+        when(lazyTimeIndex.deleteIfExists()).thenReturn(true);
+        when(transactionIndex.deleteIfExists()).thenReturn(false);
+
+        File mockFile = mock(File.class);
+        when(mockFile.getAbsolutePath()).thenReturn("/test/path");
+        when(log.file()).thenReturn(mockFile);
+        when(lazyOffsetIndex.file()).thenReturn(mockFile);
+        when(lazyTimeIndex.file()).thenReturn(mockFile);
+
+        File transactionIndexFile = new File("/");
+        when(transactionIndex.file()).thenReturn(transactionIndexFile);
+
+        try (LogSegment segment = new LogSegment(log, lazyOffsetIndex, lazyTimeIndex, transactionIndex, 0, 10, 100, Time.SYSTEM)) {
+            assertDoesNotThrow(
+                () -> segment.deleteIfExists(),
+                "Should not throw exception when transactionIndex.deleteIfExists() returns false");
         }
     }
 
