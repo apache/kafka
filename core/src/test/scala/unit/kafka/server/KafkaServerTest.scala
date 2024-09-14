@@ -201,5 +201,4 @@ class KafkaServerTest extends QuorumTestHarness {
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }
-
 }
