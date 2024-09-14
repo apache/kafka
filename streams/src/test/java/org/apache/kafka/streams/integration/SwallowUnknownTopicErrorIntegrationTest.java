@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -57,8 +56,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 
 @Timeout(600)
 @Tag("integration")

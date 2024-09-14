@@ -2054,6 +2054,7 @@ public class RecordCollectorTest {
             return response.orElse(null);
         }
 
+        @SuppressWarnings("rawtypes")
         @Override
         public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                                final ProducerRecord record,
