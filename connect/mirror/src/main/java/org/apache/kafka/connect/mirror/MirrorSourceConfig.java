@@ -46,7 +46,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
             + " Excludes take precedence over includes.";
 
     public static final String CONFIG_PROPERTIES_EXCLUDE = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG;
-    public static final String CONFIG_PROPERTIES_EXCLUDE_ALIAS = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG;
     public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_DEFAULT;
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "Topic config properties that should not be replicated. Supports "
             + "comma-separated property names and regexes.";
@@ -104,7 +103,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public MirrorSourceConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
                 {TOPICS_EXCLUDE, TOPICS_EXCLUDE_ALIAS},
-                {CONFIG_PROPERTIES_EXCLUDE, CONFIG_PROPERTIES_EXCLUDE_ALIAS}}));
+                {CONFIG_PROPERTIES_EXCLUDE}}));
     }
 
     public MirrorSourceConfig(ConfigDef configDef, Map<String, String> props) {
@@ -233,12 +232,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
                         ConfigDef.Importance.HIGH,
                         CONFIG_PROPERTIES_EXCLUDE_DOC)
-                .define(
-                        CONFIG_PROPERTIES_EXCLUDE_ALIAS,
-                        ConfigDef.Type.LIST,
-                        null,
-                        ConfigDef.Importance.HIGH,
-                        "Deprecated. Use " + CONFIG_PROPERTIES_EXCLUDE + " instead.")
                 .define(
                         TOPIC_FILTER_CLASS,
                         ConfigDef.Type.CLASS,
