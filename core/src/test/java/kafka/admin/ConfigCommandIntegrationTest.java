@@ -324,11 +324,13 @@ public class ConfigCommandIntegrationTest {
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
     public void testGroupConfigUpdateUsingKraft() throws Exception {
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "groups", "--alter");
+        alterOpts = Stream.concat(entityOp(Optional.of(defaultGroupName)).stream(),
+                        Stream.of("--entity-type", "groups", "--alter"))
+                .collect(Collectors.toList());
         verifyGroupConfigUpdate();
 
         // Test for the --group alias
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--group", "--alter");
+        alterOpts = asList("--group", defaultGroupName, "--alter");
         verifyGroupConfigUpdate();
     }
 
@@ -346,20 +348,20 @@ public class ConfigCommandIntegrationTest {
             deleteAndVerifyGroupConfigValue(client, defaultGroupName, configs);
 
             // Unknown config configured should fail
-            assertThrows(ExecutionException.class,
-                () -> alterConfigWithKraft(client, Optional.of(defaultGroupName),
-                    singletonMap("unknown.config", "20000")));
+            assertThrows(ExecutionException.class, () -> alterConfigWithKraft(client, singletonMap("unknown.config", "20000")));
         }
     }
 
 
     @ClusterTest(types = {Type.KRAFT})
     public void testClientMetricsConfigUpdate() throws Exception {
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "client-metrics", "--alter");
+        alterOpts = Stream.concat(entityOp(Optional.of(defaultClientMetricsName)).stream(),
+                        Stream.of("--entity-type", "client-metrics", "--alter"))
+            .collect(Collectors.toList());
         verifyClientMetricsConfigUpdate();
 
         // Test for the --client-metrics alias
-        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--client-metrics", "--alter");
+        alterOpts = asList("--client-metrics", defaultClientMetricsName, "--alter");
         verifyClientMetricsConfigUpdate();
     }
 
@@ -375,9 +377,7 @@ public class ConfigCommandIntegrationTest {
             deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet());
 
             // Unknown config configured should fail
-            assertThrows(ExecutionException.class,
-                () -> alterConfigWithKraft(client, Optional.of(defaultClientMetricsName),
-                    singletonMap("unknown.config", "20000")));
+            assertThrows(ExecutionException.class, () -> alterConfigWithKraft(client, singletonMap("unknown.config", "20000")));
         }
     }
 
@@ -565,6 +565,7 @@ public class ConfigCommandIntegrationTest {
         String configStr = transferConfigMapToString(config);
         ConfigCommand.ConfigCommandOptions addOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId), asList("--add-config", configStr)));
+        addOpts.checkArgs();
         ConfigCommand.alterConfigWithZk(zkClient, addOpts, adminZkClient);
     }
 
@@ -578,6 +579,7 @@ public class ConfigCommandIntegrationTest {
         ConfigCommand.ConfigCommandOptions deleteOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
                         asList("--delete-config", String.join(",", configNames))));
+        deleteOpts.checkArgs();
         ConfigCommand.alterConfigWithZk(zkClient, deleteOpts, adminZkClient);
         verifyConfig(zkClient, brokerId, Collections.emptyMap());
     }
@@ -614,19 +616,35 @@ public class ConfigCommandIntegrationTest {
     }
 
     private void alterAndVerifyGroupConfig(Admin client, String groupName, Map<String, String> config) throws Exception {
-        alterConfigWithKraft(client, Optional.of(groupName), config);
+        alterConfigWithKraft(client, config);
         verifyGroupConfig(client, groupName, config);
     }
 
     private void alterAndVerifyClientMetricsConfig(Admin client, String clientMetricsName, Map<String, String> config) throws Exception {
-        alterConfigWithKraft(client, Optional.of(clientMetricsName), config);
+        alterConfigWithKraft(client, config);
         verifyClientMetricsConfig(client, clientMetricsName, config);
     }
 
     private void alterConfigWithKraft(Admin client, Optional<String> resourceName, Map<String, String> config) {
         String configStr = transferConfigMapToString(config);
+        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions addOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(resourceName), asList("--add-config", configStr)));
+                new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                        entityOp(resourceName),
+                        alterOpts,
+                        asList("--add-config", configStr)));
+        addOpts.checkArgs();
+        ConfigCommand.alterConfig(client, addOpts);
+    }
+
+    private void alterConfigWithKraft(Admin client, Map<String, String> config) {
+        String configStr = transferConfigMapToString(config);
+        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
+        ConfigCommand.ConfigCommandOptions addOpts =
+                new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                        alterOpts,
+                        asList("--add-config", configStr)));
+        addOpts.checkArgs();
         ConfigCommand.alterConfig(client, addOpts);
     }
 
@@ -679,6 +697,7 @@ public class ConfigCommandIntegrationTest {
         ConfigCommand.ConfigCommandOptions deleteOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", brokerId),
                         asList("--delete-config", String.join(",", config))));
+        deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyPerBrokerConfigValue(client, brokerId, config, hasDefaultValue);
     }
@@ -686,9 +705,12 @@ public class ConfigCommandIntegrationTest {
     private void deleteAndVerifyGroupConfigValue(Admin client,
                                                  String groupName,
                                                  Map<String, String> defaultConfigs) throws Exception {
+        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions deleteOpts =
-            new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", groupName),
-                asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
+            new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                    alterOpts,
+                    asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
+        deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyGroupConfig(client, groupName, defaultConfigs);
     }
@@ -696,9 +718,12 @@ public class ConfigCommandIntegrationTest {
     private void deleteAndVerifyClientMetricsConfigValue(Admin client,
                                                          String clientMetricsName,
                                                          Set<String> defaultConfigs) throws Exception {
+        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions deleteOpts =
-            new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", clientMetricsName),
-                asList("--delete-config", String.join(",", defaultConfigs))));
+            new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                    alterOpts,
+                    asList("--delete-config", String.join(",", defaultConfigs))));
+        deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         // There are no default configs returned for client metrics
         verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
