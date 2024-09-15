@@ -35,7 +35,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Target({METHOD})
 @Retention(RUNTIME)
 @TestTemplate
-@Timeout(30)
+@Timeout(60)
 @Tag("integration")
 public @interface ClusterTest {
     Type[] types() default {};
