@@ -869,15 +869,6 @@ public class StreamsBuilderTest {
 
     @Test
     @SuppressWarnings("deprecation")
-    public void shouldUseSpecifiedNameForTransform() {
-        builder.stream(STREAM_TOPIC).transform(() -> null, Named.as(STREAM_OPERATION_NAME));
-        builder.build();
-        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
-        assertNamesForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForTransformValues() {
         builder.stream(STREAM_TOPIC).transformValues(() -> new NoopValueTransformer<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();

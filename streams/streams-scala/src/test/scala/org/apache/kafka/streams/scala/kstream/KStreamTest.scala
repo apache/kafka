@@ -37,7 +37,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 import scala.annotation.nowarn
-import scala.jdk.CollectionConverters._
 
 class KStreamTest extends TestDriver {
 
@@ -216,42 +215,6 @@ class KStreamTest extends TestDriver {
     testInput2.pipeInput("1", "topic2value1", now)
 
     assertEquals("topic1value1-topic2value1", testOutput.readValue)
-
-    assertTrue(testOutput.isEmpty)
-
-    testDriver.close()
-  }
-
-  @nowarn
-  @Test
-  def testTransformCorrectlyRecords(): Unit = {
-    class TestTransformer extends Transformer[String, String, KeyValue[String, String]] {
-      override def init(context: ProcessorContext): Unit = {}
-
-      override def transform(key: String, value: String): KeyValue[String, String] =
-        new KeyValue(s"$key-transformed", s"$value-transformed")
-
-      override def close(): Unit = {}
-    }
-    val builder = new StreamsBuilder()
-    val sourceTopic = "source"
-    val sinkTopic = "sink"
-
-    val stream = builder.stream[String, String](sourceTopic)
-    stream
-      .transform(() => new TestTransformer)
-      .to(sinkTopic)
-
-    val now = Instant.now()
-    val testDriver = createTestDriver(builder, now)
-    val testInput = testDriver.createInput[String, String](sourceTopic)
-    val testOutput = testDriver.createOutput[String, String](sinkTopic)
-
-    testInput.pipeInput("1", "value", now)
-
-    val result = testOutput.readKeyValue()
-    assertEquals("value-transformed", result.value)
-    assertEquals("1-transformed", result.key)
 
     assertTrue(testOutput.isEmpty)
 
@@ -446,29 +409,5 @@ class KStreamTest extends TestDriver {
 
     val joinNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
     assertEquals("my-name", joinNode.name())
-  }
-
-  @nowarn
-  @Test
-  def testSettingNameOnTransform(): Unit = {
-    class TestTransformer extends Transformer[String, String, KeyValue[String, String]] {
-      override def init(context: ProcessorContext): Unit = {}
-
-      override def transform(key: String, value: String): KeyValue[String, String] =
-        new KeyValue(s"$key-transformed", s"$value-transformed")
-
-      override def close(): Unit = {}
-    }
-    val builder = new StreamsBuilder()
-    val sourceTopic = "source"
-    val sinkTopic = "sink"
-
-    val stream = builder.stream[String, String](sourceTopic)
-    stream
-      .transform(() => new TestTransformer, Named.as("my-name"))
-      .to(sinkTopic)
-
-    val transformNode = builder.build().describe().subtopologies().asScala.head.nodes().asScala.toList(1)
-    assertEquals("my-name", transformNode.name())
   }
 }

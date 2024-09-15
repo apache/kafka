@@ -1245,24 +1245,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     @Deprecated
-    public <KR, VR> KStream<KR, VR> transform(final org.apache.kafka.streams.kstream.TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
-                                              final String... stateStoreNames) {
-        Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
-        final String name = builder.newProcessorName(TRANSFORM_NAME);
-        return flatTransform(new TransformerSupplierAdapter<>(transformerSupplier), Named.as(name), stateStoreNames);
-    }
-
-    @Override
-    @Deprecated
-    public <KR, VR> KStream<KR, VR> transform(final org.apache.kafka.streams.kstream.TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
-                                              final Named named,
-                                              final String... stateStoreNames) {
-        Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
-        return flatTransform(new TransformerSupplierAdapter<>(transformerSupplier), named, stateStoreNames);
-    }
-
-    @Override
-    @Deprecated
     public <K1, V1> KStream<K1, V1> flatTransform(final org.apache.kafka.streams.kstream.TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                                   final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");

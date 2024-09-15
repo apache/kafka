@@ -109,50 +109,6 @@ public class KStreamTransformIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldTransform() {
-        builder.addStateStore(storeBuilder());
-
-        stream
-            .transform(TestTransformer::new, stateStoreName)
-            .foreach(accumulateExpected);
-
-        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
-            KeyValue.pair(2, 1),
-            KeyValue.pair(3, 2),
-            KeyValue.pair(4, 3),
-            KeyValue.pair(3, 2),
-            KeyValue.pair(3, 5),
-            KeyValue.pair(2, 4));
-        verifyResult(expected);
-    }
-
-    @Test
-    public void shouldTransformWithConnectedStoreProvider() {
-        stream
-            .transform(new org.apache.kafka.streams.kstream.TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
-                @Override
-                public org.apache.kafka.streams.kstream.Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
-                    return new TestTransformer();
-                }
-
-                @Override
-                public Set<StoreBuilder<?>> stores() {
-                    return Collections.singleton(storeBuilder());
-                }
-            })
-            .foreach(accumulateExpected);
-
-        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
-            KeyValue.pair(2, 1),
-            KeyValue.pair(3, 2),
-            KeyValue.pair(4, 3),
-            KeyValue.pair(3, 2),
-            KeyValue.pair(3, 5),
-            KeyValue.pair(2, 4));
-        verifyResult(expected);
-    }
-
     private class TestFlatTransformer implements org.apache.kafka.streams.kstream.Transformer<Integer, Integer, Iterable<KeyValue<Integer, Integer>>> {
         private KeyValueStore<Integer, Integer> state;
 

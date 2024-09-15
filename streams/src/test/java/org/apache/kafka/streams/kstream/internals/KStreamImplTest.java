@@ -1268,9 +1268,6 @@ public class KStreamImplTest {
         assertEquals(((AbstractStream) stream1.flatMapValues(flatMapper)).keySerde(), consumedInternal.keySerde());
         assertNull(((AbstractStream) stream1.flatMapValues(flatMapper)).valueSerde());
 
-        assertNull(((AbstractStream) stream1.transform(transformerSupplier)).keySerde());
-        assertNull(((AbstractStream) stream1.transform(transformerSupplier)).valueSerde());
-
         assertEquals(((AbstractStream) stream1.transformValues(valueTransformerSupplier)).keySerde(), consumedInternal.keySerde());
         assertNull(((AbstractStream) stream1.transformValues(valueTransformerSupplier)).valueSerde());
 
@@ -1655,96 +1652,6 @@ public class KStreamImplTest {
             new KeyValueTimestamp<>("D", "dd", 8),
             new KeyValueTimestamp<>("E", "ee", 3)),
             processorSupplier.theCapturedProcessor().processed());
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullTransformerSupplierOnTransform() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(null));
-        assertThat(exception.getMessage(), equalTo("transformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullTransformerSupplierOnTransformWithStores() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(null, "storeName"));
-        assertThat(exception.getMessage(), equalTo("transformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullTransformerSupplierOnTransformWithNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(null, Named.as("transformer")));
-        assertThat(exception.getMessage(), equalTo("transformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullTransformerSupplierOnTransformWithNamedAndStores() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(null, Named.as("transformer"), "storeName"));
-        assertThat(exception.getMessage(), equalTo("transformerSupplier can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNamesOnTransform() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(transformerSupplier, (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNameOnTransform() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(transformerSupplier, (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNamesOnTransformWithNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(transformerSupplier, Named.as("transform"), (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullStoreNameOnTransformWithNamed() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(transformerSupplier, Named.as("transform"), (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't contain `null` as store name"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullNamedOnTransform() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(transformerSupplier, (Named) null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldNotAllowNullNamedOnTransformWithStoreName() {
-        final NullPointerException exception = assertThrows(
-            NullPointerException.class,
-            () -> testStream.transform(transformerSupplier, (Named) null, "storeName"));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
     }
 
     @Test
