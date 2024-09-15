@@ -241,9 +241,9 @@ class LocalLog(@volatile private var _dir: File,
    * Completely delete all segments with no delay.
    * @return the deleted segments
    */
-  private[log] def deleteAllSegments(): Iterable[LogSegment] = {
+  private[log] def deleteAllSegments(): util.List[LogSegment] = {
     maybeHandleIOException(s"Error while deleting all segments for $topicPartition in dir ${dir.getParent}") {
-      val deletableSegments = new util.ArrayList(segments.values).asScala
+      val deletableSegments = new util.ArrayList(segments.values)
       removeAndDeleteSegments(segments.values.asScala, asyncDelete = false, LogDeletion(this))
       isMemoryMappedBufferClosed = true
       deletableSegments

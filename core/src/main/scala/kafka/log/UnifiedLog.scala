@@ -907,7 +907,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               updateHighWatermarkWithLogEndOffset()
 
               // update the producer state
-              updatedProducers.values.asScala.foreach(producerAppendInfo => producerStateManager.update(producerAppendInfo))
+              updatedProducers.values.forEach(producerAppendInfo => producerStateManager.update(producerAppendInfo))
 
               // update the transaction index with the true last stable offset. The last offset visible
               // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
@@ -1776,7 +1776,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         producerExpireCheck.cancel(true)
         leaderEpochCache.foreach(_.clear())
         val deletedSegments = localLog.deleteAllSegments()
-        deleteProducerSnapshots(deletedSegments.toList.asJava, asyncDelete = false)
+        deleteProducerSnapshots(deletedSegments, asyncDelete = false)
         localLog.deleteEmptyDir()
       }
     }

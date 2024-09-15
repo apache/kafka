@@ -20,6 +20,7 @@ package kafka.log
 import java.io.File
 import java.nio.channels.ClosedChannelException
 import java.nio.charset.StandardCharsets
+import java.util
 import java.util.regex.Pattern
 import java.util.Collections
 import kafka.server.KafkaConfig
@@ -123,7 +124,7 @@ class LocalLogTest {
     log.roll()
     assertEquals(2, log.segments.numberOfSegments)
     assertFalse(logDir.listFiles.isEmpty)
-    val segmentsBeforeDelete = log.segments.values.asScala.toVector
+    val segmentsBeforeDelete = new util.ArrayList(log.segments.values)
     val deletedSegments = log.deleteAllSegments()
     assertTrue(log.segments.isEmpty)
     assertEquals(segmentsBeforeDelete, deletedSegments)
