@@ -1289,45 +1289,28 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
 
-        val epochResult: Optional[Integer] =
-          if (leaderEpochCache.isDefined) {
-            val epochOpt = leaderEpochCache.get.epochForOffset(curLocalLogStartOffset)
-            if (epochOpt.isPresent) Optional.of(epochOpt.getAsInt) else Optional.empty()
-          } else {
-            Optional.empty()
-          }
+        val epochResult = leaderEpochCache.flatMap(_.epochForOffset(curLocalLogStartOffset).asScala)
+          .asJava.asInstanceOf[Optional[Integer]]
 
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochResult))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
-        val epoch = leaderEpochCache match {
-          case Some(cache) =>
-            val latestEpoch = cache.latestEpoch()
-            if (latestEpoch.isPresent) Optional.of[Integer](latestEpoch.getAsInt) else Optional.empty[Integer]()
-          case None => Optional.empty[Integer]()
-        }
+        val epoch = leaderEpochCache.flatMap(_.latestEpoch().asScala).asJava.asInstanceOf[Optional[Integer]]
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epoch))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
         if (remoteLogEnabled()) {
           val curHighestRemoteOffset = highestOffsetInRemoteStorage()
 
-          val epochResult: Optional[Integer] =
-            if (leaderEpochCache.isDefined) {
-              val epochOpt = leaderEpochCache.get.epochForOffset(curHighestRemoteOffset)
-              if (epochOpt.isPresent) {
-                Optional.of(epochOpt.getAsInt)
-              } else if (curHighestRemoteOffset == -1) {
-                Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-              } else {
-                Optional.empty()
-              }
-            } else {
-              Optional.empty()
-            }
+          val epochResult = leaderEpochCache
+            .flatMap(_.epochForOffset(curHighestRemoteOffset).asScala)
+            .orElse(if (curHighestRemoteOffset == -1) Some(RecordBatch.NO_PARTITION_LEADER_EPOCH) else Option.empty)
+            .asJava.asInstanceOf[Optional[Integer]]
 
           Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curHighestRemoteOffset, epochResult))
         } else {
           Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)))
         }
+      } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
+        fetchEarliestPendingUploadOffset(remoteLogManager)
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
         // constant time access while being safe to use with concurrent collections unlike `toArray`.
@@ -1361,6 +1344,29 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           searchOffsetInLocalLog(targetTimestamp, logStartOffset)
         }
       }
+    }
+  }
+
+  private def fetchEarliestPendingUploadOffset(remoteLogManager: Option[RemoteLogManager]): Option[TimestampAndOffset] = {
+    if (remoteLogEnabled()) {
+      val curHighestRemoteOffset = highestOffsetInRemoteStorage()
+
+      if (curHighestRemoteOffset == -1) {
+        if (localLogStartOffset() == logStartOffset) {
+          // No segments have been uploaded yet
+          fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, remoteLogManager)
+        } else {
+          // Leader currently does not know about the already uploaded segments
+          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)))
+        }
+      } else {
+        val earliestPendingUploadOffset = math.max(curHighestRemoteOffset + 1, logStartOffset)
+        val epochResult = leaderEpochCache.flatMap(_.epochForOffset(earliestPendingUploadOffset).asScala)
+          .asJava.asInstanceOf[Optional[Integer]]
+        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, earliestPendingUploadOffset, epochResult))
+      }
+    } else {
+      Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)))
     }
   }
 

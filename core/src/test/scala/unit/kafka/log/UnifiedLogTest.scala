@@ -2222,6 +2222,169 @@ class UnifiedLogTest {
       log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
   }
 
+  @Test
+  def testFetchEarliestPendingUploadTimestampNoRemoteStorage(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
+    val log = createLog(logDir, logConfig)
+
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP))
+
+    val firstTimestamp = mockTime.milliseconds
+    val leaderEpoch = 0
+    log.appendAsLeader(TestUtils.singletonRecords(
+      value = TestUtils.randomBytes(10),
+      timestamp = firstTimestamp),
+      leaderEpoch = leaderEpoch)
+
+    val secondTimestamp = firstTimestamp + 1
+    log.appendAsLeader(TestUtils.singletonRecords(
+      value = TestUtils.randomBytes(10),
+      timestamp = secondTimestamp),
+      leaderEpoch = leaderEpoch)
+
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP))
+  }
+
+  @Test
+  def testFetchEarliestPendingUploadTimestampWithRemoteStorage(): Unit = {
+    val remoteLogManager = mock(classOf[RemoteLogManager])
+    val (log, ts) = prepareLog(remoteLogManager)
+
+    // Offsets upto 0 are in remote storage
+    when(remoteLogManager.findOffsetByTimestamp(ArgumentMatchers.eq(log.topicPartition),
+      anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache.get)))
+      .thenAnswer(ans => {
+        val timestamp = ans.getArgument(1).asInstanceOf[Long]
+        Optional.of(timestamp)
+          .filter(_ == ts.firstTimestamp)
+          .map[TimestampAndOffset](x => new TimestampAndOffset(x, 0L, Optional.of(ts.firstLeaderEpoch)))
+      })
+
+    // Offset 0 (first timestamp) is in remote storage and deleted locally. Offset 1 (second timestamp) is in local storage.
+    log._localLogStartOffset = 1
+    log._highestOffsetInRemoteStorage = 0
+
+    assertEquals(Some(new TimestampAndOffset(ts.firstTimestamp, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ts.firstTimestamp, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ts.secondTimestamp, 1L, Optional.of(ts.secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ts.secondTimestamp, Some(remoteLogManager)))
+
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(ts.secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(ts.thirdLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(ts.secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP, Some(remoteLogManager)))
+  }
+
+  @Test
+  def testFetchEarliestPendingUploadTimestampWithRemoteStorageNoLocalDeletion(): Unit = {
+    val remoteLogManager = mock(classOf[RemoteLogManager])
+    val (log, ts) = prepareLog(remoteLogManager)
+
+    // Offsets upto 1 are in remote storage
+    when(remoteLogManager.findOffsetByTimestamp(ArgumentMatchers.eq(log.topicPartition),
+      anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache.get)))
+      .thenAnswer(ans => {
+        val timestamp = ans.getArgument(1).asInstanceOf[Long]
+        Optional.of(timestamp)
+          .map[TimestampAndOffset] {
+            case x@ts.firstTimestamp => new TimestampAndOffset(x, 0L, Optional.of(ts.firstLeaderEpoch))
+            case x@ts.secondTimestamp => new TimestampAndOffset(x, 1L, Optional.of(ts.secondLeaderEpoch))
+            case _ => None.orNull
+          }
+      })
+
+    // Offsets 0, 1 (first and second timestamps) are in remote storage and not deleted locally.
+    log._localLogStartOffset = 0
+    log._highestOffsetInRemoteStorage = 1
+
+    assertEquals(Some(new TimestampAndOffset(ts.firstTimestamp, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ts.firstTimestamp, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ts.secondTimestamp, 1L, Optional.of(ts.secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ts.secondTimestamp, Some(remoteLogManager)))
+
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(ts.secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(ts.thirdLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(ts.thirdLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP, Some(remoteLogManager)))
+  }
+
+  @Test
+  def testFetchEarliestPendingUploadTimestampNoSegmentsUploaded(): Unit = {
+    val remoteLogManager = mock(classOf[RemoteLogManager])
+    val (log, ts) = prepareLog(remoteLogManager)
+
+    // No offsets are in remote storage
+    when(remoteLogManager.findOffsetByTimestamp(ArgumentMatchers.eq(log.topicPartition),
+      anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache.get)))
+      .thenReturn(Optional.empty[TimestampAndOffset]())
+
+    // Offsets 0, 1, 2 (first, second and third timestamps) are in local storage only and not uploaded to remote storage.
+    log._localLogStartOffset = 0
+    log._highestOffsetInRemoteStorage = -1
+
+    assertEquals(Some(new TimestampAndOffset(ts.firstTimestamp, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ts.firstTimestamp, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ts.secondTimestamp, 1L, Optional.of(ts.secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ts.secondTimestamp, Some(remoteLogManager)))
+
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1L, Optional.of(-1))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(ts.thirdLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP, Some(remoteLogManager)))
+  }
+
+  @Test
+  def testFetchEarliestPendingUploadTimestampStaleHighestOffsetInRemote(): Unit = {
+    val remoteLogManager = mock(classOf[RemoteLogManager])
+    val (log, ts) = prepareLog(remoteLogManager, logStartOffset = 100)
+
+    // Offsets 100, 101, 102 (first, second and third timestamps) are in local storage and not uploaded to remote storage.
+    // Tiered storage copy was disabled and then enabled again, because of which the remote log segments are deleted but
+    // the highest offset in remote storage has become stale
+    when(remoteLogManager.findOffsetByTimestamp(ArgumentMatchers.eq(log.topicPartition),
+      anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache.get)))
+      .thenReturn(Optional.empty[TimestampAndOffset]())
+
+    log._localLogStartOffset = 100
+    log._highestOffsetInRemoteStorage = 50
+
+    assertEquals(Some(new TimestampAndOffset(ts.firstTimestamp, 100L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ts.firstTimestamp, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ts.secondTimestamp, 101L, Optional.of(ts.secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ts.secondTimestamp, Some(remoteLogManager)))
+
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 50L, Optional.empty())),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 103L, Optional.of(ts.thirdLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(ts.firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP, Some(remoteLogManager)))
+  }
+
   /**
    * Test the Log truncate operations
    */
@@ -4476,6 +4639,48 @@ class UnifiedLogTest {
     }
 
     (log, segmentWithOverflow)
+  }
+
+  case class LogTimestamps(firstTimestamp: Long,
+                           secondTimestamp: Long,
+                           thirdTimestamp: Long,
+                           firstLeaderEpoch: Int,
+                           secondLeaderEpoch: Int,
+                           thirdLeaderEpoch: Int)
+
+  private def prepareLog(remoteLogManager: RemoteLogManager, logStartOffset: Int = 0): (UnifiedLog, LogTimestamps) = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
+      remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, logStartOffset = logStartOffset, remoteStorageSystemEnable = true, remoteLogManager = Some(remoteLogManager))
+    when(remoteLogManager.findOffsetByTimestamp(log.topicPartition, 0, 0, log.leaderEpochCache.get))
+      .thenReturn(Optional.empty[TimestampAndOffset]())
+
+    assertEquals(None, log.fetchOffsetByTimestamp(0L, Some(remoteLogManager)))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, logStartOffset, Optional.empty())),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP, Some(remoteLogManager)))
+
+    val firstTimestamp = mockTime.milliseconds
+    val firstLeaderEpoch = 0
+    log.appendAsLeader(TestUtils.singletonRecords(
+      value = TestUtils.randomBytes(10),
+      timestamp = firstTimestamp),
+      leaderEpoch = firstLeaderEpoch)
+
+    val secondTimestamp = firstTimestamp + 1
+    val secondLeaderEpoch = 1
+    log.appendAsLeader(TestUtils.singletonRecords(
+      value = TestUtils.randomBytes(10),
+      timestamp = secondTimestamp),
+      leaderEpoch = secondLeaderEpoch)
+
+    val thirdTimestamp = secondTimestamp + 1
+    val thirdLeaderEpoch = 2
+    log.appendAsLeader(TestUtils.singletonRecords(
+      value = TestUtils.randomBytes(10),
+      timestamp = thirdTimestamp),
+      leaderEpoch = thirdLeaderEpoch)
+
+    (log, LogTimestamps(firstTimestamp, secondTimestamp, thirdTimestamp, firstLeaderEpoch, secondLeaderEpoch, thirdLeaderEpoch))
   }
 }
 
