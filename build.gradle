@@ -121,12 +121,11 @@ ext {
     // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
     if (name == "compileTestJava" || name == "compileTestScala") {
       options.compilerArgs << "-parameters"
-    } else if (name == "compileJava") {
-      options.compilerArgs << "-Xlint:deprecation"
-      options.compilerArgs << "-encoding" << "UTF-8"
-      options.compilerArgs << "-Xlint:deprecation"
-      options.compilerArgs << "-Xlint:unchecked"
     }
+    options.compilerArgs << "-Xlint:deprecation"
+    options.compilerArgs << "-encoding" << "UTF-8"
+    options.compilerArgs << "-Xlint:deprecation"
+    options.compilerArgs << "-Xlint:unchecked"
   }
 }
 
