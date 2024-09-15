@@ -26,7 +26,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, OffsetPosition, LocalLog => JLocalLog}
 
-import java.io.{File, IOException}
+import java.io.File
 import java.nio.file.Files
 import java.util
 import java.util.Collections.singletonList
@@ -90,9 +90,7 @@ class LocalLog(@volatile private var _dir: File,
   private[log] def isFuture: Boolean = dir.getName.endsWith(LocalLog.FutureDirSuffix)
 
   private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
-    LocalLog.maybeHandleIOException(logDirFailureChannel, parentDir, msg) {
-      fun
-    }
+    JLocalLog.maybeHandleIOException(logDirFailureChannel, parentDir, () => msg, () => fun)
   }
 
   /**
@@ -670,31 +668,6 @@ object LocalLog extends Logging {
       catch { case _: NumberFormatException => throw exception(dir) }
 
     new TopicPartition(topic, partition)
-  }
-
-  /**
-   * Invokes the provided function and handles any IOException raised by the function by marking the
-   * provided directory offline.
-   *
-   * @param logDirFailureChannel Used to asynchronously handle log directory failure.
-   * @param logDir The log directory to be marked offline during an IOException.
-   * @param errorMsg The error message to be used when marking the log directory offline.
-   * @param fun The function to be executed.
-   * @return The value returned by the function after a successful invocation
-   */
-  private[log] def maybeHandleIOException[T](logDirFailureChannel: LogDirFailureChannel,
-                                             logDir: String,
-                                             errorMsg: => String)(fun: => T): T = {
-    if (logDirFailureChannel.hasOfflineLogDir(logDir)) {
-      throw new KafkaStorageException(s"The log dir $logDir is already offline due to a previous IO exception.")
-    }
-    try {
-      fun
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddOfflineLogDir(logDir, errorMsg, e)
-        throw new KafkaStorageException(errorMsg, e)
-    }
   }
 
   private[log] def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
