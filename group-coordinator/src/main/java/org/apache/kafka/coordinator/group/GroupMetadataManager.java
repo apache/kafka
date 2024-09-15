@@ -4028,14 +4028,26 @@ public class GroupMetadataManager {
      * @return The coordinator result that will be appended to the log.
      */
     private CoordinatorResult<Void, CoordinatorRecord> maybeCompleteJoinPhase(ClassicGroup group) {
-        if (group.isInState(PREPARING_REBALANCE) &&
-            group.hasAllMembersJoined() &&
-            group.previousState() != EMPTY
-        ) {
-            return completeClassicGroupJoin(group);
+        if (!group.isInState(PREPARING_REBALANCE)) {
+            log.debug("Cannot complete join phase of group {} because the group is in {} state.",
+                group.groupId(), group.currentState());
+            return EMPTY_RESULT;
         }
 
-        return EMPTY_RESULT;
+        if (group.previousState() == EMPTY) {
+            log.debug("Cannot complete join phase of group {} because this is an initial rebalance.",
+                group.groupId());
+            return EMPTY_RESULT;
+        }
+
+        if (!group.hasAllMembersJoined()) {
+            log.debug("Cannot complete join phase of group {} because not all the members have rejoined. " +
+                "Members={}, AwaitingJoinResponses={}, PendingJoinMembers={}.",
+                group.groupId(), group.numMembers(), group.numAwaitingJoinResponse(), group.numPendingJoinMembers());
+            return EMPTY_RESULT;
+        }
+
+        return completeClassicGroupJoin(group);
     }
 
     /**
