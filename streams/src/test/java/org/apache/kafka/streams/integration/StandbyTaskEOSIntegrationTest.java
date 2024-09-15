@@ -329,7 +329,7 @@ public class StandbyTaskEOSIntegrationTest {
             Serdes.Integer())
         );
         builder.<Integer, Integer>stream(inputTopic)
-            .transform(
+            .process(
                 () -> new org.apache.kafka.streams.kstream.Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
                     private KeyValueStore<Integer, Integer> store;
 
