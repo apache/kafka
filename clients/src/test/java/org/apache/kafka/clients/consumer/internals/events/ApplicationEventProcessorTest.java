@@ -68,6 +68,7 @@ public class ApplicationEventProcessorTest {
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
     private final ConsumerHeartbeatRequestManager heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
     private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
+    private final OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
     private final SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private ApplicationEventProcessor processor;
@@ -75,7 +76,7 @@ public class ApplicationEventProcessorTest {
     private void setupProcessor(boolean withGroupId) {
         RequestManagers requestManagers = new RequestManagers(
                 new LogContext(),
-                mock(OffsetsRequestManager.class),
+                offsetsRequestManager,
                 mock(TopicMetadataRequestManager.class),
                 mock(FetchRequestManager.class),
                 withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
@@ -128,8 +129,7 @@ public class ApplicationEventProcessorTest {
                 Arguments.of(new PollEvent(100)),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
-                Arguments.of(new ResetPositionsEvent(500)),
-                Arguments.of(new ValidatePositionsEvent(500)),
+                Arguments.of(new CheckAndUpdatePositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
                 Arguments.of(new AssignmentChangeEvent(12345, 12345, Collections.emptyList())));
     }
@@ -142,14 +142,6 @@ public class ApplicationEventProcessorTest {
         ApplicationEvent e = new ListOffsetsEvent(timestamps, calculateDeadlineMs(time, 100), requireTimestamp);
         applicationEventProcessor.process(e);
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
-    }
-
-    @Test
-    public void testResetPositionsProcess() {
-        ApplicationEventProcessor applicationEventProcessor = mock(ApplicationEventProcessor.class);
-        ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
-        applicationEventProcessor.process(event);
-        verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
     }
 
     @ParameterizedTest

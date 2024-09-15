@@ -99,12 +99,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((ListOffsetsEvent) event);
                 return;
 
-            case RESET_POSITIONS:
-                process((ResetPositionsEvent) event);
-                return;
-
-            case VALIDATE_POSITIONS:
-                process((ValidatePositionsEvent) event);
+            case CHECK_AND_UPDATE_POSITIONS:
+                process((CheckAndUpdatePositionsEvent) event);
                 return;
 
             case SUBSCRIPTION_CHANGE:
@@ -259,13 +255,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
     }
 
-    private void process(final ResetPositionsEvent event) {
-        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
-        future.whenComplete(complete(event.future()));
-    }
-
-    private void process(final ValidatePositionsEvent event) {
-        CompletableFuture<Void> future = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+    /**
+     * Check if all assigned partitions have fetch positions. If there are missing positions, fetch offsets and use
+     * them to update positions in the subscription state.
+     */
+    private void process(final CheckAndUpdatePositionsEvent event) {
+        CompletableFuture<Boolean> future = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 

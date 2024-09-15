@@ -17,14 +17,19 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * Event for resetting offsets for all assigned partitions that require it. This is an
- * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
- * positions when responses are received.
- */
-public class ResetPositionsEvent extends CompletableApplicationEvent<Void> {
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 
-    public ResetPositionsEvent(final long deadlineMs) {
-        super(Type.RESET_POSITIONS, deadlineMs);
+/**
+ * Event to check if all assigned partitions have fetch positions. If there are positions missing, it will fetch
+ * offsets and update positions when it gets them. This will first attempt to use the committed offsets if available. If
+ * no committed offsets available, it will use the partition offsets retrieved from the leader.
+ * <p/>
+ * The event completes with a boolean indicating if all assigned partitions have valid fetch positions
+ * (based on {@link SubscriptionState#hasAllFetchPositions()}).
+ */
+public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Boolean> {
+
+    public CheckAndUpdatePositionsEvent(long deadlineMs) {
+        super(Type.CHECK_AND_UPDATE_POSITIONS, deadlineMs);
     }
 }
