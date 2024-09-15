@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.log.UnifiedLog
+import kafka.log.{OffsetResultHolder, UnifiedLog}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
@@ -106,13 +106,13 @@ class LogOffsetTest extends BaseRequestTest {
 
     log.updateHighWatermark(log.logEndOffset)
 
-    val firstOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
+    val firstOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP).timestampAndOffsetOpt
     assertEquals(19L, firstOffset.get.offset)
     assertEquals(19L, firstOffset.get.timestamp)
 
     log.truncateTo(0)
 
-    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
+    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP).timestampAndOffsetOpt)
   }
 
   @ParameterizedTest
@@ -128,7 +128,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     log.updateHighWatermark(log.logEndOffset)
 
-    val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP)
+    val maxTimestampOffset = log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP).timestampAndOffsetOpt
     assertEquals(7L, log.logEndOffset)
     assertEquals(5L, maxTimestampOffset.get.offset)
     assertEquals(6L, maxTimestampOffset.get.timestamp)
@@ -201,7 +201,7 @@ class LogOffsetTest extends BaseRequestTest {
     log.updateHighWatermark(log.logEndOffset)
 
     assertEquals(0L, log.logEndOffset)
-    assertEquals(Option.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
+    assertEquals(OffsetResultHolder(None), log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
   }
 
   @deprecated("legacyFetchOffsetsBefore", since = "")

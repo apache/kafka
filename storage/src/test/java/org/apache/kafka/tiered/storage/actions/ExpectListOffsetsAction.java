@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class ExpectListOffsetsAction implements TieredStorageTestAction {
@@ -55,6 +56,8 @@ public final class ExpectListOffsetsAction implements TieredStorageTestAction {
         if (expected.epoch != -1) {
             assertTrue(listOffsetsResult.leaderEpoch().isPresent());
             assertEquals(expected.epoch, listOffsetsResult.leaderEpoch().get());
+        } else {
+            assertFalse(listOffsetsResult.leaderEpoch().isPresent());
         }
     }
 

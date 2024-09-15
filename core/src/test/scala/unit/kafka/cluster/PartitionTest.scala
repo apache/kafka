@@ -749,7 +749,7 @@ class PartitionTest extends AbstractPartitionTest {
     val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.empty(),
-      fetchOnlyFromLeader = true)
+      fetchOnlyFromLeader = true).timestampAndOffsetOpt
 
     assertTrue(timestampAndOffsetOpt.isDefined)
 
@@ -803,12 +803,18 @@ class PartitionTest extends AbstractPartitionTest {
 
     def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
       try {
-        Right(partition.fetchOffsetForTimestamp(
+        val offsetResultHolder = partition.fetchOffsetForTimestamp(
           timestamp = timestamp,
           isolationLevel = isolation,
           currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
           fetchOnlyFromLeader = true
-        ))
+        )
+        val timestampAndOffsetOpt = offsetResultHolder.timestampAndOffsetOpt
+        if (timestampAndOffsetOpt.isEmpty || offsetResultHolder.lastFetchableOffset.isDefined &&
+          timestampAndOffsetOpt.get.offset >= offsetResultHolder.lastFetchableOffset.get) {
+          offsetResultHolder.maybeOffsetsError.map(e => throw e)
+        }
+        Right(timestampAndOffsetOpt)
       } catch {
         case e: ApiException => Left(e)
       }
@@ -1013,7 +1019,7 @@ class PartitionTest extends AbstractPartitionTest {
       val res = partition.fetchOffsetForTimestamp(timestamp,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true)
+        fetchOnlyFromLeader = true).timestampAndOffsetOpt
       assertTrue(res.isDefined)
       res.get
     }
