@@ -108,7 +108,7 @@ public class ShareFetchUtils {
         // Isolation level is only required when reading from the latest offset hence use Option.empty() for now.
         Option<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
                 topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
-                Optional.empty(), true);
+                Optional.empty(), true).timestampAndOffsetOpt();
         return timestampAndOffset.isEmpty() ? (long) 0 : timestampAndOffset.get().offset;
     }
 }
