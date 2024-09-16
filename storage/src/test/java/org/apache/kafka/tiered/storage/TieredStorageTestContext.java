@@ -44,6 +44,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
@@ -298,6 +299,15 @@ public final class TieredStorageTestContext implements AutoCloseable {
                 .filter(rsm -> rsm.brokerId() == brokerId)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No remote storage manager found for broker " + brokerId));
+    }
+
+    // unused now, but it can be reused later as this is an utility method.
+    public Optional<LeaderEpochFileCache> leaderEpochFileCache(int brokerId, TopicPartition partition) {
+        Optional<UnifiedLog> unifiedLogOpt = log(brokerId, partition);
+        if (unifiedLogOpt.isPresent() && unifiedLogOpt.get().leaderEpochCache().isDefined()) {
+            return Optional.of(unifiedLogOpt.get().leaderEpochCache().get());
+        }
+        return Optional.empty();
     }
 
     public List<LocalTieredStorage> remoteStorageManagers() {
