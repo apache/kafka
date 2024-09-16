@@ -342,11 +342,11 @@
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
-              files="(LogValidator|RemoteLogManagerConfig|RemoteLogManager).java"/>
+              files="(LogLoader|LogValidator|RemoteLogManagerConfig|RemoteLogManager).java"/>
     <suppress checks="NPathComplexity"
-              files="(LogValidator|RemoteLogManager|RemoteIndexCache).java"/>
+              files="(LogLoader|LogValidator|RemoteLogManager|RemoteIndexCache).java"/>
     <suppress checks="ParameterNumber"
-              files="(LogAppendInfo|RemoteLogManagerConfig).java"/>
+              files="(LogAppendInfo|LogLoader|RemoteLogManagerConfig).java"/>
 
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"

@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -43,7 +43,7 @@ import java.nio._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.Properties
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import scala.collection._
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -200,12 +200,14 @@ class LogCleanerTest extends Logging {
       time.scheduler,
       time,
       logDirFailureChannel,
-      hadCleanShutdown = true,
+      true,
       logSegments,
       0L,
       0L,
       leaderEpochCache.asJava,
-      producerStateManager
+      producerStateManager,
+      new ConcurrentHashMap[String, Integer],
+      false
     ).load()
     val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)

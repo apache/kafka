@@ -39,10 +39,12 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, VerificationGuard}
+import org.apache.kafka.storage.internals.log.LocalLog.SplitSegmentResult
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LocalLog => JLocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, UnifiedLog => JUnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
 
 import java.io.{File, IOException}
+import java.lang.{Long => JLong}
 import java.nio.file.{Files, Path}
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, ScheduledFuture}
@@ -50,7 +52,7 @@ import java.util.stream.Collectors
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.collection.{Seq, immutable, mutable}
+import scala.collection.{Seq, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
@@ -551,8 +553,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private def rebuildProducerState(lastOffset: Long,
                                    producerStateManager: ProducerStateManager): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
-    UnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time,
-      reloadFromCleanShutdown = false, logIdent)
+    JUnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time, false, logIdent)
   }
 
   @threadsafe
@@ -905,7 +906,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               updateHighWatermarkWithLogEndOffset()
 
               // update the producer state
-              updatedProducers.values.foreach(producerAppendInfo => producerStateManager.update(producerAppendInfo))
+              updatedProducers.values.forEach(producerAppendInfo => producerStateManager.update(producerAppendInfo))
 
               // update the transaction index with the true last stable offset. The last offset visible
               // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
@@ -1025,8 +1026,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                                               records: MemoryRecords,
                                               origin: AppendOrigin,
                                               requestVerificationGuard: VerificationGuard):
-  (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
-    val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
+  (util.Map[JLong, ProducerAppendInfo], List[CompletedTxn], Option[BatchMetadata]) = {
+    val updatedProducers = new util.HashMap[JLong, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     var relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment
 
@@ -1067,12 +1068,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // We cache offset metadata for the start of each transaction. This allows us to
         // compute the last stable offset without relying on additional index lookups.
         val firstOffsetMetadata = if (batch.isTransactional)
-          Some(new LogOffsetMetadata(batch.baseOffset, appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
+          Optional.of(new LogOffsetMetadata(batch.baseOffset, appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
         else
-          None
+          Optional.empty[LogOffsetMetadata]
 
-        val maybeCompletedTxn = updateProducers(producerStateManager, batch, updatedProducers, firstOffsetMetadata, origin)
-        maybeCompletedTxn.foreach(completedTxns += _)
+        val maybeCompletedTxn = JUnifiedLog.updateProducers(producerStateManager, batch, updatedProducers, firstOffsetMetadata, origin)
+        maybeCompletedTxn.ifPresent(ct => completedTxns += ct)
       }
 
       relativePositionInSegment += batch.sizeInBytes
@@ -1553,7 +1554,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // remove the segments for lookups
           localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
         }
-        deleteProducerSnapshots(deletable, asyncDelete = true)
+        deleteProducerSnapshots(deletable.toList.asJava, asyncDelete = true)
       }
       numToDelete
     }
@@ -1840,7 +1841,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             truncateFullyAndStartAt(targetOffset)
           } else {
             val deletedSegments = localLog.truncateTo(targetOffset)
-            deleteProducerSnapshots(deletedSegments, asyncDelete = true)
+            deleteProducerSnapshots(deletedSegments.toList.asJava, asyncDelete = true)
             leaderEpochCache.foreach(_.truncateFromEndAsyncFlush(targetOffset))
             logStartOffset = math.min(targetOffset, logStartOffset)
             rebuildProducerState(targetOffset, producerStateManager)
@@ -1921,7 +1922,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       localLog.checkIfMemoryMappedBufferClosed()
       val deletedSegments = UnifiedLog.replaceSegments(localLog.segments, newSegments, oldSegments, dir, topicPartition,
         config, scheduler, logDirFailureChannel, logIdent)
-      deleteProducerSnapshots(deletedSegments, asyncDelete = true)
+      deleteProducerSnapshots(deletedSegments.toList.asJava, asyncDelete = true)
     }
   }
 
@@ -1932,8 +1933,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Currently, it is used by LogCleaner threads on log compact non-active segments only with LogCleanerManager's lock
    * to ensure no other logcleaner threads and retention thread can work on the same segment.
    */
-  private[log] def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] = {
-    segments.stream().map[java.lang.Long](s => s.getFirstBatchTimestamp).collect(Collectors.toList())
+  private[log] def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[JLong] = {
+    segments.stream().map[JLong](s => s.getFirstBatchTimestamp).collect(Collectors.toList())
   }
 
   /**
@@ -1954,19 +1955,17 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private[log] def addSegment(segment: LogSegment): LogSegment = localLog.segments.add(segment)
 
   private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
-    LocalLog.maybeHandleIOException(logDirFailureChannel, parentDir, msg) {
-      fun
-    }
+    JLocalLog.maybeHandleIOException(logDirFailureChannel, parentDir, () => msg, () => fun)
   }
 
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = lock synchronized {
     val result = UnifiedLog.splitOverflowedSegment(segment, localLog.segments, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
     deleteProducerSnapshots(result.deletedSegments, asyncDelete = true)
-    result.newSegments.toList
+    result.newSegments.asScala.toList
   }
 
-  private[log] def deleteProducerSnapshots(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
-    UnifiedLog.deleteProducerSnapshots(segments, producerStateManager, asyncDelete, scheduler, config, logDirFailureChannel, parentDir, topicPartition)
+  private[log] def deleteProducerSnapshots(segments: util.List[LogSegment], asyncDelete: Boolean): Unit = {
+    JUnifiedLog.deleteProducerSnapshots(segments, producerStateManager, asyncDelete, scheduler, config, logDirFailureChannel, parentDir, topicPartition)
   }
 }
 
@@ -1979,11 +1978,11 @@ object UnifiedLog extends Logging {
 
   val TxnIndexFileSuffix: String = LogFileUtils.TXN_INDEX_FILE_SUFFIX
 
-  val CleanedFileSuffix: String = LocalLog.CleanedFileSuffix
+  val CleanedFileSuffix: String = LogFileUtils.CLEANED_FILE_SUFFIX
 
-  val SwapFileSuffix: String = LocalLog.SwapFileSuffix
+  val SwapFileSuffix: String = LogFileUtils.SWAP_FILE_SUFFIX
 
-  val DeleteDirSuffix: String = LocalLog.DeleteDirSuffix
+  val DeleteDirSuffix: String = LogFileUtils.DELETE_DIR_SUFFIX
 
   val StrayDirSuffix: String = LocalLog.StrayDirSuffix
 
@@ -2019,7 +2018,7 @@ object UnifiedLog extends Logging {
             lastShutdownClean: Boolean = true,
             topicId: Option[Uuid],
             keepPartitionMetadataFile: Boolean,
-            numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
+            numRemainingSegments: ConcurrentMap[String, Integer] = new ConcurrentHashMap[String, Integer],
             remoteStorageSystemEnable: Boolean = false,
             logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     // create the log directory if it doesn't exist
@@ -2086,42 +2085,6 @@ object UnifiedLog extends Logging {
 
   def parseTopicPartitionName(dir: File): TopicPartition = LocalLog.parseTopicPartitionName(dir)
 
-  private[log] def isIndexFile(file: File): Boolean = LocalLog.isIndexFile(file)
-
-  private[log] def isLogFile(file: File): Boolean = LocalLog.isLogFile(file)
-
-  private def loadProducersFromRecords(producerStateManager: ProducerStateManager, records: Records): Unit = {
-    val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
-    val completedTxns = ListBuffer.empty[CompletedTxn]
-    records.batches.forEach { batch =>
-      if (batch.hasProducerId) {
-        val maybeCompletedTxn = updateProducers(
-          producerStateManager,
-          batch,
-          loadedProducers,
-          firstOffsetMetadata = None,
-          origin = AppendOrigin.REPLICATION)
-        maybeCompletedTxn.foreach(completedTxns += _)
-      }
-    }
-    loadedProducers.values.foreach(producerStateManager.update)
-    completedTxns.foreach(producerStateManager.completeTxn)
-  }
-
-  private def updateProducers(producerStateManager: ProducerStateManager,
-                              batch: RecordBatch,
-                              producers: mutable.Map[Long, ProducerAppendInfo],
-                              firstOffsetMetadata: Option[LogOffsetMetadata],
-                              origin: AppendOrigin): Option[CompletedTxn] = {
-    val producerId = batch.producerId
-    val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, origin))
-    val completedTxn = appendInfo.append(batch, firstOffsetMetadata.asJava).asScala
-    // Whether we wrote a control marker or a data batch, we can remove VerificationGuard since either the transaction is complete or we have a first offset.
-    if (batch.isTransactional)
-      producerStateManager.clearVerificationStateEntry(producerId)
-    completedTxn
-  }
-
   /**
    * If the recordVersion is >= RecordVersion.V2, create a new LeaderEpochFileCache instance.
    * Loading the epoch entries from the backing checkpoint file or the provided currentCache if not empty.
@@ -2169,124 +2132,16 @@ object UnifiedLog extends Logging {
                                    logDirFailureChannel: LogDirFailureChannel,
                                    logPrefix: String,
                                    isRecoveredSwapFile: Boolean = false): Iterable[LogSegment] = {
-    LocalLog.replaceSegments(existingSegments,
-      newSegments,
-      oldSegments,
+    JLocalLog.replaceSegments(existingSegments,
+      newSegments.asJava,
+      oldSegments.asJava,
       dir,
       topicPartition,
       config,
       scheduler,
       logDirFailureChannel,
       logPrefix,
-      isRecoveredSwapFile)
-  }
-
-  private[log] def deleteSegmentFiles(segmentsToDelete: immutable.Iterable[LogSegment],
-                                      asyncDelete: Boolean,
-                                      dir: File,
-                                      topicPartition: TopicPartition,
-                                      config: LogConfig,
-                                      scheduler: Scheduler,
-                                      logDirFailureChannel: LogDirFailureChannel,
-                                      logPrefix: String): Unit = {
-    LocalLog.deleteSegmentFiles(segmentsToDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix)
-  }
-
-  /**
-   * Rebuilds producer state until the provided lastOffset. This function may be called from the
-   * recovery code path, and thus must be free of all side-effects, i.e. it must not update any
-   * log-specific state.
-   *
-   * @param producerStateManager    The ProducerStateManager instance to be rebuilt.
-   * @param segments                The segments of the log whose producer state is being rebuilt
-   * @param logStartOffset          The log start offset
-   * @param lastOffset              The last offset upto which the producer state needs to be rebuilt
-   * @param recordVersion           The record version
-   * @param time                    The time instance used for checking the clock
-   * @param reloadFromCleanShutdown True if the producer state is being built after a clean shutdown,
-   *                                false otherwise.
-   * @param logPrefix               The logging prefix
-   */
-  private[log] def rebuildProducerState(producerStateManager: ProducerStateManager,
-                                        segments: LogSegments,
-                                        logStartOffset: Long,
-                                        lastOffset: Long,
-                                        recordVersion: RecordVersion,
-                                        time: Time,
-                                        reloadFromCleanShutdown: Boolean,
-                                        logPrefix: String): Unit = {
-    val offsetsToSnapshot =
-      if (segments.nonEmpty) {
-        val lastSegmentBaseOffset = segments.lastSegment.get.baseOffset
-        val nextLatestSegmentBaseOffset = segments.lowerSegment(lastSegmentBaseOffset).asScala.map(_.baseOffset)
-        Seq(nextLatestSegmentBaseOffset, Some(lastSegmentBaseOffset), Some(lastOffset))
-      } else {
-        Seq(Some(lastOffset))
-      }
-    info(s"${logPrefix}Loading producer state till offset $lastOffset with message format version ${recordVersion.value}")
-
-    // We want to avoid unnecessary scanning of the log to build the producer state when the broker is being
-    // upgraded. The basic idea is to use the absence of producer snapshot files to detect the upgrade case,
-    // but we have to be careful not to assume too much in the presence of broker failures. The two most common
-    // upgrade cases in which we expect to find no snapshots are the following:
-    //
-    // 1. The broker has been upgraded, but the topic is still on the old message format.
-    // 2. The broker has been upgraded, the topic is on the new message format, and we had a clean shutdown.
-    //
-    // If we hit either of these cases, we skip producer state loading and write a new snapshot at the log end
-    // offset (see below). The next time the log is reloaded, we will load producer state using this snapshot
-    // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
-    // from the first segment.
-    if (recordVersion.value < RecordBatch.MAGIC_VALUE_V2 ||
-      (!producerStateManager.latestSnapshotOffset.isPresent && reloadFromCleanShutdown)) {
-      // To avoid an expensive scan through all of the segments, we take empty snapshots from the start of the
-      // last two segments and the last offset. This should avoid the full scan in the case that the log needs
-      // truncation.
-      offsetsToSnapshot.flatten.foreach { offset =>
-        producerStateManager.updateMapEndOffset(offset)
-        producerStateManager.takeSnapshot()
-      }
-    } else {
-      info(s"${logPrefix}Reloading from producer snapshot and rebuilding producer state from offset $lastOffset")
-      val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
-      val producerStateLoadStart = time.milliseconds()
-      producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
-      val segmentRecoveryStart = time.milliseconds()
-
-      // Only do the potentially expensive reloading if the last snapshot offset is lower than the log end
-      // offset (which would be the case on first startup) and there were active producers prior to truncation
-      // (which could be the case if truncating after initial loading). If there weren't, then truncating
-      // shouldn't change that fact (although it could cause a producerId to expire earlier than expected),
-      // and we can skip the loading. This is an optimization for users which are not yet using
-      // idempotent/transactional features yet.
-      if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
-        val segmentOfLastOffset = segments.floorSegment(lastOffset)
-
-        segments.values(producerStateManager.mapEndOffset, lastOffset).forEach { segment =>
-          val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
-          producerStateManager.updateMapEndOffset(startOffset)
-
-          if (offsetsToSnapshot.contains(Some(segment.baseOffset)))
-            producerStateManager.takeSnapshot()
-
-          val maxPosition = if (segmentOfLastOffset.isPresent && segmentOfLastOffset.get == segment) {
-            Option(segment.translateOffset(lastOffset))
-              .map(_.position)
-              .getOrElse(segment.size)
-          } else {
-            segment.size
-          }
-
-          val fetchDataInfo = segment.read(startOffset, Int.MaxValue, maxPosition)
-          if (fetchDataInfo != null)
-            loadProducersFromRecords(producerStateManager, fetchDataInfo.records)
-        }
-      }
-      producerStateManager.updateMapEndOffset(lastOffset)
-      producerStateManager.takeSnapshot()
-      info(s"${logPrefix}Producer state recovery took ${segmentRecoveryStart - producerStateLoadStart}ms for snapshot load " +
-        s"and ${time.milliseconds() - segmentRecoveryStart}ms for segment recovery from offset $lastOffset")
-    }
+      isRecoveredSwapFile).asScala
   }
 
   private[log] def splitOverflowedSegment(segment: LogSegment,
@@ -2297,39 +2152,11 @@ object UnifiedLog extends Logging {
                                           scheduler: Scheduler,
                                           logDirFailureChannel: LogDirFailureChannel,
                                           logPrefix: String): SplitSegmentResult = {
-    LocalLog.splitOverflowedSegment(segment, existingSegments, dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix)
-  }
-
-  private[log] def deleteProducerSnapshots(segments: Iterable[LogSegment],
-                                           producerStateManager: ProducerStateManager,
-                                           asyncDelete: Boolean,
-                                           scheduler: Scheduler,
-                                           config: LogConfig,
-                                           logDirFailureChannel: LogDirFailureChannel,
-                                           parentDir: String,
-                                           topicPartition: TopicPartition): Unit = {
-    val snapshotsToDelete = segments.flatMap { segment =>
-      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset).asScala
-    }
-
-    def deleteProducerSnapshots(): Unit = {
-      LocalLog.maybeHandleIOException(logDirFailureChannel,
-        parentDir,
-        s"Error while deleting producer state snapshots for $topicPartition in dir $parentDir") {
-        snapshotsToDelete.foreach { snapshot =>
-          snapshot.deleteIfExists()
-        }
-      }
-    }
-
-    if (asyncDelete)
-      scheduler.scheduleOnce("delete-producer-snapshot", () => deleteProducerSnapshots(), config.fileDeleteDelayMs)
-    else
-      deleteProducerSnapshots()
+    JLocalLog.splitOverflowedSegment(segment, existingSegments, dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix)
   }
 
   private[log] def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
-    LocalLog.createNewCleanedSegment(dir, logConfig, baseOffset)
+    JLocalLog.createNewCleanedSegment(dir, logConfig, baseOffset)
   }
 
   // Visible for benchmarking
