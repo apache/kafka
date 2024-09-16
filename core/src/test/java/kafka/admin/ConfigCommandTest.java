@@ -81,6 +81,7 @@ import java.util.stream.Stream;
 
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -2292,8 +2293,7 @@ public class ConfigCommandTest {
         }
     }
 
-    @SuppressWarnings({"deprecation"})
     private <T> Seq<T> seq(Collection<T> seq) {
-        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
+        return CollectionConverters.asScala(seq.iterator()).toSeq();
     }
 }
