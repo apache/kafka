@@ -598,7 +598,7 @@ public class StandbyTaskTest {
             streamsMetrics
         );
 
-        final InternalProcessorContext context = new ProcessorContextImpl(
+        final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
             taskId,
             config,
             stateManager,
