@@ -539,12 +539,12 @@ public class KafkaStreams implements AutoCloseable {
                 }
                 break;
             case SHUTDOWN_CLIENT:
-                log.error(String.format(
+                log.error(
                     "Encountered the following exception during processing and the registered exception handler" +
-                        "opted to %s. The streams client is going to shut down now. %s",
+                        "opted to {}. The streams client is going to shut down now.",
                     action,
                     throwable
-                ));
+                );
                 closeToError();
                 break;
             case SHUTDOWN_APPLICATION:
