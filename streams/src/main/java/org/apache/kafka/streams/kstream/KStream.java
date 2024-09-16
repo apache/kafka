@@ -48,8 +48,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
  * A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
  * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link Topology}) via
- * {@link #process(ProcessorSupplier, String...) process(...)},
- * {@link #transform(TransformerSupplier, String...) transform(...)}, and
+ * {@link #process(ProcessorSupplier, String...) process(...)} and
  * {@link #transformValues(ValueTransformerSupplier, String...) transformValues(...)}.
  *
  * @param <K> Type of keys
@@ -179,8 +178,7 @@ public interface KStream<K, V> {
      * altered arbitrarily).
      * The provided {@link KeyValueMapper} is applied to each input record and computes a new output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateless record-by-record operation (cf. {@link #transform(TransformerSupplier, String...)} for
-     * stateful record transformation).
+     * This is a stateless record-by-record operation.
      * <p>
      * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
      * <pre>{@code
@@ -216,8 +214,7 @@ public interface KStream<K, V> {
      * altered arbitrarily).
      * The provided {@link KeyValueMapper} is applied to each input record and computes a new output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateless record-by-record operation (cf. {@link #transform(TransformerSupplier, String...)} for
-     * stateful record transformation).
+     * This is a stateless record-by-record operation.
      * <p>
      * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
      * <pre>{@code
@@ -393,8 +390,7 @@ public interface KStream<K, V> {
      * can be altered arbitrarily).
      * The provided {@link KeyValueMapper} is applied to each input record and computes zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateless record-by-record operation (cf. {@link #transform(TransformerSupplier, String...)} for
-     * stateful record transformation).
+     * This is a stateless record-by-record operation.
      * <p>
      * The example below splits input records {@code <null:String>} containing sentences as values into their words
      * and emit a record {@code <word:1>} for each word.
@@ -443,8 +439,7 @@ public interface KStream<K, V> {
      * can be altered arbitrarily).
      * The provided {@link KeyValueMapper} is applied to each input record and computes zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateless record-by-record operation (cf. {@link #transform(TransformerSupplier, String...)} for
-     * stateful record transformation).
+     * This is a stateless record-by-record operation.
      * <p>
      * The example below splits input records {@code <null:String>} containing sentences as values into their words
      * and emit a record {@code <word:1>} for each word.
@@ -903,8 +898,7 @@ public interface KStream<K, V> {
      * Convert this stream to a {@link KTable}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
-     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic will be created in Kafka.
+     * {@link #map(KeyValueMapper)} or {@link #flatMap(KeyValueMapper)} an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -929,8 +923,7 @@ public interface KStream<K, V> {
      * Convert this stream to a {@link KTable}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
-     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic will be created in Kafka.
+     * {@link #map(KeyValueMapper)} or {@link #flatMap(KeyValueMapper)} an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -956,8 +949,7 @@ public interface KStream<K, V> {
      * Convert this stream to a {@link KTable}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
-     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic will be created in Kafka.
+     * {@link #map(KeyValueMapper)} or {@link #flatMap(KeyValueMapper)} an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -984,8 +976,7 @@ public interface KStream<K, V> {
      * Convert this stream to a {@link KTable}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
-     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic will be created in Kafka.
+     * {@link #map(KeyValueMapper)} or {@link #flatMap(KeyValueMapper)} an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
@@ -1082,8 +1073,7 @@ public interface KStream<K, V> {
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
-     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic may need to be created in
+     * {@link #map(KeyValueMapper)}, or {@link #flatMap(KeyValueMapper)} an internal repartitioning topic may need to be created in
      * Kafka if a later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
@@ -1111,8 +1101,7 @@ public interface KStream<K, V> {
      * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
-     * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
-     * {@link #transform(TransformerSupplier, String...)}) an internal repartitioning topic may need to be created in
+     * {@link #map(KeyValueMapper)}, or {@link #flatMap(KeyValueMapper)} an internal repartitioning topic may need to be created in
      * Kafka if a later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
@@ -3339,8 +3328,7 @@ public interface KStream<K, V> {
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs can be emitted via
+     * No additional {@link KeyValue} pairs can be emitted via
      * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
@@ -3370,7 +3358,7 @@ public interface KStream<K, V> {
      * <p>
      * Setting a new value preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
+     * is applied to the result {@code KStream}.
      *
      * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a newly constructed {@link ValueTransformer}
      *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformer} object
@@ -3449,8 +3437,7 @@ public interface KStream<K, V> {
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs can be emitted via
+     * No additional {@link KeyValue} pairs can be emitted via
      * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
@@ -3480,7 +3467,7 @@ public interface KStream<K, V> {
      * <p>
      * Setting a new value preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
+     * is applied to the result {@code KStream}.
      *
      * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a newly constructed {@link ValueTransformer}
      *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformer} object
@@ -3563,9 +3550,7 @@ public interface KStream<K, V> {
      * a schedule must be registered.
      * The {@link ValueTransformerWithKey} must return the new value in
      * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via
+     * No additional {@link KeyValue} pairs can be emitted via
      * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
@@ -3596,7 +3581,7 @@ public interface KStream<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * So, setting a new value preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
+     * is applied to the result {@code KStream}.
      *
      * @param valueTransformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a newly constructed {@link ValueTransformerWithKey}
      *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformerWithKey} object
@@ -3677,9 +3662,7 @@ public interface KStream<K, V> {
      * a schedule must be registered.
      * The {@link ValueTransformerWithKey} must return the new value in
      * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via
+     * No additional {@link KeyValue} pairs can be emitted via
      * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
@@ -3710,7 +3693,7 @@ public interface KStream<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * So, setting a new value preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #transform(TransformerSupplier, String...)})
+     * is applied to the result {@code KStream}.
      *
      * @param valueTransformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a newly constructed {@link ValueTransformerWithKey}
      *                                 The supplier should always generate a new instance. Creating a single {@link ValueTransformerWithKey} object
@@ -3796,9 +3779,7 @@ public interface KStream<K, V> {
      * transform()}.
      * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is an empty
      * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via
+     * No additional {@link KeyValue} pairs can be emitted via
      * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
@@ -3920,9 +3901,7 @@ public interface KStream<K, V> {
      * transform()}.
      * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is an empty
      * {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via
+     * No additional {@link KeyValue} pairs can be emitted via
      * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
@@ -4046,9 +4025,7 @@ public interface KStream<K, V> {
      * transform()}.
      * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
      * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via
+     * No additional {@link KeyValue} pairs can be emitted via
      * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
@@ -4171,9 +4148,7 @@ public interface KStream<K, V> {
      * transform()}.
      * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
      * is an empty {@link java.lang.Iterable Iterable} or {@code null}, no records are emitted.
-     * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
-     * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
-     * can be emitted via
+     * No additional {@link KeyValue} pairs can be emitted via
      * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
