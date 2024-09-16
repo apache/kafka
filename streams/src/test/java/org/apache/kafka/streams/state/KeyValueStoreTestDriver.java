@@ -191,7 +191,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<KeyValue<byte[], byte[]>> restorableEntries = new LinkedList<>();
 
-    private final InternalMockProcessorContext context;
+    private final InternalMockProcessorContext<?, ?> context;
     private final StateSerdes<K, V> stateSerdes;
 
     @SuppressWarnings("unchecked")
@@ -216,7 +216,6 @@ public class KeyValueStoreTestDriver<K, V> {
                 new StreamsConfig(props),
                 "threadId",
                 new MockClientSupplier(),
-                null,
                 null,
                 logContext,
                 Time.SYSTEM),
@@ -266,7 +265,7 @@ public class KeyValueStoreTestDriver<K, V> {
         stateDir.mkdirs();
         stateSerdes = serdes;
 
-        context = new InternalMockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
+        context = new InternalMockProcessorContext<Object, Object>(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
             final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override

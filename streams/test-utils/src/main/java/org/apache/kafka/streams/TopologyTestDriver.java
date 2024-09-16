@@ -1382,7 +1382,7 @@ public class TopologyTestDriver implements Closeable {
                                   final KafkaClientSupplier clientSupplier,
                                   final LogContext logContext,
                                   final Time time) {
-            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext, time);
+            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, UUID.randomUUID(), logContext, time);
         }
 
         @Override

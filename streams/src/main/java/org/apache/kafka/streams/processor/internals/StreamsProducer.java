@@ -56,7 +56,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.taskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.threadProducerClientId;
 
 /**
@@ -85,7 +84,6 @@ public class StreamsProducer {
     public StreamsProducer(final StreamsConfig config,
                            final String threadId,
                            final KafkaClientSupplier clientSupplier,
-                           final TaskId taskId,
                            final UUID processId,
                            final LogContext logContext,
                            final Time time) {
@@ -102,21 +100,6 @@ public class StreamsProducer {
         switch (processingMode) {
             case AT_LEAST_ONCE: {
                 producerConfigs = config.getProducerConfigs(threadProducerClientId(threadId));
-                eosV2ProducerConfigs = null;
-
-                break;
-            }
-            case EXACTLY_ONCE_ALPHA: {
-                producerConfigs = config.getProducerConfigs(
-                    taskProducerClientId(
-                        threadId,
-                        Objects.requireNonNull(taskId, "taskId cannot be null for exactly-once alpha")
-                    )
-                );
-
-                final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + taskId);
-
                 eosV2ProducerConfigs = null;
 
                 break;
@@ -302,10 +285,7 @@ public class StreamsProducer {
         }
         maybeBeginTransaction();
         try {
-            // EOS-v2 assumes brokers are on version 2.5+ and thus can understand the full set of consumer group metadata
-            // Thus if we are using EOS-v1 and can't make this assumption, we must downgrade the request to include only the group id metadata
-            final ConsumerGroupMetadata maybeDowngradedGroupMetadata = processingMode == EXACTLY_ONCE_V2 ? consumerGroupMetadata : new ConsumerGroupMetadata(consumerGroupMetadata.groupId());
-            producer.sendOffsetsToTransaction(offsets, maybeDowngradedGroupMetadata);
+            producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
             producer.commitTransaction();
             transactionInFlight = false;
         } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException | InvalidPidMappingException error) {

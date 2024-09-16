@@ -160,7 +160,6 @@ public class RecordCollectorTest {
             config,
             processId + "-StreamThread-1",
             clientSupplier,
-            null,
             processId,
             logContext,
             Time.SYSTEM
@@ -1401,7 +1400,6 @@ public class RecordCollectorTest {
                         };
                     }
                 },
-                taskId,
                 processId,
                 logContext,
                 Time.SYSTEM
@@ -1434,7 +1432,6 @@ public class RecordCollectorTest {
                         };
                     }
                 },
-                null,
                 null,
                 logContext,
                 Time.SYSTEM
@@ -1470,7 +1467,6 @@ public class RecordCollectorTest {
                         return mockProducer;
                     }
                 },
-                taskId,
                 processId,
                 logContext,
                 Time.SYSTEM
@@ -1881,7 +1877,6 @@ public class RecordCollectorTest {
                 }
             },
             null,
-            null,
             logContext,
             Time.SYSTEM
         );
@@ -1902,7 +1897,6 @@ public class RecordCollectorTest {
                     };
                 }
             },
-            null,
             null,
             logContext,
             Time.SYSTEM
