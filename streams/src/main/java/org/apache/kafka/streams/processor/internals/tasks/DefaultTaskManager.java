@@ -373,8 +373,16 @@ public class DefaultTaskManager implements TaskManager {
             t.requestShutdown();
         }
         signalTaskExecutors();
-        for (final TaskExecutor t: taskExecutors) {
-            t.awaitShutdown(duration);
+        try {
+            for (final TaskExecutor t: taskExecutors) {
+                t.awaitShutdown(Duration.ofSeconds(10));
+            }
+        } catch (Exception e) {
+            System.err.println("Got stuck in shutdown!");
+            signalTaskExecutors();
+            for (final TaskExecutor t: taskExecutors) {
+                t.awaitShutdown(duration);
+            }
         }
     }
 }
