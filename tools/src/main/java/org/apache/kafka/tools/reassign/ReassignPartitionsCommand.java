@@ -129,7 +129,6 @@ public class ReassignPartitionsCommand {
             Properties props = opts.options.has(opts.commandConfigOpt)
                 ? Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
                 : new Properties();
-            validateBootstrapControllerNotSupportedAction(opts);
             if (opts.options.has(opts.bootstrapControllerOpt)) {
                 props.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, opts.options.valueOf(opts.bootstrapControllerOpt));
             } else {
@@ -153,14 +152,6 @@ public class ReassignPartitionsCommand {
         // If the command failed, exit with a non-zero exit code.
         if (failed) {
             Exit.exit(1);
-        }
-    }
-
-    private static void validateBootstrapControllerNotSupportedAction(ReassignPartitionsCommandOptions opts) {
-        if (opts.options.has(opts.bootstrapControllerOpt)) {
-            if (opts.options.has(opts.verifyOpt) || opts.options.has(opts.executeOpt) || opts.options.has(opts.generateOpt)) {
-                throw new UnsupportedOperationException("The --bootstrap-controller option is not supported with these action.");
-            }
         }
     }
 
@@ -1419,14 +1410,14 @@ public class ReassignPartitionsCommand {
 
         OptionSpec<?> action = allActions.get(0);
         
-        OptionSpec<String> bootstrapOpt = null;
+        boolean isBootstrapServer = true;
         
         if (opts.options.has(opts.bootstrapServerOpt) && opts.options.has(opts.bootstrapControllerOpt)) 
             CommandLineUtils.printUsageAndExit(opts.parser, "Please don't specify both --bootstrap-server and --bootstrap-controller");
         else if (!opts.options.has(opts.bootstrapServerOpt) && !opts.options.has(opts.bootstrapControllerOpt))
             CommandLineUtils.printUsageAndExit(opts.parser, "Please specify either --bootstrap-server or --bootstrap-controller");
-        else 
-            bootstrapOpt = opts.options.has(opts.bootstrapServerOpt) ? opts.bootstrapServerOpt : opts.bootstrapControllerOpt;
+        else
+            isBootstrapServer = opts.options.has(opts.bootstrapServerOpt);
 
         // Make sure that we have all the required arguments for our action.
         Map<OptionSpec<?>, List<OptionSpec<?>>> requiredArgs = new HashMap<>();
@@ -1451,32 +1442,32 @@ public class ReassignPartitionsCommand {
         Map<OptionSpec<?>, List<OptionSpec<?>>> permittedArgs = new HashMap<>();
 
         permittedArgs.put(opts.verifyOpt, Arrays.asList(
-            bootstrapOpt,
+            opts.bootstrapServerOpt,
             opts.commandConfigOpt,
             opts.preserveThrottlesOpt
         ));
         permittedArgs.put(opts.generateOpt, Arrays.asList(
-            bootstrapOpt,
+            opts.bootstrapServerOpt,
             opts.brokerListOpt,
             opts.commandConfigOpt,
             opts.disableRackAware
         ));
         permittedArgs.put(opts.executeOpt, Arrays.asList(
             opts.additionalOpt,
-            bootstrapOpt,
+            opts.bootstrapServerOpt,
             opts.commandConfigOpt,
             opts.interBrokerThrottleOpt,
             opts.replicaAlterLogDirsThrottleOpt,
             opts.timeoutOpt
         ));
         permittedArgs.put(opts.cancelOpt, Arrays.asList(
-            bootstrapOpt,
+            isBootstrapServer ? opts.bootstrapServerOpt : opts.bootstrapControllerOpt,
             opts.commandConfigOpt,
             opts.preserveThrottlesOpt,
             opts.timeoutOpt
         ));
         permittedArgs.put(opts.listOpt, Arrays.asList(
-            bootstrapOpt,
+            isBootstrapServer ? opts.bootstrapServerOpt : opts.bootstrapControllerOpt,
             opts.commandConfigOpt
         ));
 
@@ -1488,8 +1479,16 @@ public class ReassignPartitionsCommand {
                     String.format("Option \"%s\" can't be used with action \"%s\"", opt, action));
             }
         });
-
+        validateBootstrapControllerNotSupportedAction(opts);
         return opts;
+    }
+
+    private static void validateBootstrapControllerNotSupportedAction(ReassignPartitionsCommandOptions opts) {
+        if (opts.options.has(opts.bootstrapControllerOpt)) {
+            if (opts.options.has(opts.verifyOpt) || opts.options.has(opts.executeOpt) || opts.options.has(opts.generateOpt)) {
+                throw new UnsupportedOperationException("The --bootstrap-controller option is not supported with these action.");
+            }
+        }
     }
 
     static Set<TopicPartitionReplica> alterReplicaLogDirs(Admin adminClient,

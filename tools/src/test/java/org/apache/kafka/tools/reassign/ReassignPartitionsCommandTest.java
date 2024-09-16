@@ -94,7 +94,6 @@ import static org.apache.kafka.tools.ToolsTestUtils.assignThrottledPartitionRepl
 import static org.apache.kafka.tools.ToolsTestUtils.throttleAllBrokersReplication;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_THROTTLES;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelAssignment;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.curReassignmentsToString;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generateAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAssignment;

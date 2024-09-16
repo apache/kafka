@@ -86,7 +86,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             .ofType(String.class);
 
         bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The controller to use for reassignment. " +
-                        "By default, the tool will get the quorum controller.")
+                        "By default, the tool will get the quorum controller. This option supports the actions --cancel and --list.")
             .withOptionalArg()
             .describedAs("bootstrap controller to connect to")
             .ofType(String.class);
