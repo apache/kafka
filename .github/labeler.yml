@@ -1,0 +1,86 @@
+build:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**'
+      - 'gradle/**'
+      - '*gradlew*'
+
+clients:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'clients/**'
+
+connect:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'connect/**'
+
+core:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'core/**'
+    - '*server*/**'
+
+storage:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'storage/**'
+
+streams:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'streams/**'
+
+tests:
+- changed-files:
+  - any-glob-to-all-files: 
+    - 'tests/**'
+    - '**/test/**'
+
+tools:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'tools/**'
+    - 'trogdor/**'
+    - 'vagrant/**'
+    - 'committer-tools/**'
+
+docs:
+- changed-files:
+  - any-glob-to-any-file:
+    - 'docs/**'
+    - '**/*.md'
+    - 'examples/**'
+
+docker:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'docker/**'
+
+
+coordinator:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'group-coordinator/**'
+    - 'coordinator-common/**'
+
+performance:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'jmh-benchmarks/**'
+
+consumer:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'clients/src/main/java/org/apache/kafka/clients/consumer/**'
+
+producer:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'clients/src/main/java/org/apache/kafka/clients/producer/**'
+
+kraft:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'metadata/**'
+      - 'raft/**'
