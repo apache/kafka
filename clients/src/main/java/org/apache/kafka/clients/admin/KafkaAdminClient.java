@@ -4150,7 +4150,7 @@ public class KafkaAdminClient extends AdminClient {
             List<MemberIdentity> members = options.members().stream()
                     .map(m -> m.toMemberIdentity().setReason(reason))
                     .collect(Collectors.toList());
-                    handleRemoveMembersFromConsumerGroupAndInvokeDriver(groupId, members, options.timeoutMs, future);
+            handleRemoveMembersFromConsumerGroupAndInvokeDriver(groupId, members, options.timeoutMs, future);
             return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
         }
 
