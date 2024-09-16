@@ -206,7 +206,6 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -245,7 +244,6 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -280,7 +278,6 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -315,7 +312,6 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -351,7 +347,6 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -387,7 +382,6 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -436,7 +430,6 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -488,7 +481,6 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -532,7 +524,6 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -576,7 +567,6 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -625,7 +615,6 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -675,7 +664,6 @@ public interface KStream<K, V> {
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
@@ -3150,7 +3138,6 @@ public interface KStream<K, V> {
      * @param <V1>                the value type of the new stream
      * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
      * @see #flatMap(KeyValueMapper)
-     * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
@@ -3281,7 +3268,6 @@ public interface KStream<K, V> {
      * @param <V1>                the value type of the new stream
      * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
      * @see #flatMap(KeyValueMapper)
-     * @see #transform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
@@ -3396,7 +3382,6 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
     @Deprecated
@@ -3508,7 +3493,6 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
     @Deprecated
@@ -3624,7 +3608,6 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
     @Deprecated
@@ -3740,7 +3723,6 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
     @Deprecated
@@ -3864,7 +3846,6 @@ public interface KStream<K, V> {
      * different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
@@ -3990,7 +3971,6 @@ public interface KStream<K, V> {
      * different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
@@ -4117,7 +4097,6 @@ public interface KStream<K, V> {
      * different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, String...)} instead.
      */
@@ -4244,7 +4223,6 @@ public interface KStream<K, V> {
      * different type)
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
-     * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
      * @deprecated Since 3.3. Use {@link KStream#processValues(FixedKeyProcessorSupplier, Named, String...)} instead.
      */
@@ -4348,7 +4326,6 @@ public interface KStream<K, V> {
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
      * @see #foreach(ForeachAction)
-     * @see #transform(TransformerSupplier, String...)
      * @deprecated Since 3.0. Use {@link KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, java.lang.String...)} instead.
      */
     @Deprecated
@@ -4450,7 +4427,6 @@ public interface KStream<K, V> {
      * @param named             a {@link Named} config used to name the processor in the topology
      * @param stateStoreNames   the names of the state store used by the processor
      * @see #foreach(ForeachAction)
-     * @see #transform(TransformerSupplier, String...)
      * @deprecated Since 3.0. Use {@link KStream#process(org.apache.kafka.streams.processor.api.ProcessorSupplier, org.apache.kafka.streams.kstream.Named, java.lang.String...)} instead.
      */
     @Deprecated
@@ -4551,7 +4527,6 @@ public interface KStream<K, V> {
      * @param stateStoreNames     the names of the state stores used by the processor; not required if the supplier
      *                            implements {@link ConnectedStoreProvider#stores()}
      * @see #map(KeyValueMapper)
-     * @see #transform(TransformerSupplier, String...)
      */
     <KOut, VOut> KStream<KOut, VOut> process(
         final ProcessorSupplier<? super K, ? super V, KOut, VOut> processorSupplier,
