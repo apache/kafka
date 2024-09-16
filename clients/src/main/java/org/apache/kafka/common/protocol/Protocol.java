@@ -157,6 +157,11 @@ public class Protocol {
                     b.append(") => ");
                     schemaToBnfHtml(requests[i], b, 2);
                     b.append("</pre>");
+
+                    b.append("<p><b>Request header version:</b> ");
+                    b.append(key.requestHeaderVersion((short) i));
+                    b.append("</p>\n");
+
                     schemaToFieldTableHtml(requests[i], b);
                 }
                 b.append("</div>\n");
@@ -178,6 +183,11 @@ public class Protocol {
                     b.append(") => ");
                     schemaToBnfHtml(responses[i], b, 2);
                     b.append("</pre>");
+
+                    b.append("<p><b>Response header version:</b> ");
+                    b.append(key.responseHeaderVersion((short) i));
+                    b.append("</p>\n");
+
                     schemaToFieldTableHtml(responses[i], b);
                 }
                 b.append("</div>\n");
