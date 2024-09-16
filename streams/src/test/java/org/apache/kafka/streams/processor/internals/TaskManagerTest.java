@@ -123,6 +123,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -1242,6 +1243,35 @@ public class TaskManagerTest {
         verify(task01).initializeIfNeeded();
         verify(tasks).addPendingTasksToInit(
             argThat(tasksToInit -> tasksToInit.contains(task00) && !tasksToInit.contains(task01))
+        );
+        verify(stateUpdater, never()).add(task00);
+        verify(stateUpdater).add(task01);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldRetryInitializationWhenCanNotTryLock() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+                .withInputPartitions(taskId00Partitions)
+                .inState(State.RESTORING).build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+                .withInputPartitions(taskId01Partitions)
+                .inState(State.RUNNING).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
+        final TaskManager.BackoffRecord backoffRecord = mock(TaskManager.BackoffRecord.class);
+        final HashMap taskIdToBackoffRecord = mock(HashMap.class);
+        doReturn(true).when(taskIdToBackoffRecord).containsKey(taskId00);
+        doReturn(backoffRecord).when(taskIdToBackoffRecord).get(taskId00);
+        doReturn(false).when(backoffRecord).canAttempt(anyLong());
+
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        taskManager.setTaskIdToBackoffRecord(taskIdToBackoffRecord);
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        verify(tasks).addPendingTasksToInit(
+                argThat(tasksToInit -> tasksToInit.contains(task00) && !tasksToInit.contains(task01))
         );
         verify(stateUpdater, never()).add(task00);
         verify(stateUpdater).add(task01);
