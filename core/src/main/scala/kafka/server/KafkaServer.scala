@@ -1051,7 +1051,7 @@ class KafkaServer(
         // Close remote log manager before stopping processing requests, to give a chance to any
         // of its underlying clients (especially in RemoteStorageManager and RemoteLogMetadataManager)
         // to close gracefully.
-        remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager option"))
+        remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager"))
 
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)
@@ -1068,8 +1068,7 @@ class KafkaServer(
           CoreUtils.swallow(socketServer.shutdown(), this)
         unregisterCurrentControllerIdMetric()
         Utils.closeQuietly(metrics, "metrics")
-        if (brokerTopicStats != null)
-          CoreUtils.swallow(brokerTopicStats.close(), this)
+        Utils.closeQuietly(brokerTopicStats, "broker topic stats")
 
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()

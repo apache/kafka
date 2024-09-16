@@ -547,7 +547,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
   def shutdown(): Unit = {
     topicPurgatory.shutdown()
-    createTopicPolicy.foreach(Utils.closeQuietly(_, "topic policy"))
+    createTopicPolicy.foreach(Utils.closeQuietly(_, "create topic policy"))
     alterConfigPolicy.foreach(Utils.closeQuietly(_, "alter config policy"))
   }
 

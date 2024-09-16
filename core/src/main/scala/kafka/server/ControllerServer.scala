@@ -503,7 +503,7 @@ class ControllerServer(
       Utils.closeQuietly(controller, "controller")
       Utils.closeQuietly(quorumControllerMetrics, "quorum controller metrics")
       authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
-      createTopicPolicy.foreach(policy => Utils.closeQuietly(policy, "topic policy"))
+      createTopicPolicy.foreach(policy => Utils.closeQuietly(policy, "create topic policy"))
       alterConfigPolicy.foreach(policy => Utils.closeQuietly(policy, "alter config policy"))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
       CoreUtils.swallow(config.dynamicConfig.clear(), this)

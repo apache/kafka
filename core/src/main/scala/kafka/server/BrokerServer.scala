@@ -756,7 +756,7 @@ class BrokerServer(
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
-      remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager option"))
+      remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager"))
 
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
