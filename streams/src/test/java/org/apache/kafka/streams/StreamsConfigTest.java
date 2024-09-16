@@ -28,11 +28,11 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
@@ -556,13 +556,6 @@ public class StreamsConfigTest {
         assertThat(consumerConfigs.get("internal.throw.on.fetch.stable.offset.unsupported"), is(true));
     }
 
-    @Test
-    public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosDisabled() {
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
-        assertThat(producerConfigs.get("internal.auto.downgrade.txn.commit"), is(nullValue()));
-    }
-
-    // TODO: should we keep this test? (cf other TODO)
     @Test
     public void shouldNotSetInternalAutoDowngradeTxnCommitToTrueInProducerForEosV2() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);

@@ -1666,8 +1666,6 @@ public class TaskManagerTest {
         assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
 
-    // this @Test annotation was removed via https://github.com/apache/kafka/pull/15896
-    // but I am not sure why -- maybe by mistake?
     @Test
     public void shouldAddSubscribedTopicsFromAssignmentToTopologyMetadata() {
         final Map<TaskId, Set<TopicPartition>> activeTasksAssignment = mkMap(
