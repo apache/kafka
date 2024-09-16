@@ -4150,8 +4150,7 @@ public class KafkaAdminClient extends AdminClient {
             List<MemberIdentity> members = options.members().stream()
                     .map(m -> m.toMemberIdentity().setReason(reason))
                     .collect(Collectors.toList());
-            RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
-            invokeDriver(handler, future, options.timeoutMs);
+                    handleRemoveMembersFromConsumerGroupAndInvokeDriver(groupId, members, options.timeoutMs, future);
             return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
         }
 
@@ -4159,12 +4158,17 @@ public class KafkaAdminClient extends AdminClient {
             if (ex != null) {
                 future.completeExceptionally(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), ex));
             } else {
-                RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
-                invokeDriver(handler, future, options.timeoutMs);
+                handleRemoveMembersFromConsumerGroupAndInvokeDriver(groupId, members, options.timeoutMs, future);
             }
         });
 
         return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
+    }
+
+    private void handleRemoveMembersFromConsumerGroupAndInvokeDriver(String groupId, List<MemberIdentity> members, Integer timeoutMs,
+        SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future) {
+        RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
+        invokeDriver(handler, future, timeoutMs);
     }
 
     @Override
