@@ -697,7 +697,7 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_DOC = "The strategy we use for rack aware assignment. Rack aware assignment will take <code>client.rack</code> and <code>racks</code> of <code>TopicPartition</code> into account when assigning"
         + " tasks to minimize cross rack traffic. Valid settings are : <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_NONE + "</code> (default), which will disable rack aware assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC
-        + "</code>, which will compute minimum cross rack traffic assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY + "</code>, which will compute minimum cross rack traffic and try to balance the tasks of same subtopolgies across different clients";
+        + "</code>, which will compute minimum cross rack traffic assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY + "</code>, which will compute minimum cross rack traffic and try to balance the tasks of same subtopologies across different clients";
 
     /** {@code rack.aware.assignment.tags} */
     @SuppressWarnings("WeakerAccess")
@@ -1281,7 +1281,11 @@ public class StreamsConfig extends AbstractConfig {
             } else if (value instanceof String) {
                 return Boolean.parseBoolean((String) value);
             } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a true/false value.");
+                log.warn(String.format(
+                    "Invalid value (%s) on internal configuration '%s'. Please specify a true/false value.",
+                    value,
+                    key
+                ));
                 return defaultValue;
             }
         }
@@ -1293,7 +1297,11 @@ public class StreamsConfig extends AbstractConfig {
             } else if (value instanceof String) {
                 return Long.parseLong((String) value);
             } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a numeric value.");
+                log.warn(String.format(
+                    "Invalid value (%s) on internal configuration '%s'. Please specify a numeric value.",
+                    value,
+                    key
+                ));
                 return defaultValue;
             }
         }
@@ -1303,7 +1311,11 @@ public class StreamsConfig extends AbstractConfig {
             if (value instanceof String) {
                 return (String) value;
             } else {
-                log.warn("Invalid value (" + value + ") on internal configuration '" + key + "'. Please specify a String value.");
+                log.warn(String.format(
+                    "Invalid value (%s) on internal configuration '%s'. Please specify a String value.",
+                    value,
+                    key
+                ));
                 return defaultValue;
             }
         }
@@ -1525,7 +1537,7 @@ public class StreamsConfig extends AbstractConfig {
         // Streams does not allow users to configure certain consumer/producer configurations, for example,
         // enable.auto.commit. In cases where user tries to override such non-configurable
         // consumer/producer configurations, log a warning and remove the user defined value from the Map.
-        // Thus the default values for these consumer/producer configurations that are suitable for
+        // Thus, the default values for these consumer/producer configurations that are suitable for
         // Streams will be used instead.
 
         final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
