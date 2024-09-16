@@ -105,7 +105,7 @@ public class TaskManager {
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
-    private final HashMap<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
+    private Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
 
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
@@ -151,6 +151,11 @@ public class TaskManager {
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
+    }
+
+    /* For testing */
+    void setTaskIdToBackoffRecord(final Map<TaskId, BackoffRecord> taskIdToBackoffRecord) {
+        this.taskIdToBackoffRecord = taskIdToBackoffRecord;
     }
 
     public double totalProducerBlockedTime() {
@@ -1013,17 +1018,18 @@ public class TaskManager {
         try {
             if (canTryLock(task.id(), nowMs)) {
                 task.initializeIfNeeded();
-                stateUpdater.add(task);
                 taskIdToBackoffRecord.remove(task.id());
+                stateUpdater.add(task);
             } else {
                 log.trace("Task {} is still not allowed to retry acquiring the state directory lock", task.id());
-                handleUnsuccessfulLockAcquiring(task, nowMs);
+                tasks.addPendingTasksToInit(Collections.singleton(task));
             }
         } catch (final LockException lockException) {
             // The state directory may still be locked by another thread, when the rebalance just happened.
             // Retry in the next iteration.
             log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
-            handleUnsuccessfulLockAcquiring(task, nowMs);
+            tasks.addPendingTasksToInit(Collections.singleton(task));
+            updateOrCreateBackoffRecord(task.id(), nowMs);
         }
     }
 
@@ -2127,11 +2133,6 @@ public class TaskManager {
         tasks.addTask(task);
     }
 
-    private void handleUnsuccessfulLockAcquiring(final Task task, final long nowMs) {
-        updateOrCreateBackoffRecord(task.id(), nowMs);
-        tasks.addPendingTasksToInit(Collections.singleton(task));
-    }
-
     private boolean canTryLock(final TaskId taskId, final long nowMs) {
         return !taskIdToBackoffRecord.containsKey(taskId) || taskIdToBackoffRecord.get(taskId).canAttempt(nowMs);
     }
@@ -2147,7 +2148,7 @@ public class TaskManager {
     public static class BackoffRecord {
         private long attempts;
         private long lastAttemptMs;
-        private static final ExponentialBackoff EXPONENTIAL_BACKOFF = new ExponentialBackoff(1, 2, 10000, 0.5);
+        private static final ExponentialBackoff EXPONENTIAL_BACKOFF = new ExponentialBackoff(1000, 2, 10000, 0.5);
 
 
         public BackoffRecord(final long nowMs) {
@@ -2161,7 +2162,7 @@ public class TaskManager {
         }
 
         public boolean canAttempt(final long nowMs) {
-            return  nowMs - lastAttemptMs >= EXPONENTIAL_BACKOFF.backoff(attempts);
+            return nowMs - lastAttemptMs >= EXPONENTIAL_BACKOFF.backoff(attempts);
         }
     }
 }
