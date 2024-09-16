@@ -122,10 +122,8 @@ ext {
     if (name == "compileTestJava" || name == "compileTestScala") {
       options.compilerArgs << "-parameters"
     } else if (name == "compileScala") {
-      options.compilerArgs << "-Xlint:deprecation"
+      options.compilerArgs << "-Xlint:all"
       options.compilerArgs << "-encoding" << "UTF-8"
-      options.compilerArgs << "-Xlint:deprecation"
-      options.compilerArgs << "-Xlint:unchecked"
     }
   }
 }
