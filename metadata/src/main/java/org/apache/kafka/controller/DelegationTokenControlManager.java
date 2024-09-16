@@ -189,12 +189,8 @@ public class DelegationTokenControlManager {
             maxLifeTime = Math.min(maxLifeTime, requestData.maxLifetimeMs());
         }
 
-        if (checkTimestampOverflow(now, maxLifeTime)) {
-            return ControllerResult.atomicOf(records, responseData.setErrorCode(INVALID_TIMESTAMP.code()));
-        }
-
-        long maxTimestamp = now + maxLifeTime;
-        long expiryTimestamp = Math.min(maxTimestamp, now + tokenDefaultRenewLifetimeMs);
+        long maxTimestamp = calculateMaxTimestamp(now, maxLifeTime);
+        long expiryTimestamp = calculateExpiryTimestamp(now, maxLifeTime, Math.min(maxTimestamp, now + tokenDefaultRenewLifetimeMs));
 
         String tokenId = Uuid.randomUuid().toString();
 
@@ -229,6 +225,14 @@ public class DelegationTokenControlManager {
 
         records.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), (short) 0));
         return ControllerResult.atomicOf(records, responseData);
+    }
+
+    private long calculateExpiryTimestamp(long now, long maxLifeTime, long maxTimestamp) {
+        return checkTimestampOverflow(now, maxLifeTime) ? Long.MAX_VALUE : maxTimestamp;
+    }
+
+    private long calculateMaxTimestamp(long now, long maxLifeTime) {
+        return calculateExpiryTimestamp(now, maxLifeTime, now + maxLifeTime);
     }
 
     public ControllerResult<RenewDelegationTokenResponseData> renewDelegationToken(
