@@ -75,9 +75,15 @@ public class ProducerPerformance {
             // not thread-safe, do not share with other threads
             SplittableRandom random = new SplittableRandom(0);
             ProducerRecord<byte[], byte[]> record;
-            stats = new Stats(config.numRecords, 5000);
+            if (config.warmupRecords > 0) {
+                this.warmupStats = new Stats(config.warmupRecords, 5000);
+                //stats = new Stats(config.numRecords, 5000);
+            }
             long startMs = System.currentTimeMillis();
 
+            // TODO: Keep this message? Maybe unnecessary
+            if (config.warmupRecords > 0)
+                System.out.println("Warmup first " + config.warmupRecords + " records. Steady-state results will print after the complete-test summary.");
             ThroughputThrottler throttler = new ThroughputThrottler(config.throughput, startMs);
 
             int currentTransactionSize = 0;
@@ -94,8 +100,17 @@ public class ProducerPerformance {
                 record = new ProducerRecord<>(config.topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                cb = new PerfCallback(sendStartMs, payload.length, stats);
-                producer.send(record, cb);
+                if (i < config.warmupRecords) {
+                    cb = new PerfCallback(sendStartMs, payload.length, warmupStats);
+                    producer.send(record, cb);
+                } else if (i == config.warmupRecords) {
+                    stats = new Stats(config.numRecords - config.warmupRecords, 5000, config.warmupRecords);
+                    cb = new PerfCallback(sendStartMs, payload.length, stats);
+                    producer.send(record, cb);
+                } else {
+                    cb = new PerfCallback(sendStartMs, payload.length, stats);
+                    producer.send(record, cb);
+                }
 
                 currentTransactionSize++;
                 if (config.transactionsEnabled && config.transactionDurationMs <= (sendStartMs - transactionStartTime)) {
@@ -114,6 +129,10 @@ public class ProducerPerformance {
             if (!config.shouldPrintMetrics) {
                 producer.close();
 
+                /* print warmup stats if relevant */
+                if (config.warmupRecords > 0) {
+                    stats.printTotal(warmupStats);
+                }
                 /* print final results */
                 stats.printTotal();
             } else {
@@ -122,6 +141,10 @@ public class ProducerPerformance {
                 // expects this class to work with older versions of the client jar that don't support flush().
                 producer.flush();
 
+                /* print warmup stats if relevant */
+                if (config.warmupRecords > 0) {
+                    stats.printTotal(warmupStats);
+                }
                 /* print final results */
                 stats.printTotal();
 
@@ -148,6 +171,7 @@ public class ProducerPerformance {
     Callback cb;
 
     Stats stats;
+    Stats warmupStats;
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
             SplittableRandom random, boolean payloadMonotonic, long recordValue) {
@@ -326,6 +350,16 @@ public class ProducerPerformance {
                        "--producer.config, or --transactional-id but --transaction-duration-ms is not specified, " +
                        "the default value will be 3000.");
 
+        parser.addArgument("--warmup-records")
+               .action(store())
+               .required(false)
+               .type(Long.class)
+               .metavar("WARMUP-RECORDS")
+               .dest("warmupRecords")
+               .setDefault(0L)
+               .help("The number of records to treat as warmup; these initial records will not be included in steady-state statistics. " +
+                       "An additional summary line will be printed describing the steady-state statistics. (default: 0).");
+
         return parser;
     }
 
@@ -346,8 +380,13 @@ public class ProducerPerformance {
         private long windowTotalLatency;
         private long windowBytes;
         private long windowStart;
+        private long warmupRecords;
 
         public Stats(long numRecords, int reportingInterval) {
+            this(numRecords, reportingInterval, 0);
+        }
+
+        public Stats(long numRecords, int reportingInterval, long warmupRecords) {
             this.start = System.currentTimeMillis();
             this.windowStart = System.currentTimeMillis();
             this.iteration = 0;
@@ -361,6 +400,7 @@ public class ProducerPerformance {
             this.windowBytes = 0;
             this.totalLatency = 0;
             this.reportingInterval = reportingInterval;
+            this.warmupRecords = warmupRecords;
         }
 
         public void record(int latency, int bytes, long time) {
@@ -403,6 +443,18 @@ public class ProducerPerformance {
             return this.index;
         }
 
+        public int maxLatency() {
+            return this.maxLatency;
+        }
+
+        public int[] getLatencies() {
+            return this.latencies;
+        }
+
+        public long getTotalLatency() {
+            return this.totalLatency;
+        }
+
         public void printWindow() {
             long elapsed = System.currentTimeMillis() - windowStart;
             double recsPerSec = 1000.0 * windowCount / (double) elapsed;
@@ -428,12 +480,43 @@ public class ProducerPerformance {
             double recsPerSec = 1000.0 * count / (double) elapsed;
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
-            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
+            String state = "";
+            if (this.warmupRecords > 0) {
+                state = " steady state";
+            }
+            System.out.printf("%d%s records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
                               count,
+                              state,
                               recsPerSec,
                               mbPerSec,
                               totalLatency / (double) count,
                               (double) maxLatency,
+                              percs[0],
+                              percs[1],
+                              percs[2],
+                              percs[3]);
+        }
+
+        public void printTotal(Stats warmupStats) {
+            long overallElapsed = System.currentTimeMillis() - warmupStats.start;
+            long overallCount = count + warmupStats.totalCount();
+            long overallBytes = bytes + warmupStats.bytes();
+            double overallRecsPerSec = 1000.0 * overallCount / (double) overallElapsed;
+            double overallMbPerSec = 1000.0 * overallBytes / (double) overallElapsed / (1024.0 * 1024.0);
+            int overallMax = Math.max(maxLatency, warmupStats.maxLatency());
+            long overallTotalLatency = totalLatency + warmupStats.getTotalLatency();
+
+            int totalElements = index + warmupStats.index();
+            int[] overallLatencyArray = Arrays.copyOf(warmupStats.getLatencies(), totalElements);
+            System.arraycopy(this.getLatencies(), 0, overallLatencyArray, warmupStats.index(), this.index());
+
+            int[] percs = percentiles(overallLatencyArray, totalElements, 0.5, 0.95, 0.99, 0.999);
+            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
+                              overallCount,
+                              overallRecsPerSec,
+                              overallMbPerSec,
+                              overallTotalLatency / (double) overallCount,
+                              (double) overallMax,
                               percs[0],
                               percs[1],
                               percs[2],
@@ -480,6 +563,7 @@ public class ProducerPerformance {
     static final class ConfigPostProcessor {
         final String topicName;
         final long numRecords;
+        final long warmupRecords;
         final Integer recordSize;
         final double throughput;
         final boolean payloadMonotonic;
@@ -493,6 +577,7 @@ public class ProducerPerformance {
             Namespace namespace = parser.parseArgs(args);
             this.topicName = namespace.getString("topic");
             this.numRecords = namespace.getLong("numRecords");
+            this.warmupRecords = Math.max(namespace.getLong("warmupRecords"), 0);
             this.recordSize = namespace.getInt("recordSize");
             this.throughput = namespace.getDouble("throughput");
             this.payloadMonotonic = namespace.getBoolean("payloadMonotonic");
@@ -503,6 +588,9 @@ public class ProducerPerformance {
             String payloadFilePath = namespace.getString("payloadFile");
             Long transactionDurationMsArg = namespace.getLong("transactionDurationMs");
             String transactionIdArg = namespace.getString("transactionalId");
+            if (warmupRecords >= numRecords) {
+                throw new ArgumentParserException("The value for --warmup-records must be strictly fewer than the number of records in the test, --num-records.", parser);
+            }
             if (producerConfigs == null && producerConfigFile == null) {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
             }

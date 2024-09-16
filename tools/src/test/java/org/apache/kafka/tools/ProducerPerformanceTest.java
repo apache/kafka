@@ -472,4 +472,75 @@ public class ProducerPerformanceTest {
         assertTrue(configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG).toString()
                 .startsWith(ProducerPerformance.DEFAULT_TRANSACTION_ID_PREFIX));
     }
+
+    @Test
+    public void testWarmupRecordsFractionalValue() throws Exception {
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--warmup-records", "1.5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        ArgumentParser parser = ProducerPerformance.argParser();
+        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
+    }
+
+    @Test
+    public void testWarmupRecordsString() throws Exception {
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--warmup-records", "foo",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        ArgumentParser parser = ProducerPerformance.argParser();
+        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
+    }
+
+    @Test
+    public void testWarmupNumberOfSuccessfulSendAndClose() throws IOException {
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            producerPerformanceSpy.cb.onCompletion(null, null);
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--warmup-records", "2",
+            "--throughput", "1",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        verify(producerMock, times(10)).send(any(), any());
+        assertEquals(2, producerPerformanceSpy.warmupStats.totalCount());
+        assertEquals(8, producerPerformanceSpy.stats.totalCount());
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testWarmupNegativeRecordsNormalTest() throws IOException {
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            producerPerformanceSpy.cb.onCompletion(null, null);
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--warmup-records", "-1",
+            "--throughput", "1",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        verify(producerMock, times(10)).send(any(), any());
+        assertEquals(10, producerPerformanceSpy.stats.totalCount());
+        verify(producerMock, times(1)).close();
+    }
 }
