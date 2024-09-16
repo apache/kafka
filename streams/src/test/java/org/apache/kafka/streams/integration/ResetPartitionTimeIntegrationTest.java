@@ -88,9 +88,8 @@ public class ResetPartitionTimeIntegrationTest {
     private static final int DEFAULT_TIMEOUT = 100;
     private static long lastRecordedTimestamp = -2L;
 
-    @SuppressWarnings("deprecation")
     @ParameterizedTest
-    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
+    @ValueSource(strings = {StreamsConfig.AT_LEAST_ONCE, StreamsConfig.EXACTLY_ONCE_V2})
     public void shouldPreservePartitionTimeOnKafkaStreamRestart(final String processingGuarantee, final TestInfo testInfo) {
         final String appId = "app-" + safeUniqueTestName(testInfo);
         final String input = "input";
