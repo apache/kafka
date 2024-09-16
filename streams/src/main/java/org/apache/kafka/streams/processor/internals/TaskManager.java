@@ -1016,10 +1016,8 @@ public class TaskManager {
                 stateUpdater.add(task);
                 taskIdToBackoffRecord.remove(task.id());
             } else {
-                final String errorMsg = String.format("Task " + task.id() + " is still not allowed to retry acquiring the state directory lock");
-                log.trace(errorMsg);
+                log.trace("Task {} is still not allowed to retry acquiring the state directory lock", task.id());
                 handleUnsuccessfulLockAcquiring(task, nowMs);
-                throw new RuntimeException(errorMsg);
             }
         } catch (final LockException lockException) {
             // The state directory may still be locked by another thread, when the rebalance just happened.
