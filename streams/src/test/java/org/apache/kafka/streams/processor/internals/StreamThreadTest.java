@@ -95,6 +95,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -172,6 +173,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@Timeout(300)
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StreamThreadTest {
@@ -2552,13 +2554,13 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")        
+    @MethodSource("data")
     public void shouldLogAndRecordSkippedMetricForDeserializationException(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
         final Properties properties = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
         properties.setProperty(
-            StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+            StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
             LogAndContinueExceptionHandler.class.getName()
         );
         properties.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());

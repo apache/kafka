@@ -80,6 +80,7 @@
   <subpackage name="log.remote">
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.log.remote" />
+    <allow pkg="org.apache.kafka.server.log.remote.quota" />
     <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="org.apache.kafka.storage.log.metrics" />
@@ -141,5 +142,11 @@
     <allow pkg="kafka.test"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
+  </subpackage>
+
+  <subpackage name="security">
+    <allow pkg="org.apache.commons" />
+    <allow pkg="org.apache.directory" />
+    <allow pkg="org.apache.mina.core.service" />
   </subpackage>
 </import-control>

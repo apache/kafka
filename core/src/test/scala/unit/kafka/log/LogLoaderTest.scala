@@ -30,7 +30,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, MemoryRecords, RecordBatch, RecordVersion, SimpleRecord, TimestampType}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
 import org.apache.kafka.server.util.{MockTime, Scheduler}
@@ -60,8 +60,8 @@ class LogLoaderTest {
   var config: KafkaConfig = _
   val brokerTopicStats = new BrokerTopicStats
   val maxTransactionTimeoutMs: Int = 5 * 60 * 1000
-  val producerStateManagerConfig: ProducerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false)
-  val producerIdExpirationCheckIntervalMs: Int = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
+  val producerStateManagerConfig: ProducerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false)
+  val producerIdExpirationCheckIntervalMs: Int = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   var logsToClose: Seq[UnifiedLog] = Seq()
@@ -103,7 +103,7 @@ class LogLoaderTest {
     val logDirFailureChannel = new LogDirFailureChannel(logDirs.size)
 
     val maxTransactionTimeoutMs = 5 * 60 * 1000
-    val producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
+    val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
 
     // Create a LogManager with some overridden methods to facilitate interception of clean shutdown
     // flag and to inject an error
@@ -353,7 +353,7 @@ class LogLoaderTest {
 
     def createLogWithInterceptedReads(recoveryPoint: Long): UnifiedLog = {
       val maxTransactionTimeoutMs = 5 * 60 * 1000
-      val producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
+      val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
       val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
       val logDirFailureChannel = new LogDirFailureChannel(10)
       // Intercept all segment read calls
@@ -512,7 +512,7 @@ class LogLoaderTest {
       firstAppendTimestamp, coordinatorEpoch = coordinatorEpoch)
     assertEquals(firstAppendTimestamp, log.producerStateManager.lastEntry(producerId).get.lastTimestamp)
 
-    val maxProducerIdExpirationMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT
+    val maxProducerIdExpirationMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT
     mockTime.sleep(maxProducerIdExpirationMs)
     assertEquals(Optional.empty(), log.producerStateManager.lastEntry(producerId))
 
@@ -868,9 +868,11 @@ class LogLoaderTest {
     for (i <- 0 until numMessages) {
       assertEquals(i, LogTestUtils.readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
-        assertEquals(log.logSegments.asScala.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(log.logSegments.asScala.head.baseOffset,
+          log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).timestampAndOffsetOpt.get.offset)
       else
-        assertEquals(i, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(i,
+          log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).timestampAndOffsetOpt.get.offset)
     }
     log.close()
   }
@@ -942,9 +944,11 @@ class LogLoaderTest {
     for (i <- 0 until numMessages) {
       assertEquals(i, LogTestUtils.readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
-        assertEquals(log.logSegments.asScala.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(log.logSegments.asScala.head.baseOffset,
+          log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).timestampAndOffsetOpt.get.offset)
       else
-        assertEquals(i, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(i,
+          log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).timestampAndOffsetOpt.get.offset)
     }
     log.close()
   }

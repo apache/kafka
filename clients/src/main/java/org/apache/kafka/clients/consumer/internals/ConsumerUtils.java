@@ -215,9 +215,9 @@ public final class ConsumerUtils {
         }
     }
 
-    public static <T> T getResult(Future<T> future, Timer timer) {
+    public static <T> T getResult(Future<T> future, long timeoutMs) {
         try {
-            return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            return future.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof IllegalStateException)
                 throw (IllegalStateException) e.getCause();
@@ -227,6 +227,10 @@ public final class ConsumerUtils {
         } catch (java.util.concurrent.TimeoutException e) {
             throw new TimeoutException(e);
         }
+    }
+
+    public static <T> T getResult(Future<T> future, Timer timer) {
+        return getResult(future, timer.remainingMs());
     }
 
     public static <T> T getResult(Future<T> future) {

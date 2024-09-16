@@ -84,9 +84,9 @@ trait SaslSetup {
     val (serverKeytabFile, clientKeytabFile) = maybeCreateEmptyKeytabFiles()
     kdc = new MiniKdc(kdcConf, workDir)
     kdc.start()
-    kdc.createPrincipal(serverKeytabFile, JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost")
+    kdc.createPrincipal(serverKeytabFile, List(JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost").asJava)
     kdc.createPrincipal(clientKeytabFile,
-      JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2)
+      List(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2).asJava)
   }
 
   /** Return a tuple with the path to the server keytab file and client keytab file */

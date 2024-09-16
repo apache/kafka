@@ -19,7 +19,6 @@ package kafka.admin;
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
@@ -63,8 +62,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG;
 import static org.apache.kafka.security.PasswordEncoderConfigs.PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG;
@@ -82,6 +79,7 @@ public class ConfigCommandIntegrationTest {
     private List<String> alterOpts;
     private final String defaultBrokerId = "0";
     private final String defaultGroupName = "group";
+    private final String defaultClientMetricsName = "cm";
     private final ClusterInstance cluster;
 
     private static Runnable run(Stream<String> command) {
@@ -134,6 +132,21 @@ public class ConfigCommandIntegrationTest {
             errOut -> assertTrue(errOut.contains("Invalid entity type groups, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
     }
 
+    @ClusterTest(types = {Type.ZK})
+    public void testExitWithNonZeroStatusOnZkCommandAlterClientMetrics() {
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
+                        "--entity-type", "client-metrics",
+                        "--entity-name", "cm",
+                        "--alter", "--add-config", "metrics=org.apache")),
+                errOut -> assertTrue(errOut.contains("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
+
+        // Test for the --client-metrics alias
+        assertNonZeroStatusExit(Stream.concat(quorumArgs(), Stream.of(
+                        "--client-metrics", "cm",
+                        "--alter", "--add-config", "consumer.session.timeout.ms=50000")),
+                errOut -> assertTrue(errOut.contains("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument"), errOut));
+    }
+
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
     public void testNullStatusOnKraftCommandAlterUserQuota() {
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
@@ -158,6 +171,23 @@ public class ConfigCommandIntegrationTest {
         command = Stream.concat(quorumArgs(), Stream.of(
             "--group", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
+        message = captureStandardMsg(run(command));
+        assertTrue(StringUtils.isBlank(message), message);
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
+    public void testNullStatusOnKraftCommandAlterClientMetrics() {
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", "client-metrics",
+                "--entity-name", "cm",
+                "--alter", "--add-config", "metrics=org.apache"));
+        String message = captureStandardMsg(run(command));
+        assertTrue(StringUtils.isBlank(message), message);
+
+        // Test for the --client-metrics alias
+        command = Stream.concat(quorumArgs(), Stream.of(
+                "--client-metrics", "cm",
+                "--alter", "--add-config", "metrics=org.apache"));
         message = captureStandardMsg(run(command));
         assertTrue(StringUtils.isBlank(message), message);
     }
@@ -292,10 +322,7 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
-    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-        @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
-        @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
-    })
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
     public void testGroupConfigUpdateUsingKraft() throws Exception {
         alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "groups", "--alter");
         verifyGroupConfigUpdate();
@@ -321,6 +348,35 @@ public class ConfigCommandIntegrationTest {
             // Unknown config configured should fail
             assertThrows(ExecutionException.class,
                 () -> alterConfigWithKraft(client, Optional.of(defaultGroupName),
+                    singletonMap("unknown.config", "20000")));
+        }
+    }
+
+
+    @ClusterTest(types = {Type.KRAFT})
+    public void testClientMetricsConfigUpdate() throws Exception {
+        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "client-metrics", "--alter");
+        verifyClientMetricsConfigUpdate();
+
+        // Test for the --client-metrics alias
+        alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--client-metrics", "--alter");
+        verifyClientMetricsConfigUpdate();
+    }
+
+    private void verifyClientMetricsConfigUpdate() throws Exception {
+        try (Admin client = cluster.createAdminClient()) {
+            // Add config
+            Map<String, String> configs = new HashMap<>();
+            configs.put("metrics", "");
+            configs.put("interval.ms", "6000");
+            alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs);
+
+            // Delete config
+            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet());
+
+            // Unknown config configured should fail
+            assertThrows(ExecutionException.class,
+                () -> alterConfigWithKraft(client, Optional.of(defaultClientMetricsName),
                     singletonMap("unknown.config", "20000")));
         }
     }
@@ -562,6 +618,11 @@ public class ConfigCommandIntegrationTest {
         verifyGroupConfig(client, groupName, config);
     }
 
+    private void alterAndVerifyClientMetricsConfig(Admin client, String clientMetricsName, Map<String, String> config) throws Exception {
+        alterConfigWithKraft(client, Optional.of(clientMetricsName), config);
+        verifyClientMetricsConfig(client, clientMetricsName, config);
+    }
+
     private void alterConfigWithKraft(Admin client, Optional<String> resourceName, Map<String, String> config) {
         String configStr = transferConfigMapToString(config);
         ConfigCommand.ConfigCommandOptions addOpts =
@@ -585,6 +646,18 @@ public class ConfigCommandIntegrationTest {
             Map<String, String> current = getConfigEntryStream(client, configResource)
                 .filter(configEntry -> Objects.nonNull(configEntry.value()))
                 .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
+            return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
+        }, 10000, config + " are not updated");
+    }
+
+    private void verifyClientMetricsConfig(Admin client, String clientMetricsName, Map<String, String> config) throws Exception {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName);
+        TestUtils.waitForCondition(() -> {
+            Map<String, String> current = getConfigEntryStream(client, configResource)
+                    .filter(configEntry -> Objects.nonNull(configEntry.value()))
+                    .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
+            if (config.isEmpty())
+                return current.isEmpty();
             return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
         }, 10000, config + " are not updated");
     }
@@ -618,6 +691,17 @@ public class ConfigCommandIntegrationTest {
                 asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyGroupConfig(client, groupName, defaultConfigs);
+    }
+
+    private void deleteAndVerifyClientMetricsConfigValue(Admin client,
+                                                         String clientMetricsName,
+                                                         Set<String> defaultConfigs) throws Exception {
+        ConfigCommand.ConfigCommandOptions deleteOpts =
+            new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", clientMetricsName),
+                asList("--delete-config", String.join(",", defaultConfigs))));
+        ConfigCommand.alterConfig(client, deleteOpts);
+        // There are no default configs returned for client metrics
+        verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
     }
 
     private void verifyPerBrokerConfigValue(Admin client,

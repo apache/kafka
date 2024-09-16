@@ -39,4 +39,10 @@
   <allow pkg="org.apache.kafka.common.protocol" />
   <allow pkg="org.apache.kafka.common.requests" />
 
+  <subpackage name="server">
+    <subpackage name="share">
+      <allow pkg="org.apache.kafka.server.share" />
+    </subpackage>
+  </subpackage>
+
 </import-control>
