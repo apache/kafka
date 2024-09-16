@@ -44,7 +44,7 @@ import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareGroupConfig, ZkConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ShareCoordinatorConfig, ShareGroupConfig, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
@@ -237,6 +237,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private val _shareGroupConfig = new ShareGroupConfig(this)
   def shareGroupConfig: ShareGroupConfig = _shareGroupConfig
+
+  private val _shareCoordinatorConfig = new ShareCoordinatorConfig(this)
+  def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
 
   private val _transactionLogConfig = new TransactionLogConfig(this)
   private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
@@ -581,19 +584,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
     if (protocols.contains(GroupType.CONSUMER)) {
-      if (processRoles.isEmpty) {
-        throw new ConfigException(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported in KRaft cluster.")
-      }
-      if (!isNewGroupCoordinatorEnabled) {
-        throw new ConfigException(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported by the new group coordinator.")
+      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
+        warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
       }
     }
     if (protocols.contains(GroupType.SHARE)) {
-      if (processRoles.isEmpty) {
-        throw new ConfigException(s"The new '${GroupType.SHARE}' rebalance protocol is only supported in KRaft cluster.")
-      }
-      if (!isNewGroupCoordinatorEnabled) {
-        throw new ConfigException(s"The new '${GroupType.SHARE}' rebalance protocol is only supported by the new group coordinator.")
+      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
+        warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
       }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
@@ -629,8 +626,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled
 
   /** ********* DelegationToken Configuration **************/
-  val delegationTokenSecretKey = Option(getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG))
-    .getOrElse(getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_CONFIG))
+  val delegationTokenSecretKey = getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG)
   val tokenAuthEnabled = delegationTokenSecretKey != null && delegationTokenSecretKey.value.nonEmpty
   val delegationTokenMaxLifeMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG)
   val delegationTokenExpiryTimeMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG)
@@ -850,6 +846,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         throw new ConfigException(s"Missing required configuration `${ZkConfigs.ZK_CONNECT_CONFIG}` which has no default value.")
       }
       if (brokerIdGenerationEnable) {
+        if (migrationEnabled) {
+          require(brokerId != -1, "broker id generation is incompatible with migration to ZK. Please disable it before enabling migration")
+        }
         require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
       } else {
         require(brokerId >= 0, "broker.id must be greater than or equal to 0")
@@ -967,6 +966,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     } else {
       // ZK-based
       if (migrationEnabled) {
+        require(brokerId >= 0,
+          "broker broker.id.generation.enable is incompatible with migration to ZK. Please disable it before enabling migration")
         validateQuorumVotersAndQuorumBootstrapServerForMigration()
         require(controllerListenerNames.nonEmpty,
           s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")

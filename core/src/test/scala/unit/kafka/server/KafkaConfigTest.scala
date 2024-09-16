@@ -1072,7 +1072,6 @@ class KafkaConfigTest {
         case PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
 
         //delegation token configs
-        case DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_CONFIG => // ignore
         case DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG => // ignore
         case DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
@@ -1142,6 +1141,7 @@ class KafkaConfigTest {
         case ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
 
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
@@ -1884,6 +1884,17 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testMigrationCannotBeEnabledWithBrokerIdGeneration(): Unit = {
+    val props = TestUtils.createBrokerConfig(-1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort, logDirCount = 2)
+    props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, "true")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    assertEquals(
+      "requirement failed: broker id generation is incompatible with migration to ZK. Please disable it before enabling migration",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+  }
+
+  @Test
   def testMigrationEnabledKRaftMode(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())
@@ -1939,14 +1950,6 @@ class KafkaConfigTest {
   def testGroupCoordinatorRebalanceProtocols(): Unit = {
     val props = new Properties()
 
-    // consumer cannot be enabled in ZK mode.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-
-    // share cannot be enabled in ZK mode.
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-
     // Setting KRaft's properties.
     props.putAll(kraftProps())
 
@@ -1971,16 +1974,6 @@ class KafkaConfigTest {
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
     assertTrue(config.shareGroupConfig.isShareGroupEnabled)
-
-    // consumer cannot be used without the new group coordinator.
-    props.put(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false")
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-
-    // share cannot be used without the new group coordinator.
-    props.put(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false")
-    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,share")
-    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test

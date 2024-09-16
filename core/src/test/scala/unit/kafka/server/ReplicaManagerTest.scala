@@ -60,7 +60,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch, RequestLocal}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -2999,6 +2999,8 @@ class ReplicaManagerTest {
       purgatoryName = "ElectLeader", timer, reaperEnabled = false)
     val mockRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
       purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
+    val mockRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
+      purgatoryName = "RemoteListOffsets", timer, reaperEnabled = false)
 
     // Mock network client to show leader offset of 5
     val blockingSend = new MockBlockingSender(
@@ -3024,6 +3026,7 @@ class ReplicaManagerTest {
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
       delayedElectLeaderPurgatoryParam = Some(mockElectLeaderPurgatory),
       delayedRemoteFetchPurgatoryParam = Some(mockRemoteFetchPurgatory),
+      delayedRemoteListOffsetsPurgatoryParam = Some(mockRemoteListOffsetsPurgatory),
       threadNamePrefix = Option(this.getClass.getName)) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
@@ -3420,6 +3423,8 @@ class ReplicaManagerTest {
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
     val mockDelayedRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
       purgatoryName = "DelayedRemoteFetch", timer, reaperEnabled = false)
+    val mockDelayedRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
+      purgatoryName = "RemoteListOffsets", timer, reaperEnabled = false)
 
     when(metadataCache.contains(new TopicPartition(topic, 0))).thenReturn(true)
 
@@ -3452,6 +3457,7 @@ class ReplicaManagerTest {
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
       delayedElectLeaderPurgatoryParam = Some(mockDelayedElectLeaderPurgatory),
       delayedRemoteFetchPurgatoryParam = Some(mockDelayedRemoteFetchPurgatory),
+      delayedRemoteListOffsetsPurgatoryParam = Some(mockDelayedRemoteListOffsetsPurgatory),
       threadNamePrefix = Option(this.getClass.getName),
       addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
       directoryEventHandler = directoryEventHandler,

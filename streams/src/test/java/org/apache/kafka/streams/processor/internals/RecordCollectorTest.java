@@ -1581,6 +1581,98 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldNotFailIfContextIsNotAvailableOnSerializationError() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+            );
+
+            assertThrows(
+                StreamsException.class, // should not crash with NullPointerException
+                () -> collector.send(
+                    topic,
+                    "key",
+                    "val",
+                    null,
+                    0,
+                    null,
+                    errorSerializer,
+                    stringSerializer,
+                    sinkNodeName,
+                    null // pass `null` context for testing
+                )
+            );
+        }
+    }
+    
+    @Test
+    public void shouldNotFailIfRecordContextIsNotAvailableOnSerializationError() {
+        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                streamsProducer,
+                productionExceptionHandler,
+                streamsMetrics,
+                topology
+            );
+
+            // RecordContext is null when writing into a changelog topic
+            context.setRecordContext(null);
+            assertThrows(
+                StreamsException.class, // should not crash with NullPointerException
+                () -> collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context)
+            );
+        }
+    }
+
+    @Test
+    public void shouldNotFailIfContextIsNotAvailableOnSendError() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(new RuntimeException("Kaboom!")),
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        collector.send(
+            topic,
+            "key",
+            "val",
+            null,
+            0,
+            null,
+            stringSerializer,
+            stringSerializer,
+            sinkNodeName,
+            null // pass `null` context for testing
+        );
+    }
+
+    @Test
+    public void shouldNotFailIfRecordContextIsNotAvailableOnSendError() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducerOnSend(new RuntimeException("Kaboom!")),
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+
+        // RecordContext is null when writing into a changelog topic
+        context.setRecordContext(null);
+        collector.send(topic, "key", "val", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
+    }
+
+    @Test
     public void shouldThrowStreamsExceptionWhenSerializationFailedAndProductionExceptionHandlerReturnsNull() {
         try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
             final RecordCollector collector = newRecordCollector(new ProductionExceptionHandlerMock(
@@ -1845,6 +1937,16 @@ public class RecordCollectorTest {
         private TaskId expectedTaskId;
         private SerializationExceptionOrigin expectedSerializationExceptionOrigin;
 
+        // No args constructor, referred in StreamsConfigTest
+        public ProductionExceptionHandlerMock() {
+            this.response = Optional.empty();
+            this.shouldThrowException = false;
+            this.expectedContext = null;
+            this.expectedProcessorNodeId = null;
+            this.expectedTaskId = null;
+            this.expectedSerializationExceptionOrigin = null;
+        }
+
         public ProductionExceptionHandlerMock(final Optional<ProductionExceptionHandlerResponse> response) {
             this.response = response;
         }
@@ -1914,6 +2016,7 @@ public class RecordCollectorTest {
             assertEquals(expectedContext.recordContext().offset(), context.offset());
             assertEquals(expectedProcessorNodeId, context.processorNodeId());
             assertEquals(expectedTaskId, context.taskId());
+            assertEquals(expectedContext.recordContext().timestamp(), context.timestamp());
             assertInstanceOf(RuntimeException.class, exception);
             assertEquals("KABOOM!", exception.getMessage());
         }

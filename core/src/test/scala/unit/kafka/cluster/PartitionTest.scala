@@ -55,7 +55,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
@@ -749,7 +749,7 @@ class PartitionTest extends AbstractPartitionTest {
     val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.empty(),
-      fetchOnlyFromLeader = true)
+      fetchOnlyFromLeader = true).timestampAndOffsetOpt
 
     assertTrue(timestampAndOffsetOpt.isDefined)
 
@@ -803,12 +803,18 @@ class PartitionTest extends AbstractPartitionTest {
 
     def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
       try {
-        Right(partition.fetchOffsetForTimestamp(
+        val offsetResultHolder = partition.fetchOffsetForTimestamp(
           timestamp = timestamp,
           isolationLevel = isolation,
           currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
           fetchOnlyFromLeader = true
-        ))
+        )
+        val timestampAndOffsetOpt = offsetResultHolder.timestampAndOffsetOpt
+        if (timestampAndOffsetOpt.isEmpty || offsetResultHolder.lastFetchableOffset.isDefined &&
+          timestampAndOffsetOpt.get.offset >= offsetResultHolder.lastFetchableOffset.get) {
+          offsetResultHolder.maybeOffsetsError.map(e => throw e)
+        }
+        Right(timestampAndOffsetOpt)
       } catch {
         case e: ApiException => Left(e)
       }
@@ -1013,7 +1019,7 @@ class PartitionTest extends AbstractPartitionTest {
       val res = partition.fetchOffsetForTimestamp(timestamp,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true)
+        fetchOnlyFromLeader = true).timestampAndOffsetOpt
       assertTrue(res.isDefined)
       res.get
     }
@@ -3355,7 +3361,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     listener1.verify()
@@ -3368,7 +3374,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k2".getBytes, "v2".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(
@@ -3386,7 +3392,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(
@@ -3444,7 +3450,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k1".getBytes, "v1".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     listener.verify()
@@ -3541,7 +3547,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = records,
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     listener.verify()
@@ -3565,7 +3571,7 @@ class PartitionTest extends AbstractPartitionTest {
       records = TestUtils.records(List(new SimpleRecord("k3".getBytes, "v3".getBytes))),
       origin = AppendOrigin.CLIENT,
       requiredAcks = 0,
-      requestLocal = RequestLocal.NoCaching
+      requestLocal = RequestLocal.noCaching
     )
 
     fetchFollower(

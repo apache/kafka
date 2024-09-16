@@ -20,7 +20,6 @@ package kafka.log
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.LocalLog.nextOption
 import kafka.log.remote.RemoteLogManager
-import kafka.server.RequestLocal
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -32,7 +31,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch, RequestLocal}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -715,7 +714,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
                      interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestProduction,
-                     requestLocal: RequestLocal = RequestLocal.NoCaching,
+                     requestLocal: RequestLocal = RequestLocal.noCaching,
                      verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), verificationGuard, ignoreRecordSize = false)
@@ -1264,7 +1263,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *         None if no such message is found.
    */
   @nowarn("cat=deprecation")
-  def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Option[RemoteLogManager] = None): Option[TimestampAndOffset] = {
+  def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Option[RemoteLogManager] = None): OffsetResultHolder = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
@@ -1286,7 +1285,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           Optional.of[Integer](earliestEpochEntry.get().epoch)
         } else Optional.empty[Integer]()
 
-        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
+        OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt)))
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
 
@@ -1298,7 +1297,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             Optional.empty()
           }
 
-        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochResult))
+        OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochResult)))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
         val epoch = leaderEpochCache match {
           case Some(cache) =>
@@ -1306,7 +1305,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             if (latestEpoch.isPresent) Optional.of[Integer](latestEpoch.getAsInt) else Optional.empty[Integer]()
           case None => Optional.empty[Integer]()
         }
-        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epoch))
+        OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epoch)))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
         if (remoteLogEnabled()) {
           val curHighestRemoteOffset = highestOffsetInRemoteStorage()
@@ -1325,9 +1324,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               Optional.empty()
             }
 
-          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curHighestRemoteOffset, epochResult))
+          OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curHighestRemoteOffset, epochResult)))
         } else {
-          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)))
+          OffsetResultHolder(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1))))
         }
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
@@ -1337,13 +1336,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         val maxTimestampSoFar = latestTimestampSegment.readMaxTimestampAndOffsetSoFar
         // lookup the position of batch to avoid extra I/O
         val position = latestTimestampSegment.offsetIndex.lookup(maxTimestampSoFar.offset)
-        latestTimestampSegment.log.batchesFrom(position.position).asScala
+        val timestampAndOffsetOpt = latestTimestampSegment.log.batchesFrom(position.position).asScala
           .find(_.maxTimestamp() == maxTimestampSoFar.timestamp)
           .flatMap(batch => batch.offsetOfMaxTimestamp().asScala.map(new TimestampAndOffset(batch.maxTimestamp(), _,
             Optional.of[Integer](batch.partitionLeaderEpoch()).filter(_ >= 0))))
+        OffsetResultHolder(timestampAndOffsetOpt)
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
-        if (remoteLogEnabled()) {
+        if (remoteLogEnabled() && !isEmpty) {
           if (remoteLogManager.isEmpty) {
             throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.")
           }
@@ -1351,18 +1351,22 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             throw new KafkaException("Tiered storage is supported only with versions supporting leader epochs, that means RecordVersion must be >= 2.")
           }
 
-          val remoteOffset = remoteLogManager.get.findOffsetByTimestamp(topicPartition, targetTimestamp, logStartOffset, leaderEpochCache.get)
-          if (remoteOffset.isPresent) {
-            remoteOffset.asScala
-          } else {
-            // If it is not found in remote log storage, search in the local log storage from local log start offset.
-            searchOffsetInLocalLog(targetTimestamp, localLogStartOffset())
-          }
+          val asyncOffsetReadFutureHolder = remoteLogManager.get.asyncOffsetRead(topicPartition, targetTimestamp,
+            logStartOffset, leaderEpochCache.get, () => searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()))
+          OffsetResultHolder(None, Some(asyncOffsetReadFutureHolder))
         } else {
-          searchOffsetInLocalLog(targetTimestamp, logStartOffset)
+          OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset))
         }
       }
     }
+  }
+
+  /**
+   * Checks if the log is empty.
+   * @return Returns True when the log is empty. Otherwise, false.
+   */
+  private[log] def isEmpty = {
+    logStartOffset == logEndOffset
   }
 
   private def searchOffsetInLocalLog(targetTimestamp: Long, startOffset: Long): Option[TimestampAndOffset] = {
