@@ -206,6 +206,14 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 <h4 class="anchor-heading"><a id="protocol_messages" class="anchor-link"></a><a href="#protocol_messages">The Messages</a></h4>
 
 <p>This section gives details on each of the individual API Messages, their usage, their binary format, and the meaning of their fields.</p>
+
+<p>The message consists of the header and body:</p>
+<pre>
+Message => RequestOrResponseHeader Body
+</pre>
+
+<p><code>RequestOrResponseHeader</code> is the versioned request or response header. <code>Body</code> is the message-specific body.</p>
+
 <!--#include virtual="generated/protocol_messages.html" -->
 
 <h4 class="anchor-heading"><a id="protocol_philosophy" class="anchor-link"></a><a href="#protocol_philosophy">Some Common Philosophical Questions</a></h4>
