@@ -51,6 +51,8 @@ public interface TasksRegistry {
 
     void addTask(final Task task);
 
+    void addFailedTask(final Task task);
+
     void removeTask(final Task taskToRemove);
 
     void replaceActiveWithStandby(final StandbyTask standbyTask);
@@ -72,6 +74,8 @@ public interface TasksRegistry {
     Collection<Task> activeTasks();
 
     Set<Task> allTasks();
+
+    Set<Task> allNonFailedTasks();
 
     Map<TaskId, Task> allTasksPerId();
 

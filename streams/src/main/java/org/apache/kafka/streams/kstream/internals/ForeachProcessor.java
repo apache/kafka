@@ -14,17 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.kstream.internals;
 
-package org.apache.kafka.clients.consumer.internals.events;
+import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 
-/**
- * Event for resetting offsets for all assigned partitions that require it. This is an
- * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
- * positions when responses are received.
- */
-public class ResetPositionsEvent extends CompletableApplicationEvent<Void> {
+public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
 
-    public ResetPositionsEvent(final long deadlineMs) {
-        super(Type.RESET_POSITIONS, deadlineMs);
+    private final ForeachAction<K, V> action;
+
+    public ForeachProcessor(final ForeachAction<K, V> action) {
+        this.action = action;
+    }
+
+    @Override
+    public void process(final Record<K, V> record) {
+        action.apply(record.key(), record.value());
     }
 }

@@ -23,7 +23,8 @@ inputs:
     description: "The GitHub token for use with the CLI"
     required: true
   repository:
-    description: "The repository where the commit is located"
+    description: "The GitHub repository"
+    required: true
     default: "apache/kafka"
   commit_sha:
     description: "The SHA of the commit we are updating"

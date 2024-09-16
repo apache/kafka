@@ -23,6 +23,7 @@ import os.path
 import sys
 from typing import Tuple, Optional, List, Iterable
 import xml.etree.ElementTree
+import html
 
 
 logger = logging.getLogger()
@@ -99,6 +100,9 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
                 test_case_failed = False
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
+                if failure_message:
+                    failure_message = html.escape(failure_message)
+                    failure_message = failure_message.replace('\n', '<br>').replace('\r', '<br>')
                 failure_class = elem.get("type")
                 failure_stack_trace = elem.text
                 failure = partial_test_case(failure_message, failure_class, failure_stack_trace)
@@ -215,7 +219,7 @@ if __name__ == "__main__":
     logger.info(f"Finished processing {len(reports)} reports")
 
     # Print summary
-    report_url = get_env("REPORT_URL")
+    report_url = get_env("JUNIT_REPORT_URL")
     report_md = f"Download [HTML report]({report_url})."
     summary = (f"{total_run} tests cases run in {duration}. "
                f"{total_success} {PASSED}, {total_failures} {FAILED}, "
@@ -255,9 +259,15 @@ if __name__ == "__main__":
     # Print special message if there was a timeout
     exit_code = get_env("GRADLE_EXIT_CODE", int)
     if exit_code == 124:
+        thread_dump_url = get_env("THREAD_DUMP_URL")
         logger.debug(f"Gradle command timed out. These are partial results!")
         logger.debug(summary)
-        logger.debug("Failing this step because the tests timed out.")
+        if thread_dump_url:
+            print(f"\nThe JUnit tests were cancelled due to a timeout. Thread dumps were generated before the job was cancelled. "
+                  f"Download [thread dumps]({thread_dump_url}).\n")
+            logger.debug(f"Failing this step because the tests timed out. Thread dumps were taken and archived here: {thread_dump_url}")
+        else:
+            logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
         exit(1)
     elif exit_code in (0, 1):
         logger.debug(summary)

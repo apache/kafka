@@ -16,6 +16,8 @@
  */
 package kafka.server.share;
 
+import kafka.server.DelayedOperationPurgatory;
+
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -261,6 +263,11 @@ public class SharePartition {
      */
     private SharePartitionState partitionState;
 
+    /**
+     * The delayed share fetch purgatory is used to store the share fetch requests that could not be processed immediately.
+     */
+    private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory;
+
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -269,7 +276,8 @@ public class SharePartition {
         int recordLockDurationMs,
         Timer timer,
         Time time,
-        Persister persister
+        Persister persister,
+        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -284,6 +292,7 @@ public class SharePartition {
         this.time = time;
         this.persister = persister;
         this.partitionState = SharePartitionState.EMPTY;
+        this.delayedShareFetchPurgatory = delayedShareFetchPurgatory;
     }
 
     /**
@@ -995,6 +1004,9 @@ public class SharePartition {
      * @return A boolean which indicates whether the fetch lock is acquired.
      */
     boolean maybeAcquireFetchLock() {
+        if (partitionState() != SharePartitionState.ACTIVE) {
+            return false;
+        }
         return fetchLock.compareAndSet(false, true);
     }
 
@@ -1006,7 +1018,12 @@ public class SharePartition {
     }
 
     private void completeInitializationWithException(CompletableFuture<Void> future, Throwable exception) {
-        partitionState = SharePartitionState.FAILED;
+        lock.writeLock().lock();
+        try {
+            partitionState = SharePartitionState.FAILED;
+        } finally {
+            lock.writeLock().unlock();
+        }
         future.completeExceptionally(exception);
     }
 
@@ -1770,6 +1787,11 @@ public class SharePartition {
                     // Even if write share group state RPC call fails, we will still go ahead with the state transition.
                     // Update the cached state and start and end offsets after releasing the acquisition lock on timeout.
                     maybeUpdateCachedStateAndOffsets();
+
+                    // If we have an acquisition lock timeout for a share-partition, then we should check if
+                    // there is a pending share fetch request for the share-partition and complete it.
+                    DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchKey(groupId, topicIdPartition);
+                    delayedShareFetchPurgatory.checkAndComplete(delayedShareFetchKey);
                 });
             }
         } finally {

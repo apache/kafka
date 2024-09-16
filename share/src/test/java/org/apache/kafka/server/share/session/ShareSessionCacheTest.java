@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.share;
+package org.apache.kafka.server.share.session;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.server.share.CachedSharePartition;
 
 import org.junit.jupiter.api.Test;
 

@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.server.DelayedOperationPurgatory;
 import kafka.server.share.SharePartition.InFlightState;
 import kafka.server.share.SharePartition.RecordState;
 import kafka.server.share.SharePartition.SharePartitionState;
@@ -727,6 +728,7 @@ public class SharePartitionTest {
     @Test
     public void testMaybeAcquireAndReleaseFetchLock() {
         SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        sharePartition.maybeInitialize();
         assertTrue(sharePartition.maybeAcquireFetchLock());
         // Lock cannot be acquired again, as already acquired.
         assertFalse(sharePartition.maybeAcquireFetchLock());
@@ -4924,6 +4926,7 @@ public class SharePartitionTest {
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
         private Persister persister = NoOpShareStatePersister.getInstance();
+        private final DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = Mockito.mock(DelayedOperationPurgatory.class);
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
             this.maxInflightMessages = maxInflightMessages;
@@ -4951,7 +4954,7 @@ public class SharePartitionTest {
 
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, maxInflightMessages, maxDeliveryCount,
-                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister);
+                acquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, delayedShareFetchPurgatory);
         }
     }
 }
