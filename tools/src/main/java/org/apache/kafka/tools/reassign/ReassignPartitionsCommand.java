@@ -1410,14 +1410,12 @@ public class ReassignPartitionsCommand {
 
         OptionSpec<?> action = allActions.get(0);
         
-        boolean isBootstrapServer = true;
-        
         if (opts.options.has(opts.bootstrapServerOpt) && opts.options.has(opts.bootstrapControllerOpt)) 
             CommandLineUtils.printUsageAndExit(opts.parser, "Please don't specify both --bootstrap-server and --bootstrap-controller");
         else if (!opts.options.has(opts.bootstrapServerOpt) && !opts.options.has(opts.bootstrapControllerOpt))
             CommandLineUtils.printUsageAndExit(opts.parser, "Please specify either --bootstrap-server or --bootstrap-controller");
-        else
-            isBootstrapServer = opts.options.has(opts.bootstrapServerOpt);
+
+        boolean isBootstrapServer = opts.options.has(opts.bootstrapServerOpt);
 
         // Make sure that we have all the required arguments for our action.
         Map<OptionSpec<?>, List<OptionSpec<?>>> requiredArgs = new HashMap<>();
