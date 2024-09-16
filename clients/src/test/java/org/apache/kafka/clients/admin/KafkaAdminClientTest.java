@@ -261,6 +261,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -6324,7 +6325,7 @@ public class KafkaAdminClientTest {
     }
 
     private Map<String, ApiError> makeTestFeatureUpdateErrors(final Map<String, FeatureUpdate> updates, final Errors error) {
-        final Map<String, ApiError> errors = new HashMap<>();
+        final Map<String, ApiError> errors = new LinkedHashMap<>(); // Use LinkedHashMap so it is in the same order each time.
         for (Map.Entry<String, FeatureUpdate> entry : updates.entrySet()) {
             errors.put(entry.getKey(), new ApiError(error));
         }
@@ -6393,19 +6394,20 @@ public class KafkaAdminClientTest {
     }
 
     private ApiError topLevelError(Map<String, ApiError> errors) {
-        List<String> featuresWithErrors = new ArrayList<>();
-        for (final Map.Entry<String, ApiError> updateError : errors.entrySet()) {
-            final String feature = updateError.getKey();
-            final ApiError error = updateError.getValue();
+        ApiError topLevelError = ApiError.NONE;
+        Stream<Map.Entry<String, ApiError>> errorEntries = errors.entrySet().stream().filter(entry ->
+                !entry.getValue().error().equals(Errors.NONE));
+        Optional<Map.Entry<String, ApiError>> errorEntry = errorEntries.findFirst();
 
-            if (!error.error().equals(Errors.NONE)) {
-                featuresWithErrors.add(feature + ":" + error.error().exceptionName() + " (" + error.message() + ")");
-            }
+        if (errorEntry.isPresent()) {
+            String errorFeatureName = errorEntry.get().getKey();
+            ApiError topError = errorEntry.get().getValue();
+            String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
+            topLevelError = new ApiError(Errors.INVALID_UPDATE_VERSION.code(),
+                    "The update failed for all features since the following feature had an error: " + errorString);
         }
 
-        return new ApiError(Errors.INVALID_UPDATE_VERSION,
-            "The update failed for all features since the following features had errors: " +
-                    String.join(", ", featuresWithErrors));
+        return topLevelError;
     }
 
     @Test

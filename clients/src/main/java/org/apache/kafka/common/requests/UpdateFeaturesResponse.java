@@ -24,10 +24,10 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * Possible error codes:
@@ -86,27 +86,33 @@ public class UpdateFeaturesResponse extends AbstractResponse {
 
     public static UpdateFeaturesResponse createWithErrors(short version, ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
-        List<String> featuresWithErrors = new ArrayList<>();
-        for (final Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
-            final String feature = updateError.getKey();
-            final ApiError error = updateError.getValue();
-
-            if (!error.error().equals(Errors.NONE)) {
-                featuresWithErrors.add(feature + ":" + error.error().exceptionName() + " (" + error.message() + ")");
-            }
-
-            final UpdatableFeatureResult result = new UpdatableFeatureResult();
-            result.setFeature(feature)
-                .setErrorCode(error.error().code())
-                .setErrorMessage(error.message());
-            results.add(result);
+        Optional<Map.Entry<String, ApiError>> errorEntry = Optional.empty();
+        if (version > 1) {
+            Stream<Map.Entry<String, ApiError>> errorEntries = updateErrors.entrySet().stream().filter(entry ->
+                    !entry.getValue().error().equals(Errors.NONE));
+            errorEntry = errorEntries.findFirst();
         }
-        // Here we check the version and if it is high enough override the topLevelError.
-        // If the request is a newer version, indicate the update failed with a top level error if any update failed.
-        if (version > 1 && featuresWithErrors.size() > 0) {
-            topLevelError = new ApiError(Errors.INVALID_UPDATE_VERSION,
-                "The update failed for all features since the following features had errors: " +
-                String.join(", ", featuresWithErrors));
+
+        if (errorEntry.isPresent()) {
+            String errorFeatureName = errorEntry.get().getKey();
+            ApiError topError = errorEntry.get().getValue();
+            String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
+            topLevelError = new ApiError(Errors.INVALID_UPDATE_VERSION.code(),
+                    "The update failed for all features since the following feature had an error: " + errorString);
+            updateErrors.forEach((featureName, error) ->
+                    results.add(
+                            new UpdatableFeatureResult()
+                                    .setFeature(featureName)
+                                    .setErrorCode(Errors.INVALID_UPDATE_VERSION.code()))
+            );
+        } else {
+            updateErrors.forEach((featureName, error) ->
+                    results.add(
+                            new UpdatableFeatureResult()
+                                    .setFeature(featureName)
+                                    .setErrorCode(error.error().code())
+                                    .setErrorMessage(error.message()))
+            );
         }
 
         final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()

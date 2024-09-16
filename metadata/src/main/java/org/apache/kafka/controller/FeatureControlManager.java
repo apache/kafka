@@ -188,10 +188,11 @@ public class FeatureControlManager {
         for (Entry<String, Short> entry : updates.entrySet()) {
             ApiError error = updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
+            results.put(entry.getKey(), error);
             if (!error.error().equals(Errors.NONE)) {
                 updateFailed = true;
+                break;
             }
-            results.put(entry.getKey(), error);
         }
 
         if (validateOnly || updateFailed) {

@@ -151,7 +151,7 @@ public class FeatureCommandTest {
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
         assertEquals("Could not disable metadata.version. The update failed for all features since the following " +
-                "features had errors: metadata.version:org.apache.kafka.common.errors.InvalidUpdateVersionException (Invalid update version 0 for feature " +
+                "feature had an error: metadata.version:org.apache.kafka.common.errors.InvalidUpdateVersionException (Invalid update version 0 for feature " +
                 "metadata.version. Local controller 3000 only supports versions 1-24)", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -160,7 +160,7 @@ public class FeatureCommandTest {
 
         );
         assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
-                "features had errors: metadata.version:org.apache.kafka.common.errors.InvalidUpdateVersionException (Invalid metadata.version 4. " +
+                "feature had an error: metadata.version:org.apache.kafka.common.errors.InvalidUpdateVersionException (Invalid metadata.version 4. " +
                 "Refusing to perform the requested downgrade because it might delete metadata information.)", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -169,7 +169,7 @@ public class FeatureCommandTest {
 
         );
         assertEquals("Could not downgrade metadata.version to 4. The update failed for all features since the following " +
-                "features had errors: metadata.version:org.apache.kafka.common.errors.InvalidUpdateVersionException (Invalid metadata.version 4. " +
+                "feature had an error: metadata.version:org.apache.kafka.common.errors.InvalidUpdateVersionException (Invalid metadata.version 4. " +
                 "Unsafe metadata downgrade is not supported in this version.)", commandOutput);
     }
 

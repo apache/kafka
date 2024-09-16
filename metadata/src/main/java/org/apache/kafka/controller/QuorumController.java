@@ -151,6 +151,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -2306,22 +2307,33 @@ public final class QuorumController implements Controller {
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
-            List<String> featuresWithErrors = new ArrayList<>();
-            result.forEach((featureName, error) -> {
-                if (!error.error().equals(Errors.NONE))  {
-                    featuresWithErrors.add(featureName + ":" + error.error().exceptionName() + " (" + error.message() + ")");
-                }
-                responseData.results().add(
-                    new UpdateFeaturesResponseData.UpdatableFeatureResult()
-                        .setFeature(featureName)
-                        .setErrorCode(error.error().code())
-                        .setErrorMessage(error.message()));
-            });
-            // If the request is a newer version, indicate the update failed with a top level error if any update failed.
-            if (context.requestHeader().requestApiVersion() > 1 && featuresWithErrors.size() > 0) {
+            Optional<Entry<String, ApiError>> errorEntry = Optional.empty();
+            if (context.requestHeader().requestApiVersion() > 1) {
+                Stream<Entry<String, ApiError>> errorEntries = result.entrySet().stream().filter(entry ->
+                        !entry.getValue().error().equals(Errors.NONE));
+                errorEntry = errorEntries.findFirst();
+            }
+                
+            if (errorEntry.isPresent()) {
+                String errorFeatureName = errorEntry.get().getKey();
+                ApiError topError = errorEntry.get().getValue();
+                String errorString = errorFeatureName + ":" + topError.error().exceptionName() + " (" + topError.message() + ")";
                 responseData.setErrorCode(Errors.INVALID_UPDATE_VERSION.code());
-                responseData.setErrorMessage("The update failed for all features since the following features had errors: " +
-                    String.join(", ", featuresWithErrors));
+                responseData.setErrorMessage("The update failed for all features since the following feature had an error: " + errorString);
+                result.forEach((featureName, error) ->
+                    responseData.results().add(
+                         new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                              .setFeature(featureName)
+                              .setErrorCode(Errors.INVALID_UPDATE_VERSION.code()))
+                );
+            } else {
+                result.forEach((featureName, error) ->
+                    responseData.results().add(
+                        new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                            .setFeature(featureName)
+                            .setErrorCode(error.error().code())
+                            .setErrorMessage(error.message()))
+                );
             }
             return responseData;
         });
