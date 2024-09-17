@@ -86,7 +86,7 @@ jobs:
       - name: Update Floating 'cached' Tag on Successful Trunk Build
         if: github.ref == 'refs/heads/trunk' && success()
         run: |
-          git fetch --tags
+          git fetch origin refs/tags/cached:refs/tags/cached
           git tag -f cached $GITHUB_SHA
           git push origin cached --force
         env:
