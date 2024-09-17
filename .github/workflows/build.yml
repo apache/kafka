@@ -83,7 +83,7 @@ jobs:
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-      - name: Update Floating 'cached' Tag on Successful Trunk Build
+      - name: Update Floating 'cached' Tag
         if: github.ref == 'refs/heads/trunk' && success()
         run: |
           git fetch origin refs/tags/cached:refs/tags/cached
