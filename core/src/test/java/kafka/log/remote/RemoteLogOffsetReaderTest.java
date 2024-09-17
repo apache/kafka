@@ -111,8 +111,11 @@ class RemoteLogOffsetReaderTest {
         holderList.get(2).jobFuture().cancel(false);
 
         rlm.resume();
-        AsyncOffsetReadFutureHolder<Either<Exception, Option<TimestampAndOffset>>> last = holderList.get(holderList.size() - 1);
-        last.taskFuture().get(100, TimeUnit.MILLISECONDS);
+        for (AsyncOffsetReadFutureHolder<Either<Exception, Option<TimestampAndOffset>>> holder : holderList) {
+            if (!holder.jobFuture().isCancelled()) {
+                holder.taskFuture().get(1, TimeUnit.SECONDS);
+            }
+        }
 
         assertEquals(12, holderList.size());
         assertEquals(11, holderList.stream().filter(h -> h.taskFuture().isDone()).count());
