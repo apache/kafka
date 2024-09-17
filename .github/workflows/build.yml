@@ -84,7 +84,7 @@ jobs:
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
       - name: Update Floating 'cached' Tag on Successful Trunk Build
-        if: success()
+        if: github.ref == 'refs/heads/trunk' && success()
         run: |
           git fetch --tags
           git tag -f cached $GITHUB_SHA
