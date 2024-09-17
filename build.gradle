@@ -124,6 +124,11 @@ ext {
     } else if (name == "compileScala") {
       options.compilerArgs << "-Xlint:all"
       options.compilerArgs << "-encoding" << "UTF-8"
+      options.compilerArgs << "-Xlint:-rawtypes"
+      options.compilerArgs << "-Xlint:-serial"
+      options.compilerArgs << "-Xlint:-try"
+      options.compilerArgs << "-Werror"
+      options.compilerArgs << "-Xlint:-options"
     }
   }
 }
