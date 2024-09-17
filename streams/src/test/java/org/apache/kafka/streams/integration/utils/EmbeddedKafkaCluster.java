@@ -85,8 +85,6 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 public class EmbeddedKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
-    private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = TimeUnit.SECONDS.toMillis(120);
-    private static final long GROUP_COORDINATOR_AVAILABILITY_DURATION_MS = TimeUnit.MINUTES.toMillis(2);
     private final KafkaClusterTestKit cluster;
     private final Properties brokerConfig;
     public final MockTime time;
@@ -182,7 +180,7 @@ public class EmbeddedKafkaCluster {
         produce(producerProps, topic, null, "warmup message key", "warmup message value");
 
         try (Consumer<?, ?> consumer = createConsumerAndSubscribeTo(consumerConfig, topic)) {
-            final ConsumerRecords<?, ?> records = consumer.poll(Duration.ofMillis(GROUP_COORDINATOR_AVAILABILITY_DURATION_MS));
+            final ConsumerRecords<?, ?> records = consumer.poll(Duration.ofMillis(TimeUnit.MINUTES.toMillis(2)));
             if (records.isEmpty()) {
                 throw new AssertionError("Failed to verify availability of group coordinator and produce/consume APIs on Kafka cluster in time");
             }
@@ -338,7 +336,7 @@ public class EmbeddedKafkaCluster {
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
             final ProducerRecord<byte[], byte[]> msg = new ProducerRecord<>(topic, partition, key == null ? null : key.getBytes(), value == null ? null : value.getBytes());
             try {
-                producer.send(msg).get(DEFAULT_PRODUCE_SEND_DURATION_MS, TimeUnit.MILLISECONDS);
+                producer.send(msg).get(TimeUnit.SECONDS.toMillis(120), TimeUnit.MILLISECONDS);
                 producer.flush();
             } catch (final Exception e) {
                 throw new KafkaException("Could not produce message: " + msg, e);
