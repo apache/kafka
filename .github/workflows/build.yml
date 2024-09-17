@@ -83,14 +83,6 @@ jobs:
         run: python .github/scripts/checkstyle.py
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-      - name: Update Floating 'cached' Tag
-        if: github.ref == 'refs/heads/trunk' && success()
-        run: |
-          git fetch origin refs/tags/cached:refs/tags/cached
-          git tag -fa cached -m "Automatically generated after running workflow $GITHUB_RUN_NUMBER. https://github.com/${{ github.repository }}/actions/runs/$GITHUB_RUN_ID"
-          git push origin cached --force
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   test:
     needs: validate
