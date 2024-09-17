@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.metadata.FakeKafkaConfigSchema;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -106,15 +107,16 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
                 builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultFeatureMap(true), nodeIds));
-                sessionTimeoutMillis.ifPresent(timeout -> {
-                    builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
-                });
+                sessionTimeoutMillis.ifPresent(timeout ->
+                    builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS))
+                );
                 MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
                 builder.setFatalFaultHandler(fatalFaultHandler);
                 fatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 MockFaultHandler nonFatalFaultHandler = new MockFaultHandler("nonFatalFaultHandler");
                 builder.setNonFatalFaultHandler(nonFatalFaultHandler);
                 builder.setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled);
+                builder.setConfigSchema(FakeKafkaConfigSchema.INSTANCE);
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 this.controllers.add(builder.build());

@@ -1,0 +1,160 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Check and Test
+
+on:
+  workflow_call:
+    inputs:
+      gradle-cache-read-only:
+        description: "Should the Gradle cache be read-only?"
+        default: "true"
+        type: string
+      gradle-cache-write-only:
+        description: "Should the Gradle cache be write-only?"
+        default: "false"
+        type: string
+      is-public-fork:
+        description: "Is this CI run from a public fork?"
+        default: "true"
+        type: string
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ 21, 17, 11, 8 ]
+    name: Compile and Check Java ${{ matrix.java }}
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: ${{ matrix.java }}
+          gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
+          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+      - name: Compile and validate
+        # Gradle flags
+        # --build-cache:  Let Gradle restore the build cache
+        # --info:         For now, we'll generate lots of logs while setting up the GH Actions
+        # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
+        # --no-scan:      For public fork PRs, we won't attempt to publish the scan
+        run: |
+          ./gradlew --build-cache --info  \
+          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
+          check -x test
+      - name: Archive check reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-reports-${{ matrix.java }}
+          path: |
+            **/build/**/*.html
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Annotate checkstyle errors
+        # Avoid duplicate annotations, only run on java 21
+        if: ${{ failure() && matrix.java == '21' }}
+        run: python .github/scripts/checkstyle.py
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+  test:
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ 17, 11 ]  # If we change these, make sure to adjust ci-complete.yml
+    name: JUnit tests Java ${{ matrix.java }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: ${{ matrix.java }}
+          gradle-cache-read-only: ${{ inputs.gradle-cache-read-only }}
+          gradle-cache-write-only: ${{ inputs.gradle-cache-write-only }}
+          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+      - name: Test
+        # Gradle flags
+        # --build-cache:  Let Gradle restore the build cache
+        # --no-scan:      Don't attempt to publish the scan yet. We want to archive it first.
+        # --continue:     Keep running even if a test fails
+        # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
+        id: junit-test
+        env:
+          TIMEOUT_MINUTES: 180  # 3 hours
+        run: |
+          set +e
+          ./.github/scripts/thread-dump.sh &
+          timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
+          -PtestLoggingEvents=started,passed,skipped,failed \
+          -PmaxParallelForks=2 \
+          -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
+          -PcommitId=xxxxxxxxxxxxxxxx \
+          test
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+      - name: Archive JUnit reports
+        uses: actions/upload-artifact@v4
+        id: junit-upload-artifact
+        with:
+          name: junit-reports-${{ matrix.java }}
+          path: |
+            **/build/reports/tests/test/*
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Archive Thread Dumps
+        id: thread-dump-upload-artifact
+        if: always() && steps.junit-test.outputs.exitcode == '124'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-thread-dumps-${{ matrix.java }}
+          path: |
+            thread-dumps/*
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Parse JUnit tests
+        run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          JUNIT_REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
+          THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
+          GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
+      - name: Archive Build Scan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-scan-test-${{ matrix.java }}
+          path: ~/.gradle/build-scan-data
+          compression-level: 9
+          if-no-files-found: ignore

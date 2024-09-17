@@ -24,6 +24,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import org.junit.jupiter.api.Test;
@@ -73,17 +74,13 @@ public class SnapshotEmitterTest {
         }
 
         @Override
-        public long scheduleAppend(int epoch, List<ApiMessageAndVersion> records) {
+        public long prepareAppend(int epoch, List<ApiMessageAndVersion> records) {
             return 0;
         }
 
         @Override
-        public long scheduleAtomicAppend(
-            int epoch,
-            OptionalLong requiredEndOffset,
-            List<ApiMessageAndVersion> records
-        ) {
-            return 0;
+        public void schedulePreparedAppend() {
+            // nothing to do
         }
 
         @Override
@@ -122,6 +119,11 @@ public class SnapshotEmitterTest {
         @Override
         public long logEndOffset() {
             return 0;
+        }
+
+        @Override
+        public KRaftVersion kraftVersion() {
+            return KRaftVersion.KRAFT_VERSION_0;
         }
 
         @Override

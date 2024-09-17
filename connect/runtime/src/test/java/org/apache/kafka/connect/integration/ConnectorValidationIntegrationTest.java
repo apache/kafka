@@ -20,7 +20,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverter;
@@ -69,7 +70,16 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(GROUP_ID_CONFIG, WORKER_GROUP_ID);
 
-        // build a Connect cluster backed by Kafka and Zk
+        TestPlugins.TestPlugin[] testPlugins = new TestPlugins.TestPlugin[] {
+            TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
+            TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
+            TestPlugins.TestPlugin.BAD_PACKAGING_INNOCUOUS_CONNECTOR
+        };
+        workerProps.put(
+                WorkerConfig.PLUGIN_PATH_CONFIG,
+                TestPlugins.pluginPathJoined(testPlugins)
+        );
+
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connector-validation-connect-cluster")
                 .workerProps(workerProps)
@@ -82,7 +92,6 @@ public class ConnectorValidationIntegrationTest {
     @AfterAll
     public static void close() {
         if (connect != null) {
-            // stop all Connect, Kafka and Zk threads.
             Utils.closeQuietly(connect::stop, "Embedded Connect cluster");
         }
     }
@@ -331,8 +340,11 @@ public class ConnectorValidationIntegrationTest {
 
     @Test
     public void testConnectorHasConverterWithNoSuitableConstructor() throws InterruptedException {
-        Map<String, String> config = defaultSinkConnectorProps();
-        config.put(KEY_CONVERTER_CLASS_CONFIG, TestConverterWithPrivateConstructor.class.getName());
+        Map<String, String> config = innocuousSinkConnectorProps();
+        config.put(
+                KEY_CONVERTER_CLASS_CONFIG,
+                TestPlugins.TestPlugin.BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONVERTER.className()
+        );
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -344,8 +356,11 @@ public class ConnectorValidationIntegrationTest {
 
     @Test
     public void testConnectorHasConverterThatThrowsExceptionOnInstantiation() throws InterruptedException {
-        Map<String, String> config = defaultSinkConnectorProps();
-        config.put(KEY_CONVERTER_CLASS_CONFIG, TestConverterWithConstructorThatThrowsException.class.getName());
+        Map<String, String> config = innocuousSinkConnectorProps();
+        config.put(
+                KEY_CONVERTER_CLASS_CONFIG,
+                TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER.className()
+        );
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -423,8 +438,11 @@ public class ConnectorValidationIntegrationTest {
 
     @Test
     public void testConnectorHasHeaderConverterWithNoSuitableConstructor() throws InterruptedException {
-        Map<String, String> config = defaultSinkConnectorProps();
-        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestConverterWithPrivateConstructor.class.getName());
+        Map<String, String> config = innocuousSinkConnectorProps();
+        config.put(
+                HEADER_CONVERTER_CLASS_CONFIG,
+                TestPlugins.TestPlugin.BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONVERTER.className()
+        );
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -436,8 +454,11 @@ public class ConnectorValidationIntegrationTest {
 
     @Test
     public void testConnectorHasHeaderConverterThatThrowsExceptionOnInstantiation() throws InterruptedException {
-        Map<String, String> config = defaultSinkConnectorProps();
-        config.put(HEADER_CONVERTER_CLASS_CONFIG, TestConverterWithConstructorThatThrowsException.class.getName());
+        Map<String, String> config = innocuousSinkConnectorProps();
+        config.put(
+                HEADER_CONVERTER_CLASS_CONFIG,
+                TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER.className()
+        );
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(
                 config.get(CONNECTOR_CLASS_CONFIG),
                 config,
@@ -520,17 +541,6 @@ public class ConnectorValidationIntegrationTest {
     public abstract static class AbstractTestConverter extends TestConverter {
     }
 
-    public static class TestConverterWithPrivateConstructor extends TestConverter {
-        private TestConverterWithPrivateConstructor() {
-        }
-    }
-
-    public static class TestConverterWithConstructorThatThrowsException extends TestConverter {
-        public TestConverterWithConstructorThatThrowsException() {
-            throw new ConnectException("whoops");
-        }
-    }
-
     public static class TestConverterWithSinglePropertyConfigDef extends TestConverter {
         public static final String BOOLEAN_PROPERTY_NAME = "prop";
         @Override
@@ -563,6 +573,17 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> props = new HashMap<>();
         props.put(NAME_CONFIG, "sink-connector");
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, "1");
+        props.put(TOPICS_CONFIG, "t1");
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        return props;
+    }
+
+    private Map<String, String> innocuousSinkConnectorProps() {
+        Map<String, String> props = new HashMap<>();
+        props.put(NAME_CONFIG, "innocuous-sink-connector");
+        props.put(CONNECTOR_CLASS_CONFIG, TestPlugins.TestPlugin.BAD_PACKAGING_INNOCUOUS_CONNECTOR.className());
         props.put(TASKS_MAX_CONFIG, "1");
         props.put(TOPICS_CONFIG, "t1");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

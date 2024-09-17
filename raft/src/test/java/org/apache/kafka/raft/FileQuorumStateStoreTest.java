@@ -20,7 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.raft.internals.ReplicaKey;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,7 +28,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -48,8 +49,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FileQuorumStateStoreTest {
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    void testWriteReadElectedLeader(short kraftVersion) throws IOException {
+    @EnumSource(value = KRaftVersion.class)
+    void testWriteReadElectedLeader(KRaftVersion kraftVersion) throws IOException {
         FileQuorumStateStore stateStore = new FileQuorumStateStore(TestUtils.tempFile());
 
         final int epoch = 2;
@@ -64,7 +65,7 @@ public class FileQuorumStateStoreTest {
         );
 
         final Optional<ElectionState> expected;
-        if (kraftVersion == 1) {
+        if (kraftVersion.isReconfigSupported()) {
             expected = Optional.of(
                 ElectionState.withElectedLeader(epoch, voter1, Collections.emptySet())
             );
@@ -78,8 +79,8 @@ public class FileQuorumStateStoreTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    void testWriteReadVotedCandidate(short kraftVersion) throws IOException {
+    @EnumSource(value = KRaftVersion.class)
+    void testWriteReadVotedCandidate(KRaftVersion kraftVersion) throws IOException {
         FileQuorumStateStore stateStore = new FileQuorumStateStore(TestUtils.tempFile());
 
         final int epoch = 2;
@@ -95,7 +96,7 @@ public class FileQuorumStateStoreTest {
         );
 
         final Optional<ElectionState> expected;
-        if (kraftVersion == 1) {
+        if (kraftVersion.isReconfigSupported()) {
             expected = Optional.of(
                 ElectionState.withVotedCandidate(
                     epoch,
@@ -118,8 +119,8 @@ public class FileQuorumStateStoreTest {
     }
 
     @ParameterizedTest
-    @ValueSource(shorts = {0, 1})
-    void testWriteReadUnknownLeader(short kraftVersion) throws IOException {
+    @EnumSource(value = KRaftVersion.class)
+    void testWriteReadUnknownLeader(KRaftVersion kraftVersion) throws IOException {
         FileQuorumStateStore stateStore = new FileQuorumStateStore(TestUtils.tempFile());
 
         final int epoch = 2;
@@ -131,7 +132,7 @@ public class FileQuorumStateStoreTest {
         );
 
         final Optional<ElectionState> expected;
-        if (kraftVersion == 1) {
+        if (kraftVersion.isReconfigSupported()) {
             expected = Optional.of(ElectionState.withUnknownLeader(epoch, Collections.emptySet()));
         } else {
             expected = Optional.of(ElectionState.withUnknownLeader(epoch, voters));
@@ -149,7 +150,7 @@ public class FileQuorumStateStoreTest {
         final int epoch = 2;
         Set<Integer> voters = Utils.mkSet(1, 2, 3);
 
-        stateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters), (short) 1);
+        stateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters), KRAFT_VERSION_1);
 
         // Check that state is persisted
         FileQuorumStateStore reloadedStore = new FileQuorumStateStore(stateFile);

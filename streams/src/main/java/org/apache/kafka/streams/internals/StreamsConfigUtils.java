@@ -77,7 +77,7 @@ public class StreamsConfigUtils {
     }
 
     @SuppressWarnings("deprecation")
-    public static long getTotalCacheSize(final StreamsConfig config) {
+    public static long totalCacheSize(final StreamsConfig config) {
         // both deprecated and new config set. Warn and use the new one.
         if (config.originals().containsKey(CACHE_MAX_BYTES_BUFFERING_CONFIG) && config.originals().containsKey(STATESTORE_CACHE_MAX_BYTES_CONFIG)) {
             if (!config.getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG).equals(config.getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG))) {

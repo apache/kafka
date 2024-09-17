@@ -35,7 +35,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -137,21 +136,6 @@ public class MeteredSessionStoreTest {
 
     private void init() {
         store.init((StateStoreContext) context, store);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        setUp();
-        final MeteredSessionStore<String, String> outer = new MeteredSessionStore<>(
-            innerStore,
-            STORE_TYPE,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-        doNothing().when(innerStore).init((ProcessorContext) context, outer);
-        outer.init((ProcessorContext) context, outer);
     }
 
     @Test

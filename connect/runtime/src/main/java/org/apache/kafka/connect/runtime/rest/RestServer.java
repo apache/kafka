@@ -77,6 +77,7 @@ public abstract class RestServer {
     // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
     // but currently a worker simply leaving the group can take this long as well.
     public static final long DEFAULT_REST_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(90);
+    public static final long DEFAULT_HEALTH_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
     private static final Logger log = LoggerFactory.getLogger(RestServer.class);
 
@@ -107,7 +108,7 @@ public abstract class RestServer {
 
         jettyServer = new Server();
         handlers = new ContextHandlerCollection();
-        requestTimeout = new RequestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        requestTimeout = new RequestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS, DEFAULT_HEALTH_CHECK_TIMEOUT_MS);
 
         createConnectors(listeners, adminListeners);
     }
@@ -450,6 +451,11 @@ public abstract class RestServer {
         this.requestTimeout.timeoutMs(requestTimeoutMs);
     }
 
+    // For testing only
+    public void healthCheckTimeout(long healthCheckTimeoutMs) {
+        this.requestTimeout.healthCheckTimeoutMs(healthCheckTimeoutMs);
+    }
+
     String determineAdvertisedProtocol() {
         String advertisedSecurityProtocol = config.advertisedListener();
         if (advertisedSecurityProtocol == null) {
@@ -534,9 +540,11 @@ public abstract class RestServer {
 
         private final RequestBinder binder;
         private volatile long timeoutMs;
+        private volatile long healthCheckTimeoutMs;
 
-        public RequestTimeout(long initialTimeoutMs) {
+        public RequestTimeout(long initialTimeoutMs, long initialHealthCheckTimeoutMs) {
             this.timeoutMs = initialTimeoutMs;
+            this.healthCheckTimeoutMs = initialHealthCheckTimeoutMs;
             this.binder = new RequestBinder();
         }
 
@@ -545,8 +553,17 @@ public abstract class RestServer {
             return timeoutMs;
         }
 
+        @Override
+        public long healthCheckTimeoutMs() {
+            return healthCheckTimeoutMs;
+        }
+
         public void timeoutMs(long timeoutMs) {
             this.timeoutMs = timeoutMs;
+        }
+
+        public void healthCheckTimeoutMs(long healthCheckTimeoutMs) {
+            this.healthCheckTimeoutMs = healthCheckTimeoutMs;
         }
 
         public Binder binder() {

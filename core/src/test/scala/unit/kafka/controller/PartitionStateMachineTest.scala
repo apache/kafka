@@ -16,7 +16,6 @@
  */
 package kafka.controller
 
-import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -26,6 +25,7 @@ import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.common.MetadataVersion.{IBP_3_1_IV0, IBP_3_2_IV0}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -39,6 +39,7 @@ import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.util.Properties
+import scala.jdk.CollectionConverters._
 
 class PartitionStateMachineTest {
   private var controllerContext: ControllerContext = _
@@ -93,7 +94,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, NewPartition)
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava), controllerEpoch)
     when(mockZkClient.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch), controllerContext.epochZkVersion))
       .thenReturn(Seq(CreateResponse(Code.OK, null, Some(partition), null, ResponseMetadata(0, 0))))
     partitionStateMachine.handleStateChanges(
@@ -114,7 +115,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, NewPartition)
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava), controllerEpoch)
     when(mockZkClient.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch), controllerContext.epochZkVersion))
       .thenThrow(new ZooKeeperClientException("test"))
     partitionStateMachine.handleStateChanges(
@@ -133,7 +134,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, NewPartition)
-    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava), controllerEpoch)
     when(mockZkClient.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch), controllerContext.epochZkVersion))
       .thenReturn(Seq(CreateResponse(Code.NODEEXISTS, null, Some(partition), null, ResponseMetadata(0, 0))))
     partitionStateMachine.handleStateChanges(
@@ -166,7 +167,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, OnlinePartition)
-    val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
+    val leaderAndIsr = new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
@@ -202,7 +203,7 @@ class PartitionStateMachineTest {
       ReplicaAssignment(Seq(brokerId, otherBrokerId))
     )
     controllerContext.putPartitionState(partition, OnlinePartition)
-    val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId, otherBrokerId))
+    val leaderAndIsr = new LeaderAndIsr(brokerId, List(brokerId, otherBrokerId).map(Int.box).asJava)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
@@ -210,7 +211,7 @@ class PartitionStateMachineTest {
     when(mockZkClient.getTopicPartitionStatesRaw(partitions))
       .thenReturn(Seq(GetDataResponse(Code.OK, null, Some(partition),
         TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch), stat, ResponseMetadata(0, 0))))
-    val leaderAndIsrAfterElection = leaderAndIsr.newLeaderAndIsr(otherBrokerId, List(otherBrokerId))
+    val leaderAndIsrAfterElection = leaderAndIsr.newLeaderAndIsr(otherBrokerId, List(otherBrokerId).map(Int.box).asJava)
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .thenReturn(UpdateLeaderAndIsrResult(Map(partition -> Right(updatedLeaderAndIsr)), Seq.empty))
@@ -253,7 +254,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, OfflinePartition)
-    val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
+    val leaderAndIsr = new LeaderAndIsr(LeaderAndIsr.NO_LEADER, List(brokerId).map(Int.box).asJava)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
@@ -320,7 +321,7 @@ class PartitionStateMachineTest {
     )
     controllerContext.putPartitionState(partition, OfflinePartition)
 
-    val leaderAndIsr = LeaderAndIsr(leaderBrokerId, List(leaderBrokerId))
+    val leaderAndIsr = new LeaderAndIsr(leaderBrokerId, List(leaderBrokerId).map(Int.box).asJava)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
@@ -338,9 +339,9 @@ class PartitionStateMachineTest {
     )
 
     val leaderAndIsrAfterElection = if (isLeaderRecoverySupported) {
-      leaderAndIsr.newRecoveringLeaderAndIsr(brokerId, List(brokerId))
+      leaderAndIsr.newRecoveringLeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava)
     } else {
-      leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
+      leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava)
     }
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withPartitionEpoch(2)
     when(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
@@ -368,7 +369,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, OfflinePartition)
-    val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
+    val leaderAndIsr = new LeaderAndIsr(LeaderAndIsr.NO_LEADER, List(brokerId).map(Int.box).asJava)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
@@ -391,7 +392,7 @@ class PartitionStateMachineTest {
     controllerContext.setLiveBrokers(Map(createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
     controllerContext.putPartitionState(partition, OfflinePartition)
-    val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
+    val leaderAndIsr = new LeaderAndIsr(LeaderAndIsr.NO_LEADER, List(brokerId).map(Int.box).asJava)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
 
@@ -426,7 +427,7 @@ class PartitionStateMachineTest {
   }
 
   private def prepareMockToElectLeaderForPartitions(partitions: Seq[TopicPartition]): Unit = {
-    val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
+    val leaderAndIsr = new LeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava)
     def prepareMockToGetTopicPartitionsStatesRaw(): Unit = {
       val stat = new Stat(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
       val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
@@ -443,7 +444,7 @@ class PartitionStateMachineTest {
 
     def prepareMockToUpdateLeaderAndIsr(): Unit = {
       val updatedLeaderAndIsr: Map[TopicPartition, LeaderAndIsr] = partitions.map { partition =>
-        partition -> leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
+        partition -> leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId).map(Int.box).asJava)
       }.toMap
       when(mockZkClient.updateLeaderAndIsr(updatedLeaderAndIsr, controllerEpoch, controllerContext.epochZkVersion))
         .thenReturn(UpdateLeaderAndIsrResult(updatedLeaderAndIsr.map { case (k, v) => k -> Right(v) }, Seq.empty))

@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,7 +48,6 @@ class BatchBuilderTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         long baseOffset = 57;
         long logAppendTime = time.milliseconds();
-        boolean isControlBatch = false;
         int leaderEpoch = 15;
         Compression compression = Compression.of(compressionType).build();
         BatchBuilder<String> builder = new BatchBuilder<>(
@@ -56,7 +56,6 @@ class BatchBuilderTest {
             compression,
             baseOffset,
             logAppendTime,
-            isControlBatch,
             leaderEpoch,
             buffer.limit()
         );
@@ -83,7 +82,7 @@ class BatchBuilderTest {
         assertEquals(compressionType, batch.compressionType());
         assertEquals(baseOffset, batch.baseOffset());
         assertEquals(logAppendTime, batch.maxTimestamp());
-        assertEquals(isControlBatch, batch.isControlBatch());
+        assertFalse(batch.isControlBatch());
         assertEquals(leaderEpoch, batch.partitionLeaderEpoch());
 
         List<String> builtRecords = Utils.toList(batch).stream()
@@ -99,7 +98,6 @@ class BatchBuilderTest {
         ByteBuffer buffer = ByteBuffer.allocate(batchSize);
         long baseOffset = 57;
         long logAppendTime = time.milliseconds();
-        boolean isControlBatch = false;
         int leaderEpoch = 15;
 
         BatchBuilder<String> builder = new BatchBuilder<>(
@@ -108,7 +106,6 @@ class BatchBuilderTest {
             Compression.NONE,
             baseOffset,
             logAppendTime,
-            isControlBatch,
             leaderEpoch,
             buffer.limit()
         );

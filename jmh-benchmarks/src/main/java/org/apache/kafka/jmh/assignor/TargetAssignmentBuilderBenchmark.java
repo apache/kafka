@@ -197,6 +197,7 @@ public class TargetAssignmentBuilderBenchmark {
 
             members.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
+                Optional.empty(),
                 new TopicIds(new HashSet<>(allTopicNames), topicsImage),
                 Assignment.EMPTY
             ));

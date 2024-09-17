@@ -20,16 +20,14 @@ package kafka.server
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.{ReplicationConfigs, ZkConfigs}
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
 
-import java.util.Properties
 import java.net.{InetAddress, ServerSocket}
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.ZkConfigs
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class KafkaServerTest extends QuorumTestHarness {
@@ -178,6 +176,18 @@ class KafkaServerTest extends QuorumTestHarness {
     server.shutdown()
   }
 
+  @Test
+  def testGeneratedBrokerIdSyncWithNodeId(): Unit = {
+    val props = TestUtils.createBrokerConfig(-1, zkConnect)
+    props.put("reserved.broker.max.id", "2000")
+    val kafkaServer: KafkaServer = TestUtils.createServer(KafkaConfig.fromProps(props))
+    try {
+      kafkaServer.startup()
+      assertEquals(2001, kafkaServer.config.brokerId)
+      assertEquals(2001, kafkaServer.config.nodeId)
+    } finally kafkaServer.shutdown()
+  }
+
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
     props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"PLAINTEXT://$hostName:$port")
@@ -191,5 +201,4 @@ class KafkaServerTest extends QuorumTestHarness {
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }
-
 }

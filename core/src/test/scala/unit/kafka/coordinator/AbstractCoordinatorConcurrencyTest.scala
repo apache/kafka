@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
@@ -173,7 +174,8 @@ object AbstractCoordinatorConcurrencyTest {
                            val delayedFetchPurgatoryParam: DelayedOperationPurgatory[DelayedFetch],
                            val delayedDeleteRecordsPurgatoryParam: DelayedOperationPurgatory[DelayedDeleteRecords],
                            val delayedElectLeaderPurgatoryParam: DelayedOperationPurgatory[DelayedElectLeader],
-                           val delayedRemoteFetchPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteFetch])
+                           val delayedRemoteFetchPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteFetch],
+                           val delayedRemoteListOffsetsPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteListOffsets])
     extends ReplicaManager(
       config,
       metrics = null,
@@ -190,6 +192,7 @@ object AbstractCoordinatorConcurrencyTest {
       delayedDeleteRecordsPurgatoryParam = Some(delayedDeleteRecordsPurgatoryParam),
       delayedElectLeaderPurgatoryParam = Some(delayedElectLeaderPurgatoryParam),
       delayedRemoteFetchPurgatoryParam = Some(delayedRemoteFetchPurgatoryParam),
+      delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam),
       threadNamePrefix = Option(this.getClass.getName)) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
@@ -217,7 +220,7 @@ object AbstractCoordinatorConcurrencyTest {
                                responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
-                               requestLocal: RequestLocal = RequestLocal.NoCaching,
+                               requestLocal: RequestLocal = RequestLocal.noCaching,
                                actionQueue: ActionQueue = null,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
 
@@ -284,6 +287,8 @@ object AbstractCoordinatorConcurrencyTest {
               watchKeys: mutable.Set[TopicPartitionOperationKey]): TestReplicaManager = {
       val mockRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
         purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
+      val mockRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
+        purgatoryName = "RemoteListOffsets", timer, reaperEnabled = false)
       val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
         purgatoryName = "Fetch", timer, reaperEnabled = false)
       val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
@@ -291,7 +296,8 @@ object AbstractCoordinatorConcurrencyTest {
       val mockElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", timer, reaperEnabled = false)
       new TestReplicaManager(config, time, scheduler, logManager, quotaManagers, watchKeys, producePurgatory,
-        mockFetchPurgatory, mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, mockRemoteFetchPurgatory)
+        mockFetchPurgatory, mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, mockRemoteFetchPurgatory,
+        mockRemoteListOffsetsPurgatory)
     }
   }
 }

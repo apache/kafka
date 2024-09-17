@@ -40,7 +40,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssign
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -76,10 +76,12 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             Collections.emptySet(),
             Assignment.EMPTY
         ));
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             Collections.emptySet(),
             Assignment.EMPTY
@@ -116,10 +118,12 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             Collections.singleton(topic3Uuid),
             Assignment.EMPTY
         ));
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             Collections.singleton(topic2Uuid),
             Assignment.EMPTY
@@ -156,11 +160,13 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             Collections.singleton(topic3Uuid),
             Assignment.EMPTY
@@ -210,17 +216,20 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             Collections.singleton(topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             Collections.singleton(topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             Collections.singleton(topic1Uuid),
             Assignment.EMPTY
@@ -279,6 +288,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             Collections.singleton(topic1Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2)
@@ -286,6 +296,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -295,6 +306,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         ));
 
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
             new Assignment(mkAssignment(
@@ -364,6 +376,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2, 3),
@@ -372,6 +385,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid),
             new Assignment(mkAssignment(
@@ -426,6 +440,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             Collections.singleton(topic1Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
@@ -434,6 +449,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -444,6 +460,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         // Add a new member to trigger a re-assignment.
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
@@ -502,6 +519,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2),
@@ -510,6 +528,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             Collections.singleton(topic2Uuid),
             new Assignment(mkAssignment(
@@ -564,6 +583,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             Collections.singleton(topic1Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
@@ -572,6 +592,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -617,11 +638,13 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topic1Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             Collections.emptySet(),
             Assignment.EMPTY

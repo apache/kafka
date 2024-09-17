@@ -115,8 +115,12 @@ public class SslFactory implements Reconfigurable, Closeable {
     }
 
     @Override
-    public void validateReconfiguration(Map<String, ?> newConfigs) {
-        createNewSslEngineFactory(newConfigs);
+    public void validateReconfiguration(Map<String, ?> newConfigs) throws ConfigException {
+        try {
+            createNewSslEngineFactory(newConfigs);
+        } catch (IllegalStateException e) {
+            throw new ConfigException("SSL reconfiguration failed due to " + e);
+        }
     }
 
     @Override

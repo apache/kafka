@@ -63,7 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
@@ -1352,8 +1352,8 @@ public class SslTransportLayerTest {
         void run() throws IOException;
     }
 
-    private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
-        return () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+    private Function<Short, ApiVersionsResponse> defaultApiVersionsSupplier() {
+        return version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     static class TestSslChannelBuilder extends SslChannelBuilder {

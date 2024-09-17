@@ -121,7 +121,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -1951,7 +1950,7 @@ public class SaslAuthenticatorTest {
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
 
-        Supplier<ApiVersionsResponse> apiVersionSupplier = () -> {
+        Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionCollection versionCollection = new ApiVersionCollection(2);
             versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_HANDSHAKE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
             versionCollection.add(new ApiVersion().setApiKey(ApiKeys.SASL_AUTHENTICATE.id).setMinVersion((short) 0).setMaxVersion((short) 100));
@@ -1980,7 +1979,7 @@ public class SaslAuthenticatorTest {
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Collections.singletonList(saslMechanism));
 
-        Supplier<ApiVersionsResponse> apiVersionSupplier = () -> {
+        Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionsResponse defaultApiVersionResponse = TestUtils.defaultApiVersionsResponse(
                 ApiMessageType.ListenerType.ZK_BROKER);
             ApiVersionCollection apiVersions = new ApiVersionCollection();
@@ -2577,7 +2576,7 @@ public class SaslAuthenticatorTest {
                 DelegationTokenCache tokenCache, Time time) {
             super(connectionMode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 handshakeRequestEnable, credentialCache, tokenCache, null, time, new LogContext(),
-                () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
         }
 
         @Override

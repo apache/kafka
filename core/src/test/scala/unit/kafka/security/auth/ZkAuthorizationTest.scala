@@ -18,7 +18,6 @@
 package kafka.security.auth
 
 import java.nio.charset.StandardCharsets
-
 import kafka.admin.ZkSecurityMigrator
 import kafka.server.QuorumTestHarness
 import kafka.utils.{Logging, TestUtils}
@@ -33,6 +32,7 @@ import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.ReplicaAssignment
+import kafka.security.JaasTestUtils
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
@@ -43,7 +43,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 class ZkAuthorizationTest extends QuorumTestHarness with Logging {
-  val jaasFile = kafka.utils.JaasTestUtils.writeJaasContextsToFile(kafka.utils.JaasTestUtils.zkSections)
+  val jaasFile = JaasTestUtils.writeJaasContextsToFile(JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
 
   @BeforeEach

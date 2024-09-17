@@ -115,9 +115,9 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                         new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"))
 
                 /*
-                 * (3) Stops and restarts the broker. The purpose of this test is to a) exercise consumption
-                 *       from a given offset and b) verify that upon broker start, existing remote log segments
-                 *       metadata are loaded by Kafka and these log segments available.
+                 * (3) Stops and restarts the broker. The purpose of this test is to
+                 *      a) exercise consumption from a given offset and
+                 *      b) verify that upon broker start, existing remote log segments metadata are loaded by Kafka and these log segments available.
                  *
                  *       Acceptance:
                  *       -----------

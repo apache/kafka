@@ -33,10 +33,11 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
-import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
 import java.util.concurrent.ThreadLocalRandom
+import java.util.function.Supplier
 import java.util.{Collections, Properties}
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq, Set, mutable}
@@ -45,7 +46,10 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.Breaks._
 
 
-class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging with ConfigRepository {
+class KRaftMetadataCache(
+  val brokerId: Int,
+  val kraftVersionSupplier: Supplier[KRaftVersion]
+) extends MetadataCache with Logging with ConfigRepository {
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
 
   // This is the cache state. Every MetadataImage instance is immutable, and updates
@@ -526,6 +530,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     _currentImage = newImage
   }
 
+  def getImage(): MetadataImage = {
+    _currentImage
+  }
+
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)
 
@@ -541,8 +549,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   override def features(): FinalizedFeatures = {
     val image = _currentImage
+    val finalizedFeatures = new java.util.HashMap[String, java.lang.Short](image.features().finalizedVersions())
+    finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionSupplier.get().featureLevel())
+
     new FinalizedFeatures(image.features().metadataVersion(),
-      image.features().finalizedVersions(),
+      finalizedFeatures,
       image.highestOffsetAndEpoch().offset,
       true)
   }

@@ -98,20 +98,20 @@ public class ProducerIdControlManagerTest {
         assertEquals(42, range.firstProducerId());
 
         // Can't go backwards in Producer IDs
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(RuntimeException.class, () ->
             producerIdControlManager.replay(
                 new ProducerIdsRecord()
                     .setBrokerId(1)
                     .setBrokerEpoch(100)
-                    .setNextProducerId(40));
-        }, "Producer ID range must only increase");
-        assertThrows(RuntimeException.class, () -> {
+                    .setNextProducerId(40)),
+            "Producer ID range must only increase");
+        assertThrows(RuntimeException.class, () ->
             producerIdControlManager.replay(
                 new ProducerIdsRecord()
                     .setBrokerId(2)
                     .setBrokerEpoch(100)
-                    .setNextProducerId(42));
-        }, "Producer ID range must only increase");
+                    .setNextProducerId(42)),
+            "Producer ID range must only increase");
         range = producerIdControlManager.generateNextProducerId(3, 100).response();
         assertEquals(42, range.firstProducerId());
 

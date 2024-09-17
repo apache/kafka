@@ -19,7 +19,6 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.raft.internals.ReplicaKey;
 
 import org.slf4j.Logger;
 
@@ -49,7 +48,7 @@ public class ResignedState implements EpochState {
     private final long electionTimeoutMs;
     private final Set<Integer> unackedVoters;
     private final Timer electionTimer;
-    private final List<Integer> preferredSuccessors;
+    private final List<ReplicaKey> preferredSuccessors;
     private final Logger log;
 
     public ResignedState(
@@ -58,7 +57,7 @@ public class ResignedState implements EpochState {
         int epoch,
         Set<Integer> voters,
         long electionTimeoutMs,
-        List<Integer> preferredSuccessors,
+        List<ReplicaKey> preferredSuccessors,
         Endpoints endpoints,
         LogContext logContext
     ) {
@@ -136,7 +135,7 @@ public class ResignedState implements EpochState {
         return electionTimer.remainingMs();
     }
 
-    public List<Integer> preferredSuccessors() {
+    public List<ReplicaKey> preferredSuccessors() {
         return preferredSuccessors;
     }
 

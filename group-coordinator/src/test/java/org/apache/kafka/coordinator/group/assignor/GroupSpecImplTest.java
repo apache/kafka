@@ -55,6 +55,7 @@ public class GroupSpecImplTest {
 
         members.put(TEST_MEMBER,  new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
+            Optional.empty(),
             mkSet(topicId),
             Assignment.EMPTY
         ));
@@ -101,6 +102,7 @@ public class GroupSpecImplTest {
             mkSet(0, 1)
         );
         members.put(TEST_MEMBER, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
             Optional.empty(),
             mkSet(topicId),
             new Assignment(topicPartitions)

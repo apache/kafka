@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 
 import java.util.Arrays;
 import java.util.List;
@@ -35,6 +36,7 @@ public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
         CLASSIC("classic"),
+        SHARE("share"),
         UNKNOWN("unknown");
 
         private final String name;

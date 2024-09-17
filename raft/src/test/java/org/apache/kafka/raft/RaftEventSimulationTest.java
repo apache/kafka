@@ -22,6 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -535,7 +537,7 @@ public class RaftEventSimulationTest {
         final Random random;
         final AtomicInteger correlationIdCounter = new AtomicInteger();
         final MockTime time = new MockTime();
-        final Uuid clusterId = Uuid.randomUuid();
+        final String clusterId = Uuid.randomUuid().toString();
         final Map<Integer, Node> voters = new HashMap<>();
         final Map<Integer, PersistentState> nodes = new HashMap<>();
         final Map<Integer, RaftNode> running = new HashMap<>();
@@ -544,10 +546,7 @@ public class RaftEventSimulationTest {
             this.random = random;
 
             for (int nodeId = 0; nodeId < numVoters; nodeId++) {
-                voters.put(
-                    nodeId,
-                    new Node(nodeId, String.format("host-node-%d", nodeId), 1234)
-                );
+                voters.put(nodeId, nodeFromId(nodeId));
                 nodes.put(nodeId, new PersistentState(nodeId));
             }
 
@@ -731,8 +730,27 @@ public class RaftEventSimulationTest {
             nodes.put(nodeId, new PersistentState(nodeId));
         }
 
+        private static final int PORT = 1234;
+
         private static InetSocketAddress nodeAddress(Node node) {
             return InetSocketAddress.createUnresolved(node.host(), node.port());
+        }
+
+        private static Node nodeFromId(int nodeId) {
+            return new Node(nodeId, hostFromId(nodeId), PORT);
+        }
+
+        private static String hostFromId(int nodeId) {
+            return String.format("host-node-%d", nodeId);
+        }
+
+        private static Endpoints endpointsFromId(int nodeId, ListenerName listenerName) {
+            return Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(
+                    listenerName,
+                    InetSocketAddress.createUnresolved(hostFromId(nodeId), PORT)
+                )
+            );
         }
 
         void start(int nodeId) {
@@ -771,9 +789,11 @@ public class RaftEventSimulationTest {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
-                clusterId.toString(),
+                true,
+                clusterId,
                 Collections.emptyList(),
-                Endpoints.empty(), // KAFKA-16529 will fix this
+                endpointsFromId(nodeId, channel.listenerName()),
+                Features.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig
@@ -849,12 +869,12 @@ public class RaftEventSimulationTest {
 
         long highWatermark() {
             return client.quorum().highWatermark()
-                .map(hw -> hw.offset)
+                .map(LogOffsetMetadata::offset)
                 .orElse(0L);
         }
 
         long logEndOffset() {
-            return log.endOffset().offset;
+            return log.endOffset().offset();
         }
 
         @Override
@@ -930,7 +950,7 @@ public class RaftEventSimulationTest {
          * Returns if the message should be sent to the destination.
          *
          * Returns false when outbound request messages contains a destination {@code Node} that
-         * matches the set of unreaable {@code InetSocketAddress}. Note that the {@code Node.id()}
+         * matches the set of unreachable {@code InetSocketAddress}. Note that the {@code Node.id()}
          * and {@code Node.rack()} are not compared.
          *
          * @param message the raft message
@@ -979,9 +999,9 @@ public class RaftEventSimulationTest {
                     fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
                 }
-                cluster.ifRunning(nodeId, nodeState -> {
-                    assertEquals(newEpoch, nodeState.client.quorum().epoch());
-                });
+                cluster.ifRunning(nodeId, nodeState ->
+                    assertEquals(newEpoch, nodeState.client.quorum().epoch())
+                );
                 nodeEpochs.put(nodeId, newEpoch);
             }
         }
@@ -999,7 +1019,7 @@ public class RaftEventSimulationTest {
             cluster.leaderHighWatermark().ifPresent(highWatermark -> {
                 long numReachedHighWatermark = cluster.nodes.entrySet().stream()
                     .filter(entry -> cluster.voters.containsKey(entry.getKey()))
-                    .filter(entry -> entry.getValue().log.endOffset().offset >= highWatermark)
+                    .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
                     .count();
                 assertTrue(
                     numReachedHighWatermark >= cluster.majoritySize(),
@@ -1097,7 +1117,7 @@ public class RaftEventSimulationTest {
                         assertEquals(
                             logStartOffset,
                             earliestSnapshotId.offset(),
-                            () -> String.format("mising snapshot at log start offset: nodeId = %s", nodeId)
+                            () -> String.format("missing snapshot at log start offset: nodeId = %s", nodeId)
                         );
                     }
                 });
@@ -1283,9 +1303,9 @@ public class RaftEventSimulationTest {
             if (!filters.get(inflightRequest.sourceId).acceptInbound(inbound))
                 return;
 
-            cluster.nodeIfRunning(inflightRequest.sourceId).ifPresent(node -> {
-                node.channel.mockReceive(inbound);
-            });
+            cluster.nodeIfRunning(inflightRequest.sourceId).ifPresent(node ->
+                node.channel.mockReceive(inbound)
+            );
         }
 
         void filter(int nodeId, NetworkFilter filter) {

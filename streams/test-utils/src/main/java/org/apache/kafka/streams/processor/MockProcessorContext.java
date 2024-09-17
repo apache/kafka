@@ -28,8 +28,6 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.internals.ApiUtils;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -46,7 +44,8 @@ import java.util.Properties;
 
 /**
  * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
- * {@link Transformer}, and {@link ValueTransformer} implementations.
+ * {@link org.apache.kafka.streams.kstream.Transformer}, and {@link org.apache.kafka.streams.kstream.ValueTransformer}
+ * implementations.
  * <p>
  * The tests for this class (org.apache.kafka.streams.MockProcessorContextTest) include several behavioral
  * tests that serve as example usage.
@@ -55,8 +54,10 @@ import java.util.Properties;
  * It simply captures any data it witnesses.
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
+ *
+ * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.MockProcessorContext} instead.
  */
-@SuppressWarnings("deprecation") // not deprecating old PAPI Context, since it is still in use by Transformers.
+@Deprecated
 public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
@@ -374,18 +375,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.headers = headers;
     }
 
-    /**
-     * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
-     * but for the purpose of driving unit tests, you can set it directly. Setting this attribute doesn't affect the others.
-     *
-     * @param timestamp A record timestamp
-     * @deprecated Since 3.0.0; use {@link MockProcessorContext#setRecordTimestamp(long)} instead.
-     */
-    @Deprecated
-    @SuppressWarnings({"WeakerAccess", "unused"})
-    public void setTimestamp(final long timestamp) {
-        this.recordTimestamp = timestamp;
-    }
 
     /**
      * The context exposes this metadata for use in the processor. Normally, they are set by the Kafka Streams framework,
@@ -450,7 +439,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @Override
     public long timestamp() {
         if (recordTimestamp == null) {
-            throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setTimestamp().");
+            throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setRecordTimestamp().");
         }
         return recordTimestamp;
     }

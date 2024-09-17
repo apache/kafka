@@ -17,7 +17,6 @@
 
 package kafka.zk.migration
 
-import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
@@ -28,7 +27,7 @@ import org.apache.kafka.common.metadata.PartitionRecord
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.TopicMigrationClient.TopicVisitorInterest
 import org.apache.kafka.metadata.migration.{MigrationClientException, TopicMigrationClient, ZkMigrationLeadershipState}
-import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException.Code
@@ -80,7 +79,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
           leaderIsrAndControllerEpochs.get(topicPartition) match {
             case Some(leaderIsrAndEpoch) =>
               record
-                .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                .setIsr(leaderIsrAndEpoch.leaderAndIsr.isr)
                 .setLeader(leaderIsrAndEpoch.leaderAndIsr.leader)
                 .setLeaderEpoch(leaderIsrAndEpoch.leaderAndIsr.leaderEpoch)
                 .setPartitionEpoch(leaderIsrAndEpoch.leaderAndIsr.partitionEpoch)
@@ -309,10 +308,10 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     controllerEpoch: Int
   ): (String, Array[Byte]) = {
     val path = TopicPartitionStateZNode.path(topicPartition)
-    val data = TopicPartitionStateZNode.encode(LeaderIsrAndControllerEpoch(LeaderAndIsr(
+    val data = TopicPartitionStateZNode.encode(LeaderIsrAndControllerEpoch(new LeaderAndIsr(
       partitionRegistration.leader,
       partitionRegistration.leaderEpoch,
-      partitionRegistration.isr.toList,
+      partitionRegistration.isr.toList.map(Integer.valueOf).asJava,
       partitionRegistration.leaderRecoveryState,
       partitionRegistration.partitionEpoch), controllerEpoch))
     (path, data)

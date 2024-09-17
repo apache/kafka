@@ -205,7 +205,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   def testCreateClusterMetadataTopic(quorum: String): Unit = {
     validateErrorCreateTopicsRequests(
       topicsReq(Seq(topicReq(Topic.CLUSTER_METADATA_TOPIC_NAME))),
-      Map(Topic.CLUSTER_METADATA_TOPIC_NAME -> error(Errors.TOPIC_AUTHORIZATION_FAILED, Some("Authorization failed.")))
+      Map(Topic.CLUSTER_METADATA_TOPIC_NAME ->
+        error(Errors.INVALID_REQUEST, Some(s"Creation of internal topic ${Topic.CLUSTER_METADATA_TOPIC_NAME} is prohibited.")))
     )
   }
 }

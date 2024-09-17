@@ -1249,7 +1249,7 @@ queued.max.requests=[number of concurrent requests]</code></pre>
 
   <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
 
-  Java 8, Java 11, and Java 17 are supported.
+  Java 8, Java 11, Java 17, and Java 21 are supported.
   <p>
   Note that Java 8 support project-wide has been deprecated since Apache Kafka 3.0 and Java 11 support for the broker and tools
   has been deprecated since Apache Kafka 3.7. Both will be removed in Apache Kafka 4.0.
@@ -1931,6 +1931,27 @@ NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   
         <td>Average idle percent of thread pool for copying data to remote storage</td>
         <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogManagerTasksAvgIdlePercent</td>
       </tr>
+      <tr>
+        <td>RemoteLogManager Avg Broker Fetch Throttle Time</td>
+        <td>The average time in millis remote fetches was throttled by a broker</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-avg	</td>
+      </tr>
+      <tr>
+        <td>RemoteLogManager Max Broker Fetch Throttle Time</td>
+        <td>The max time in millis remote fetches was throttled by a broker</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-max	</td>
+      </tr>
+      <tr>
+        <td>RemoteLogManager Avg Broker Copy Throttle Time</td>
+        <td>The average time in millis remote copies was throttled by a broker</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-copy-throttle-time-avg</td>
+      </tr>
+      <tr>
+        <td>RemoteLogManager Max Broker Copy Throttle Time</td>
+        <td>The max time in millis remote copies was throttled by a broker</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-copy-throttle-time-max</td>
+      </tr>
+
     </tbody>
   </table>
 
@@ -3836,7 +3857,6 @@ foo
   <p>The following features are not fully implemented in KRaft mode:</p>
 
   <ul>
-    <li>Supporting JBOD configurations with multiple storage directories. Note that an Early Access release is supported in 3.7 as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-858%3A+Handle+JBOD+broker+disk+failure+in+KRaft">KIP-858</a>. Note that it is not yet recommended for use in production environments. Please refer to the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+JBOD+in+KRaft+Early+Access+Release+Notes">release notes</a> to help us test it and provide feedback at <a href="https://issues.apache.org/jira/browse/KAFKA-16061">KAFKA-16061</a>.</li>
     <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
   </ul>
 
@@ -3946,6 +3966,7 @@ inter.broker.listener.name=PLAINTEXT
   </p>
 
   <ul>
+    <li><a href="#brokerconfigs_broker.id">broker.id</a>: Ensure <code>broker.id</code> is set to a non-negative integer even if <code>broker.id.generation.enable</code> is enabled (default is enabled). Additionally, ensure <code>broker.id</code> does not exceed <code>reserved.broker.max.id</code> to avoid failure.</li>
     <li><a href="#brokerconfigs_controller.quorum.voters">controller.quorum.voters</a></li>
     <li><a href="#brokerconfigs_controller.listener.names">controller.listener.names</a></li>
     <li>The controller.listener.name should also be added to <a href="#brokerconfigs_listener.security.protocol.map">listener.security.property.map</a></li>
@@ -4107,7 +4128,10 @@ listeners=CONTROLLER://:9093
             </li>
             <li>
               Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
-              of the brokers can become the new old-style controller.
+              of the brokers can become the new old-style controller. Additionally, run
+              <code>get /migration</code> followed by <code>rmr /migration</code> to clear the
+              migration state from ZooKeeper. This will allow you to re-attempt the migration
+              in the future. The data read from "/migration" can be useful for debugging.
             </li>
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
@@ -4199,8 +4223,6 @@ listeners=CONTROLLER://:9093
   The new remote tier uses external storage systems, such as HDFS or S3, to store the completed log segments.
   Please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-405%3A+Kafka+Tiered+Storage">KIP-405</a> for more information.
 </p>
-
-<p><b>Note: Tiered storage is considered as an early access feature, and is not recommended for use in production environments</b></p>
 
 <h4 class="anchor-heading"><a id="tiered_storage_config" class="anchor-link"></a><a href="#tiered_storage_config">Configuration</a></h4>
 
@@ -4313,7 +4335,28 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --topic tieredTopic --from-beginning --max-messages 1 --bootstrap-server localhost:9092 --property print.offset=true</code></pre>
 
-<p>Please note, if you want to disable tiered storage at the cluster level, you should delete the tiered storage enabled topics explicitly.
+<p>In KRaft mode, you can disable tiered storage at the topic level, to make the remote logs as read-only logs, or completely delete all remote logs.</p>
+
+<p>If you want to let the remote logs become read-only and no more local logs copied to the remote storage,
+  you can set <code>remote.storage.enable=true,remote.log.copy.disable=true</code> to the topic.</p>
+
+<p>Note: You also need to set <code>local.retention.ms</code> and <code>local.retention.bytes</code> to the same value as
+  <code>retention.ms</code> and <code>retention.bytes</code>, or set to "-2". This is because after disabling remote log copy,
+  the local retention policies will not be applied anymore, and that might confuse users and cause unexpected disk full.
+</p>
+
+<pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+   --alter --entity-type topics --entity-name tieredTopic \
+   --add-config 'remote.storage.enable=true,remote.log.copy.disable=true,local.retention.ms=-2,local.retention.bytes=-2'</code></pre>
+
+<p>If you want to completely disable tiered storage at the topic level with all remote logs deleted,
+  you can set <code>remote.storage.enable=false,remote.log.delete.on.disable=true</code> to the topic.</p>
+
+  <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+   --alter --entity-type topics --entity-name tieredTopic \
+   --add-config 'remote.storage.enable=false,remote.log.delete.on.disable=true'</code></pre>
+
+<p>You can also re-enable tiered storage feature at the topic level. Please note, if you want to disable tiered storage at the cluster level, you should delete the tiered storage enabled topics explicitly.
   Attempting to disable tiered storage at the cluster level without deleting the topics using tiered storage will result in an exception during startup.</p>
 
 <pre><code class="language-bash">$ bin/kafka-topics.sh --delete --topic tieredTopic --bootstrap-server localhost:9092</code></pre>
@@ -4322,18 +4365,16 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <h4 class="anchor-heading"><a id="tiered_storage_limitation" class="anchor-link"></a><a href="#tiered_storage_limitation">Limitations</a></h4>
 
-<p>While the early access release of Tiered Storage offers the opportunity to try out this new feature, it is important to be aware of the following limitations:
+<p>While the Tiered Storage works for most use cases, it is still important to be aware of the following limitations:
 <ul>
-  <li>No support for clusters with multiple log directories (i.e. JBOD feature)</li>
   <li>No support for compacted topics</li>
-  <li>Cannot disable tiered storage at the topic level</li>
   <li>Deleting tiered storage enabled topics is required before disabling tiered storage at the broker level</li>
   <li>Admin actions related to tiered storage feature are only supported on clients from version 3.0 onwards</li>
+  <li>No support for log segments missing producer snapshot file. It can happen when topic is created before v2.8.0.</li>
 </ul>
 
-<p>For more information, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+Early+Access+Release+Notes">Tiered Storage Early Access Release Note</a>.
+<p>For more information, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+GA+Release+Notes">Kafka Tiered Storage GA Release Notes</a>.
 </p>
-
 
 </script>
 

@@ -101,14 +101,7 @@ public final class MetaPropertiesEnsemble {
         private Optional<String> metadataLogDir = Optional.empty();
 
         public Loader addLogDirs(Collection<String> logDirs) {
-            for (String logDir : logDirs) {
-                this.logDirs.add(logDir);
-            }
-            return this;
-        }
-
-        public Loader addLogDir(String logDir) {
-            this.logDirs.add(logDir);
+            this.logDirs.addAll(logDirs);
             return this;
         }
 

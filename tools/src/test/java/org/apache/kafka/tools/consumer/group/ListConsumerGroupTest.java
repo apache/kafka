@@ -37,7 +37,6 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -67,7 +66,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNM
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 
-@Tag("integration")
 @ExtendWith(ClusterTestExtensions.class)
 public class ListConsumerGroupTest {
     private static final String TOPIC_PREFIX = "test.topic.";
@@ -85,7 +83,7 @@ public class ListConsumerGroupTest {
     }
 
     private static List<ClusterConfig> consumerProtocolOnlyGenerator() {
-        return ConsumerGroupCommandTestUtils.forConsumerGroupCoordinator();
+        return ConsumerGroupCommandTestUtils.forKRaftGroupCoordinator();
     }
 
     private List<GroupProtocol> supportedGroupProtocols() {

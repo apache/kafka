@@ -130,7 +130,7 @@ public class NioEchoServer extends Thread {
             if (channelBuilder == null)
                 channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
                         securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                        () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
             this.metrics = new Metrics();
             this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                     "MetricGroup", channelBuilder, logContext);
@@ -356,10 +356,21 @@ public class NioEchoServer extends Thread {
     }
 
     public void closeSocketChannels() throws IOException {
-        for (SocketChannel channel : socketChannels) {
-            channel.close();
+        synchronized (socketChannels) {
+            for (SocketChannel channel : socketChannels) {
+                channel.close();
+            }
+            socketChannels.clear();
         }
-        socketChannels.clear();
+    }
+
+    public void closeNewChannels() throws IOException {
+        synchronized (newChannels) {
+            for (SocketChannel channel : newChannels) {
+                channel.close();
+            }
+            newChannels.clear();
+        }
     }
 
     public void close() throws IOException, InterruptedException {
@@ -368,6 +379,7 @@ public class NioEchoServer extends Thread {
         Utils.closeQuietly(selector, "selector");
         acceptorThread.interrupt();
         acceptorThread.join();
+        closeNewChannels();
         interrupt();
         join();
     }

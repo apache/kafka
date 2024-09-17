@@ -99,6 +99,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -232,6 +233,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final DistributedConfig config;
 
+    private Future<?> herderTask;
+
     /**
      * Create a herder that will form a Connect cluster with other {@link DistributedHerder} instances (in this or other JVMs)
      * that have the same group ID.
@@ -363,7 +366,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     public void start() {
-        this.herderExecutor.submit(this);
+        herderTask = this.herderExecutor.submit(this);
     }
 
     @Override
@@ -372,15 +375,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Herder starting");
             herderThread = Thread.currentThread();
 
-            try (TickThreadStage stage = new TickThreadStage("reading to the end of internal topics")) {
+            try (TickThreadStage stage = new TickThreadStage("initializing and reading to the end of internal topics")) {
                 startServices();
             }
 
-            log.info("Herder started");
-            running = true;
-
             while (!stopping.get()) {
                 tick();
+
+                if (!isReady()) {
+                    ready();
+                    log.info("Herder started");
+                }
             }
 
             recordTickThreadStage("shutting down");
@@ -391,9 +396,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.error("Uncaught exception in herder work thread, exiting: ", t);
             Utils.closeQuietly(this::stopServices, "herder services");
             Exit.exit(1);
-        } finally {
-            running = false;
         }
+    }
+
+    // public for testing
+    public Future<?> herderTask() {
+        return herderTask;
     }
 
     // public for testing
@@ -848,7 +856,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         ThreadUtils.shutdownExecutorServiceQuietly(forwardRequestExecutor, FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         ThreadUtils.shutdownExecutorServiceQuietly(startAndStopExecutor, START_AND_STOP_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         log.info("Herder stopped");
-        running = false;
+    }
+
+    @Override
+    public void healthCheck(Callback<Void> callback) {
+        addRequest(
+                () -> {
+                    callback.onCompletion(null, null);
+                    return null;
+                },
+                forwardErrorAndTickThreadStages(callback)
+        );
     }
 
     @Override
@@ -2364,6 +2382,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     DistributedHerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
+        callback.recordStage(tickThreadStage);
         DistributedHerderRequest req = new DistributedHerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
         // We don't need to synchronize here
@@ -2375,7 +2394,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // queue was added
         if (peekWithoutException() == req)
             member.wakeup();
-        callback.recordStage(tickThreadStage);
         return req;
     }
 
@@ -2414,10 +2432,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             log.info("Connector {} config removed", connector);
 
             synchronized (DistributedHerder.this) {
-                // rebalance after connector removal to ensure that existing tasks are balanced among workers
-                if (configState.contains(connector))
+                if (configState.contains(connector)) {
+                    // rebalance after connector removal to ensure that existing tasks are balanced among workers
                     needsReconfigRebalance = true;
-                connectorConfigUpdates.add(connector);
+                } else {
+                    connectorConfigUpdates.add(connector);
+                }
+
             }
             member.wakeup();
         }
@@ -2430,9 +2451,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // to be bounced. However, this callback may also indicate a connector *addition*, which does require
             // a rebalance, so we need to be careful about what operation we request.
             synchronized (DistributedHerder.this) {
-                if (!configState.contains(connector))
+                if (!configState.contains(connector)) {
                     needsReconfigRebalance = true;
-                connectorConfigUpdates.add(connector);
+                } else {
+                    // Only need to restart the connector if it already existed
+                    connectorConfigUpdates.add(connector);
+                }
+
             }
             member.wakeup();
         }

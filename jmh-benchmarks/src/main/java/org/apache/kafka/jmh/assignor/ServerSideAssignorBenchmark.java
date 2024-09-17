@@ -237,6 +237,7 @@ public class ServerSideAssignorBenchmark {
 
         members.put(memberId, new MemberSubscriptionAndAssignmentImpl(
             rackId,
+            Optional.empty(),
             subscribedTopicIds,
             Assignment.EMPTY
         ));
@@ -270,6 +271,7 @@ public class ServerSideAssignorBenchmark {
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 groupSpec.memberSubscription(memberId).rackId(),
+                Optional.empty(),
                 groupSpec.memberSubscription(memberId).subscribedTopicIds(),
                 new Assignment(Collections.unmodifiableMap(memberAssignment.partitions()))
             ));
@@ -285,6 +287,7 @@ public class ServerSideAssignorBenchmark {
         Optional<String> rackId = rackId(memberCount - 1);
         updatedMemberSpec.put("newMember", new MemberSubscriptionAndAssignmentImpl(
             rackId,
+            Optional.empty(),
             subscribedTopicIdsForNewMember,
             Assignment.EMPTY
         ));

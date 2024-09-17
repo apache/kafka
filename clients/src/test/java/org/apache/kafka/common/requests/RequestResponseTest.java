@@ -98,7 +98,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
@@ -1363,8 +1363,16 @@ public class RequestResponseTest {
     }
 
     private UpdateRaftVoterResponse createUpdateRaftVoterResponse() {
-        return new UpdateRaftVoterResponse(new UpdateRaftVoterResponseData().
-            setErrorCode((short) 0));
+        return new UpdateRaftVoterResponse(
+            new UpdateRaftVoterResponseData()
+                .setErrorCode((short) 0)
+                .setCurrentLeader(new UpdateRaftVoterResponseData.CurrentLeader()
+                    .setLeaderId(1)
+                    .setLeaderEpoch(2)
+                    .setHost("localhost")
+                    .setPort(9999)
+                )
+        );
     }
 
     private DescribeTopicPartitionsResponse createDescribeTopicPartitionsResponse() {
@@ -2345,7 +2353,7 @@ public class RequestResponseTest {
                             .setMaxNumOffsets(10)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
+                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else if (version == 1) {
@@ -2356,7 +2364,7 @@ public class RequestResponseTest {
                             .setTimestamp(1000000L)
                             .setCurrentLeaderEpoch(5)));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false)
+                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
@@ -2369,7 +2377,7 @@ public class RequestResponseTest {
                     .setName("test")
                     .setPartitions(singletonList(partition));
             return ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(singletonList(topic))
                     .build(version);
         } else {
@@ -2888,7 +2896,7 @@ public class RequestResponseTest {
         topic2.assignments().add(new CreatableReplicaAssignment()
             .setPartitionIndex(1)
             .setBrokerIds(asList(2, 3, 4)));
-        topic2.configs().add(new CreateableTopicConfig()
+        topic2.configs().add(new CreatableTopicConfig()
             .setName("config1").setValue("value1"));
 
         return new CreateTopicsRequest.Builder(data).build(version);
@@ -3033,7 +3041,7 @@ public class RequestResponseTest {
                             .setName("topic")
                             .setPartitions(Collections.singletonList(73))).iterator())))
                     .iterator());
-            return AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version);  
+            return AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version);
         }
     }
 
@@ -3042,7 +3050,7 @@ public class RequestResponseTest {
         AddPartitionsToTxnResponseData.AddPartitionsToTxnResult result = AddPartitionsToTxnResponse.resultForTransaction(
                 txnId, Collections.singletonMap(new TopicPartition("t", 0), Errors.NONE));
         AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData().setThrottleTimeMs(0);
-        
+
         if (version < 4) {
             data.setResultsByTopicV3AndBelow(result.topicResults());
         } else {
