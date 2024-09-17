@@ -70,7 +70,7 @@ public class MirrorSourceConfigTest {
     public void testConfigBackwardsCompatibility() {
         MirrorSourceConfig config = new MirrorSourceConfig(
                 makeProps("config.properties.exclude", "prop1",
-                        "topics.blacklist", "topic-1"));
+                        "topics.exclude", "topic-1"));
         assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"));
         assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"));
         assertFalse(config.topicFilter().shouldReplicateTopic("topic-1"));
