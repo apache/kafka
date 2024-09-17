@@ -847,7 +847,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       }
       if (brokerIdGenerationEnable) {
         if (migrationEnabled) {
-          require(brokerId >= -1, "broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).")
+          require(brokerId >= 0, "broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).")
         }
         require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
       } else {
