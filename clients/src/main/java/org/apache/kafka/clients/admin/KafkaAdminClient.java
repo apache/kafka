@@ -4146,29 +4146,26 @@ public class KafkaAdminClient extends AdminClient {
 
         final SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
                 RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
-        if (!options.removeAll()) {
-            List<MemberIdentity> members = options.members().stream()
+
+        KafkaFutureImpl<List<MemberIdentity>> f;
+        if (options.removeAll()) f = getMembersFromGroup(groupId, reason);
+        else {
+            f = new KafkaFutureImpl<>();
+            f.complete(options.members().stream()
                     .map(m -> m.toMemberIdentity().setReason(reason))
-                    .collect(Collectors.toList());
-            handleRemoveMembersFromConsumerGroupAndInvokeDriver(groupId, members, options.timeoutMs, future);
-            return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
+                    .collect(Collectors.toList()));
         }
 
-        getMembersFromGroup(groupId, reason).whenComplete((members, ex) -> {
+        f.whenComplete((members, ex) -> {
             if (ex != null) {
                 future.completeExceptionally(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), ex));
             } else {
-                handleRemoveMembersFromConsumerGroupAndInvokeDriver(groupId, members, options.timeoutMs, future);
+                RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
+                invokeDriver(handler, future, options.timeoutMs());
             }
         });
 
         return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
-    }
-
-    private void handleRemoveMembersFromConsumerGroupAndInvokeDriver(String groupId, List<MemberIdentity> members, Integer timeoutMs,
-        SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future) {
-        RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
-        invokeDriver(handler, future, timeoutMs);
     }
 
     @Override
