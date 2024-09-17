@@ -1016,7 +1016,7 @@ public class TaskManager {
     private void addTaskToStateUpdater(final Task task) {
         final long nowMs = System.currentTimeMillis();
         try {
-            if (canTryLock(task.id(), nowMs)) {
+            if (canTryInitializeTask(task.id(), nowMs)) {
                 task.initializeIfNeeded();
                 taskIdToBackoffRecord.remove(task.id());
                 stateUpdater.add(task);
@@ -2133,7 +2133,7 @@ public class TaskManager {
         tasks.addTask(task);
     }
 
-    private boolean canTryLock(final TaskId taskId, final long nowMs) {
+    private boolean canTryInitializeTask(final TaskId taskId, final long nowMs) {
         return !taskIdToBackoffRecord.containsKey(taskId) || taskIdToBackoffRecord.get(taskId).canAttempt(nowMs);
     }
 
