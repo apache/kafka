@@ -254,6 +254,9 @@ public class DefaultTaskExecutor implements TaskExecutor {
     public void requestShutdown() {
         if (taskExecutorThread != null) {
             taskExecutorThread.shutdownRequested.set(true);
+            // TaskManager#awaitProcessableTasks may hang for long time and can't wait for a processable task,
+            // so we interrupt the thread to make it stop waiting.
+            taskExecutorThread.interrupt();
         }
     }
 
