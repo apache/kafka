@@ -87,28 +87,6 @@ public class KStreamTransformIntegrationTest {
         assertThat(results, equalTo(expected));
     }
 
-    private class TestTransformer implements org.apache.kafka.streams.kstream.Transformer<Integer, Integer, KeyValue<Integer, Integer>> {
-        private KeyValueStore<Integer, Integer> state;
-
-        @Override
-        public void init(final ProcessorContext context) {
-            state = context.getStateStore(stateStoreName);
-        }
-
-        @Override
-        public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
-            state.putIfAbsent(key, 0);
-            Integer storedValue = state.get(key);
-            final KeyValue<Integer, Integer> result = new KeyValue<>(key + 1, value + storedValue++);
-            state.put(key, storedValue);
-            return result;
-        }
-
-        @Override
-        public void close() {
-        }
-    }
-
     private class TestFlatTransformer implements org.apache.kafka.streams.kstream.Transformer<Integer, Integer, Iterable<KeyValue<Integer, Integer>>> {
         private KeyValueStore<Integer, Integer> state;
 
