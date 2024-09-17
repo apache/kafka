@@ -20,6 +20,11 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -171,5 +176,40 @@ public class HdrHistogramTest {
         assertEquals(numEventsInFirstCycle, hdrHistogram.count(now));
         assertEquals(numEventsInFirstCycle, hdrHistogram.count(now + maxSnapshotAgeMs));
         assertEquals(numEventsInSecondCycle, hdrHistogram.count(now + 1 + maxSnapshotAgeMs));
+    }
+
+    @Test
+    public void testLatestHistogramRace() throws InterruptedException, ExecutionException {
+        long maxSnapshotAgeMs = 10L;
+        long now = System.currentTimeMillis();
+        HdrHistogram hdrHistogram = new HdrHistogram(maxSnapshotAgeMs, MAX_VALUE, 1);
+        ExecutorService countExecutor = Executors.newFixedThreadPool(2);
+        for (int i = 1; i < 10000; i++) {
+            int numEvents = 2;
+            for (int j = 0; j < numEvents; j++) {
+                hdrHistogram.record(i);
+            }
+            final long moreThanMaxAge = now + maxSnapshotAgeMs + 1;
+            now = moreThanMaxAge;
+            CountDownLatch latch = new CountDownLatch(1);
+            Callable<Long> countTask = () -> {
+                try {
+                    assertTrue(latch.await(500, TimeUnit.MILLISECONDS));
+                    return hdrHistogram.count(moreThanMaxAge);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            };
+            Future<Long> t1Future = countExecutor.submit(countTask);
+            Future<Long> t2Future = countExecutor.submit(countTask);
+            latch.countDown();
+            long t1Count = t1Future.get();
+            long t2Count = t2Future.get();
+            assertTrue(
+                numEvents == t1Count && numEvents == t2Count,
+                String.format("Expected %d events in both threads, got %d in T1 and %d in T2",
+                    numEvents, t1Count, t2Count));
+        }
+        ThreadUtils.shutdownExecutorServiceQuietly(countExecutor, 500, TimeUnit.MILLISECONDS);
     }
 }

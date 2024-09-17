@@ -51,8 +51,8 @@ public class HistogramBenchmark {
 
     /*
      * This benchmark compares the performance of the most commonly used in the Kafka codebase
-     * Yammer histograms and HdrHistogram. It does it by focusing on the write path in a multiple
-     * writers, multiple readers scenario.
+     * Yammer histogram and the new HdrHistogram. It does it by focusing on the write path in a
+     * multiple writers, multiple readers scenario.
      *
      * The benchmark relies on JMH Groups which allows us to distribute the number of worker threads
      * to the different benchmark methods.
@@ -60,8 +60,8 @@ public class HistogramBenchmark {
 
     private static final long MAX_VALUE = TimeUnit.MINUTES.toMillis(1L);
 
-    private volatile Histogram yammerHistogram;
-    private volatile HdrHistogram hdrHistogram;
+    private Histogram yammerHistogram;
+    private HdrHistogram hdrHistogram;
 
     @Setup(Level.Trial)
     public void setUp() {
@@ -78,14 +78,14 @@ public class HistogramBenchmark {
     @Benchmark
     @Group("runner")
     @GroupThreads(3)
-    public void write_YammerHistogram() {
+    public void writeYammerHistogram() {
         yammerHistogram.update(ThreadLocalRandom.current().nextLong(MAX_VALUE));
     }
 
     @Benchmark
     @Group("runner")
     @GroupThreads(3)
-    public void write_HdrHistogram() {
+    public void writeHdrHistogram() {
         hdrHistogram.record(ThreadLocalRandom.current().nextLong(MAX_VALUE));
     }
 
@@ -101,7 +101,7 @@ public class HistogramBenchmark {
     @Benchmark
     @Group("runner")
     @GroupThreads(2)
-    public double read_YammerHistogram() {
+    public double readYammerHistogram() {
         long now = System.currentTimeMillis();
         if (now % 199 == 0) {
             return yammerHistogram.getSnapshot().get999thPercentile();
@@ -112,7 +112,7 @@ public class HistogramBenchmark {
     @Benchmark
     @Group("runner")
     @GroupThreads(2)
-    public double read_HdrHistogram() {
+    public double readHdrHistogram() {
         long now = System.currentTimeMillis();
         if (now % 199 == 0) {
             return hdrHistogram.measurePercentile(now, 99.9);
