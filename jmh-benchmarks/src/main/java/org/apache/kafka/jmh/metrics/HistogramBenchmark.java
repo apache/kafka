@@ -17,7 +17,7 @@
 package org.apache.kafka.jmh.metrics;
 
 import java.util.concurrent.ThreadLocalRandom;
-import org.apache.kafka.coordinator.group.metrics.HdrHistogram;
+import org.apache.kafka.coordinator.common.runtime.HdrHistogram;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Histogram;
