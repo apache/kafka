@@ -279,15 +279,12 @@ public class ConsumerNetworkClientTest {
         // Sleep a little so that t1 is blocking in poll
         Thread.sleep(50);
 
-        Thread t2 = new Thread(() -> consumerClient.poll(future));
-        t2.start();
-
-        // Sleep a little so that t2 is awaiting the network client lock
-        Thread.sleep(50);
-
         // Simulate a network response and return from the poll in t1
         client.respond(heartbeatResponse(Errors.NONE));
         client.wakeup();
+
+        Thread t2 = new Thread(() -> consumerClient.poll(future));
+        t2.start();
 
         // Both threads should complete since t1 should wakeup t2
         t1.join();
