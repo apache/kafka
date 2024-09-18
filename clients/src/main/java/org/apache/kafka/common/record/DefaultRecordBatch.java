@@ -159,7 +159,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     /**
      * Gets the base timestamp of the batch which is used to calculate the record timestamps from the deltas.
-     *
+     * 
      * @return The base timestamp
      */
     public long baseTimestamp() {
