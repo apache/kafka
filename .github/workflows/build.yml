@@ -117,7 +117,6 @@ jobs:
           set +e
           ./.github/scripts/thread-dump.sh &
           timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
-          --rerun-tasks \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
