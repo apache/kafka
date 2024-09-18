@@ -177,7 +177,7 @@ if __name__ == "__main__":
     flaky_table = []
     skipped_table = []
 
-    logger.debug(f"::group::{{Parsing {len(reports)} JUnit Report Files}}")
+    logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing {report}")
