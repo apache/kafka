@@ -70,7 +70,7 @@ class RemoteLogOffsetReaderTest {
         logDir = Files.createTempDirectory("kafka-test");
         LeaderEpochCheckpointFile checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
         cache = new LeaderEpochFileCache(topicPartition, checkpoint, time.scheduler);
-        rlm = new MockRemoteLogManager(2, 3, logDir.toString());
+        rlm = new MockRemoteLogManager(2, 1, logDir.toString());
     }
 
     @AfterEach
@@ -98,8 +98,8 @@ class RemoteLogOffsetReaderTest {
         rlm.pause();
 
         List<AsyncOffsetReadFutureHolder<Either<Exception, Option<TimestampAndOffset>>>> holderList = new ArrayList<>();
-        // Task queue size is 3 and number of threads is 2, so it can accept at-most 5 items
-        for (int i = 0; i < 5; i++) {
+        // Task queue size is 1 and number of threads is 2, so it can accept at-most 3 items
+        for (int i = 0; i < 3; i++) {
             holderList.add(rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Option::empty));
         }
         assertThrows(TimeoutException.class, () -> holderList.get(0).taskFuture().get(10, TimeUnit.MILLISECONDS));
@@ -116,15 +116,15 @@ class RemoteLogOffsetReaderTest {
                 holder.taskFuture().get(1, TimeUnit.SECONDS);
             }
         }
-        assertEquals(5, holderList.size());
-        assertEquals(4, holderList.stream().filter(h -> h.taskFuture().isDone()).count());
+        assertEquals(3, holderList.size());
+        assertEquals(2, holderList.stream().filter(h -> h.taskFuture().isDone()).count());
         assertEquals(1, holderList.stream().filter(h -> !h.taskFuture().isDone()).count());
     }
 
     @Test
     public void testThrowErrorOnFindOffsetByTimestamp() throws Exception {
         RemoteStorageException exception = new RemoteStorageException("Error");
-        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 3, logDir.toString()) {
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
             @Override
             public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
                                                                       long timestamp,
