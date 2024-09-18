@@ -27,15 +27,22 @@ import kafka.test.annotation.Type;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.test.TestUtils;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
@@ -207,4 +214,28 @@ public interface ClusterInstance {
                 60000L, "Timeout waiting for controller metadata propagating to brokers");
         }
     }
+
+    default List<Authorizer> authorizers() {
+        List<Authorizer> authorizers = new ArrayList<>();
+        authorizers.addAll(brokers().values().stream()
+                .filter(server -> server.authorizer().isDefined())
+                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+        authorizers.addAll(controllers().values().stream()
+                .filter(server -> server.authorizer().isDefined())
+                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+        return authorizers;
+    }
+
+    default void waitAcls(AclBindingFilter filter, Collection<AccessControlEntry> entries) throws InterruptedException {
+        for (Authorizer authorizer : authorizers()) {
+            AtomicReference<Set<AccessControlEntry>> actualEntries = new AtomicReference<>(new HashSet<>());
+            TestUtils.waitForCondition(() -> {
+                Set<AccessControlEntry> accessControlEntrySet = new HashSet<>();
+                authorizer.acls(filter).forEach(aclBinding -> accessControlEntrySet.add(aclBinding.entry()));
+                actualEntries.set(accessControlEntrySet);
+                return accessControlEntrySet.containsAll(entries) && entries.containsAll(accessControlEntrySet);
+            }, () -> "expected acls: " + entries + ", actual acls: " + actualEntries.get());
+        }
+    }
+
 }

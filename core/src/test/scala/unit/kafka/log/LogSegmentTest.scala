@@ -29,9 +29,11 @@ import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log._
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.mockito.Mockito.{doReturn, mock}
 
 import java.io.{File, RandomAccessFile}
 import java.util.{Optional, OptionalLong}
@@ -633,6 +635,33 @@ class LogSegmentTest {
     assertEquals(1000L, segment.getFirstBatchTimestamp)
 
     segment.close()
+  }
+
+  @Test
+  def testDeleteIfExistsWithGetParentIsNull(): Unit = {
+    val log = mock(classOf[FileRecords])
+    val lazyOffsetIndex = mock(classOf[LazyIndex[OffsetIndex]])
+    val lazyTimeIndex = mock(classOf[LazyIndex[TimeIndex]])
+    val transactionIndex = mock(classOf[TransactionIndex])
+    val segment = new LogSegment(log, lazyOffsetIndex, lazyTimeIndex, transactionIndex, 0, 10, 100, Time.SYSTEM)
+
+    // Use "Nil: _*" as workaround for jdk 8
+    doReturn(true, Nil: _*).when(log).deleteIfExists()
+    doReturn(true, Nil: _*).when(lazyOffsetIndex).deleteIfExists()
+    doReturn(true, Nil: _*).when(lazyTimeIndex).deleteIfExists()
+    doReturn(false, Nil: _*).when(transactionIndex).deleteIfExists()
+
+    val mockFile = mock(classOf[File])
+    doReturn("/test/path", Nil: _*).when(mockFile).getAbsolutePath
+    doReturn(mockFile, Nil: _*).when(log).file()
+    doReturn(mockFile, Nil: _*).when(lazyOffsetIndex).file()
+    doReturn(mockFile, Nil: _*).when(lazyTimeIndex).file()
+
+    val transactionIndexFile = new File("/")
+    doReturn(transactionIndexFile, Nil: _*).when(transactionIndex).file()
+    assertDoesNotThrow(new Executable {
+      override def execute(): Unit = segment.deleteIfExists()
+    }, "Should not throw exception when transactionIndex.deleteIfExists() returns false")
   }
 
   private def newProducerStateManager(): ProducerStateManager = {

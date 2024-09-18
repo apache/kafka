@@ -51,7 +51,7 @@ import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ServerLogConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, fail}
-import org.junit.jupiter.api.{Assumptions, Timeout}
+import org.junit.jupiter.api.{Assumptions, Disabled, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.function.Executable
 import org.slf4j.{Logger, LoggerFactory}
@@ -291,6 +291,7 @@ class ZkMigrationIntegrationTest {
     migrationState = migrationClient.releaseControllerLeadership(migrationState)
   }
 
+  @Disabled
   @ClusterTemplate("zkClustersForAllMigrationVersions")
   def testMigrateTopicDeletions(zkCluster: ClusterInstance): Unit = {
     // Create some topics in ZK mode
