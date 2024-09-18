@@ -176,7 +176,7 @@ public class MirrorMakerConfigTest {
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",
             "groups.blacklist", "group-7",
-            "topics.blacklist", "topic3",
+            "topics.exclude", "topic3",
             "topic.filter.class", DefaultTopicFilter.class.getName()));
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
@@ -198,7 +198,7 @@ public class MirrorMakerConfigTest {
     public void testConfigBackwardsCompatibilitySourceTarget() {
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",
-            "source->target.topics.blacklist", "topic3",
+            "source->target.topics.exclude", "topic3",
             "source->target.groups.blacklist", "group-7",
             "topic.filter.class", DefaultTopicFilter.class.getName()));
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
