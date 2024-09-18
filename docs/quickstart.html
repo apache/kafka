@@ -32,7 +32,7 @@
             the latest Kafka release and extract it:
         </p>
 
-        <pre><code class="language-bash">tar -xzf kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz
+        <pre><code class="language-bash">$ tar -xzf kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz
 cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
     </div>
 
@@ -53,41 +53,41 @@ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
         <h6>Using downloaded files</h6>
 
         <p>Generate a Cluster UUID</p>
-        <pre><code class="language-bash">KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
+        <pre><code class="language-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
 
         <p>Format Log Directories</p>
-        <pre><code class="language-bash">bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties</code></pre>
+        <pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties</code></pre>
 
         <p>Start the Kafka Server</p>
-        <pre><code class="language-bash">bin/kafka-server-start.sh config/kraft/reconfig-server.properties</code></pre>
+        <pre><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/reconfig-server.properties</code></pre>
 
         <p>Once the Kafka server has successfully launched, you will have a basic Kafka environment running and ready to use.</p>
 
         <h6>Using JVM Based Apache Kafka Docker Image</h6>
 
         <p> Get the Docker image:</p>
-        <pre><code class="language-bash">docker pull apache/kafka:{{fullDotVersion}}</code></pre>
+        <pre><code class="language-bash">$ docker pull apache/kafka:{{fullDotVersion}}</code></pre>
 
         <p> Start the Kafka Docker container: </p>
-        <pre><code class="language-bash">docker run -p 9092:9092 apache/kafka:{{fullDotVersion}}</code></pre>
+        <pre><code class="language-bash">$ docker run -p 9092:9092 apache/kafka:{{fullDotVersion}}</code></pre>
 
         <h6>Using GraalVM Based Native Apache Kafka Docker Image</h6>
 
         <p>Get the Docker image:</p>
-        <pre><code class="language-bash">docker pull apache/kafka-native:{{fullDotVersion}}</code></pre>
+        <pre><code class="language-bash">$ docker pull apache/kafka-native:{{fullDotVersion}}</code></pre>
 
         <p>Start the Kafka Docker container:</p>
-        <pre><code class="language-bash">docker run -p 9092:9092 apache/kafka-native:{{fullDotVersion}}</code></pre>
+        <pre><code class="language-bash">$ docker run -p 9092:9092 apache/kafka-native:{{fullDotVersion}}</code></pre>
 
         <h5>Kafka with ZooKeeper</h5>
 
         <p>Run the following commands in order to start all services in the correct order:</p>
         <pre><code class="language-bash"># Start the ZooKeeper service
-bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
+$ bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
 
         <p>Open another terminal session and run:</p>
         <pre><code class="language-bash"># Start the Kafka broker service
-bin/kafka-server-start.sh config/server.properties</code></pre>
+$ bin/kafka-server-start.sh config/server.properties</code></pre>
 
         <p>Once all services have successfully launched, you will have a basic Kafka environment running and ready to use.</p>
 
@@ -117,7 +117,7 @@ bin/kafka-server-start.sh config/server.properties</code></pre>
             So before you can write your first events, you must create a topic.  Open another terminal session and run:
         </p>
 
-        <pre><code class="language-bash">bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092</code></pre>
+        <pre><code class="language-bash">$ bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092</code></pre>
 
         <p>
             All of Kafka's command line tools have additional options: run the <code>kafka-topics.sh</code> command without any
@@ -126,7 +126,7 @@ bin/kafka-server-start.sh config/server.properties</code></pre>
             of the new topic:
         </p>
 
-        <pre><code class="language-bash">bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
+        <pre><code class="language-bash">$ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
 Topic: quickstart-events        TopicId: NPmZHyhbR9y00wMglMH2sg PartitionCount: 1       ReplicationFactor: 1	Configs:
 Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0</code></pre>
     </div>
@@ -148,7 +148,7 @@ Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0</code></
             By default, each line you enter will result in a separate event being written to the topic.
         </p>
 
-        <pre><code class="language-bash">bin/kafka-console-producer.sh --topic quickstart-events --bootstrap-server localhost:9092
+        <pre><code class="language-bash">$ bin/kafka-console-producer.sh --topic quickstart-events --bootstrap-server localhost:9092
 &gt;This is my first event
 &gt;This is my second event</code></pre>
 
@@ -163,7 +163,7 @@ Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0</code></
 
         <p>Open another terminal session and run the console consumer client to read the events you just created:</p>
 
-        <pre><code class="language-bash">bin/kafka-console-consumer.sh --topic quickstart-events --from-beginning --bootstrap-server localhost:9092
+        <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --topic quickstart-events --from-beginning --bootstrap-server localhost:9092
 This is my first event
 This is my second event</code></pre>
 
@@ -207,15 +207,15 @@ This is my second event</code></pre>
             Edit the <code class="language-bash">config/connect-standalone.properties</code> file, add or change the <code>plugin.path</code> configuration property match the following, and save the file:
         </p>
 
-        <pre><code class="language-bash">echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar" &gt;&gt; config/connect-standalone.properties</code></pre>
+        <pre><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar" &gt;&gt; config/connect-standalone.properties</code></pre>
 
         <p>
             Then, start by creating some seed data to test with:
         </p>
 
-        <pre><code class="language-bash">echo -e "foo\nbar" &gt; test.txt</code></pre>
+        <pre><code class="language-bash">$ echo -e "foo\nbar" &gt; test.txt</code></pre>
         Or on Windows:
-        <pre><code class="language-bash">echo foo &gt; test.txt
+        <pre><code class="language-bash">$ echo foo &gt; test.txt
 echo bar &gt;&gt; test.txt</code></pre>
 
         <p>
@@ -226,7 +226,7 @@ echo bar &gt;&gt; test.txt</code></pre>
             class to instantiate, and any other configuration required by the connector.
         </p>
 
-        <pre><code class="language-bash">bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</code></pre>
+        <pre><code class="language-bash">$ bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</code></pre>
 
         <p>
             These sample configuration files, included with Kafka, use the default local cluster configuration you started earlier
@@ -243,7 +243,7 @@ echo bar &gt;&gt; test.txt</code></pre>
         </p>
 
 
-        <pre><code class="language-bash">more test.sink.txt
+        <pre><code class="language-bash">$ more test.sink.txt
 foo
 bar</code></pre>
 
@@ -253,14 +253,14 @@ bar</code></pre>
         </p>
 
 
-        <pre><code class="language-bash">bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
+        <pre><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
 {"schema":{"type":"string","optional":false},"payload":"foo"}
 {"schema":{"type":"string","optional":false},"payload":"bar"}
 &hellip;</code></pre>
 
         <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
 
-        <pre><code class="language-bash">echo "Another line" &gt;&gt; test.txt</code></pre>
+        <pre><code class="language-bash">$ echo "Another line" &gt;&gt; test.txt</code></pre>
 
         <p>You should see the line appear in the console consumer output and in the sink file.</p>
 
@@ -330,7 +330,7 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
             along the way, run the command:
         </p>
 
-        <pre><code class="language-bash">rm -rf /tmp/kafka-logs /tmp/zookeeper /tmp/kraft-combined-logs</code></pre>
+        <pre><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper /tmp/kraft-combined-logs</code></pre>
 
     </div>
 
