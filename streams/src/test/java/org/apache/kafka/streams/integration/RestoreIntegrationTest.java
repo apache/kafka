@@ -580,13 +580,14 @@ public class RestoreIntegrationTest {
         validateReceivedMessages(sampleData, outputTopic);
 
         // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
-        kafkaStreams.close(Duration.ofMillis(IntegrationTestUtils.DEFAULT_TIMEOUT));
+        kafkaStreams.close();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
         kafkaStreams = startKafkaStreams(builder, kafkaStreams1StateRestoreListener, kafkaStreams1Configuration);
 
-        // Must make ensure all the restoring tasks are in active state before starting the new instance.
+        // Ensure all the restoring tasks are in active state before starting the new instance.
+        // Otherwise, the tasks which assigned to first kafka streams won't encounter "restoring suspend" after being reassigned to the second instance.
         waitForActiveRestoringTask(kafkaStreams, 5, IntegrationTestUtils.DEFAULT_TIMEOUT);
 
         assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationStarts());

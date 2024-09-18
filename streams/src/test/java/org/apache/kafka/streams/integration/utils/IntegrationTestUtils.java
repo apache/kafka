@@ -640,11 +640,10 @@ public class IntegrationTestUtils {
     public static void waitForActiveRestoringTask(final KafkaStreams streams,
                                                   final int expectedTasks,
                                                   final long timeoutMilliseconds) throws Exception {
-        TestUtils.waitForCondition(() -> {
-            return streams.metrics().entrySet().stream()
-                    .filter(metric -> metric.getKey().name().equals("active-restoring-tasks"))
-                    .anyMatch(metric -> ((Number) metric.getValue().metricValue()).intValue() == expectedTasks);
-        }, timeoutMilliseconds, "Timed out waiting for active restoring task");
+        TestUtils.waitForCondition(() -> streams.metrics().entrySet().stream()
+                        .filter(metric -> metric.getKey().name().equals("active-restoring-tasks"))
+                        .anyMatch(metric -> ((Number) metric.getValue().metricValue()).intValue() == expectedTasks),
+                timeoutMilliseconds, "Timed out waiting for active restoring task");
     }
 
     /**
