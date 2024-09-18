@@ -1412,6 +1412,7 @@ class LogManagerTest {
 
     try {
       logManager = assertDoesNotThrow(() => createLogManager())
+      assertEquals(0, logManager.dirLocks.size)
     } finally {
       // Add write permissions back to make file cleanup passed
       permissions.add(PosixFilePermission.OWNER_WRITE)
