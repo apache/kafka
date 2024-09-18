@@ -31,12 +31,6 @@ streams:
   - any-glob-to-any-file: 
     - 'streams/**'
 
-tests:
-- changed-files:
-  - any-glob-to-all-files: 
-    - 'tests/**'
-    - '**/test/**'
-
 tools:
 - changed-files:
   - any-glob-to-any-file:

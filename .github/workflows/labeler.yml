@@ -5,7 +5,7 @@ on:
   
 
 jobs:
-  label PRs:
+  label_PRs:
     permissions:
       contents: read
       pull-requests: write
