@@ -61,6 +61,7 @@ import java.util.OptionalLong;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -133,11 +134,8 @@ public class LogSegmentTest {
     public void testAppendForLogSegmentOffsetOverflowException(long baseOffset, long largestOffset) throws IOException {
         try (LogSegment seg = createSegment(baseOffset, 10, Time.SYSTEM)) {
             long currentTime = Time.SYSTEM.milliseconds();
-            long shallowOffsetOfMaxTimestamp = largestOffset;
             MemoryRecords memoryRecords = records(0, "hello");
-            assertThrows(LogSegmentOffsetOverflowException.class, () -> {
-                seg.append(largestOffset, currentTime, shallowOffsetOfMaxTimestamp, memoryRecords);
-            });
+            assertThrows(LogSegmentOffsetOverflowException.class, () -> seg.append(largestOffset, currentTime, largestOffset, memoryRecords));
         }
     }
 
@@ -245,24 +243,15 @@ public class LogSegmentTest {
 
                 // check that we can read back both messages
                 FetchDataInfo read = seg.read(offset, 10000);
-                assertEquals(Arrays.asList(ms1.records().iterator().next(), ms2.records().iterator().next()), iteratorToList(read.records.records().iterator()));
+                assertIterableEquals(Arrays.asList(ms1.records().iterator().next(), ms2.records().iterator().next()), read.records.records());
 
                 // Now truncate off the last message
                 seg.truncateTo(offset + 1);
                 FetchDataInfo read2 = seg.read(offset, 10000);
-                assertEquals(1, iteratorToList(read2.records.records().iterator()).size());
-                checkEquals(ms1.records().iterator(), read2.records.records().iterator());
+                assertIterableEquals(ms1.records(), read2.records.records());
                 offset += 1;
             }
         }
-    }
-
-    private <T> List<T> iteratorToList(Iterator<T> iterator) {
-        List<T> list = new ArrayList<>();
-        while (iterator.hasNext()) {
-            list.add(iterator.next());
-        }
-        return list;
     }
 
     @Test
@@ -710,8 +699,9 @@ public class LogSegmentTest {
 
             // Then we should still truncate the record that was present (i.e. offset + 3 is gone)
             FetchDataInfo log = seg.read(offset, 10000);
-            assertEquals(offset, log.records.batches().iterator().next().baseOffset());
-            assertEquals(1, iteratorToList(log.records.batches().iterator()).size());
+            Iterator<? extends RecordBatch> iter = log.records.batches().iterator();
+            assertEquals(offset, iter.next().baseOffset());
+            assertFalse(iter.hasNext());
         }
     }
 
