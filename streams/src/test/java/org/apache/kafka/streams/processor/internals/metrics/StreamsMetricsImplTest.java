@@ -93,7 +93,6 @@ public class StreamsMetricsImplTest {
     private static final String SENSOR_NAME_1 = "sensor1";
     private static final String SENSOR_NAME_2 = "sensor2";
     private static final String INTERNAL_PREFIX = "internal";
-    private static final String VERSION = StreamsConfig.METRICS_LATEST;
     private static final String CLIENT_ID = "test-client";
     private static final String THREAD_ID1 = "test-thread-1";
     private static final String TASK_ID1 = "test-task-1";
