@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
+import static org.apache.kafka.server.common.Features.PRODUCTION_FEATURES;
 
 /**
  * A class that encapsulates the latest features supported by the Broker and also provides APIs to
@@ -53,9 +54,7 @@ public class BrokerFeatures {
     public static Map<String, VersionRange> createDefaultFeatureMap(BrokerFeatures features) {
         Map<String, SupportedVersionRange> supportedFeatures = features.supportedFeatures.features();
         Map<String, VersionRange> result = new HashMap<>();
-        for (Map.Entry<String, SupportedVersionRange> entry : supportedFeatures.entrySet()) {
-            result.put(entry.getKey(), VersionRange.of(entry.getValue().min(), entry.getValue().max()));
-        }
+        supportedFeatures.forEach((key, value) -> result.put(key, VersionRange.of(value.min(), value.max())));
         return result;
     }
 
@@ -66,7 +65,7 @@ public class BrokerFeatures {
                         MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
                         unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting().featureLevel()
                                 : MetadataVersion.latestProduction().featureLevel()));
-        org.apache.kafka.server.common.Features.PRODUCTION_FEATURES.forEach(feature -> {
+        PRODUCTION_FEATURES.forEach(feature -> {
             int maxVersion = unstableFeatureVersionsEnabled ? feature.latestTesting() : feature.latestProduction();
             if (maxVersion > 0) {
                 features.put(feature.featureName(), new SupportedVersionRange(feature.minimumProduction(), (short) maxVersion));

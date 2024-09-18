@@ -51,7 +51,6 @@ import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
-import scala.collection.convert.ImplicitConversions.`map AsScala`
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -434,7 +433,7 @@ class KafkaController(val config: KafkaConfig,
       val newVersion = createFeatureZNode(
         FeatureZNode(config.interBrokerProtocolVersion,
           FeatureZNodeStatus.Enabled,
-          brokerFeatures.defaultFinalizedFeatures.map { case (k, v) => (k, v.shortValue()) }
+          brokerFeatures.defaultFinalizedFeatures.asScala.map { case (k, v) => (k, v.shortValue()) }
         ))
       featureCache.waitUntilFeatureEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
     } else {
