@@ -49,23 +49,23 @@
       the <code>listeners</code> property in the server configuration, which accepts a comma-separated
       list of the listeners to enable. At least one listener must be defined on each server. The format
       of each listener defined in <code>listeners</code> is given below:</p>
-
+	  
     <pre><code class="language-text">{LISTENER_NAME}://{hostname}:{port}</code></pre>
-
+	    
     <p>The <code>LISTENER_NAME</code> is usually a descriptive name which defines the purpose of
       the listener. For example, many configurations use a separate listener for client traffic,
       so they might refer to the corresponding listener as <code>CLIENT</code> in the configuration:</p>
-
+      
     <pre><code class="language-text">listeners=CLIENT://localhost:9092</code></pre>
-
+      
     <p>The security protocol of each listener is defined in a separate configuration:
       <code>listener.security.protocol.map</code>. The value is a comma-separated list
       of each listener mapped to its security protocol. For example, the follow value
       configuration specifies that the <code>CLIENT</code> listener will use SSL while the
       <code>BROKER</code> listener will use plaintext.</p>
-
+    
     <pre><code class="language-text">listener.security.protocol.map=CLIENT:SSL,BROKER:PLAINTEXT</code></pre>
-
+	    
     <p>Possible options (case-insensitive) for the security protocol are given below:</p>
     <ol>
       <li>PLAINTEXT</li>
@@ -81,9 +81,9 @@
       security protocol name as the listener name in <code>listeners</code>. Using the example above,
       we could skip the definition of the <code>CLIENT</code> and <code>BROKER</code> listeners
       using the following definition:</p>
-
+    
     <pre><code class="language-text">listeners=SSL://localhost:9092,PLAINTEXT://localhost:9093</code></pre>
-
+      
     <p>However, we recommend users to provide explicit names for the listeners since it
       makes the intended usage of each listener clearer.</p>
 
@@ -93,7 +93,7 @@
       partition replication. If not defined, then the inter-broker listener is determined
       by the security protocol defined by <code>security.inter.broker.protocol</code>, which
       defaults to <code>PLAINTEXT</code>.</p>
-
+    
     <p>For legacy clusters which rely on Zookeeper to store cluster metadata, it is possible to
       declare a separate listener to be used for metadata propagation from the active controller
       to the brokers. This is defined by <code>control.plane.listener.name</code>. The active controller
@@ -102,7 +102,7 @@
       which makes it less likely for application traffic to impede timely propagation of metadata changes
       (such as partition leader and ISR updates). Note that the default value is null, which
       means that the controller will use the same listener defined by <code>inter.broker.listener</code></p>
-
+    
     <p>In a KRaft cluster, a broker is any server which has the <code>broker</code> role enabled
       in <code>process.roles</code> and a controller is any server which has the <code>controller</code>
       role enabled. Listener configuration depends on the role. The listener defined by
@@ -116,7 +116,7 @@
       (i.e. it is just a broker), it must still define the controller listener along with
       any security properties that are needed to configure it. For example, we might
       use the following configuration on a standalone broker:</p>
-
+      
     <pre><code class="language-text">process.roles=broker
 listeners=BROKER://localhost:9092
 inter.broker.listener.name=BROKER
@@ -127,13 +127,13 @@ listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL</code></pre>
     <p>The controller listener is still configured in this example to use the <code>SASL_SSL</code>
       security protocol, but it is not included in <code>listeners</code> since the broker
       does not expose the controller listener itself. The port that will be used in this case
-      comes from the <code>controller.quorum.bootstrap.servers</code> configuration, which defines
+      comes from the <code>controller.quorum.voters</code> configuration, which defines
       the complete list of controllers.</p>
 
     <p>For KRaft servers which have both the broker and controller role enabled, the configuration
       is similar. The only difference is that the controller listener must be included in
       <code>listeners</code>:</p>
-
+    
     <pre><code class="language-text">process.roles=broker,controller
 listeners=BROKER://localhost:9092,CONTROLLER://localhost:9093
 inter.broker.listener.name=BROKER
@@ -155,14 +155,16 @@ listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL</code></pre>
       the first one in the list will be used for outbound requests.</p>
 
     <p>It is conventional in Kafka to use a separate listener for clients. This allows the
-      inter-cluster listeners to be isolated at the network level. Clients that connect to any other
-      listener configured on a broker will have their administrative requests forwarded to the
-      active controller as described <a href="#kraft_principal_forwarding">below</a></p>
-
+      inter-cluster listeners to be isolated at the network level. In the case of the controller
+      listener in KRaft, the listener should be isolated since clients do not work with it
+      anyway. Clients are expected to connect to any other listener configured on a broker.
+      Any requests that are bound for the controller will be forwarded as described
+      <a href="#kraft_principal_forwarding">below</a></p>
+    
     <p>In the following <a href="#security_ssl">section</a>, this document covers how to enable SSL
       on a listener for encryption as well as authentication. The subsequent <a href="#security_sasl">section</a> will then
       cover additional authentication mechanisms using SASL.</p>
-
+    
     <h3 class="anchor-heading"><a id="security_ssl" class="anchor-link"></a><a href="#security_ssl">7.3 Encryption and Authentication using SSL</a></h3>
     Apache Kafka allows clients to use SSL for encryption of traffic as well as authentication. By default, SSL is disabled but can be turned on if needed.
     The following paragraphs explain in detail how to set up your own PKI infrastructure, use it to create certificates and configure Kafka to use these.
@@ -677,9 +679,9 @@ listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.p
                         the broker for client authentication and follow the steps to configure SASL
                         for the selected mechanism.</p>
 
-                    <p>Note: When establishing connections to brokers via SASL, clients may perform a reverse
-                        DNS lookup of the broker address. Due to how the JRE implements reverse
-                        DNS lookups, clients may observe slow SASL handshakes if fully qualified domain
+                    <p>Note: When establishing connections to brokers via SASL, clients may perform a reverse 
+                        DNS lookup of the broker address. Due to how the JRE implements reverse 
+                        DNS lookups, clients may observe slow SASL handshakes if fully qualified domain 
                         names are not used, for both the client's <code>bootstrap.servers</code> and a broker's
                         <code><a href="#brokerconfigs_advertised.listeners">advertised.listeners</a></code>.</p></li>
             </ol>
@@ -1302,7 +1304,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     The default implementation <code>org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder</code> uses the Kafka RPC format defined in the source code: <code>clients/src/main/resources/common/message/DefaultPrincipalData.json</code>.
 
     For more detail about request forwarding in KRaft, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller">KIP-590</a>
-
+    
     <h5 class="anchor-heading"><a id="security_authz_ssl" class="anchor-link"></a><a href="#security_authz_ssl">Customizing SSL User Name</a></h5>
 
     By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting <code>ssl.principal.mapping.rules</code> to a customized rule in server.properties.
@@ -1372,7 +1374,13 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
         </tr>
         <tr>
             <td>--bootstrap-server</td>
-            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster. Only one of --bootstrap-server or --authorizer option must be specified.</td>
+            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster broker. Only one of --bootstrap-server, --bootstrap-controller, or --authorizer option must be specified.</td>
+            <td></td>
+            <td>Configuration</td>
+        </tr>
+        <tr>
+            <td>--bootstrap-controller</td>
+            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster controller. Only one of --bootstrap-server, --bootstrap-controller, or --authorizer option must be specified.</td>
             <td></td>
             <td>Configuration</td>
         </tr>
