@@ -17,9 +17,9 @@
 
 package org.apache.kafka.jmh.metadata;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
-import kafka.network.RequestConvertToJson;
 import kafka.server.AutoTopicCreationManager;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
@@ -58,6 +58,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.FinalizedFeatures;
@@ -237,7 +238,9 @@ public class KRaftMetadataRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.requestLog(), allTopicMetadataRequest.isForwarded()).toString();
+        Option<JsonNode> option = allTopicMetadataRequest.requestLog();
+        Optional<JsonNode> optional = option.isDefined() ? Optional.of(option.get()) : Optional.empty();
+        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), optional, allTopicMetadataRequest.isForwarded()).toString();
     }
 
     @Benchmark

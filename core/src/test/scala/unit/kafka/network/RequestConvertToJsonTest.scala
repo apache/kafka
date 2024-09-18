@@ -21,13 +21,13 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network
-import kafka.network.RequestConvertToJson.requestHeaderNode
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -35,6 +35,7 @@ import org.mockito.Mockito.mock
 
 import java.util.Collections
 import scala.collection.mutable.ArrayBuffer
+import scala.compat.java8.OptionConverters._
 
 class RequestConvertToJsonTest {
 
@@ -155,10 +156,10 @@ class RequestConvertToJsonTest {
 
     val expectedNode = new ObjectNode(JsonNodeFactory.instance)
     expectedNode.set("isForwarded", if (req.isForwarded) BooleanNode.TRUE else BooleanNode.FALSE)
-    expectedNode.set("requestHeader", requestHeaderNode(req.header))
+    expectedNode.set("requestHeader", RequestConvertToJson.requestHeaderNode(req.header))
     expectedNode.set("request", req.requestLog.getOrElse(new TextNode("")))
 
-    val actualNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded)
+    val actualNode = RequestConvertToJson.requestDesc(req.header, req.requestLog.asJava, req.isForwarded)
 
     assertEquals(expectedNode, actualNode)
   }
@@ -181,7 +182,7 @@ class RequestConvertToJsonTest {
     val temporaryMemoryBytes = 8
     val messageConversionsTimeMs = 9
 
-    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded).asInstanceOf[ObjectNode]
+    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog.asJava, req.isForwarded).asInstanceOf[ObjectNode]
     expectedNode.set("response", res.responseLog.getOrElse(new TextNode("")))
     expectedNode.set("connection", new TextNode(req.context.connectionId))
     expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs))
@@ -198,7 +199,7 @@ class RequestConvertToJsonTest {
     expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     expectedNode.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
 
-    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog, res.responseLog, req.context, req.session, req.isForwarded,
+    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog.asJava, res.responseLog.asJava, req.context, req.session, req.isForwarded,
       totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
       responseSendTimeMs, temporaryMemoryBytes, messageConversionsTimeMs).asInstanceOf[ObjectNode]
 
