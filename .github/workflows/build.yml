@@ -28,8 +28,8 @@ on:
         type: string
       is-public-fork:
         description: "Is this CI run from a public fork?"
-        default: "true"
-        type: string
+        default: true
+        type: boolean
 
 jobs:
   validate:
@@ -66,7 +66,7 @@ jobs:
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
         run: |
           ./gradlew --build-cache --info  \
-          ${{ inputs.is-public-fork == 'true' && '--no-scan' || '--scan' }} \
+          ${{ inputs.is-public-fork && '--no-scan' || '--scan' }} \
           check -x test
       - name: Archive check reports
         if: always()
