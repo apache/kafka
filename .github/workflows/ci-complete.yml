@@ -120,12 +120,12 @@ jobs:
           state: 'success'
 
   update-cached-tag:
-    # Skip this workflow if the CI run was skipped or cancelled
-    if: (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+    # Only run this job if the previous workflow run was successful
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Update Floating 'cached' Tag
-        if: github.ref == 'refs/heads/trunk' && success()
+        if: github.ref == 'refs/heads/trunk'
         run: |
           git fetch origin refs/tags/cached:refs/tags/cached
           git tag -fa cached -m "Automatically generated after running workflow $GITHUB_RUN_NUMBER. https://github.com/${{ github.repository }}/actions/runs/$GITHUB_RUN_ID"
