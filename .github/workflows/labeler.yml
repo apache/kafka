@@ -5,7 +5,7 @@ on:
   
 
 jobs:
-  labeler:
+  label PRs:
     permissions:
       contents: read
       pull-requests: write
