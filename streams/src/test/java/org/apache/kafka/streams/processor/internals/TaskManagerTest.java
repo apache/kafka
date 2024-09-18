@@ -1250,7 +1250,7 @@ public class TaskManagerTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldRetryInitializationWhenCanNotTryLock() {
+    public void shouldRetryInitializationWhenCanNotInitializeTask() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
                 .withInputPartitions(taskId00Partitions)
                 .inState(State.RESTORING).build();
@@ -1262,6 +1262,7 @@ public class TaskManagerTest {
         final TaskManager.BackoffRecord backoffRecord = mock(TaskManager.BackoffRecord.class);
         final HashMap taskIdToBackoffRecord = mock(HashMap.class);
         doReturn(true).when(taskIdToBackoffRecord).containsKey(taskId00);
+        doReturn(false).when(taskIdToBackoffRecord).containsKey(taskId01);
         doReturn(backoffRecord).when(taskIdToBackoffRecord).get(taskId00);
         doReturn(false).when(backoffRecord).canAttempt(anyLong());
 
