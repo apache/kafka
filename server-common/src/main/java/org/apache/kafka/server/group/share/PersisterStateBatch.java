@@ -91,8 +91,8 @@ public class PersisterStateBatch implements Comparable {
         return "PersisterStateBatch(" +
             "firstOffset=" + firstOffset + "," +
             "lastOffset=" + lastOffset + "," +
-            "deliveryState=" + deliveryState + "," +
-            "deliveryCount=" + deliveryCount +
+            "deliveryCount=" + deliveryCount + "," +
+            "deliveryState=" + deliveryState +
             ")";
     }
 
@@ -103,11 +103,11 @@ public class PersisterStateBatch implements Comparable {
         if (deltaFirst == 0) {
             int deltaLast = Long.compare(this.lastOffset(), that.lastOffset());
             if (deltaLast == 0) {
-                int countDelta = this.deliveryCount() - that.deliveryCount();
-                if (countDelta == 0) {
+                int deltaCount = this.deliveryCount() - that.deliveryCount();
+                if (deltaCount == 0) {
                     return Byte.compare(this.deliveryState(), that.deliveryState());
                 }
-                return countDelta;
+                return deltaCount;
             }
             return deltaLast;
         }

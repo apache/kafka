@@ -646,7 +646,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 continue;
             }
 
-            // overlap and same state (last.firstOffset <= candidate.firstOffset due to sort
+            // overlap and same state (last.firstOffset <= candidate.firstOffset) due to sort
             // covers:
             // case:        1        2          3            4          5           6          7 (contiguous)
             // last:        ______   _______    _______      _______   _______   ________    _______
@@ -666,53 +666,45 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 );
 
                 sortedBatches.add(last);
-            } else if (candidate.firstOffset() <= last.lastOffset()) { // non contiguous overlap
+            } else if (candidate.firstOffset() <= last.lastOffset()) { // non-contiguous overlap
                 // overlap and different state
                 // covers:
-                // case:        1        2          3            4          5           6
+                // case:        1        2 (NP)      3            4          5           6
                 // last:        ______   _______    _______      _______    _______     ________
                 // candidate:   ______   ____       _________      ____        ____          _______
                 // max batches: 1           2       2                3          2            2
                 // min batches: 1           1       1                1          1            2
 
+                // remove both last and candidate for easier
+                // assessment about adding batches to sortedBatches
                 sortedBatches.remove(last);
-                if (candidate.firstOffset() == last.firstOffset()) {
-                    // No special handling for case 1
-                    // here candidate can never have lower priority
-                    // since the treeset order takes that into account
-                    // and candidate is already in the treeset.
+                sortedBatches.remove(candidate);
 
-                    if (candidate.lastOffset() < last.lastOffset()) { // case 2
+                if (candidate.firstOffset() == last.firstOffset()) {
+                    if (candidate.lastOffset() == last.lastOffset()) {  // case 1
+                        // candidate can never have lower or equal priority
+                        // since sortedBatches order takes that into account.
+                        sortedBatches.add(candidate);
+                    } else {
+                        // case 2 is not possible with TreeSet. It is symmetric to case 3.
+                        // case 3
                         if (compareBatchState(candidate, last) < 0) {
                             sortedBatches.add(last);
-                        } else {    // last has lower priority
-                            sortedBatches.add(candidate);
-                            sortedBatches.add(new PersisterStateBatch(
-                                candidate.lastOffset() + 1,
-                                last.firstOffset(),
-                                last.deliveryState(),
-                                last.deliveryCount()
-                            ));
-                        }
-                    } else {    // case 3
-                        if (compareBatchState(candidate, last) < 0) {
-                            sortedBatches.add(last);
-                            sortedBatches.remove(candidate);
                             sortedBatches.add(new PersisterStateBatch(
                                 last.lastOffset() + 1,
                                 candidate.lastOffset(),
                                 candidate.deliveryState(),
                                 candidate.deliveryCount()
                             ));
-                        } else {    // last has lower priority
+                        } else {
+                            // candidate priority is >= last
                             sortedBatches.add(candidate);
                         }
                     }
-                } else {    // candidate.firstOffset() > last.lastOffset()
+                } else {    // candidate.firstOffset() > last.firstOffset()
                     if (candidate.lastOffset() < last.lastOffset()) {    // case 4
                         if (compareBatchState(candidate, last) < 0) {
                             sortedBatches.add(last);
-                            sortedBatches.remove(candidate);
                         } else {
                             sortedBatches.add(new PersisterStateBatch(
                                 last.firstOffset(),
@@ -733,7 +725,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     } else if (candidate.lastOffset() == last.lastOffset()) {    // case 5
                         if (compareBatchState(candidate, last) < 0) {
                             sortedBatches.add(last);
-                            sortedBatches.remove(candidate);
                         } else {
                             sortedBatches.add(new PersisterStateBatch(
                                 last.firstOffset(),
@@ -747,7 +738,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     } else {    // case 6
                         if (compareBatchState(candidate, last) < 0) {
                             sortedBatches.add(last);
-                            sortedBatches.remove(candidate);
 
                             sortedBatches.add(new PersisterStateBatch(
                                 last.lastOffset() + 1,
@@ -756,6 +746,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                                 candidate.deliveryCount()
                             ));
                         } else {
+                            // candidate has higher priority
                             sortedBatches.add(new PersisterStateBatch(
                                 last.firstOffset(),
                                 candidate.firstOffset() - 1,
@@ -818,7 +809,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return int representing comparison result.
      */
     private static int compareBatchState(PersisterStateBatch b1, PersisterStateBatch b2) {
-        int countDelta = Short.compare(b1.deliveryCount(), b2.deliveryCount());
+        int deltaCount = Short.compare(b1.deliveryCount(), b2.deliveryCount());
 
         // Delivery state could be:
         // 0 - AVAILABLE (non-terminal)
@@ -827,10 +818,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // 3 - ARCHIVING - not implemented in KIP-932 - non-terminal - leads only to ARCHIVED
         // 4 - ARCHIVED (terminal)
 
-        if (countDelta == 0) {   // same delivery count
+        if (deltaCount == 0) {   // same delivery count
             return Byte.compare(b1.deliveryState(), b2.deliveryState());
         }
-        return countDelta;
+        return deltaCount;
     }
 
     // Any batches where the last offset is < the current start offset
