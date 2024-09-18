@@ -4043,7 +4043,7 @@ public class GroupMetadataManager {
         if (!group.hasAllMembersJoined()) {
             log.debug("Cannot complete join phase of group {} because not all the members have rejoined. " +
                 "Members={}, AwaitingJoinResponses={}, PendingJoinMembers={}.",
-                group.groupId(), group.numMembers(), group.numAwaitingJoinResponse(), group.numPendingJoinMembers());
+                group.groupId(), group.numMembers(), group.numAwaitingJoinResponse(), String.join(",", group.pendingJoinMembers()));
             return EMPTY_RESULT;
         }
 
