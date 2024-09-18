@@ -17,7 +17,6 @@
 
 package org.apache.kafka.jmh.metadata;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AutoTopicCreationManager;
@@ -238,8 +237,8 @@ public class KRaftMetadataRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        Option<JsonNode> option = allTopicMetadataRequest.requestLog();
-        Optional<JsonNode> optional = option.isDefined() ? Optional.of(option.get()) : Optional.empty();
+        Option<com.fasterxml.jackson.databind.JsonNode> option = allTopicMetadataRequest.requestLog();
+        Optional<com.fasterxml.jackson.databind.JsonNode> optional = option.isDefined() ? Optional.of(option.get()) : Optional.empty();
         return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), optional, allTopicMetadataRequest.isForwarded()).toString();
     }
 
