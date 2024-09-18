@@ -713,6 +713,10 @@ public abstract class TopicCommand {
 
         private final ArgumentAcceptingOptionSpec<String> configOpt;
 
+        /**
+         * @deprecated since 4.0 and should not be used any longer.
+         */
+        @Deprecated
         private final ArgumentAcceptingOptionSpec<String> deleteConfigOpt;
 
         private final ArgumentAcceptingOptionSpec<Integer> partitionsOpt;
@@ -782,7 +786,7 @@ public abstract class TopicCommand {
                 .describedAs("name=value")
                 .ofType(String.class);
 
-            deleteConfigOpt = parser.accepts("delete-config", "This option is no longer supported.")
+            deleteConfigOpt = parser.accepts("delete-config", "This option is no longer supported and has been deprecated since 4.0")
                 .withRequiredArg()
                 .describedAs("name")
                 .ofType(String.class);
