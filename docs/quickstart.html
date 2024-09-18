@@ -33,7 +33,7 @@
         </p>
 
         <pre><code class="language-bash">$ tar -xzf kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz
-cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
+$ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
     </div>
 
     <div class="quickstart-step">
@@ -56,10 +56,10 @@ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
         <pre><code class="language-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
 
         <p>Format Log Directories</p>
-        <pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties</code></pre>
+        <pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties</code></pre>
 
         <p>Start the Kafka Server</p>
-        <pre><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/reconfig-server.properties</code></pre>
+        <pre><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/server.properties</code></pre>
 
         <p>Once the Kafka server has successfully launched, you will have a basic Kafka environment running and ready to use.</p>
 
@@ -216,7 +216,7 @@ This is my second event</code></pre>
         <pre><code class="language-bash">$ echo -e "foo\nbar" &gt; test.txt</code></pre>
         Or on Windows:
         <pre><code class="language-bash">$ echo foo &gt; test.txt
-echo bar &gt;&gt; test.txt</code></pre>
+$ echo bar &gt;&gt; test.txt</code></pre>
 
         <p>
             Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
