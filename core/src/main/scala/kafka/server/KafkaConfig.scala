@@ -853,7 +853,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       }
       if (brokerIdGenerationEnable) {
         if (migrationEnabled) {
-          require(brokerId != -1, "broker id generation is incompatible with migration to ZK. Please disable it before enabling migration")
+          require(brokerId >= 0, "broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).")
         }
         require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
       } else {
@@ -973,7 +973,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       // ZK-based
       if (migrationEnabled) {
         require(brokerId >= 0,
-          "broker broker.id.generation.enable is incompatible with migration to ZK. Please disable it before enabling migration")
+          "broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).")
         validateQuorumVotersAndQuorumBootstrapServerForMigration()
         require(controllerListenerNames.nonEmpty,
           s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
