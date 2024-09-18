@@ -19,6 +19,7 @@ package kafka.server
 
 import kafka.server.metadata.{FeatureCacheUpdateException, ZkMetadataCache}
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test

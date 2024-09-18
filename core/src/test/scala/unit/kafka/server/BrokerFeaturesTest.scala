@@ -18,6 +18,7 @@
 package kafka.server
 
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.common.{MetadataVersion, Features => ServerFeatures}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.Test
@@ -44,7 +45,7 @@ class BrokerFeaturesTest {
     val compatibleFeatures = Map[String, Short]("test_feature_1" -> 4)
     val inCompatibleFeatures = Map[String, Short]("test_feature_3" -> 4)
     val features = compatibleFeatures++inCompatibleFeatures
-    val finalizedFeatures = features
+    val finalizedFeatures = features.map { case (k, v) => (k, v: java.lang.Short) }.asJava
 
     assertEquals(inCompatibleFeatures,
       brokerFeatures.incompatibleFeatures(finalizedFeatures))
@@ -62,7 +63,7 @@ class BrokerFeaturesTest {
     val compatibleFeatures = Map[String, Short]("test_feature_1" -> 3)
     val inCompatibleFeatures = Map[String, Short]("test_feature_2" -> 4)
     val features = compatibleFeatures++inCompatibleFeatures
-    val finalizedFeatures = features
+    val finalizedFeatures = features.map { case (k, v) => (k, v: java.lang.Short) }.asJava
 
     assertEquals(
       inCompatibleFeatures,
@@ -81,7 +82,7 @@ class BrokerFeaturesTest {
     val compatibleFeatures = Map[String, Short](
       "test_feature_1" -> 3,
       "test_feature_2" -> 3)
-    val finalizedFeatures = compatibleFeatures
+    val finalizedFeatures = compatibleFeatures.map { case (k, v) => (k, v: java.lang.Short) }.asJava
     assertTrue(brokerFeatures.incompatibleFeatures(finalizedFeatures).isEmpty)
     assertFalse(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures))
   }

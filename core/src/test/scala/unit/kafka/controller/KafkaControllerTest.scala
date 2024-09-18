@@ -18,10 +18,11 @@
 package kafka.controller
 
 import kafka.server.metadata.ZkMetadataCache
-import kafka.server.{BrokerFeatures, DelegationTokenManager, KafkaConfig}
+import kafka.server.{DelegationTokenManager, KafkaConfig}
 import kafka.utils.TestUtils
 import kafka.zk.{BrokerInfo, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.server.BrokerFeatures
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.{BeforeEach, Test}
