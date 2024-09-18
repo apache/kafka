@@ -76,14 +76,14 @@ public class ProducerPerformance {
             SplittableRandom random = new SplittableRandom(0);
             ProducerRecord<byte[], byte[]> record;
             if (config.warmupRecords > 0) {
+                // TODO: Keep this message? Maybe unnecessary
+                System.out.println("Warmup first " + config.warmupRecords + " records. Steady-state results will print after the complete-test summary.");
                 this.warmupStats = new Stats(config.warmupRecords, 5000);
-                //stats = new Stats(config.numRecords, 5000);
+            } else {
+                stats = new Stats(config.numRecords, 5000);
             }
             long startMs = System.currentTimeMillis();
 
-            // TODO: Keep this message? Maybe unnecessary
-            if (config.warmupRecords > 0)
-                System.out.println("Warmup first " + config.warmupRecords + " records. Steady-state results will print after the complete-test summary.");
             ThroughputThrottler throttler = new ThroughputThrottler(config.throughput, startMs);
 
             int currentTransactionSize = 0;
@@ -100,12 +100,13 @@ public class ProducerPerformance {
                 record = new ProducerRecord<>(config.topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                if (i < config.warmupRecords) {
-                    cb = new PerfCallback(sendStartMs, payload.length, warmupStats);
-                    producer.send(record, cb);
-                } else if (i == config.warmupRecords) {
-                    stats = new Stats(config.numRecords - config.warmupRecords, 5000, config.warmupRecords);
-                    cb = new PerfCallback(sendStartMs, payload.length, stats);
+                if (warmupStats != null) {
+                    if (i < config.warmupRecords) {
+                        cb = new PerfCallback(sendStartMs, payload.length, warmupStats);
+                    } else if (i == config.warmupRecords) {
+                        stats = new Stats(config.numRecords - config.warmupRecords, 5000, config.warmupRecords);
+                        cb = new PerfCallback(sendStartMs, payload.length, stats);
+                    }
                     producer.send(record, cb);
                 } else {
                     cb = new PerfCallback(sendStartMs, payload.length, stats);
@@ -130,8 +131,9 @@ public class ProducerPerformance {
                 producer.close();
 
                 /* print warmup stats if relevant */
-                if (config.warmupRecords > 0) {
-                    stats.printTotal(warmupStats);
+                if (warmupStats != null) {
+                    overallStats = new Stats(warmupStats, stats);
+                    overallStats.printTotal();
                 }
                 /* print final results */
                 stats.printTotal();
@@ -142,8 +144,9 @@ public class ProducerPerformance {
                 producer.flush();
 
                 /* print warmup stats if relevant */
-                if (config.warmupRecords > 0) {
-                    stats.printTotal(warmupStats);
+                if (warmupStats != null) {
+                    Stats overallStats = new Stats(warmupStats, stats);
+                    overallStats.printTotal();
                 }
                 /* print final results */
                 stats.printTotal();
@@ -171,6 +174,7 @@ public class ProducerPerformance {
     Callback cb;
 
     Stats stats;
+    Stats overallStats;
     Stats warmupStats;
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
@@ -403,6 +407,25 @@ public class ProducerPerformance {
             this.warmupRecords = warmupRecords;
         }
 
+        public Stats(Stats first, Stats second) {
+            // create a Stats object that's the combination of two disjoint Stats objects
+            this.start = Math.min(first.start, second.start);
+            this.iteration = first.iteration + second.iteration;
+            this.sampling = first.sampling;
+            this.latencies = Arrays.copyOf(first.latencies, first.index + second.index);
+            System.arraycopy(second.latencies, 0, this.latencies, first.index(), second.index());
+            this.maxLatency = Math.max(first.maxLatency, second.maxLatency);
+            this.windowCount = first.windowCount + second.windowCount;
+            this.totalLatency = first.totalLatency + second.totalLatency;
+            this.reportingInterval = first.reportingInterval;
+            this.warmupRecords = 0;
+            this.count = first.count + second.count;
+            // unused vars, populating to prevent compiler errors:
+            //this.windowMaxLatency = 0;
+            //this.windowTotalLatency = 0;
+            //this.windowBytes = 0;
+        }
+
         public void record(int latency, int bytes, long time) {
             this.count++;
             this.bytes += bytes;
@@ -441,18 +464,6 @@ public class ProducerPerformance {
 
         public int index() {
             return this.index;
-        }
-
-        public int maxLatency() {
-            return this.maxLatency;
-        }
-
-        public int[] getLatencies() {
-            return this.latencies;
-        }
-
-        public long getTotalLatency() {
-            return this.totalLatency;
         }
 
         public void printWindow() {
@@ -497,18 +508,28 @@ public class ProducerPerformance {
                               percs[3]);
         }
 
+        /*
+        public void combineStats(Stats stats) {
+            this.count += stats.totalCount();
+            this.bytes += stats.bytes;
+            this.totalLatency += stats.totalLatency;
+            this.latencies = Arrays.copyOf(this.latencies, index + stats.index);
+            System.arraycopy(stats.latencies, 0, this.latencies, this.index(), stats.index());
+            this.index += stats.index;
+        }
+
         public void printTotal(Stats warmupStats) {
             long overallElapsed = System.currentTimeMillis() - warmupStats.start;
             long overallCount = count + warmupStats.totalCount();
             long overallBytes = bytes + warmupStats.bytes();
             double overallRecsPerSec = 1000.0 * overallCount / (double) overallElapsed;
             double overallMbPerSec = 1000.0 * overallBytes / (double) overallElapsed / (1024.0 * 1024.0);
-            int overallMax = Math.max(maxLatency, warmupStats.maxLatency());
-            long overallTotalLatency = totalLatency + warmupStats.getTotalLatency();
+            int overallMax = Math.max(maxLatency, warmupStats.maxLatency);
+            long overallTotalLatency = totalLatency + warmupStats.totalLatency;
 
             int totalElements = index + warmupStats.index();
-            int[] overallLatencyArray = Arrays.copyOf(warmupStats.getLatencies(), totalElements);
-            System.arraycopy(this.getLatencies(), 0, overallLatencyArray, warmupStats.index(), this.index());
+            int[] overallLatencyArray = Arrays.copyOf(warmupStats.latencies, totalElements);
+            System.arraycopy(this.latencies, 0, overallLatencyArray, warmupStats.index(), this.index());
 
             int[] percs = percentiles(overallLatencyArray, totalElements, 0.5, 0.95, 0.99, 0.999);
             System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
@@ -522,6 +543,7 @@ public class ProducerPerformance {
                               percs[2],
                               percs[3]);
         }
+        */
 
         private static int[] percentiles(int[] latencies, int count, double... percentiles) {
             int size = Math.min(count, latencies.length);
