@@ -36,9 +36,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.text.ParseException;
 import java.time.Duration;
@@ -115,7 +112,6 @@ public class StreamsResetter {
             + "reset tool!\n\n"
             + "*** Warning! This tool makes irreversible changes to your application. It is strongly recommended that "
             + "you run this once with \"--dry-run\" to preview your changes before making them.\n\n";
-    private static final Logger log = LoggerFactory.getLogger(StreamsResetter.class);
 
     private final List<String> allTopics = new LinkedList<>();
 
@@ -581,7 +577,7 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
                 .describedAs("list");
-            intermediateTopicsOption = parser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics (topics that are input and output topics). "
+            intermediateTopicsOption = parser.accepts("intermediate-topics", "[deprecated] Comma-separated list of intermediate user topics (topics that are input and output topics). "
                     + "For these topics, the tool will skip to the end.")
                 .withRequiredArg()
                 .ofType(String.class)
@@ -674,7 +670,7 @@ public class StreamsResetter {
         }
 
         public List<String> intermediateTopicsOption() {
-            log.warn("intermediateTopicsOption is deprecated and will be removed in version 5.0");
+            System.out.println("intermediateTopicsOption is deprecated and will be removed in a future release");
             return options.valuesOf(intermediateTopicsOption);
         }
 
