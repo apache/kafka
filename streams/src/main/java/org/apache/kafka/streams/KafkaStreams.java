@@ -999,7 +999,6 @@ public class KafkaStreams implements AutoCloseable {
         streamsMetrics = new StreamsMetricsImpl(
             metrics,
             clientId,
-            applicationConfigs.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
             time
         );
 
