@@ -79,7 +79,7 @@ public class DefaultTaskManagerTest {
         taskManager.shutdown(duration);
 
         verify(taskExecutor).requestShutdown();
-        verify(taskExecutor).awaitShutdown(Duration.ofSeconds(10));
+        verify(taskExecutor).awaitShutdown(duration);
     }
 
     @Test
