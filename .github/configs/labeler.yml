@@ -89,24 +89,18 @@ generator:
 transaction:
   - changed-files:
       - any-glob-to-any-file:
-          - 'transaction*/**'
+          - 'transaction-coordinator/**'
 
-share:
+KIP-932:
   - changed-files:
       - any-glob-to-any-file:
-          - '*share*/**'
+          - 'share/**'
+          - 'share-coordinator/**'
 
 docker:
 - changed-files:
   - any-glob-to-any-file: 
     - 'docker/**'
-
-
-coordinator:
-- changed-files:
-  - any-glob-to-any-file: 
-    - 'group-coordinator/**'
-    - 'coordinator-common/**'
 
 performance:
 - changed-files:
