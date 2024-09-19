@@ -127,7 +127,8 @@ class LogManager(logDirs: Seq[File],
       _liveLogDirs.asScala.toBuffer
   }
 
-  private val dirLocks = lockLogDirs(liveLogDirs)
+  // visible for testing
+  private[log] val dirLocks = lockLogDirs(liveLogDirs)
   private val directoryIds: mutable.Map[String, Uuid] = loadDirectoryIds(liveLogDirs)
   def directoryIdsSet: Predef.Set[Uuid] = directoryIds.values.toSet
 

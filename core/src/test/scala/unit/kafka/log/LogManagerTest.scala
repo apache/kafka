@@ -42,6 +42,7 @@ import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify
 import java.io._
 import java.lang.{Long => JLong}
 import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermission
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Optional, OptionalLong, Properties}
@@ -1392,6 +1393,33 @@ class LogManagerTest {
     val stopScheduler: Executable = () => scheduler.shutdown()
     assertTimeoutPreemptively(Duration.ofMillis(5000), stopLogManager)
     assertTimeoutPreemptively(Duration.ofMillis(5000), stopScheduler)
+  }
+
+  /**
+   * This test simulates an offline log directory by removing write permissions from the directory.
+   * It verifies that the LogManager continues to operate without failure in this scenario.
+   * For more details, refer to KAFKA-17356.
+   */
+  @Test
+  def testInvalidLogDirNotFailLogManager(): Unit = {
+    logManager.shutdown()
+    val permissions = Files.getPosixFilePermissions(logDir.toPath)
+    // Remove write permissions for user, group, and others
+    permissions.remove(PosixFilePermission.OWNER_WRITE)
+    permissions.remove(PosixFilePermission.GROUP_WRITE)
+    permissions.remove(PosixFilePermission.OTHERS_WRITE)
+    Files.setPosixFilePermissions(logDir.toPath, permissions)
+
+    try {
+      logManager = assertDoesNotThrow(() => createLogManager())
+      assertEquals(0, logManager.dirLocks.size)
+    } finally {
+      // Add write permissions back to make file cleanup passed
+      permissions.add(PosixFilePermission.OWNER_WRITE)
+      permissions.add(PosixFilePermission.GROUP_WRITE)
+      permissions.add(PosixFilePermission.OTHERS_WRITE)
+      Files.setPosixFilePermissions(logDir.toPath, permissions)
+    }
   }
 }
 
