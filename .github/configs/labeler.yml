@@ -86,7 +86,7 @@ generator:
       - any-glob-to-any-file:
         - 'generator/**'
 
-transaction:
+transactions:
   - changed-files:
       - any-glob-to-any-file:
           - 'transaction-coordinator/**'
