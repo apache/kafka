@@ -30,6 +30,11 @@ connect:
   - any-glob-to-any-file: 
     - 'connect/**'
 
+mirror-maker-2:
+- changed-files:
+  - any-glob-to-any-file: 
+    - 'connect/mirror/**'
+
 core:
 - changed-files:
   - any-glob-to-any-file:
