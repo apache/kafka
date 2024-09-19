@@ -62,7 +62,11 @@ LABEL ducker.creator=$ducker_creator
 # Update Linux and install necessary utilities.
 # we have to install git since it is included in openjdk:8 but not openjdk:11
 RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping && apt-get -y clean
-RUN python3 -m pip install -U pip==21.1.1;
+RUN apt install software-properties-common -y
+RUN add-apt-repository ppa:deadsnakes/ppa -y
+RUN apt install python3.9 python3.9-dev python3.9-venv -y
+RUN python3.9 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:${PATH}"
 RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34 debugpy && pip3 install --upgrade "ducktape==0.11.3"
 
 COPY --from=build-native-image /build/kafka-binary/ /opt/kafka-binary/
