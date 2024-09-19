@@ -56,7 +56,7 @@ tools:
 
 docs:
 - changed-files:
-  - any-glob-to-any-file:
+  - any-glob-to-all-files:
     - 'docs/**'
     - '**/*.md'
     - 'examples/**'
