@@ -35,6 +35,6 @@ jobs:
     with:
       gradle-cache-read-only: ${{ github.ref != 'refs/heads/trunk' }}
       gradle-cache-write-only: ${{ github.ref == 'refs/heads/trunk' }}
-      is-public-fork: ${{ github.event.pull_request.head.repo.fork == 'true' }}
+      is-public-fork: ${{ github.event.pull_request.head.repo.fork }}
     secrets:
       inherit
