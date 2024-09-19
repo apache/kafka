@@ -576,6 +576,13 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify that produce/consume worked throughout this test without any retries in producer
     stopAndVerifyProduceConsume(producerThread, consumerThread)
+
+    servers.foreach(_.shutdown())
+    servers.foreach(_.awaitShutdown())
+    servers.foreach(_.startup())
+
+    // Verify dynamic config persists a server restart
+    verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)
   }
 
   @ParameterizedTest
