@@ -102,6 +102,7 @@ import static org.apache.kafka.streams.Topology.AutoOffsetReset.EARLIEST;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForActiveRestoringTask;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -579,11 +580,15 @@ public class RestoreIntegrationTest {
         validateReceivedMessages(sampleData, outputTopic);
 
         // Close kafkaStreams1 (with cleanup) and start it again to force the restoration of the state.
-        kafkaStreams.close(Duration.ofMillis(5000L));
+        kafkaStreams.close();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
         kafkaStreams = startKafkaStreams(builder, kafkaStreams1StateRestoreListener, kafkaStreams1Configuration);
+
+        // Ensure all the restoring tasks are in active state before starting the new instance.
+        // Otherwise, the tasks which assigned to first kafka streams won't encounter "restoring suspend" after being reassigned to the second instance.
+        waitForActiveRestoringTask(kafkaStreams, 5, IntegrationTestUtils.DEFAULT_TIMEOUT);
 
         assertTrue(kafkaStreams1StateRestoreListener.awaitUntilRestorationStarts());
         assertTrue(kafkaStreams1StateRestoreListener.awaitUntilBatchRestoredIsCalled());
