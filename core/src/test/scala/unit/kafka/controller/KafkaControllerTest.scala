@@ -27,7 +27,9 @@ import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
-import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions}
+import org.mockito.Mockito._
+
+import scala.jdk.CollectionConverters._
 
 class KafkaControllerTest {
   var config: KafkaConfig = _
@@ -42,6 +44,7 @@ class KafkaControllerTest {
   def testRemoveMetricsOnClose(): Unit = {
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
     try {
+      val metricTags = Map("brokerId" -> "101")
       val kafkaController = new KafkaController(
         config = config,
         zkClient = mock(classOf[KafkaZkClient]),
@@ -51,7 +54,8 @@ class KafkaControllerTest {
         initialBrokerEpoch = 0,
         tokenManager = mock(classOf[DelegationTokenManager]),
         brokerFeatures = mock(classOf[BrokerFeatures]),
-        featureCache = mock(classOf[ZkMetadataCache])
+        featureCache = mock(classOf[ZkMetadataCache]),
+        metricTags = metricTags
       )
 
       // shutdown kafkaController so that metrics are removed
@@ -59,11 +63,11 @@ class KafkaControllerTest {
 
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
       val numMetricsRegistered = KafkaController.MetricNames.size
-      verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
-      KafkaController.MetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any()))
+      verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any(), ArgumentMatchers.eq(metricTags.asJava))
+      KafkaController.MetricNames.foreach(metricName => verify(mockMetricsGroup).newGauge(ArgumentMatchers.eq(metricName), any(), ArgumentMatchers.eq(metricTags.asJava)))
       // verify that each metric is removed
-      verify(mockMetricsGroup, times(numMetricsRegistered)).removeMetric(anyString())
-      KafkaController.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      verify(mockMetricsGroup, times(numMetricsRegistered)).removeMetric(anyString(), ArgumentMatchers.eq(metricTags.asJava))
+      KafkaController.MetricNames.foreach { name => verify(mockMetricsGroup).removeMetric(ArgumentMatchers.eq(name), ArgumentMatchers.eq(metricTags.asJava)) }
 
       // assert that we have verified all invocations on
       verifyNoMoreInteractions(mockMetricsGroup)

@@ -187,7 +187,7 @@ object TestUtils extends Logging {
 
   def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String],
                    startup: Boolean, enableZkApiForwarding: Boolean) = {
-    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = enableZkApiForwarding)
+    val server = new KafkaServer(config, time, threadNamePrefix, enableForwarding = enableZkApiForwarding, controllerMetricTags = Map("brokerId" -> s"${config.brokerId}"))
     if (startup) server.startup()
     server
   }

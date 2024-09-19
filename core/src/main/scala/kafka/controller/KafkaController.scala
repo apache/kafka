@@ -110,7 +110,13 @@ class KafkaController(val config: KafkaConfig,
                       tokenManager: DelegationTokenManager,
                       brokerFeatures: BrokerFeatures,
                       featureCache: ZkFinalizedFeatureCache,
-                      threadNamePrefix: Option[String] = None)
+                      threadNamePrefix: Option[String] = None,
+                      // KafkaController objects are instantiated by all ZK brokers, including the inactive controllers.
+                      // It registers metrics on instantiation using KafkaYammerMetrics which uses a static singleton
+                      // that is shared across the JVM. These tags are populated with brokerId in tests to
+                      // disambiguate between metrics for different brokers and avoid removing KafkaController metrics
+                      // altogether on a broker shutdown.
+                      metricTags: Map[String, String] = Map())
   extends ControllerEventProcessor with Logging {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
@@ -174,20 +180,20 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(1, true, "delegation-token-cleaner")
 
-  metricsGroup.newGauge(ZkMigrationStateMetricName, () => ZkMigrationState.ZK.value().intValue())
-  metricsGroup.newGauge(ActiveControllerCountMetricName, () => if (isActive) 1 else 0)
-  metricsGroup.newGauge(OfflinePartitionsCountMetricName, () => offlinePartitionCount)
-  metricsGroup.newGauge(PreferredReplicaImbalanceCountMetricName, () => preferredReplicaImbalanceCount)
-  metricsGroup.newGauge(ControllerStateMetricName, () => state.value)
-  metricsGroup.newGauge(GlobalTopicCountMetricName, () => globalTopicCount)
-  metricsGroup.newGauge(GlobalPartitionCountMetricName, () => globalPartitionCount)
-  metricsGroup.newGauge(TopicsToDeleteCountMetricName, () => topicsToDeleteCount)
-  metricsGroup.newGauge(ReplicasToDeleteCountMetricName, () => replicasToDeleteCount)
-  metricsGroup.newGauge(TopicsIneligibleToDeleteCountMetricName, () => ineligibleTopicsToDeleteCount)
-  metricsGroup.newGauge(ReplicasIneligibleToDeleteCountMetricName, () => ineligibleReplicasToDeleteCount)
-  metricsGroup.newGauge(ActiveBrokerCountMetricName, () => activeBrokerCount)
+  metricsGroup.newGauge(ZkMigrationStateMetricName, () => ZkMigrationState.ZK.value().intValue(), metricTags.asJava)
+  metricsGroup.newGauge(ActiveControllerCountMetricName, () => if (isActive) 1 else 0, metricTags.asJava)
+  metricsGroup.newGauge(OfflinePartitionsCountMetricName, () => offlinePartitionCount, metricTags.asJava)
+  metricsGroup.newGauge(PreferredReplicaImbalanceCountMetricName, () => preferredReplicaImbalanceCount, metricTags.asJava)
+  metricsGroup.newGauge(ControllerStateMetricName, () => state.value, metricTags.asJava)
+  metricsGroup.newGauge(GlobalTopicCountMetricName, () => globalTopicCount, metricTags.asJava)
+  metricsGroup.newGauge(GlobalPartitionCountMetricName, () => globalPartitionCount, metricTags.asJava)
+  metricsGroup.newGauge(TopicsToDeleteCountMetricName, () => topicsToDeleteCount, metricTags.asJava)
+  metricsGroup.newGauge(ReplicasToDeleteCountMetricName, () => replicasToDeleteCount, metricTags.asJava)
+  metricsGroup.newGauge(TopicsIneligibleToDeleteCountMetricName, () => ineligibleTopicsToDeleteCount, metricTags.asJava)
+  metricsGroup.newGauge(ReplicasIneligibleToDeleteCountMetricName, () => ineligibleReplicasToDeleteCount, metricTags.asJava)
+  metricsGroup.newGauge(ActiveBrokerCountMetricName, () => activeBrokerCount, metricTags.asJava)
   // FencedBrokerCount metric is always 0 in the ZK controller.
-  metricsGroup.newGauge(FencedBrokerCountMetricName, () => 0)
+  metricsGroup.newGauge(FencedBrokerCountMetricName, () => 0, metricTags.asJava)
 
   /**
    * Returns true if this broker is the current controller.
@@ -538,7 +544,7 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def removeMetrics(): Unit = {
-    KafkaController.MetricNames.foreach(metricsGroup.removeMetric)
+    KafkaController.MetricNames.foreach(metricsGroup.removeMetric(_, metricTags.asJava))
   }
 
   /*
