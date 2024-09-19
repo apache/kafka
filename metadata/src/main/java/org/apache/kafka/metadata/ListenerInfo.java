@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Endpoint;
