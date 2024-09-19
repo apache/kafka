@@ -596,9 +596,9 @@ primary->secondary.topics = foobar-topic, quux-.*</code></pre>
   </p>
 
   <ul>
-	  <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorMakerConfig.java">MirrorMakerConfig</a>, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorConnectorConfig.java">MirrorConnectorConfig</a></li>
-	  <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultTopicFilter.java">DefaultTopicFilter</a> for topics, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultGroupFilter.java">DefaultGroupFilter</a> for consumer groups</li>
-	  <li>Example configuration settings in <a href="https://github.com/apache/kafka/blob/trunk/config/connect-mirror-maker.properties">connect-mirror-maker.properties</a>, <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-382%3A+MirrorMaker+2.0">KIP-382: MirrorMaker 2.0</a></li>
+    <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorMakerConfig.java">MirrorMakerConfig</a>, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorConnectorConfig.java">MirrorConnectorConfig</a></li>
+    <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultTopicFilter.java">DefaultTopicFilter</a> for topics, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultGroupFilter.java">DefaultGroupFilter</a> for consumer groups</li>
+    <li>Example configuration settings in <a href="https://github.com/apache/kafka/blob/trunk/config/connect-mirror-maker.properties">connect-mirror-maker.properties</a>, <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-382%3A+MirrorMaker+2.0">KIP-382: MirrorMaker 2.0</a></li>
   </ul>
 
   <h5 class="anchor-heading"><a id="georeplication-config-syntax" class="anchor-link"></a><a href="#georeplication-config-syntax">Configuration File Syntax</a></h5>
@@ -681,28 +681,28 @@ us-east.admin.bootstrap.servers = broker8-secondary:9092</code></pre>
 
   <p>
     Exactly-once semantics are supported for dedicated MirrorMaker clusters as of version 3.5.0.</p>
-  
+
   <p>
     For new MirrorMaker clusters, set the <code>exactly.once.source.support</code> property to enabled for all targeted Kafka clusters that should be written to with exactly-once semantics. For example, to enable exactly-once for writes to cluster <code>us-east</code>, the following configuration can be used:
   </p>
 
 <pre><code class="language-text">us-east.exactly.once.source.support = enabled</code></pre>
-  
+
   <p>
     For existing MirrorMaker clusters, a two-step upgrade is necessary. Instead of immediately setting the <code>exactly.once.source.support</code> property to enabled, first set it to <code>preparing</code> on all nodes in the cluster. Once this is complete, it can be set to <code>enabled</code> on all nodes in the cluster, in a second round of restarts.
   </p>
-  
+
   <p>
     In either case, it is also necessary to enable intra-cluster communication between the MirrorMaker nodes, as described in  <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters">KIP-710</a>. To do this, the <code>dedicated.mode.enable.internal.rest</code> property must be set to <code>true</code>. In addition, many of the REST-related  <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties available for Kafka Connect</a> can be specified the MirrorMaker config. For example, to enable intra-cluster communication in MirrorMaker cluster with each node listening on port 8080 of their local machine, the following should be added to the MirrorMaker config file:
   </p>
 
 <pre><code class="language-text">dedicated.mode.enable.internal.rest = true
 listeners = http://localhost:8080</code></pre>
-  
+
   <p><b>
     Note that, if intra-cluster communication is enabled in production environments, it is highly recommended to secure the REST servers brought up by each MirrorMaker node. See the <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties for Kafka Connect</a> for information on how this can be accomplished.
   </b></p>
-  
+
   <p>
     It is also recommended to filter records from aborted transactions out from replicated data when running MirrorMaker. To do this, ensure that the consumer used to read from source clusters is configured with <code>isolation.level</code> set to <code>read_committed</code>. If replicating data from cluster <code>us-west</code>, this can be done for all replication flows that read from that cluster by adding the following to the MirrorMaker config file:
   </p>
@@ -1934,12 +1934,12 @@ NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   
       <tr>
         <td>RemoteLogManager Avg Broker Fetch Throttle Time</td>
         <td>The average time in millis remote fetches was throttled by a broker</td>
-        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-avg	</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-avg</td>
       </tr>
       <tr>
         <td>RemoteLogManager Max Broker Fetch Throttle Time</td>
         <td>The max time in millis remote fetches was throttled by a broker</td>
-        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-max	</td>
+        <td>kafka.server:type=RemoteLogManager, name=remote-fetch-throttle-time-max</td>
       </tr>
       <tr>
         <td>RemoteLogManager Avg Broker Copy Throttle Time</td>
@@ -2055,7 +2055,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Latest Metadata Snapshot Age</td>
-    <td>The interval in milliseconds since the latest snapshot that the node has generated. 
+    <td>The interval in milliseconds since the latest snapshot that the node has generated.
     If none have been generated yet, this is approximately the time delta since the process was started.</td>
     <td>kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedAgeMs</td>
   </tr>
@@ -2160,7 +2160,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>ZooKeeper Write Behind Lag</td>
-    <td>The amount of lag in records that ZooKeeper is behind relative to the highest committed record in the metadata log. 
+    <td>The amount of lag in records that ZooKeeper is behind relative to the highest committed record in the metadata log.
     This metric will only be reported by the active KRaft controller.</td>
     <td>kafka.controller:type=KafkaController,name=ZkWriteBehindLag</td>
   </tr>
@@ -2176,7 +2176,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Timed-out Broker Heartbeat Count</td>
-    <td>The number of broker heartbeats that timed out on this controller since the process was started. Note that only 
+    <td>The number of broker heartbeats that timed out on this controller since the process was started. Note that only
     active controllers handle heartbeats, so only they will see increases in this metric.</td>
     <td>kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount</td>
   </tr>
@@ -2192,7 +2192,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Number Of New Controller Elections</td>
-    <td>Counts the number of times this node has seen a new controller elected. A transition to the "no leader" state 
+    <td>Counts the number of times this node has seen a new controller elected. A transition to the "no leader" state
     is not counted here. If the same controller as before becomes active, that still counts.</td>
     <td>kafka.controller:type=KafkaController,name=NewActiveControllersCount</td>
   </tr>
@@ -3723,7 +3723,7 @@ customized state stores; for built-in state stores, currently we have:
 
   <h4 class="anchor-heading"><a id="zkversion" class="anchor-link"></a><a href="#zkversion">Stable version</a></h4>
   The current stable branch is 3.8. Kafka is regularly updated to include the latest release in the 3.8 series.
-  
+
   <h4 class="anchor-heading"><a id="zk_depr" class="anchor-link"></a><a href="#zk_depr">ZooKeeper Deprecation</a></h4>
   <p>With the release of Apache Kafka 3.5, Zookeeper is now marked deprecated. Removal of ZooKeeper is planned in the next major release of Apache Kafka (version 4.0),
      which is scheduled to happen no sooner than April 2024. During the deprecation phase, ZooKeeper is still supported for metadata management of Kafka clusters,
@@ -3732,10 +3732,10 @@ customized state stores; for built-in state stores, currently we have:
 
     <h5 class="anchor-heading"><a id="zk_depr_migration" class="anchor-link"></a><a href="#zk_drep_migration">Migration</a></h5>
     <p>Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
-	
+
     <h5 class="anchor-heading"><a id="zk_depr_3xsupport" class="anchor-link"></a><a href="#zk_depr_3xsupport">3.x and ZooKeeper Support</a></h5>
     <p>The final 3.x minor release, that supports ZooKeeper mode, will receive critical bug fixes and security fixes for 12 months after its release.</p>
-	
+
 <h4 class="anchor-heading"><a id="zkops" class="anchor-link"></a><a href="#zkops">Operationalizing ZooKeeper</a></h4>
   Operationally, we do the following for a healthy ZooKeeper installation:
   <ul>
@@ -3796,7 +3796,7 @@ controller.listener.names=CONTROLLER</code></pre>
   <h5 class="anchor-heading"><a id="kraft_storage_standalone" class="anchor-link"></a><a href="#kraft_storage_standalone">Bootstrap a Standalone Controller</a></h5>
   The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dynamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. Bootstrapping the first controller can be done with the following CLI command:
 
-  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id <cluster-id> --standalone --config controller.properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id &lt;cluster-id&gt; --standalone --config controller.properties</code></pre>
 
   This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum.
 
@@ -3820,7 +3820,7 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   <h5 class="anchor-heading"><a id="kraft_storage_observers" class="anchor-link"></a><a href="#kraft_storage_observers">Formatting Brokers and New Controllers</a></h5>
   When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the <code>kafka-storage.sh format</code> command without the --standalone or --initial-controllers flags.
 
-  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id <cluster-id> --config server.properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id &lt;cluster-id&gt; --config server.properties</code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_reconfig" class="anchor-link"></a><a href="#kraft_reconfig">Controller membership changes</a></h4>
 
