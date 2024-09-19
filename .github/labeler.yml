@@ -25,6 +25,16 @@ clients:
   - any-glob-to-any-file: 
     - 'clients/**'
 
+
+tests:
+- all:
+  - changed-files:
+    - any-glob-to-all-files: 
+      - 'tests/**'
+      - '**/test/**'
+    - all-globs-to-all-files:
+      - '!**/test/*'
+
 connect:
 - all:
   - changed-files:
