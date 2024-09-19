@@ -20,12 +20,12 @@ on:
     inputs:
       gradle-cache-read-only:
         description: "Should the Gradle cache be read-only?"
-        default: "true"
-        type: string
+        default: true
+        type: boolean
       gradle-cache-write-only:
         description: "Should the Gradle cache be write-only?"
-        default: "false"
-        type: string
+        default: false
+        type: boolean
       is-public-fork:
         description: "Is this CI run from a public fork?"
         default: true
