@@ -26,9 +26,12 @@ clients:
     - 'clients/**'
 
 connect:
-- changed-files:
-  - any-glob-to-any-file: 
-    - 'connect/**'
+- all:
+  - changed-files:
+    - any-glob-to-any-file: 
+      - 'connect/**/*'
+    - all-globs-to-all-files:
+      - '!connect/mirror/*'
 
 mirror-maker-2:
 - changed-files:
