@@ -47,7 +47,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
  * controller should be able to transition from standby to active without reloading all of
  * the metadata. The standby is a "hot" standby, not a "cold" one.
  */
-public class QuorumConfig {
+public class QuorumConfig extends AbstractConfig {
 
     private static final String QUORUM_PREFIX = "controller.quorum.";
 
@@ -109,62 +109,35 @@ public class QuorumConfig {
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, null, MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, null, LOW, QUORUM_RETRY_BACKOFF_MS_DOC);
 
-    private final int requestTimeoutMs;
-    private final int retryBackoffMs;
-    private final int electionTimeoutMs;
-    private final int electionBackoffMaxMs;
-    private final int fetchTimeoutMs;
-    private final int appendLingerMs;
+    private final AbstractConfig config;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
-        this(
-            abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG)
-        );
-    }
-
-    public QuorumConfig(
-        int requestTimeoutMs,
-        int retryBackoffMs,
-        int electionTimeoutMs,
-        int electionBackoffMaxMs,
-        int fetchTimeoutMs,
-        int appendLingerMs
-    ) {
-        this.requestTimeoutMs = requestTimeoutMs;
-        this.retryBackoffMs = retryBackoffMs;
-        this.electionTimeoutMs = electionTimeoutMs;
-        this.electionBackoffMaxMs = electionBackoffMaxMs;
-        this.fetchTimeoutMs = fetchTimeoutMs;
-        this.appendLingerMs = appendLingerMs;
+        super(CONFIG_DEF, abstractConfig.originals());
+        this.config = abstractConfig;
     }
 
     public int requestTimeoutMs() {
-        return requestTimeoutMs;
+        return config.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
     }
 
     public int retryBackoffMs() {
-        return retryBackoffMs;
+        return config.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
     }
 
     public int electionTimeoutMs() {
-        return electionTimeoutMs;
+        return config.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
     }
 
     public int electionBackoffMaxMs() {
-        return electionBackoffMaxMs;
+        return config.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
     }
 
     public int fetchTimeoutMs() {
-        return fetchTimeoutMs;
+        return config.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
     }
 
     public int appendLingerMs() {
-        return appendLingerMs;
+        return config.getInt(QUORUM_LINGER_MS_CONFIG);
     }
 
     private static Integer parseVoterId(String idString) {
