@@ -117,6 +117,7 @@ jobs:
           set +e
           ./.github/scripts/thread-dump.sh &
           timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
+          --rerun-tasks \
           -PtestLoggingEvents=started,passed,skipped,failed \
           -PmaxParallelForks=2 \
           -PmaxTestRetries=1 -PmaxTestRetryFailures=10 \
@@ -141,6 +142,22 @@ jobs:
           name: junit-thread-dumps-${{ matrix.java }}
           path: |
             thread-dumps/*
+          compression-level: 9
+          if-no-files-found: ignore
+      - name: Extract tests
+        run: |
+          ALL_TESTS_FILES=$(find . | grep all-tests.txt)
+          for FILE in $ALL_TESTS_FILES; do
+            sort $FILE > $FILE-sorted
+          done
+          ALL_TESTS_FILES_SORTED=$(find . | grep all-tests.txt-sorted)
+          sort -o all-tests-merged.txt --merge $ALL_TESTS_FILES_SORTED
+          wc -l all-tests-merged.txt
+      - name: Archive tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-tests-${{ matrix.java }}
+          path: all-tests-merged.txt
           compression-level: 9
           if-no-files-found: ignore
       - name: Parse JUnit tests

@@ -473,6 +473,7 @@ subprojects {
     ext {
       isGithubActions = System.getenv('GITHUB_ACTIONS') != null
       hadFailure = false  // Used to track if any tests failed, see afterSuite below
+      doneFile = project.layout.buildDirectory.file("all-tests.txt").get().asFile
     }
 
     maxParallelForks = maxTestForks
@@ -503,6 +504,16 @@ subprojects {
         maxRetries = userMaxTestRetries
         maxFailures = userMaxTestRetryFailures
       }
+    }
+
+    doFirst {
+      ext.doneFile.parentFile.mkdirs()
+      ext.doneFile.delete()
+      ext.doneFile.createNewFile()
+    }
+
+    beforeTest { descriptor ->
+      ext.doneFile.append("${project.name}  ${descriptor.className}#${descriptor.name}\n")
     }
     
     // As we process results, check if there were any test failures.
