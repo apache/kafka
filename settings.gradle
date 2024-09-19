@@ -53,7 +53,8 @@ buildCache {
     }
 
     remote(develocity.buildCache) {
-        enabled = false
+        enabled = isGithubActions
+        push = isGithubActions
     }
 }
 
