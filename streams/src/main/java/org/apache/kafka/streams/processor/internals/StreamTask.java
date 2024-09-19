@@ -88,7 +88,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final RecordCollector recordCollector;
     private final AbstractPartitionGroup.RecordInfo recordInfo;
     private final Map<TopicPartition, Long> consumedOffsets;
-    private Map<TopicPartition, OffsetAndMetadata> nextOffsetsAndMetadataToBeConsumed;
+    private final Map<TopicPartition, OffsetAndMetadata> nextOffsetsAndMetadataToBeConsumed = new HashMap<>();
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
@@ -277,10 +277,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             log.info("Initialized");
         }
-    }
-
-    public void setNextOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> nextOffsetsAndMetadataToBeConsumed) {
-        this.nextOffsetsAndMetadataToBeConsumed = nextOffsetsAndMetadataToBeConsumed;
     }
 
     public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
@@ -473,13 +469,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final long partitionTime = partitionGroup.partitionTimestamp(partition);
         if (offset == null) {
             try {
-                final OffsetAndMetadata offsetAndMetadata = nextOffsetsAndMetadataToBeConsumed.get(partition);
-                offset = offsetAndMetadata.offset();
-                leaderEpoch = offsetAndMetadata.leaderEpoch();
-            } catch (final NullPointerException e) {
-                // NullPointerException indicates a bug and thus we rethrow it as fatal `IllegalStateException`
-                log.error("Stream task {} does not know the partition: {}", id, partition);
-                throw new IllegalStateException(e);
+                if (nextOffsetsAndMetadataToBeConsumed.containsKey(partition)) {
+                    final OffsetAndMetadata offsetAndMetadata = nextOffsetsAndMetadataToBeConsumed.get(partition);
+                    offset = offsetAndMetadata.offset();
+                    leaderEpoch = offsetAndMetadata.leaderEpoch();
+                } else {
+                    // This indicates a bug and thus we rethrow it as fatal `IllegalStateException`
+                    final String errorMsg = String.format("Stream task " + id + " does not know the partition: " + partition);
+                    log.error(errorMsg);
+                    throw new IllegalStateException(errorMsg, new NullPointerException());
+                }
             } catch (final KafkaException fatal) {
                 throw new StreamsException(fatal);
             }
@@ -1114,6 +1113,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
+    }
+
+    public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records, final OffsetAndMetadata offsetAndMetadata) {
+        addRecords(partition, records);
+        nextOffsetsAndMetadataToBeConsumed.put(partition, offsetAndMetadata);
     }
 
     /**

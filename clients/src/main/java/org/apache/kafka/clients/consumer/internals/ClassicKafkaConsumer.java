@@ -637,7 +637,15 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                                 + "since the consumer's position has advanced for at least one topic partition");
                     }
 
-                    return this.interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                    Map<TopicPartition, OffsetAndMetadata> nextOffsetAndMetadata = new HashMap<>();
+                    Map<TopicPartition, Long> nextFetchOffsets = fetch.nextFetchOffsets();
+                    Map<TopicPartition, Optional<Integer>> fetchLastEpochs = fetch.lastEpochs();
+                    nextFetchOffsets.forEach((tp, offset) -> {
+                        Optional<Integer> lastEpoch = fetchLastEpochs.getOrDefault(tp, Optional.empty());
+                        nextOffsetAndMetadata.put(tp, new OffsetAndMetadata(offset, lastEpoch, ""));
+                    });
+
+                    return this.interceptors.onConsume(new ConsumerRecords<>(fetch.records(), nextOffsetAndMetadata));
                 }
             } while (timer.notExpired());
 

@@ -110,8 +110,6 @@ public interface Task {
      */
     void initializeIfNeeded();
 
-    default void setNextOffsetsAndMetadata(final Map<TopicPartition, OffsetAndMetadata> nextOffsetsAndMetadataToBeConsumed){}
-
     default void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
         throw new UnsupportedOperationException();
     }
