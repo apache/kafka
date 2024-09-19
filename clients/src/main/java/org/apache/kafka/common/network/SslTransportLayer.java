@@ -619,11 +619,11 @@ public class SslTransportLayer implements TransportLayer {
                     }
 
                     // appReadBuffer will extended upto currentApplicationBufferSize
-                    // we need to read the existing content into dst before we can do unwrap again. If there are no space in dst
-                    // we can break here.
-                    if (dst.hasRemaining())
-                        read += readFromAppBuffer(dst);
-                    else
+                    // we need to read the existing content into dst before we can do unwrap again.
+                    read += readFromAppBuffer(dst);
+                    // If there are no space in dst we can break here. Any data left in appReadBuffer
+                    // or netReadBuffer will be processed on the next call to the read method.
+                    if (!dst.hasRemaining())
                         break;
                 } else if (unwrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                     int currentNetReadBufferSize = netReadBufferSize();
