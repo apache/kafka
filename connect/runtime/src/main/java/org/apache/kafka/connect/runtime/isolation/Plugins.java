@@ -292,28 +292,63 @@ public class Plugins {
         return scanResult.sinkConnectors();
     }
 
+    public Set<PluginDesc<SinkConnector>> sinkConnectors(String connectorClassOrAlias) {
+        return pluginsOfClass(connectorClassOrAlias, scanResult.sinkConnectors());
+    }
+
     public Set<PluginDesc<SourceConnector>> sourceConnectors() {
         return scanResult.sourceConnectors();
+    }
+
+    public Set<PluginDesc<SourceConnector>> sourceConnectors(String connectorClassOrAlias) {
+        return pluginsOfClass(connectorClassOrAlias, scanResult.sourceConnectors());
     }
 
     public Set<PluginDesc<Converter>> converters() {
         return scanResult.converters();
     }
 
+    public Set<PluginDesc<Converter>> converters(String converterClassOrAlias) {
+        return pluginsOfClass(converterClassOrAlias, scanResult.converters());
+    }
+
     public Set<PluginDesc<HeaderConverter>> headerConverters() {
         return scanResult.headerConverters();
+    }
+
+    public Set<PluginDesc<HeaderConverter>> headerConverters(String headerConverterClassOrAlias) {
+        return pluginsOfClass(headerConverterClassOrAlias, scanResult.headerConverters());
     }
 
     public Set<PluginDesc<Transformation<?>>> transformations() {
         return scanResult.transformations();
     }
 
+    public Set<PluginDesc<Transformation<?>>> transformations(String transformationClassOrAlias) {
+        return pluginsOfClass(transformationClassOrAlias, scanResult.transformations());
+    }
+
     public Set<PluginDesc<Predicate<?>>> predicates() {
         return scanResult.predicates();
     }
 
+    public Set<PluginDesc<Predicate<?>>> predicates(String predicateClassOrAlias) {
+        return pluginsOfClass(predicateClassOrAlias, scanResult.predicates());
+    }
+
     public Set<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies() {
         return scanResult.connectorClientConfigPolicies();
+    }
+
+    private <T> Set<PluginDesc<T>> pluginsOfClass(String classNameOrAlias, Set<PluginDesc<T>> allPluginsOfType) {
+        String className = delegatingLoader.resolveFullClassName(classNameOrAlias);
+        Set<PluginDesc<T>> plugins = new TreeSet<>();
+        for (PluginDesc<T> desc : allPluginsOfType) {
+            if (desc.className().equals(className)) {
+                plugins.add(desc);
+            }
+        }
+        return plugins;
     }
 
     public Object newPlugin(String classOrAlias) throws ClassNotFoundException {

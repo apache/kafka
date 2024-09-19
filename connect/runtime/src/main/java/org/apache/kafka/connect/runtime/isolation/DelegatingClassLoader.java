@@ -121,6 +121,10 @@ public class DelegatingClassLoader extends URLClassLoader {
         return connectorLoader(connectorClassOrAlias, null);
     }
 
+    String resolveFullClassName(String classOrAlias) {
+        return aliases.getOrDefault(classOrAlias, classOrAlias);
+    }
+
     private ClassLoader findPluginLoader(
         SortedMap<PluginDesc<?>, ClassLoader> loaders,
         String pluginName,
@@ -202,6 +206,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
         throw new VersionedPluginLoadingException("Plugin loader for " + name + " not found");
     }
+
+
 
     private static Map<String, SortedMap<PluginDesc<?>, ClassLoader>> computePluginLoaders(PluginScanResult plugins) {
         Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders = new HashMap<>();
