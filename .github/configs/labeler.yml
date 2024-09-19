@@ -22,7 +22,7 @@ build:
 
 clients:
 - changed-files:
-  - any-glob-to-any-file: 
+  - any-glob-to-any-file:
     - 'clients/**'
 
 
@@ -47,6 +47,7 @@ mirror-maker-2:
   - any-glob-to-any-file: 
     - 'connect/mirror/**'
 
+
 core:
 - changed-files:
   - any-glob-to-any-file:
@@ -55,12 +56,12 @@ core:
 
 storage:
 - changed-files:
-  - any-glob-to-any-file: 
+  - any-glob-to-any-file:
     - 'storage/**'
 
 streams:
 - changed-files:
-  - any-glob-to-any-file: 
+  - any-glob-to-any-file:
     - 'streams/**'
 
 tools:
@@ -70,6 +71,8 @@ tools:
     - 'trogdor/**'
     - 'vagrant/**'
     - 'committer-tools/**'
+    - 'log4j-appender/**'
+    - 'shell/**'
 
 docs:
 - changed-files:
@@ -77,6 +80,21 @@ docs:
     - 'docs/**'
     - '**/*.md'
     - 'examples/**'
+
+generator:
+  - changed-files:
+      - any-glob-to-any-file:
+        - 'generator/**'
+
+transaction:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'transaction*/**'
+
+share:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '*share*/**'
 
 docker:
 - changed-files:
