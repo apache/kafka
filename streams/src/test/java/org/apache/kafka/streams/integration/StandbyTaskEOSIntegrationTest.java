@@ -319,6 +319,61 @@ public class StandbyTaskEOSIntegrationTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
+    private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore(storeName),
+            Serdes.Integer(),
+            Serdes.Integer())
+        );
+        builder.<Integer, Integer>stream(inputTopic)
+            .process(
+                () -> new org.apache.kafka.streams.kstream.Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+                    private KeyValueStore<Integer, Integer> store;
+
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        store = (KeyValueStore<Integer, Integer>) context.getStateStore(storeName);
+                    }
+
+                    @Override
+                    public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
+                        if (skipRecord.get()) {
+                            // we only forward so we can verify the skipping by reading the output topic
+                            // the goal is skipping is to not modify the state store
+                            return KeyValue.pair(key, value);
+                        }
+
+                        if (store.get(key) != null) {
+                            return null;
+                        }
+
+                        store.put(key, value);
+                        store.flush();
+
+                        if (key == KEY_1) {
+                            // after error injection, we need to avoid a consecutive error after rebalancing
+                            skipRecord.set(true);
+                            throw new RuntimeException("Injected test error");
+                        }
+
+                        return KeyValue.pair(key, value);
+                    }
+
+                    @Override
+                    public void close() { }
+                },
+                storeName
+            )
+            .to(outputTopic);
+
+        return new KafkaStreams(builder.build(), props(stateDirPath));
+    }
+
+
     private Properties props(final String stateDirPath) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
