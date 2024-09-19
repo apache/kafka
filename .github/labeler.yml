@@ -32,8 +32,7 @@ tests:
     - any-glob-to-all-files: 
       - 'tests/**'
       - '**/test/**'
-    - all-globs-to-all-files:
-      - '!**/test/*'
+
 
 connect:
 - all:
