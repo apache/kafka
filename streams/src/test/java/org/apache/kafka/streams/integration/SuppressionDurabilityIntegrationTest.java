@@ -55,6 +55,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -80,11 +81,10 @@ import static org.hamcrest.Matchers.equalTo;
 @Tag("integration")
 @Timeout(600)
 public class SuppressionDurabilityIntegrationTest {
-
+    private static final long NOW = Instant.now().toEpochMilli();
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         3,
-        mkProperties(mkMap()),
-        0L
+        mkProperties(mkMap())
     );
 
     @BeforeAll
@@ -306,7 +306,7 @@ public class SuppressionDurabilityIntegrationTest {
      * just to exercise that everything works properly in the presence of commits.
      */
     private long scaledTime(final long unscaledTime) {
-        return COMMIT_INTERVAL * 2 * unscaledTime;
+        return NOW + COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
     private static void produceSynchronouslyToPartitionZero(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
