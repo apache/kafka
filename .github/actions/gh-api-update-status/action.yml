@@ -19,6 +19,8 @@
 name: "Update Commit Status Check"
 description: "Update the status of a commit check using the GH CLI"
 inputs:
+  # Composite actions do not support typed parameters. Everything is treated as a string
+  # See: https://github.com/actions/runner/issues/2238
   gh-token:
     description: "The GitHub token for use with the CLI"
     required: true
