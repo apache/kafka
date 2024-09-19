@@ -160,7 +160,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     reports = glob(pathname=args.path, recursive=True)
-    logger.debug(f"Found {len(reports)} JUnit results")
+    logger.info(f"Found {len(reports)} JUnit results")
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
     total_file_count = 0
@@ -177,6 +177,7 @@ if __name__ == "__main__":
     flaky_table = []
     skipped_table = []
 
+    logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
             logger.debug(f"Parsing {report}")
@@ -215,6 +216,7 @@ if __name__ == "__main__":
                     simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
+    logger.debug("::endgroup::")
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
 
