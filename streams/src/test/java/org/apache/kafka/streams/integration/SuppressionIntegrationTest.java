@@ -52,6 +52,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -83,12 +84,8 @@ import static org.hamcrest.Matchers.empty;
 @Tag("integration")
 @Timeout(600)
 public class SuppressionIntegrationTest {
-
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-        1,
-        mkProperties(mkMap()),
-        0L
-    );
+    private static final long NOW = Instant.now().toEpochMilli();
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -525,7 +522,7 @@ public class SuppressionIntegrationTest {
      * just to exercise that everything works properly in the presence of commits.
      */
     private static long scaledTime(final long unscaledTime) {
-        return COMMIT_INTERVAL * 2 * unscaledTime;
+        return NOW + COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
     private static void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
