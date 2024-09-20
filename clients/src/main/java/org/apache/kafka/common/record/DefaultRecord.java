@@ -41,10 +41,15 @@ import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
  *   Attributes => Int8
  *   TimestampDelta => Varlong
  *   OffsetDelta => Varint
+ *   KeyLength => Varint
  *   Key => Bytes
+ *   ValueLength => Varint
  *   Value => Bytes
+ *   HeadersCount => Varint
  *   Headers => [HeaderKey HeaderValue]
+ *     HeaderKeyLength => Varint
  *     HeaderKey => String
+ *     HeaderValueLength => Varint
  *     HeaderValue => Bytes
  *
  * Note that in this schema, the Bytes and String types use a variable length integer to represent
@@ -423,7 +428,7 @@ public class DefaultRecord implements Record {
      * No-op for case where bytesToSkip <= 0. This could occur for cases where field is expected to be null.
      * @throws InvalidRecordException if end of stream is encountered before we could skip required bytes.
      * @throws IOException is an I/O error occurs while trying to skip from InputStream.
-     * 
+     *
      * @see java.io.InputStream#skip(long)
      */
     private static void skipBytes(InputStream in, int bytesToSkip) throws IOException {
