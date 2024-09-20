@@ -333,10 +333,12 @@ public class StandbyTaskEOSIntegrationTest {
         builder.<Integer, Integer>stream(inputTopic)
             .process(
                 () -> new Processor<Integer, Integer, Integer, Integer>() {
+                    private ProcessorContext<Integer, Integer> context;
                     private KeyValueStore<Integer, Integer> store;
 
                     @Override
                     public void init(ProcessorContext<Integer, Integer> context) {
+                        this.context = context;
                         store = context.getStateStore(storeName);
                     }
 
@@ -348,11 +350,13 @@ public class StandbyTaskEOSIntegrationTest {
                         if (skipRecord.get()) {
                             // we only forward so we can verify the skipping by reading the output topic
                             // the goal is skipping is to not modify the state store
-                            store.put(key, value);
+                            context.forward(record);
+                            return;
                         }
 
                         if (store.get(key) != null) {
-                            store.put(key, null);
+                            store.delete(key);
+                            return;
                         }
 
                         store.put(key, value);
@@ -365,6 +369,7 @@ public class StandbyTaskEOSIntegrationTest {
                         }
 
                         store.put(key, value);
+                        context.forward(record);
                     }
                 },
                 storeName
