@@ -1168,7 +1168,6 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void register(final TopicPartition partition, final ProcessorStateManager stateManager) { }
 
-
         @Override
         public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) { }
 
