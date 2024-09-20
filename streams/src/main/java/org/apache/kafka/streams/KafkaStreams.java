@@ -1539,7 +1539,7 @@ public class KafkaStreams implements AutoCloseable {
         final long timeoutMs;
         if (timeout.isPresent()) {
             timeoutMs = timeout.get();
-            log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
+            log.debug("Stopping Streams client with timeout = {}ms.", timeoutMs);
         } else {
             timeoutMs = Long.MAX_VALUE;
         }

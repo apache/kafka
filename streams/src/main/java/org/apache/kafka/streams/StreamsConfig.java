@@ -1281,11 +1281,11 @@ public class StreamsConfig extends AbstractConfig {
             } else if (value instanceof String) {
                 return Boolean.parseBoolean((String) value);
             } else {
-                log.warn(String.format(
-                    "Invalid value (%s) on internal configuration '%s'. Please specify a true/false value.",
+                log.warn(
+                    "Invalid value ({}) on internal configuration '{}'. Please specify a true/false value.",
                     value,
                     key
-                ));
+                );
                 return defaultValue;
             }
         }
@@ -1297,11 +1297,11 @@ public class StreamsConfig extends AbstractConfig {
             } else if (value instanceof String) {
                 return Long.parseLong((String) value);
             } else {
-                log.warn(String.format(
-                    "Invalid value (%s) on internal configuration '%s'. Please specify a numeric value.",
+                log.warn(
+                    "Invalid value ({}) on internal configuration '{}'. Please specify a numeric value.",
                     value,
                     key
-                ));
+                );
                 return defaultValue;
             }
         }
@@ -1311,11 +1311,11 @@ public class StreamsConfig extends AbstractConfig {
             if (value instanceof String) {
                 return (String) value;
             } else {
-                log.warn(String.format(
-                    "Invalid value (%s) on internal configuration '%s'. Please specify a String value.",
+                log.warn(
+                    "Invalid value ({}) on internal configuration '{}'. Please specify a String value.",
                     value,
                     key
-                ));
+                );
                 return defaultValue;
             }
         }
