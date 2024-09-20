@@ -966,6 +966,10 @@ public abstract class TopicCommand {
             if (actions != 1)
                 CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete");
 
+            if (has(deleteConfigOpt)) {
+                System.err.println("delete-config option has been deprecated since version 4.0 and will be fully removed in future releases.");
+            }
+
             checkRequiredArgs();
             checkInvalidArgs();
         }
@@ -993,8 +997,6 @@ public abstract class TopicCommand {
         private void checkInvalidArgs() {
             // check invalid args
             CommandLineUtils.checkInvalidArgs(parser, options, configOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, deleteConfigOpt,
-                invalidOptions(new HashSet<>(Arrays.asList(bootstrapServerOpt)), Arrays.asList(alterOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, invalidOptions(Arrays.asList(createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
