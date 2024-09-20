@@ -236,24 +236,24 @@ public class StreamsConfigTest {
         final Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", StandardCharsets.UTF_8.name());
         serializerConfigs.put("value.serializer.encoding", StandardCharsets.UTF_16.name());
-        final Serializer<String> serializer = new StringSerializer();
+        try (final Serializer<String> serializer = new StringSerializer()) {
+            final String str = "my string for testing";
+            final String topic = "my topic";
 
-        final String str = "my string for testing";
-        final String topic = "my topic";
+            serializer.configure(serializerConfigs, true);
+            assertEquals(
+                str,
+                streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str)),
+                "Should get the original string after serialization and deserialization with the configured encoding"
+            );
 
-        serializer.configure(serializerConfigs, true);
-        assertEquals(
-            str,
-            streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str)),
-            "Should get the original string after serialization and deserialization with the configured encoding"
-        );
-
-        serializer.configure(serializerConfigs, false);
-        assertEquals(
-            str,
-            streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str)),
-            "Should get the original string after serialization and deserialization with the configured encoding"
-        );
+            serializer.configure(serializerConfigs, false);
+            assertEquals(
+                str,
+                streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str)),
+                "Should get the original string after serialization and deserialization with the configured encoding"
+            );
+        }
     }
 
     @Test

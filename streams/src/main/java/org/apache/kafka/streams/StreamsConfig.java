@@ -1456,12 +1456,15 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_TRANSACTION_TIMEOUT;
 
         if (transactionTimeout < commitInterval) {
-            throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
+            throw new IllegalArgumentException(String.format(
+                "Transaction timeout %d was set lower than " +
                 "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
                 "caused by long commit interval. Consider reconfiguring commit interval to match " +
                 "transaction timeout by tuning 'commit.interval.ms' config, or increase the transaction timeout to match " +
                 "commit interval by tuning `producer.transaction.timeout.ms` config.",
-                transactionTimeout, commitInterval));
+                transactionTimeout,
+                commitInterval
+            ));
         }
     }
 
@@ -1540,33 +1543,58 @@ public class StreamsConfig extends AbstractConfig {
         // Thus, the default values for these consumer/producer configurations that are suitable for
         // Streams will be used instead.
 
-        final String nonConfigurableConfigMessage = "Unexpected user-specified %s config: %s found. %sUser setting (%s) will be ignored and the Streams default setting (%s) will be used ";
-        final String eosMessage = PROCESSING_GUARANTEE_CONFIG + " is set to " + getString(PROCESSING_GUARANTEE_CONFIG) + ". Hence, ";
+        final String nonConfigurableConfigMessage = "Unexpected user-specified {} config '{}' found. {} setting ({}) will be ignored and the Streams default setting ({}) will be used.";
+        final String eosMessage = "'" + PROCESSING_GUARANTEE_CONFIG + "' is set to \"" + getString(PROCESSING_GUARANTEE_CONFIG) + "\". Hence, user";
 
         for (final String config: nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
 
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
                     if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
-                        log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config),  CONSUMER_DEFAULT_OVERRIDES.get(config)));
+                        log.error(
+                            nonConfigurableConfigMessage,
+                            "consumer",
+                            config,
+                            "User",
+                            clientProvidedProps.get(config),
+                            CONSUMER_DEFAULT_OVERRIDES.get(config)
+                        );
                         clientProvidedProps.remove(config);
                     }
                 } else if (eosEnabled) {
                     if (CONSUMER_EOS_OVERRIDES.containsKey(config)) {
                         if (!clientProvidedProps.get(config).equals(CONSUMER_EOS_OVERRIDES.get(config))) {
-                            log.warn(String.format(nonConfigurableConfigMessage,
-                                    "consumer", config, eosMessage, clientProvidedProps.get(config), CONSUMER_EOS_OVERRIDES.get(config)));
+                            log.warn(
+                                nonConfigurableConfigMessage,
+                                "consumer",
+                                config,
+                                eosMessage,
+                                clientProvidedProps.get(config),
+                                CONSUMER_EOS_OVERRIDES.get(config)
+                            );
                             clientProvidedProps.remove(config);
                         }
                     } else if (PRODUCER_EOS_OVERRIDES.containsKey(config)) {
                         if (!clientProvidedProps.get(config).equals(PRODUCER_EOS_OVERRIDES.get(config))) {
-                            log.warn(String.format(nonConfigurableConfigMessage,
-                                    "producer", config, eosMessage, clientProvidedProps.get(config), PRODUCER_EOS_OVERRIDES.get(config)));
+                            log.warn(
+                                nonConfigurableConfigMessage,
+                                "producer",
+                                config,
+                                eosMessage,
+                                clientProvidedProps.get(config),
+                                PRODUCER_EOS_OVERRIDES.get(config)
+                            );
                             clientProvidedProps.remove(config);
                         }
                     } else if (ProducerConfig.TRANSACTIONAL_ID_CONFIG.equals(config)) {
-                        log.warn(String.format(nonConfigurableConfigMessage,
-                            "producer", config, eosMessage, clientProvidedProps.get(config), "<appId>-<generatedSuffix>"));
+                        log.warn(
+                            nonConfigurableConfigMessage,
+                            "producer",
+                            config,
+                            eosMessage,
+                            clientProvidedProps.get(config),
+                            "<appId>-<generatedSuffix>"
+                        );
                         clientProvidedProps.remove(config);
                     }
                 }
@@ -1663,9 +1691,11 @@ public class StreamsConfig extends AbstractConfig {
             final int batchSize = Integer.parseInt(producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG).toString());
 
             if (segmentSize < batchSize) {
-                throw new IllegalArgumentException(String.format("Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
-                        segmentSize,
-                        batchSize));
+                throw new IllegalArgumentException(String.format(
+                    "Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
+                    segmentSize,
+                    batchSize
+                ));
             }
         }
 
@@ -1879,7 +1909,9 @@ public class StreamsConfig extends AbstractConfig {
             return serde;
         } catch (final Exception e) {
             throw new StreamsException(
-                String.format("Failed to configure key serde %s", keySerdeConfigSetting), e);
+                String.format("Failed to configure key serde %s", keySerdeConfigSetting),
+                e
+            );
         }
     }
 
@@ -1901,7 +1933,9 @@ public class StreamsConfig extends AbstractConfig {
             return serde;
         } catch (final Exception e) {
             throw new StreamsException(
-                String.format("Failed to configure value serde %s", valueSerdeConfigSetting), e);
+                String.format("Failed to configure value serde %s", valueSerdeConfigSetting),
+                e
+            );
         }
     }
 
