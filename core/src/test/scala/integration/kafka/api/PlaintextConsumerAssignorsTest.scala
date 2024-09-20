@@ -238,7 +238,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   // Remote assignors only supported with consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @CsvSource(Array(
-    "kraft+kip848, consumer"
+    "kraft, consumer"
   ))
   def testRemoteAssignorInvalid(quorum: String, groupProtocol: String): Unit = {
     // 1 consumer using invalid remote assignor
@@ -268,7 +268,7 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
   // Remote assignors only supported with consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @CsvSource(Array(
-    "kraft+kip848, consumer"
+    "kraft, consumer"
   ))
   def testRemoteAssignorRange(quorum: String, groupProtocol: String): Unit = {
     // 1 consumer using range assignment

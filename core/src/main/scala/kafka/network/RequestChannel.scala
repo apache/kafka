@@ -22,7 +22,7 @@ import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import kafka.network
-import kafka.server.{KafkaConfig, RequestLocal}
+import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.jdk.CollectionConverters._

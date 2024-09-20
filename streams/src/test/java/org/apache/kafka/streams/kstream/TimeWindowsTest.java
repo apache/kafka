@@ -20,13 +20,11 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Duration;
 import java.util.Map;
 
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
-import static org.apache.kafka.streams.kstream.Windows.DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -37,10 +35,8 @@ public class TimeWindowsTest {
     private static final long ANY_SIZE = 123L;
     private static final long ANY_GRACE = 1024L;
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSetWindowSize() {
-        assertEquals(ANY_SIZE, TimeWindows.of(ofMillis(ANY_SIZE)).sizeMs);
         assertEquals(ANY_SIZE, TimeWindows.ofSizeWithNoGrace(ofMillis(ANY_SIZE)).sizeMs);
         assertEquals(ANY_SIZE, TimeWindows.ofSizeAndGrace(ofMillis(ANY_SIZE), ofMillis(ANY_GRACE)).sizeMs);
     }
@@ -59,13 +55,6 @@ public class TimeWindowsTest {
     @Test
     public void windowSizeMustNotBeNegative() {
         assertThrows(IllegalArgumentException.class, () -> TimeWindows.ofSizeWithNoGrace(ofMillis(-1)));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void graceShouldNotCalledAfterGraceSet() {
-        assertThrows(IllegalStateException.class, () -> TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(10)).grace(ofMillis(10)));
-        assertThrows(IllegalStateException.class, () -> TimeWindows.ofSizeWithNoGrace(ofMillis(10)).grace(ofMillis(10)));
     }
 
     @Test
@@ -111,15 +100,6 @@ public class TimeWindowsTest {
         } catch (final IllegalArgumentException e) {
             //expected
         }
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void oldAPIShouldSetDefaultGracePeriod() {
-        assertEquals(Duration.ofDays(1).toMillis(), DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD);
-        assertEquals(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD - 3L, TimeWindows.of(ofMillis(3L)).gracePeriodMs());
-        assertEquals(0L, TimeWindows.of(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD)).gracePeriodMs());
-        assertEquals(0L, TimeWindows.of(ofMillis(DEPRECATED_DEFAULT_24_HR_GRACE_PERIOD + 1L)).gracePeriodMs());
     }
 
     @Test

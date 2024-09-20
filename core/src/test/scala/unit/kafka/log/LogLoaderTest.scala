@@ -17,10 +17,6 @@
 
 package kafka.log
 
-import java.io.{BufferedWriter, File, FileWriter, IOException}
-import java.nio.ByteBuffer
-import java.nio.file.{Files, NoSuchFileException, Paths}
-import java.util.{Optional, OptionalLong, Properties}
 import kafka.server.KafkaConfig
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils
@@ -35,7 +31,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile}
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
@@ -47,9 +43,13 @@ import org.mockito.{ArgumentMatchers, Mockito}
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 
+import java.io.{BufferedWriter, File, FileWriter, IOException}
 import java.lang.{Long => JLong}
+import java.nio.ByteBuffer
+import java.nio.file.{Files, NoSuchFileException, Paths}
 import java.util
-import java.util.concurrent.ConcurrentMap
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import java.util.{Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Iterable, Map, mutable}
@@ -136,7 +136,7 @@ class LogLoaderTest {
 
         override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: util.Map[TopicPartition, JLong],
                              logStartOffsets: util.Map[TopicPartition, JLong], defaultConfig: LogConfig,
-                             topicConfigs: Map[String, LogConfig], numRemainingSegments: ConcurrentMap[String, Int],
+                             topicConfigs: Map[String, LogConfig], numRemainingSegments: ConcurrentMap[String, Integer],
                              shouldBeStrayKraftLog: UnifiedLog => Boolean): UnifiedLog = {
           if (simulateError.hasError) {
             simulateError.errorType match {
@@ -163,7 +163,7 @@ class LogLoaderTest {
             this.maxTransactionTimeoutMs, this.producerStateManagerConfig, time)
           val logLoader = new LogLoader(logDir, topicPartition, config, time.scheduler, time,
             logDirFailureChannel, hadCleanShutdown, segments, logStartOffset, logRecoveryPoint,
-            leaderEpochCache.asJava, producerStateManager)
+            leaderEpochCache.asJava, producerStateManager, new ConcurrentHashMap[String, Integer], false)
           val offsets = logLoader.load()
           val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
             offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
@@ -382,12 +382,15 @@ class LogLoaderTest {
         mockTime.scheduler,
         mockTime,
         logDirFailureChannel,
-        hadCleanShutdown = false,
+        false,
         interceptedLogSegments,
         0L,
         recoveryPoint,
         leaderEpochCache.asJava,
-        producerStateManager)
+        producerStateManager,
+        new ConcurrentHashMap[String, Integer],
+        false
+      )
       val offsets = logLoader.load()
       val localLog = new LocalLog(logDir, logConfig, interceptedLogSegments, offsets.recoveryPoint,
         offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
@@ -445,12 +448,14 @@ class LogLoaderTest {
       mockTime.scheduler,
       mockTime,
       logDirFailureChannel,
-      hadCleanShutdown = false,
+      false,
       segments,
       0L,
       0L,
       leaderEpochCache.asJava,
-      stateManager
+      stateManager,
+      new ConcurrentHashMap[String, Integer],
+      false
     ).load()
     val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
@@ -555,12 +560,14 @@ class LogLoaderTest {
       mockTime.scheduler,
       mockTime,
       logDirFailureChannel,
-      hadCleanShutdown = false,
+      false,
       segments,
       0L,
       0L,
       leaderEpochCache.asJava,
-      stateManager
+      stateManager,
+      new ConcurrentHashMap[String, Integer],
+      false
     ).load()
     val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
@@ -610,12 +617,14 @@ class LogLoaderTest {
       mockTime.scheduler,
       mockTime,
       logDirFailureChannel,
-      hadCleanShutdown = true,
+      true,
       segments,
       0L,
       0L,
       leaderEpochCache.asJava,
-      stateManager
+      stateManager,
+      new ConcurrentHashMap[String, Integer],
+      false
     ).load()
     val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
@@ -664,12 +673,14 @@ class LogLoaderTest {
       mockTime.scheduler,
       mockTime,
       logDirFailureChannel,
-      hadCleanShutdown = true,
+      true,
       segments,
       0L,
       0L,
       leaderEpochCache.asJava,
-      stateManager
+      stateManager,
+      new ConcurrentHashMap[String, Integer],
+      false
     ).load()
     val localLog = new LocalLog(logDir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, topicPartition,
@@ -868,9 +879,11 @@ class LogLoaderTest {
     for (i <- 0 until numMessages) {
       assertEquals(i, LogTestUtils.readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
-        assertEquals(log.logSegments.asScala.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(log.logSegments.asScala.head.baseOffset,
+          log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).timestampAndOffsetOpt.get.offset)
       else
-        assertEquals(i, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(i,
+          log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).timestampAndOffsetOpt.get.offset)
     }
     log.close()
   }
@@ -942,9 +955,11 @@ class LogLoaderTest {
     for (i <- 0 until numMessages) {
       assertEquals(i, LogTestUtils.readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
-        assertEquals(log.logSegments.asScala.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(log.logSegments.asScala.head.baseOffset,
+          log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).timestampAndOffsetOpt.get.offset)
       else
-        assertEquals(i, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(i,
+          log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).timestampAndOffsetOpt.get.offset)
     }
     log.close()
   }
@@ -1807,13 +1822,14 @@ class LogLoaderTest {
       mockTime.scheduler,
       mockTime,
       logDirFailureChannel,
-      hadCleanShutdown = true,
+      true,
       segments,
       0L,
       0L,
       leaderEpochCache.asJava,
       stateManager,
-      isRemoteLogEnabled = isRemoteLogEnabled
+      new ConcurrentHashMap[String, Integer],
+      isRemoteLogEnabled
     ).load()
     assertEquals(expectedLogStartOffset, offsets.logStartOffset)
   }
