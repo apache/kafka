@@ -337,13 +337,13 @@ public class StandbyTaskEOSIntegrationTest {
                     private KeyValueStore<Integer, Integer> store;
 
                     @Override
-                    public void init(ProcessorContext<Integer, Integer> context) {
+                    public void init(final ProcessorContext<Integer, Integer> context) {
                         this.context = context;
                         store = context.getStateStore(storeName);
                     }
 
                     @Override
-                    public void process(Record<Integer, Integer> record) {
+                    public void process(final Record<Integer, Integer> record) {
                         final Integer key = record.key();
                         final Integer value = record.value();
 
