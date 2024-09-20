@@ -483,6 +483,8 @@ class ControllerServer(
         CoreUtils.swallow(registrationChannelManager.shutdown(), this)
         registrationChannelManager = null
       }
+      if (socketServer != null)
+        CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
       metadataPublishers.clear()
       if (metadataCache != null) {
@@ -500,8 +502,6 @@ class ControllerServer(
         registrationsPublisher.close()
         registrationsPublisher = null
       }
-      if (socketServer != null)
-        CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       migrationSupport.foreach(_.shutdown(this))
       if (controller != null)
         controller.beginShutdown()
