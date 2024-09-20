@@ -132,8 +132,7 @@ public class ProducerPerformance {
 
                 /* print warmup stats if relevant */
                 if (warmupStats != null) {
-                    overallStats = new Stats(warmupStats, stats);
-                    overallStats.printTotal();
+                    new Stats(warmupStats, stats).printTotal();
                 }
                 /* print final results */
                 stats.printTotal();
@@ -145,8 +144,7 @@ public class ProducerPerformance {
 
                 /* print warmup stats if relevant */
                 if (warmupStats != null) {
-                    overallStats = new Stats(warmupStats, stats);
-                    overallStats.printTotal();
+                    new Stats(warmupStats, stats).printTotal();
                 }
                 /* print final results */
                 stats.printTotal();
@@ -174,7 +172,6 @@ public class ProducerPerformance {
     Callback cb;
 
     Stats stats;
-    Stats overallStats;
     Stats warmupStats;
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
@@ -407,7 +404,7 @@ public class ProducerPerformance {
             this.warmupRecords = warmupRecords;
         }
 
-        public Stats(Stats first, Stats second) {
+        Stats(Stats first, Stats second) {
             // create a Stats object that's the combination of two disjoint Stats objects
             this.start = Math.min(first.start, second.start);
             this.iteration = first.iteration + second.iteration;
@@ -420,10 +417,6 @@ public class ProducerPerformance {
             this.reportingInterval = first.reportingInterval;
             this.warmupRecords = 0;
             this.count = first.count + second.count;
-            // unused vars, populating to prevent compiler errors:
-            //this.windowMaxLatency = 0;
-            //this.windowTotalLatency = 0;
-            //this.windowBytes = 0;
         }
 
         public void record(int latency, int bytes, long time) {
@@ -507,43 +500,6 @@ public class ProducerPerformance {
                               percs[2],
                               percs[3]);
         }
-
-        /*
-        public void combineStats(Stats stats) {
-            this.count += stats.totalCount();
-            this.bytes += stats.bytes;
-            this.totalLatency += stats.totalLatency;
-            this.latencies = Arrays.copyOf(this.latencies, index + stats.index);
-            System.arraycopy(stats.latencies, 0, this.latencies, this.index(), stats.index());
-            this.index += stats.index;
-        }
-
-        public void printTotal(Stats warmupStats) {
-            long overallElapsed = System.currentTimeMillis() - warmupStats.start;
-            long overallCount = count + warmupStats.totalCount();
-            long overallBytes = bytes + warmupStats.bytes();
-            double overallRecsPerSec = 1000.0 * overallCount / (double) overallElapsed;
-            double overallMbPerSec = 1000.0 * overallBytes / (double) overallElapsed / (1024.0 * 1024.0);
-            int overallMax = Math.max(maxLatency, warmupStats.maxLatency);
-            long overallTotalLatency = totalLatency + warmupStats.totalLatency;
-
-            int totalElements = index + warmupStats.index();
-            int[] overallLatencyArray = Arrays.copyOf(warmupStats.latencies, totalElements);
-            System.arraycopy(this.latencies, 0, overallLatencyArray, warmupStats.index(), this.index());
-
-            int[] percs = percentiles(overallLatencyArray, totalElements, 0.5, 0.95, 0.99, 0.999);
-            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
-                              overallCount,
-                              overallRecsPerSec,
-                              overallMbPerSec,
-                              overallTotalLatency / (double) overallCount,
-                              (double) overallMax,
-                              percs[0],
-                              percs[1],
-                              percs[2],
-                              percs[3]);
-        }
-        */
 
         private static int[] percentiles(int[] latencies, int count, double... percentiles) {
             int size = Math.min(count, latencies.length);
