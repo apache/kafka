@@ -30,8 +30,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -330,25 +332,27 @@ public class StandbyTaskEOSIntegrationTest {
         );
         builder.<Integer, Integer>stream(inputTopic)
             .process(
-                () -> new org.apache.kafka.streams.kstream.Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+                () -> new Processor<Integer, Integer, Integer, Integer>() {
                     private KeyValueStore<Integer, Integer> store;
 
-                    @SuppressWarnings("unchecked")
                     @Override
-                    public void init(final ProcessorContext context) {
-                        store = (KeyValueStore<Integer, Integer>) context.getStateStore(storeName);
+                    public void init(ProcessorContext<Integer, Integer> context) {
+                        store = context.getStateStore(storeName);
                     }
 
                     @Override
-                    public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
+                    public void process(Record<Integer, Integer> record) {
+                        final Integer key = record.key();
+                        final Integer value = record.value();
+
                         if (skipRecord.get()) {
                             // we only forward so we can verify the skipping by reading the output topic
                             // the goal is skipping is to not modify the state store
-                            return KeyValue.pair(key, value);
+                            store.put(key, value);
                         }
 
                         if (store.get(key) != null) {
-                            return null;
+                            store.put(key, null);
                         }
 
                         store.put(key, value);
@@ -360,11 +364,8 @@ public class StandbyTaskEOSIntegrationTest {
                             throw new RuntimeException("Injected test error");
                         }
 
-                        return KeyValue.pair(key, value);
+                        store.put(key, value);
                     }
-
-                    @Override
-                    public void close() { }
                 },
                 storeName
             )
