@@ -26,7 +26,6 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
@@ -40,7 +39,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(value = 60)
 @ExtendWith(value = ClusterTestExtensions.class)
 public class ClusterToolTest {
 

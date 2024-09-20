@@ -27,7 +27,6 @@ import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{KRaftConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions.{assertThrows, fail}
-import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.Optional
@@ -41,7 +40,6 @@ import scala.jdk.CollectionConverters._
  * failure paths is to use timeouts. See {@link unit.kafka.server.BrokerRegistrationRequestTest} for integration test
  * of just the broker registration path.
  */
-@Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class KafkaServerKRaftRegistrationTest {
 
