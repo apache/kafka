@@ -47,7 +47,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
  * controller should be able to transition from standby to active without reloading all of
  * the metadata. The standby is a "hot" standby, not a "cold" one.
  */
-public class QuorumConfig extends AbstractConfig {
+public class QuorumConfig {
 
     private static final String QUORUM_PREFIX = "controller.quorum.";
 
@@ -112,7 +112,6 @@ public class QuorumConfig extends AbstractConfig {
     private final AbstractConfig config;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
-        super(CONFIG_DEF, abstractConfig.originals());
         this.config = abstractConfig;
     }
 
