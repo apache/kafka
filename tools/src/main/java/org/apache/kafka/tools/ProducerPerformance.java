@@ -145,7 +145,7 @@ public class ProducerPerformance {
 
                 /* print warmup stats if relevant */
                 if (warmupStats != null) {
-                    Stats overallStats = new Stats(warmupStats, stats);
+                    overallStats = new Stats(warmupStats, stats);
                     overallStats.printTotal();
                 }
                 /* print final results */
