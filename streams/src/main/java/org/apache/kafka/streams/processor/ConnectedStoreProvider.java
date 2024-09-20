@@ -95,8 +95,6 @@ import java.util.Set;
  * @see KStream#transformValues(org.apache.kafka.streams.kstream.ValueTransformerSupplier, Named, String...)
  * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see KStream#transformValues(ValueTransformerWithKeySupplier, Named, String...)
- * @see KStream#flatTransform(org.apache.kafka.streams.kstream.TransformerSupplier, String...)
- * @see KStream#flatTransform(org.apache.kafka.streams.kstream.TransformerSupplier, Named, String...)
  * @see KStream#flatTransformValues(org.apache.kafka.streams.kstream.ValueTransformerSupplier, String...)
  * @see KStream#flatTransformValues(org.apache.kafka.streams.kstream.ValueTransformerSupplier, Named, String...)
  * @see KStream#flatTransformValues(ValueTransformerWithKeySupplier, String...)
