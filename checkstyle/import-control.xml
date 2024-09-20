@@ -247,7 +247,6 @@
   </subpackage>
 
   <subpackage name="server">
-    <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.apache.kafka.common" />
 
     <!-- This is required to make AlterConfigPolicyTest work. -->
