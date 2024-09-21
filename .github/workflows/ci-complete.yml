@@ -124,31 +124,10 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Update Floating 'cached' Tag
-        if: github.ref == 'refs/heads/trunk'
+      - name: Update trunk-cached branch with trunk
         run: |
-          commit_sha=$(git rev-parse HEAD)
-          echo "Updating 'cached' tag to $commit_sha"
-          response=$(
-            gh api \
-              --method POST \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              /repos/fonsdant/github-actions/git/tags \
-              -f "tag=cached" \
-              -f "message=Automatically generated after running workflow $GITHUB_RUN_NUMBER. https://github.com/${{ github.repository }}/actions/runs/$GITHUB_RUN_ID" \
-              -f "object=$commit_sha" \
-              -f "type=commit" \
-          )
-          tag=$(echo "$response" | jq -r '.tag')
-          tag_sha=$(echo "$response" | jq -r '.sha')
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/fonsdant/github-actions/git/refs \
-            -f "ref=refs/tags/$tag" \
-            -f "sha=$tag_sha"
-          echo "Updated 'cached' tag to $commit_sha"
+          git switch trunk-cached || git switch -c trunk-cached
+          git reset --hard ${{ github.sha }}
+          git push -f origin trunk-cached
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
