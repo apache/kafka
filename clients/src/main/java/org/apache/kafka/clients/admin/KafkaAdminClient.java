@@ -4140,28 +4140,29 @@ public class KafkaAdminClient extends AdminClient {
         String reason = options.reason() == null || options.reason().isEmpty() ?
             DEFAULT_LEAVE_GROUP_REASON : JoinGroupRequest.maybeTruncateReason(options.reason());
 
-        final SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
+        final SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> adminFuture =
                 RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
 
-        KafkaFutureImpl<List<MemberIdentity>> f;
-        if (options.removeAll()) f = getMembersFromGroup(groupId, reason);
-        else {
-            f = new KafkaFutureImpl<>();
-            f.complete(options.members().stream()
+        KafkaFutureImpl<List<MemberIdentity>> memFuture;
+        if (options.removeAll()) {
+            memFuture = getMembersFromGroup(groupId, reason);
+        } else {
+            memFuture = new KafkaFutureImpl<>();
+            memFuture.complete(options.members().stream()
                     .map(m -> m.toMemberIdentity().setReason(reason))
                     .collect(Collectors.toList()));
         }
 
-        f.whenComplete((members, ex) -> {
+        memFuture.whenComplete((members, ex) -> {
             if (ex != null) {
-                future.completeExceptionally(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), ex));
+                adminFuture.completeExceptionally(Collections.singletonMap(CoordinatorKey.byGroupId(groupId), ex));
             } else {
                 RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
-                invokeDriver(handler, future, options.timeoutMs());
+                invokeDriver(handler, adminFuture, options.timeoutMs());
             }
         });
 
-        return new RemoveMembersFromConsumerGroupResult(future.get(CoordinatorKey.byGroupId(groupId)), options.members());
+        return new RemoveMembersFromConsumerGroupResult(adminFuture.get(CoordinatorKey.byGroupId(groupId)), options.members());
     }
 
     @Override
