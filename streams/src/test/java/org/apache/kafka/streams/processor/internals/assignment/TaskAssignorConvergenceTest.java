@@ -574,12 +574,7 @@ public class TaskAssignorConvergenceTest {
         assertBalancedStatefulAssignment(allStatefulTasks, clientStates, failureContext);
         final AssignmentTestUtils.TaskSkewReport taskSkewReport = AssignmentTestUtils.analyzeTaskAssignmentBalance(harness.clientStates, skewThreshold);
         if (taskSkewReport.totalSkewedTasks() > 0) {
-            fail(
-                    "Expected a balanced task assignment, but was: " +
-                            taskSkewReport +
-                            '\n' +
-                            failureContext
-            );
+            fail("Expected a balanced task assignment, but was: " + taskSkewReport + '\n' + failureContext);
         }
     }
 
@@ -628,12 +623,7 @@ public class TaskAssignorConvergenceTest {
         }
 
         if (rebalancePending) {
-            final String message = "Rebalances have not converged after iteration cutoff: " +
-                    iterationLimit +
-                    harness.history;
-            fail(message);
+            fail("Rebalances have not converged after iteration cutoff: " + iterationLimit + harness.history);
         }
     }
-
-
 }
