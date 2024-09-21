@@ -45,6 +45,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
@@ -1885,6 +1886,24 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
     }
 
+    @Test
+    public void testOffsetResetEvent() {
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        TopicPartition topic = new TopicPartition("test", 0);
+        consumer = spy(newConsumer(
+                mock(FetchBuffer.class),
+                new ConsumerInterceptors<>(Collections.emptyList()),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions,
+                "group-id",
+                "client-id"));
+        consumer.seekToBeginning(Collections.singleton(topic));
+        verify(applicationEventHandler).add(any(ResetOffsetEvent.class));
+        verify(subscriptions, never()).requestOffsetReset(topic);
+        completeResetOffsetEventSuccessfully(topic, subscriptions);
+        verify(subscriptions).requestOffsetReset(topic);
+    }
+
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
         // Check that an unsubscribe event was generated, and that the consumer waited for it to
         // complete processing background events.
@@ -1938,6 +1957,10 @@ public class AsyncKafkaConsumerTest {
             event.future().completeExceptionally(ex);
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(SyncCommitEvent.class));
+    }
+
+    private void completeResetOffsetEventSuccessfully(TopicPartition tp, SubscriptionState subscriptions) {
+        subscriptions.requestOffsetReset(tp);
     }
 
     private void completeCommitAsyncApplicationEventSuccessfully() {
