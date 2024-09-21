@@ -4121,16 +4121,12 @@ public class KafkaAdminClient extends AdminClient {
             if (ex != null) {
                 future.completeExceptionally(new KafkaException("Encounter exception when trying to get members from group: " + groupId, ex));
             } else {
-                List<MemberIdentity> membersToRemove = new ArrayList<>();
-                for (final MemberDescription member : res.members()) {
-                    MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
+                List<MemberIdentity> membersToRemove = res.members().stream().map(member ->
+                    member.groupInstanceId().map(id -> new MemberIdentity().setGroupInstanceId(id))
+                    .orElseGet(() -> new MemberIdentity().setMemberId(member.consumerId()))
+                    .setReason(reason)
+                ).collect(Collectors.toList());
 
-                    member.groupInstanceId()
-                            .map(memberIdentity::setGroupInstanceId)
-                            .orElseGet(() -> memberIdentity.setMemberId(member.consumerId()));
-
-                    membersToRemove.add(memberIdentity);
-                }
                 future.complete(membersToRemove);
             }
         });
