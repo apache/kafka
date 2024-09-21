@@ -197,17 +197,30 @@ public class DelegatingClassLoader extends URLClassLoader {
             plugin = pluginLoader.loadClass(name, resolve);
         } else {
             plugin = super.loadClass(fullName, resolve);
+            // if we are loading a plugin class from the parent classloader, we need to check if the version
+            // matches the range
+            DefaultArtifactVersion pluginVersion;
+            try (LoaderSwap classLoader = PluginScanner.withClassLoader(plugin.getClassLoader())) {
+                pluginVersion = new DefaultArtifactVersion(
+                        PluginScanner.versionFor(plugin.getDeclaredConstructor().newInstance()));
+            } catch (ReflectiveOperationException | LinkageError e) {
+                throw new VersionedPluginLoadingException(String.format(
+                        "Plugin %s was loaded but failed to determine its version",
+                        name
+                ), e);
+            }
+
+            if (range != null && range.hasRestrictions() && !range.containsVersion(pluginVersion)) {
+                throw new VersionedPluginLoadingException(String.format(
+                        "Plugin %s was loaded with version %s which does not match the version range %s",
+                        name,
+                        pluginVersion,
+                        range
+                ));
+            }
         }
 
-        DefaultArtifactVersion pluginVersion = new DefaultArtifactVersion(PluginScanner.versionFor(plugin));
-        if (range != null && range.hasRestrictions() && !range.containsVersion(pluginVersion)) {
-            throw new VersionedPluginLoadingException(String.format(
-                    "Plugin %s was loaded with version %s which does not match the version range %s",
-                    name,
-                    pluginVersion,
-                    range
-            ));
-        }
+
         return plugin;
     }
 

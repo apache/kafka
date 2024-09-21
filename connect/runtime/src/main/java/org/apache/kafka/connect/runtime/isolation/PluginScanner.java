@@ -222,7 +222,7 @@ public abstract class PluginScanner {
         }
     }
 
-    protected LoaderSwap withClassLoader(ClassLoader loader) {
+    protected static LoaderSwap withClassLoader(ClassLoader loader) {
         ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         try {
             return new LoaderSwap(savedLoader);
