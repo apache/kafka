@@ -52,7 +52,6 @@ import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_EXPIRED;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_NOT_FOUND;
 import static org.apache.kafka.common.protocol.Errors.DELEGATION_TOKEN_OWNER_MISMATCH;
 import static org.apache.kafka.common.protocol.Errors.INVALID_PRINCIPAL_TYPE;
-import static org.apache.kafka.common.protocol.Errors.INVALID_TIMESTAMP;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
 
@@ -323,11 +322,10 @@ public class DelegationTokenControlManager {
                 setTokenId(myTokenInformation.tokenId()), (short) 0));
         } else if (myTokenInformation.maxTimestamp() < now || myTokenInformation.expiryTimestamp() < now) {
             responseData.setErrorCode(DELEGATION_TOKEN_EXPIRED.code());
-        } else if (now > Long.MAX_VALUE - requestData.expiryTimePeriodMs()) {
-            return ControllerResult.atomicOf(records, responseData.setErrorCode(INVALID_TIMESTAMP.code()));
-        } else {
-            long expiryTimestamp = Math.min(myTokenInformation.maxTimestamp(),
-                now + requestData.expiryTimePeriodMs());
+        }  else {
+            long expiryTimestamp = now > Long.MAX_VALUE - requestData.expiryTimePeriodMs()
+                    ? Long.MAX_VALUE
+                    : Math.min(myTokenInformation.maxTimestamp(), now + requestData.expiryTimePeriodMs());
 
             responseData
                 .setErrorCode(NONE.code())

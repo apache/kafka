@@ -298,11 +298,10 @@ class DelegationTokenManagerZk(config: KafkaConfig,
               expireResponseCallback(Errors.NONE, now)
             } else if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
               expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
-            } else if (now > Long.MaxValue - expireLifeTimeMs) {
-              expireResponseCallback(Errors.INVALID_TIMESTAMP, tokenInfo.expiryTimestamp())
             } else {
               //set expiry time stamp
-              val expiryTimeStamp = Math.min(tokenInfo.maxTimestamp, now + expireLifeTimeMs)
+              val expiryTimeStamp = if (now > Long.MaxValue - expireLifeTimeMs) Long.MaxValue
+                else Math.min(tokenInfo.maxTimestamp, now + expireLifeTimeMs)
               tokenInfo.setExpiryTimestamp(expiryTimeStamp)
 
               updateToken(token)
