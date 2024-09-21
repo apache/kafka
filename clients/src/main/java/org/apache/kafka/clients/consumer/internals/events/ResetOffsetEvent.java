@@ -15,17 +15,18 @@
  * limitations under the License.
  */
 
-
-/**
- * Event for reset
- */
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
 
+/**
+ * Event to perform {@link AsyncKafkaConsumer#seekToBeginning(Collection)}
+ * in the background thread. This can avoid race conditions when subscription state is updated.
+ */
 public class ResetOffsetEvent extends ApplicationEvent {
 
     private final Collection<TopicPartition> topicPartitions;

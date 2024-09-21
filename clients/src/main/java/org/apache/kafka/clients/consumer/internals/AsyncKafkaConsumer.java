@@ -239,7 +239,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
-    // to keep from repeatedly scanning subscriptions in poll() and position(), cache the result during metadata updates
+    // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
+    // and record there is a resetOffsetEvent in background thread.
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
@@ -864,6 +865,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
+                // if cachedSubscriptionHasAllFetchPositions is false, there is a ResetOffsetEvent in queue
+                // so the position is invalid.
                 if (cachedSubscriptionHasAllFetchPositions) {
                     SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
                     if (position != null) {
