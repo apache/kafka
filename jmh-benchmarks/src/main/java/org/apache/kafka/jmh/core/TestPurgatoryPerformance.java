@@ -93,9 +93,9 @@ public class TestPurgatoryPerformance {
     @Param({"0.5"})
     private Double pct50;
 
-    private DelayedOperationPurgatory<FakeOperation> purgatory;
     private Random rand;
 
+    private DelayedOperationPurgatory<FakeOperation> purgatory;
     private CompletionQueue queue;
 
     @Setup(Level.Invocation)
@@ -118,7 +118,6 @@ public class TestPurgatoryPerformance {
 
     @Benchmark
     public void testPurgatoryPerformance() throws InterruptedException {
-
         LatencySamples latencySamples = new LatencySamples(1000000, pct75, pct50);
         IntervalSamples intervalSamples = new IntervalSamples(1000000, requestRate);
         CountDownLatch latch = new CountDownLatch(numRequests);
@@ -126,7 +125,6 @@ public class TestPurgatoryPerformance {
         List<String> keys = IntStream.range(0, numRequests)
                 .mapToObj(i -> String.format("fakeKey%d", rand.nextInt(numPossibleKeys)))
                 .collect(Collectors.toList());
-
         AtomicLong requestArrivalTime = new AtomicLong(System.currentTimeMillis());
         AtomicLong end = new AtomicLong(0);
         Runnable generate = () -> generateTask(intervalSamples, latencySamples, requestArrivalTime, latch, keys, end);
