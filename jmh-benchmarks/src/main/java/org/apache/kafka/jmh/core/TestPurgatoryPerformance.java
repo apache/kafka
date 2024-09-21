@@ -117,7 +117,7 @@ public class TestPurgatoryPerformance {
     }
 
     @Benchmark
-    public void main() throws InterruptedException {
+    public void testPurgatoryPerformance() throws InterruptedException {
 
         LatencySamples latencySamples = new LatencySamples(1000000, pct75, pct50);
         IntervalSamples intervalSamples = new IntervalSamples(1000000, requestRate);
@@ -129,7 +129,7 @@ public class TestPurgatoryPerformance {
 
         AtomicLong requestArrivalTime = new AtomicLong(System.currentTimeMillis());
         AtomicLong end = new AtomicLong(0);
-        Runnable generate = () -> runnable(intervalSamples, latencySamples, requestArrivalTime, latch, keys, end);
+        Runnable generate = () -> generateTask(intervalSamples, latencySamples, requestArrivalTime, latch, keys, end);
 
         Thread generateThread = new Thread(generate);
         generateThread.start();
@@ -137,12 +137,12 @@ public class TestPurgatoryPerformance {
         latch.await();
     }
 
-    private void runnable(IntervalSamples intervalSamples,
-                          LatencySamples latencySamples,
-                          AtomicLong requestArrivalTime,
-                          CountDownLatch latch,
-                          List<String> keys,
-                          AtomicLong end) {
+    private void generateTask(IntervalSamples intervalSamples,
+                              LatencySamples latencySamples,
+                              AtomicLong requestArrivalTime,
+                              CountDownLatch latch,
+                              List<String> keys,
+                              AtomicLong end) {
         Integer i = numRequests;
         while (i > 0) {
             i -= 1;
