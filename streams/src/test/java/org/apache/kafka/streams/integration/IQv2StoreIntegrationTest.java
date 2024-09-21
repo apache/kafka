@@ -126,7 +126,7 @@ public class IQv2StoreIntegrationTest {
     private static final long SEED = new Random().nextLong();
     private static final Random RANDOM = new Random(SEED);
 
-    private static final int NUM_BROKERS = 1;
+    private static final int NUM_BROKERS = 2;
     public static final Duration WINDOW_SIZE = Duration.ofMinutes(5);
     private static int port = 0;
     private static final String INPUT_TOPIC_NAME = "input-topic";
