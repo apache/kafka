@@ -191,20 +191,24 @@ public class DelegatingClassLoader extends URLClassLoader {
 
         String fullName = aliases.getOrDefault(name, name);
         PluginClassLoader pluginLoader = pluginClassLoader(fullName, range);
+        Class<?> plugin;
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", name, pluginLoader);
-            Class<?> plugin = pluginLoader.loadClass(name, resolve);
-            DefaultArtifactVersion pluginVersion = new DefaultArtifactVersion(PluginScanner.versionFor(plugin));
-            if (range != null && range.hasRestrictions() && !range.containsVersion(pluginVersion)) {
-                throw new VersionedPluginLoadingException(String.format(
+            plugin = pluginLoader.loadClass(name, resolve);
+        } else {
+            plugin = super.loadClass(fullName, resolve);
+        }
+
+        DefaultArtifactVersion pluginVersion = new DefaultArtifactVersion(PluginScanner.versionFor(plugin));
+        if (range != null && range.hasRestrictions() && !range.containsVersion(pluginVersion)) {
+            throw new VersionedPluginLoadingException(String.format(
                     "Plugin %s was loaded with version %s which does not match the version range %s",
                     name,
                     pluginVersion,
                     range
-                ));
-            }
+            ));
         }
-        throw new VersionedPluginLoadingException("Plugin loader for " + name + " not found");
+        return plugin;
     }
 
 
