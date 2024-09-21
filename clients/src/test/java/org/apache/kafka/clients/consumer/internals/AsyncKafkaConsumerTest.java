@@ -1897,11 +1897,25 @@ public class AsyncKafkaConsumerTest {
                 subscriptions,
                 "group-id",
                 "client-id"));
-        consumer.seekToBeginning(Collections.singleton(topic));
-        verify(applicationEventHandler).add(any(ResetOffsetEvent.class));
-        verify(subscriptions, never()).requestOffsetReset(topic, OffsetResetStrategy.EARLIEST);
         completeResetOffsetEventSuccessfully();
-        verify(subscriptions).requestOffsetReset(topic, OffsetResetStrategy.EARLIEST);
+        consumer.seekToBeginning(Collections.singleton(topic));
+        verify(subscriptions).requestOffsetReset(Collections.singleton(topic), OffsetResetStrategy.EARLIEST);
+    }
+
+    @Test
+    public void testSeekToEnd() {
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        TopicPartition topic = new TopicPartition("test", 0);
+        consumer = spy(newConsumer(
+                mock(FetchBuffer.class),
+                new ConsumerInterceptors<>(Collections.emptyList()),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions,
+                "group-id",
+                "client-id"));
+        completeResetOffsetEventSuccessfully();
+        consumer.seekToEnd(Collections.singleton(topic));
+        verify(subscriptions).requestOffsetReset(Collections.singleton(topic), OffsetResetStrategy.LATEST);
     }
 
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
