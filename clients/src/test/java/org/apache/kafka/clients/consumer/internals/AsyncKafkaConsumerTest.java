@@ -1887,7 +1887,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testOffsetResetEvent() {
+    public void testSeekToBeginning() {
         SubscriptionState subscriptions = mock(SubscriptionState.class);
         TopicPartition topic = new TopicPartition("test", 0);
         consumer = spy(newConsumer(
@@ -1899,9 +1899,9 @@ public class AsyncKafkaConsumerTest {
                 "client-id"));
         consumer.seekToBeginning(Collections.singleton(topic));
         verify(applicationEventHandler).add(any(ResetOffsetEvent.class));
-        verify(subscriptions, never()).requestOffsetReset(topic);
-        completeResetOffsetEventSuccessfully(topic, subscriptions);
-        verify(subscriptions).requestOffsetReset(topic);
+        verify(subscriptions, never()).requestOffsetReset(topic, OffsetResetStrategy.EARLIEST);
+        completeResetOffsetEventSuccessfully();
+        verify(subscriptions).requestOffsetReset(topic, OffsetResetStrategy.EARLIEST);
     }
 
     private void verifyUnsubscribeEvent(SubscriptionState subscriptions) {
@@ -1959,8 +1959,12 @@ public class AsyncKafkaConsumerTest {
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(SyncCommitEvent.class));
     }
 
-    private void completeResetOffsetEventSuccessfully(TopicPartition tp, SubscriptionState subscriptions) {
-        subscriptions.requestOffsetReset(tp);
+    private void completeResetOffsetEventSuccessfully() {
+        doAnswer(invocation -> {
+            ResetOffsetEvent event = invocation.getArgument(0);
+            consumer.subscriptions().requestOffsetReset(event.topicPartitions(), event.offsetResetStrategy());
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(ResetOffsetEvent.class));
     }
 
     private void completeCommitAsyncApplicationEventSuccessfully() {

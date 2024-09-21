@@ -865,8 +865,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                // if cachedSubscriptionHasAllFetchPositions is false, there is a ResetOffsetEvent in queue
-                // so the position is invalid.
+                // The {@link seekToBeginning} and {@link seekToEnd} update subscription state position in background.
+                // When {@link cachedSubscriptionHasAllFetchPositions} is false, there may have {@link ResetOffsetEvent}, which means
+                // current subscription valid position is not reliable. We should update fetch position in the background thread.
                 if (cachedSubscriptionHasAllFetchPositions) {
                     SubscriptionState.FetchPosition position = subscriptions.validPosition(partition);
                     if (position != null) {
