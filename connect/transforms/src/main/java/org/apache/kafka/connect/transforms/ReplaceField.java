@@ -79,7 +79,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             .define(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
                     "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
-    private static Set<String> names() {
+    private static Set<String> configNames() {
         return CONFIG_DEF.names();
     }
 
@@ -101,7 +101,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     @Override
     public void configure(Map<String, ?> configs) {
 
-        vilidate(configs);
+        validate(configs);
 
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(configs, new String[][]{
             {ConfigName.INCLUDE, "whitelist"},
@@ -117,12 +117,12 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
-    private static void vilidate(Map<String, ?> configs) {
-        for (Map.Entry<String, ?> entry : configs.entrySet()) {
-            if (!names().contains(entry.getKey())) {
-                throw new InvalidConfigurationException("Unknown config: " + entry.getKey());
+    private static void validate(Map<String, ?> configs) {
+        configs.keySet().forEach(key -> {
+            if (!configNames().contains(key)) {
+                throw new InvalidConfigurationException("Unknown config: " + key);
             }
-        }
+        });
     }
 
     static Map<String, String> parseRenameMappings(List<String> mappings) {
