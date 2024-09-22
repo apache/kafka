@@ -313,8 +313,8 @@ class ActiveTaskCreator {
         return ClientUtils.producerMetrics(producers);
     }
 
-    Set<String> producerClientIds() {
-        return Collections.singleton(threadProducerClientId(threadId));
+    String producerClientIds() {
+        return threadProducerClientId(threadId);
     }
 
     private LogContext getLogContext(final TaskId taskId) {
