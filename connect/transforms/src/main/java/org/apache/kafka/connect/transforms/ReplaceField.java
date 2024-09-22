@@ -22,6 +22,7 @@ import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.connect.components.Versioned;
@@ -78,6 +79,10 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             .define(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
                     "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
+    private static Set<String> names() {
+        return CONFIG_DEF.names();
+    }
+
     private static final String PURPOSE = "field replacement";
 
     private Set<String> exclude;
@@ -95,6 +100,9 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
     @Override
     public void configure(Map<String, ?> configs) {
+
+        vilidate(configs);
+
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(configs, new String[][]{
             {ConfigName.INCLUDE, "whitelist"},
             {ConfigName.EXCLUDE, "blacklist"},
@@ -107,6 +115,14 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         replaceNullWithDefault = config.getBoolean(ConfigName.REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
+    }
+
+    private static void vilidate(Map<String, ?> configs) {
+        for (Map.Entry<String, ?> entry : configs.entrySet()) {
+            if (!names().contains(entry.getKey())) {
+                throw new InvalidConfigurationException("Unknown config: " + entry.getKey());
+            }
+        }
     }
 
     static Map<String, String> parseRenameMappings(List<String> mappings) {
