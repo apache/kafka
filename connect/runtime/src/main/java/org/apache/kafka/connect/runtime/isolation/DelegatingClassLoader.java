@@ -194,7 +194,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         Class<?> plugin;
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", name, pluginLoader);
-            plugin = pluginLoader.loadClass(name, resolve);
+            plugin = pluginLoader.loadClass(fullName, resolve);
         } else {
             plugin = super.loadClass(fullName, resolve);
             // if we are loading a plugin class from the parent classloader, we need to check if the version
