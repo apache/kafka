@@ -731,7 +731,6 @@ public class RecordCollectorTest {
     public void shouldForwardFlushToStreamsProducer() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         doNothing().when(streamsProducer).flush();
-        when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         final ProcessorTopology topology = mock(ProcessorTopology.class);
         when(topology.sinkTopics()).thenReturn(Collections.emptySet());
 
@@ -750,7 +749,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldForwardFlushToStreamsProducerEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         doNothing().when(streamsProducer).flush();
         final ProcessorTopology topology = mock(ProcessorTopology.class);
         
@@ -778,7 +776,6 @@ public class RecordCollectorTest {
 
     private void shouldClearOffsetsOnClose(final boolean clean) {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         final long offset = 1234L;
         final RecordMetadata metadata = new RecordMetadata(
             new TopicPartition(topic, 0),
@@ -829,7 +826,6 @@ public class RecordCollectorTest {
     @Test
     public void shouldNotAbortTxOnCloseCleanIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         final ProcessorTopology topology = mock(ProcessorTopology.class);
         
         final RecordCollector collector = new RecordCollectorImpl(
@@ -848,7 +844,6 @@ public class RecordCollectorTest {
     public void shouldAbortTxOnCloseDirtyIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         when(streamsProducer.eosEnabled()).thenReturn(true);
-        when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
         doNothing().when(streamsProducer).abortTransaction();
         final ProcessorTopology topology = mock(ProcessorTopology.class);
         
@@ -1814,64 +1809,6 @@ public class RecordCollectorTest {
 
             assertThat(error.getCause(), instanceOf(ClassCastException.class));
         }
-    }
-
-    @Test
-    public void shouldNotSendIfSendOfOtherTaskFailedInCallback() {
-        final TaskId taskId1 = new TaskId(0, 0);
-        final TaskId taskId2 = new TaskId(0, 1);
-        final StreamsProducer streamsProducer = mock(StreamsProducer.class);
-        when(streamsProducer.eosEnabled()).thenReturn(true);
-        when(streamsProducer.sendException()).thenReturn(new AtomicReference<>(null));
-        when(streamsProducer.send(any(), any())).thenAnswer(
-            invocation -> {
-                final Callback callback = invocation.getArgument(1);
-                callback.onCompletion(null, new ProducerFencedException("KABOOM!"));
-                return null;
-            }
-        );
-        final RecordCollector collector1 = new RecordCollectorImpl(
-            logContext,
-            taskId1,
-            streamsProducer,
-            productionExceptionHandler,
-            streamsMetrics,
-            topology
-        );
-        collector1.initialize();
-        final RecordCollector collector2 = new RecordCollectorImpl(
-            logContext,
-            taskId2,
-            streamsProducer,
-            productionExceptionHandler,
-            streamsMetrics,
-            topology
-        );
-        collector2.initialize();
-        collector1.send(
-            topic,
-            "key",
-            "val",
-            null,
-            0,
-            null,
-            stringSerializer,
-            stringSerializer,
-            sinkNodeName,
-            context
-        );
-        assertThrows(StreamsException.class, () -> collector2.send(
-            topic,
-            "key",
-            "val",
-            null,
-            1,
-            null,
-            stringSerializer,
-            stringSerializer,
-            sinkNodeName,
-            context
-        ));
     }
 
     private RecordCollector newRecordCollector(final ProductionExceptionHandler productionExceptionHandler) {
