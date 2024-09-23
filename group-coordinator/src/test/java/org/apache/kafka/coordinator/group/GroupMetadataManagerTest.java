@@ -250,6 +250,23 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testConsumerHeartbeatRegexValidation() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withConsumerGroupAssignors(Collections.singletonList(assignor))
+                .build();
+        Exception ex;
+        // Regex not supported for now. This test will evolve to actually validate the regex when it's supported
+        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId("foo")
+                        .setMemberEpoch(0)
+                        .setRebalanceTimeoutMs(5000)
+                        .setSubscribedTopicRegex("t*")));
+        assertEquals("SubscribedTopicRegex is not supported yet.", ex.getMessage());
+    }
+
+    @Test
     public void testMemberIdGeneration() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
