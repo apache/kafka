@@ -1773,6 +1773,36 @@ public class WorkerSinkTaskTest {
         assertSinkMetricValue("partition-count", 0);
     }
 
+    @Test
+    public void testCurrentAssignmentStateOnRevocationOfPartitions() {
+        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        // Created sample sink task object
+        SampleSinkTask sampleSinkTask = new SampleSinkTask();
+        workerTask = new WorkerSinkTask(
+                taskId, sampleSinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
+                keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
+                transformationChain, mockConsumer, pluginLoader, time,
+                RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
+        mockConsumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {{
+            put(TOPIC_PARTITION, 0 * 1L);
+            put(TOPIC_PARTITION2, 0 * 1L);
+        }});
+        // Initialized sink task with task config.
+        workerTask.initialize(TASK_CONFIG);
+        // Initialized and started worker sink task.
+        workerTask.initializeAndStart();
+        // Initial assignment with [tp1, tp2].
+        mockConsumer.rebalance(INITIAL_ASSIGNMENT);
+        // checking if the current assignment from close method of sample sink task return [tp1, tp2].
+        assertSinkTaskCurrentAssignment(INITIAL_ASSIGNMENT, sampleSinkTask.getCurrentAssignment());
+        // revoked [tp1]
+        mockConsumer.rebalance(Collections.singleton(TOPIC_PARTITION2));
+        // checking current assignment of sample sink task should return [tp2].
+        assertSinkTaskCurrentAssignment(Collections.singleton(TOPIC_PARTITION2), sampleSinkTask.getCurrentAssignment());
+        // finally closing worker task.
+        workerTask.close();
+    }
+
     private void expectRebalanceRevocationError(RuntimeException e) {
         when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
         doThrow(e).when(sinkTask).close(INITIAL_ASSIGNMENT);
@@ -1887,5 +1917,9 @@ public class WorkerSinkTaskTest {
         MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
         String measured = metrics.currentMetricValueAsString(taskGroup, name);
         assertEquals(expected, measured);
+    }
+
+    private void assertSinkTaskCurrentAssignment(Set<TopicPartition> expected, Set<TopicPartition> actual) {
+        assertEquals(expected, actual);
     }
 }
