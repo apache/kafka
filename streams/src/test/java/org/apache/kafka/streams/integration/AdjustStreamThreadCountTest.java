@@ -17,6 +17,9 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -107,6 +110,8 @@ public class AdjustStreamThreadCountTest {
         builder = new StreamsBuilder();
         builder.stream(inputTopic);
 
+        publishDummyDataToTopic(inputTopic, CLUSTER);
+
         properties  = mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
@@ -118,6 +123,21 @@ public class AdjustStreamThreadCountTest {
                 mkEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000)
             )
         );
+    }
+
+
+    private void publishDummyDataToTopic(final String inputTopic, final EmbeddedKafkaCluster cluster) {
+        final Properties props = new Properties();
+        props.put("acks", "all");
+        props.put("retries", 1);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, "test-client");
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        final KafkaProducer<String, String> dummyProducer = new KafkaProducer<>(props);
+        dummyProducer.send(new ProducerRecord<String, String>(inputTopic, Integer.toString(4), Integer.toString(4)));
+        dummyProducer.close();
+        return;
     }
 
     private void startStreamsAndWaitForRunning(final KafkaStreams kafkaStreams) throws InterruptedException {
