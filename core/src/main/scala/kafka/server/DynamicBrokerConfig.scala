@@ -662,12 +662,27 @@ trait BrokerReconfigurable {
 }
 
 object DynamicLogConfig {
-  // Exclude message.format.version for now since we need to check that the version
-  // is supported on all brokers in the cluster.
-  val ReconfigurableConfigs: Set[String] =
-    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values.asScala.toSet - ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG
-  val KafkaConfigToLogConfigName: Map[String, String] =
-    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
+  val ReconfigurableConfigs: Set[String] = {
+    val results = new util.HashSet[String]
+    ServerTopicConfigSynonyms.ALL_TOPIC_CONFIG_SYNONYMS.values().forEach(v =>
+      v.forEach(configSynonym => results.add(configSynonym.name())))
+
+    // Exclude message.format.version for now since we need to check that the version
+    // is supported on all brokers in the cluster.
+    results.remove(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG)
+
+    results.asScala
+  }
+
+  val KafkaConfigToLogConfigName: Map[String, String] = {
+    val results = new util.HashMap[String, String]
+    ServerTopicConfigSynonyms.ALL_TOPIC_CONFIG_SYNONYMS.entrySet().forEach(e => {
+      e.getValue.forEach(configSynonym => {
+        results.put(configSynonym.name(), e.getKey)
+      })
+    })
+    results.asScala
+  }
 }
 
 class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
@@ -732,17 +747,7 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val originalLogConfig = logManager.currentDefaultConfig
     val originalUncleanLeaderElectionEnable = originalLogConfig.uncleanLeaderElectionEnable
-    val newBrokerDefaults = new util.HashMap[String, Object](originalLogConfig.originals)
-    newConfig.valuesFromThisConfig.forEach { (k, v) =>
-      if (DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
-        DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
-          if (v == null)
-             newBrokerDefaults.remove(configName)
-          else
-            newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
-        }
-      }
-    }
+    val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 
