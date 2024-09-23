@@ -646,16 +646,18 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 continue;
             }
 
+            // remove both last and candidate for easier
+            // assessment about adding batches to sortedBatches
+            sortedBatches.remove(last);
+            sortedBatches.remove(candidate);
+
             // overlap and same state (last.firstOffset <= candidate.firstOffset) due to sort
             // covers:
             // case:        1        2          3            4          5           6          7 (contiguous)
             // last:        ______   _______    _______      _______   _______   ________    _______
             // candidate:   ______   ____       __________     ___        ____       _______        _______
             if (compareBatchState(candidate, last) == 0) {
-                sortedBatches.remove(last);  // remove older smaller interval
-                sortedBatches.remove(candidate);
-
-                last = new PersisterStateBatch(
+                sortedBatches.add(new PersisterStateBatch(
                     last.firstOffset(),
                     // cover cases
                     // last:      ______   ________       _________
@@ -663,9 +665,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     Math.max(candidate.lastOffset(), last.lastOffset()),
                     last.deliveryState(),
                     last.deliveryCount()
-                );
-
-                sortedBatches.add(last);
+                ));
             } else if (candidate.firstOffset() <= last.lastOffset()) { // non-contiguous overlap
                 // overlap and different state
                 // covers:
@@ -674,11 +674,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 // candidate:   ______   ____       _________      ____        ____          _______
                 // max batches: 1           2       2                3          2            2
                 // min batches: 1           1       1                1          1            2
-
-                // remove both last and candidate for easier
-                // assessment about adding batches to sortedBatches
-                sortedBatches.remove(last);
-                sortedBatches.remove(candidate);
 
                 if (candidate.firstOffset() == last.firstOffset()) {
                     if (candidate.lastOffset() == last.lastOffset()) {  // case 1
