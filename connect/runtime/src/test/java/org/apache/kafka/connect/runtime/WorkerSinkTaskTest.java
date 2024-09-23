@@ -1783,10 +1783,12 @@ public class WorkerSinkTaskTest {
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, mockConsumer, pluginLoader, time,
                 RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
-        mockConsumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {{
-            put(TOPIC_PARTITION, 0 * 1L);
-            put(TOPIC_PARTITION2, 0 * 1L);
-        }});
+        mockConsumer.updateBeginningOffsets(
+                new HashMap<TopicPartition, Long>() {{
+                    put(TOPIC_PARTITION, 0L);
+                    put(TOPIC_PARTITION2, 0L);
+                }}
+        );
         // Initialized sink task with task config.
         workerTask.initialize(TASK_CONFIG);
         // Initialized and started worker sink task.
