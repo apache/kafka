@@ -388,368 +388,370 @@ import java.util.Optional;
 public class RequestConvertToJson {
 
     public static JsonNode request(AbstractRequest request) {
-        if (request instanceof AddOffsetsToTxnRequest) {
-            return AddOffsetsToTxnRequestDataJsonConverter.write(((AddOffsetsToTxnRequest) request).data(), request.version());
-        } else if (request instanceof AddPartitionsToTxnRequest) {
-            return AddPartitionsToTxnRequestDataJsonConverter.write(((AddPartitionsToTxnRequest) request).data(), request.version());
-        } else if (request instanceof AllocateProducerIdsRequest) {
-            return AllocateProducerIdsRequestDataJsonConverter.write(((AllocateProducerIdsRequest) request).data(), request.version());
-        } else if (request instanceof AlterClientQuotasRequest) {
-            return AlterClientQuotasRequestDataJsonConverter.write(((AlterClientQuotasRequest) request).data(), request.version());
-        } else if (request instanceof AlterConfigsRequest) {
-            return AlterConfigsRequestDataJsonConverter.write(((AlterConfigsRequest) request).data(), request.version());
-        } else if (request instanceof AlterPartitionReassignmentsRequest) {
-            return AlterPartitionReassignmentsRequestDataJsonConverter.write(((AlterPartitionReassignmentsRequest) request).data(), request.version());
-        } else if (request instanceof AlterPartitionRequest) {
-            return AlterPartitionRequestDataJsonConverter.write(((AlterPartitionRequest) request).data(), request.version());
-        } else if (request instanceof AlterReplicaLogDirsRequest) {
-            return AlterReplicaLogDirsRequestDataJsonConverter.write(((AlterReplicaLogDirsRequest) request).data(), request.version());
-        } else if (request instanceof AlterUserScramCredentialsRequest) {
-            return AlterUserScramCredentialsRequestDataJsonConverter.write(((AlterUserScramCredentialsRequest) request).data(), request.version());
-        } else if (request instanceof ApiVersionsRequest) {
-            return ApiVersionsRequestDataJsonConverter.write(((ApiVersionsRequest) request).data(), request.version());
-        } else if (request instanceof AssignReplicasToDirsRequest) {
-            return AssignReplicasToDirsRequestDataJsonConverter.write(((AssignReplicasToDirsRequest) request).data(), request.version());
-        } else if (request instanceof BeginQuorumEpochRequest) {
-            return BeginQuorumEpochRequestDataJsonConverter.write(((BeginQuorumEpochRequest) request).data(), request.version());
-        } else if (request instanceof BrokerHeartbeatRequest) {
-            return BrokerHeartbeatRequestDataJsonConverter.write(((BrokerHeartbeatRequest) request).data(), request.version());
-        } else if (request instanceof BrokerRegistrationRequest) {
-            return BrokerRegistrationRequestDataJsonConverter.write(((BrokerRegistrationRequest) request).data(), request.version());
-        } else if (request instanceof ConsumerGroupDescribeRequest) {
-            return ConsumerGroupDescribeRequestDataJsonConverter.write(((ConsumerGroupDescribeRequest) request).data(), request.version());
-        } else if (request instanceof ConsumerGroupHeartbeatRequest) {
-            return ConsumerGroupHeartbeatRequestDataJsonConverter.write(((ConsumerGroupHeartbeatRequest) request).data(), request.version());
-        } else if (request instanceof ControlledShutdownRequest) {
-            return ControlledShutdownRequestDataJsonConverter.write(((ControlledShutdownRequest) request).data(), request.version());
-        } else if (request instanceof ControllerRegistrationRequest) {
-            return ControllerRegistrationRequestDataJsonConverter.write(((ControllerRegistrationRequest) request).data(), request.version());
-        } else if (request instanceof CreateAclsRequest) {
-            return CreateAclsRequestDataJsonConverter.write(((CreateAclsRequest) request).data(), request.version());
-        } else if (request instanceof CreateDelegationTokenRequest) {
-            return CreateDelegationTokenRequestDataJsonConverter.write(((CreateDelegationTokenRequest) request).data(), request.version());
-        } else if (request instanceof CreatePartitionsRequest) {
-            return CreatePartitionsRequestDataJsonConverter.write(((CreatePartitionsRequest) request).data(), request.version());
-        } else if (request instanceof CreateTopicsRequest) {
-            return CreateTopicsRequestDataJsonConverter.write(((CreateTopicsRequest) request).data(), request.version());
-        } else if (request instanceof DeleteAclsRequest) {
-            return DeleteAclsRequestDataJsonConverter.write(((DeleteAclsRequest) request).data(), request.version());
-        } else if (request instanceof DeleteGroupsRequest) {
-            return DeleteGroupsRequestDataJsonConverter.write(((DeleteGroupsRequest) request).data(), request.version());
-        } else if (request instanceof DeleteRecordsRequest) {
-            return DeleteRecordsRequestDataJsonConverter.write(((DeleteRecordsRequest) request).data(), request.version());
-        } else if (request instanceof DeleteShareGroupStateRequest) {
-            return DeleteShareGroupStateRequestDataJsonConverter.write(((DeleteShareGroupStateRequest) request).data(), request.version());
-        } else if (request instanceof DeleteTopicsRequest) {
-            return DeleteTopicsRequestDataJsonConverter.write(((DeleteTopicsRequest) request).data(), request.version());
-        } else if (request instanceof DescribeAclsRequest) {
-            return DescribeAclsRequestDataJsonConverter.write(((DescribeAclsRequest) request).data(), request.version());
-        } else if (request instanceof DescribeClientQuotasRequest) {
-            return DescribeClientQuotasRequestDataJsonConverter.write(((DescribeClientQuotasRequest) request).data(), request.version());
-        } else if (request instanceof DescribeClusterRequest) {
-            return DescribeClusterRequestDataJsonConverter.write(((DescribeClusterRequest) request).data(), request.version());
-        } else if (request instanceof DescribeConfigsRequest) {
-            return DescribeConfigsRequestDataJsonConverter.write(((DescribeConfigsRequest) request).data(), request.version());
-        } else if (request instanceof DescribeDelegationTokenRequest) {
-            return DescribeDelegationTokenRequestDataJsonConverter.write(((DescribeDelegationTokenRequest) request).data(), request.version());
-        } else if (request instanceof DescribeGroupsRequest) {
-            return DescribeGroupsRequestDataJsonConverter.write(((DescribeGroupsRequest) request).data(), request.version());
-        } else if (request instanceof DescribeLogDirsRequest) {
-            return DescribeLogDirsRequestDataJsonConverter.write(((DescribeLogDirsRequest) request).data(), request.version());
-        } else if (request instanceof DescribeProducersRequest) {
-            return DescribeProducersRequestDataJsonConverter.write(((DescribeProducersRequest) request).data(), request.version());
-        } else if (request instanceof DescribeQuorumRequest) {
-            return DescribeQuorumRequestDataJsonConverter.write(((DescribeQuorumRequest) request).data(), request.version());
-        } else if (request instanceof DescribeTopicPartitionsRequest) {
-            return DescribeTopicPartitionsRequestDataJsonConverter.write(((DescribeTopicPartitionsRequest) request).data(), request.version());
-        } else if (request instanceof DescribeTransactionsRequest) {
-            return DescribeTransactionsRequestDataJsonConverter.write(((DescribeTransactionsRequest) request).data(), request.version());
-        } else if (request instanceof DescribeUserScramCredentialsRequest) {
-            return DescribeUserScramCredentialsRequestDataJsonConverter.write(((DescribeUserScramCredentialsRequest) request).data(), request.version());
-        } else if (request instanceof ElectLeadersRequest) {
-            return ElectLeadersRequestDataJsonConverter.write(((ElectLeadersRequest) request).data(), request.version());
-        } else if (request instanceof EndQuorumEpochRequest) {
-            return EndQuorumEpochRequestDataJsonConverter.write(((EndQuorumEpochRequest) request).data(), request.version());
-        } else if (request instanceof EndTxnRequest) {
-            return EndTxnRequestDataJsonConverter.write(((EndTxnRequest) request).data(), request.version());
-        } else if (request instanceof EnvelopeRequest) {
-            return EnvelopeRequestDataJsonConverter.write(((EnvelopeRequest) request).data(), request.version());
-        } else if (request instanceof ExpireDelegationTokenRequest) {
-            return ExpireDelegationTokenRequestDataJsonConverter.write(((ExpireDelegationTokenRequest) request).data(), request.version());
-        } else if (request instanceof FetchRequest) {
-            return FetchRequestDataJsonConverter.write(((FetchRequest) request).data(), request.version());
-        } else if (request instanceof FetchSnapshotRequest) {
-            return FetchSnapshotRequestDataJsonConverter.write(((FetchSnapshotRequest) request).data(), request.version());
-        } else if (request instanceof FindCoordinatorRequest) {
-            return FindCoordinatorRequestDataJsonConverter.write(((FindCoordinatorRequest) request).data(), request.version());
-        } else if (request instanceof GetTelemetrySubscriptionsRequest) {
-            return GetTelemetrySubscriptionsRequestDataJsonConverter.write(((GetTelemetrySubscriptionsRequest) request).data(), request.version());
-        } else if (request instanceof HeartbeatRequest) {
-            return HeartbeatRequestDataJsonConverter.write(((HeartbeatRequest) request).data(), request.version());
-        } else if (request instanceof IncrementalAlterConfigsRequest) {
-            return IncrementalAlterConfigsRequestDataJsonConverter.write(((IncrementalAlterConfigsRequest) request).data(), request.version());
-        } else if (request instanceof InitializeShareGroupStateRequest) {
-            return InitializeShareGroupStateRequestDataJsonConverter.write(((InitializeShareGroupStateRequest) request).data(), request.version());
-        } else if (request instanceof InitProducerIdRequest) {
-            return InitProducerIdRequestDataJsonConverter.write(((InitProducerIdRequest) request).data(), request.version());
-        } else if (request instanceof JoinGroupRequest) {
-            return JoinGroupRequestDataJsonConverter.write(((JoinGroupRequest) request).data(), request.version());
-        } else if (request instanceof LeaderAndIsrRequest) {
-            return LeaderAndIsrRequestDataJsonConverter.write(((LeaderAndIsrRequest) request).data(), request.version());
-        } else if (request instanceof LeaveGroupRequest) {
-            return LeaveGroupRequestDataJsonConverter.write(((LeaveGroupRequest) request).data(), request.version());
-        } else if (request instanceof ListClientMetricsResourcesRequest) {
-            return ListClientMetricsResourcesRequestDataJsonConverter.write(((ListClientMetricsResourcesRequest) request).data(), request.version());
-        } else if (request instanceof ListGroupsRequest) {
-            return ListGroupsRequestDataJsonConverter.write(((ListGroupsRequest) request).data(), request.version());
-        } else if (request instanceof ListOffsetsRequest) {
-            return ListOffsetsRequestDataJsonConverter.write(((ListOffsetsRequest) request).data(), request.version());
-        } else if (request instanceof ListPartitionReassignmentsRequest) {
-            return ListPartitionReassignmentsRequestDataJsonConverter.write(((ListPartitionReassignmentsRequest) request).data(), request.version());
-        } else if (request instanceof ListTransactionsRequest) {
-            return ListTransactionsRequestDataJsonConverter.write(((ListTransactionsRequest) request).data(), request.version());
-        } else if (request instanceof MetadataRequest) {
-            return MetadataRequestDataJsonConverter.write(((MetadataRequest) request).data(), request.version());
-        } else if (request instanceof OffsetCommitRequest) {
-            return OffsetCommitRequestDataJsonConverter.write(((OffsetCommitRequest) request).data(), request.version());
-        } else if (request instanceof OffsetDeleteRequest) {
-            return OffsetDeleteRequestDataJsonConverter.write(((OffsetDeleteRequest) request).data(), request.version());
-        } else if (request instanceof OffsetFetchRequest) {
-            return OffsetFetchRequestDataJsonConverter.write(((OffsetFetchRequest) request).data(), request.version());
-        } else if (request instanceof OffsetsForLeaderEpochRequest) {
-            return OffsetForLeaderEpochRequestDataJsonConverter.write(((OffsetsForLeaderEpochRequest) request).data(), request.version());
-        } else if (request instanceof ProduceRequest) {
-            return ProduceRequestDataJsonConverter.write(((ProduceRequest) request).data(), request.version(), false);
-        } else if (request instanceof PushTelemetryRequest) {
-            return PushTelemetryRequestDataJsonConverter.write(((PushTelemetryRequest) request).data(), request.version());
-        } else if (request instanceof ReadShareGroupStateRequest) {
-            return ReadShareGroupStateRequestDataJsonConverter.write(((ReadShareGroupStateRequest) request).data(), request.version());
-        } else if (request instanceof ReadShareGroupStateSummaryRequest) {
-            return ReadShareGroupStateSummaryRequestDataJsonConverter.write(((ReadShareGroupStateSummaryRequest) request).data(), request.version());
-        } else if (request instanceof RenewDelegationTokenRequest) {
-            return RenewDelegationTokenRequestDataJsonConverter.write(((RenewDelegationTokenRequest) request).data(), request.version());
-        } else if (request instanceof SaslAuthenticateRequest) {
-            return SaslAuthenticateRequestDataJsonConverter.write(((SaslAuthenticateRequest) request).data(), request.version());
-        } else if (request instanceof SaslHandshakeRequest) {
-            return SaslHandshakeRequestDataJsonConverter.write(((SaslHandshakeRequest) request).data(), request.version());
-        } else if (request instanceof ShareAcknowledgeRequest) {
-            return ShareAcknowledgeRequestDataJsonConverter.write(((ShareAcknowledgeRequest) request).data(), request.version());
-        } else if (request instanceof ShareFetchRequest) {
-            return ShareFetchRequestDataJsonConverter.write(((ShareFetchRequest) request).data(), request.version());
-        } else if (request instanceof ShareGroupDescribeRequest) {
-            return ShareGroupDescribeRequestDataJsonConverter.write(((ShareGroupDescribeRequest) request).data(), request.version());
-        } else if (request instanceof ShareGroupHeartbeatRequest) {
-            return ShareGroupHeartbeatRequestDataJsonConverter.write(((ShareGroupHeartbeatRequest) request).data(), request.version());
-        } else if (request instanceof StopReplicaRequest) {
-            return StopReplicaRequestDataJsonConverter.write(((StopReplicaRequest) request).data(), request.version());
-        } else if (request instanceof SyncGroupRequest) {
-            return SyncGroupRequestDataJsonConverter.write(((SyncGroupRequest) request).data(), request.version());
-        } else if (request instanceof TxnOffsetCommitRequest) {
-            return TxnOffsetCommitRequestDataJsonConverter.write(((TxnOffsetCommitRequest) request).data(), request.version());
-        } else if (request instanceof UnregisterBrokerRequest) {
-            return UnregisterBrokerRequestDataJsonConverter.write(((UnregisterBrokerRequest) request).data(), request.version());
-        } else if (request instanceof UpdateFeaturesRequest) {
-            return UpdateFeaturesRequestDataJsonConverter.write(((UpdateFeaturesRequest) request).data(), request.version());
-        } else if (request instanceof UpdateMetadataRequest) {
-            return UpdateMetadataRequestDataJsonConverter.write(((UpdateMetadataRequest) request).data(), request.version());
-        } else if (request instanceof VoteRequest) {
-            return VoteRequestDataJsonConverter.write(((VoteRequest) request).data(), request.version());
-        } else if (request instanceof WriteShareGroupStateRequest) {
-            return WriteShareGroupStateRequestDataJsonConverter.write(((WriteShareGroupStateRequest) request).data(), request.version());
-        } else if (request instanceof WriteTxnMarkersRequest) {
-            return WriteTxnMarkersRequestDataJsonConverter.write(((WriteTxnMarkersRequest) request).data(), request.version());
-        } else if (request instanceof AddRaftVoterRequest) {
-            return AddRaftVoterRequestDataJsonConverter.write(((AddRaftVoterRequest) request).data(), request.version());
-        } else if (request instanceof RemoveRaftVoterRequest) {
-            return RemoveRaftVoterRequestDataJsonConverter.write(((RemoveRaftVoterRequest) request).data(), request.version());
-        } else if (request instanceof UpdateRaftVoterRequest) {
-            return UpdateRaftVoterRequestDataJsonConverter.write(((UpdateRaftVoterRequest) request).data(), request.version());
-        } else {
-            throw new IllegalStateException("ApiKey " + request.apiKey() + " is not currently handled in `request`, the " +
-                "code should be updated to do so.");
+        switch (request.apiKey()) {
+            case ADD_OFFSETS_TO_TXN:
+                return AddOffsetsToTxnRequestDataJsonConverter.write(((AddOffsetsToTxnRequest) request).data(), request.version());
+            case ADD_PARTITIONS_TO_TXN:
+                return AddPartitionsToTxnRequestDataJsonConverter.write(((AddPartitionsToTxnRequest) request).data(), request.version());
+            case ALLOCATE_PRODUCER_IDS:
+                return AllocateProducerIdsRequestDataJsonConverter.write(((AllocateProducerIdsRequest) request).data(), request.version());
+            case ALTER_CLIENT_QUOTAS:
+                return AlterClientQuotasRequestDataJsonConverter.write(((AlterClientQuotasRequest) request).data(), request.version());
+            case ALTER_CONFIGS:
+                return AlterConfigsRequestDataJsonConverter.write(((AlterConfigsRequest) request).data(), request.version());
+            case ALTER_PARTITION_REASSIGNMENTS:
+                return AlterPartitionReassignmentsRequestDataJsonConverter.write(((AlterPartitionReassignmentsRequest) request).data(), request.version());
+            case ALTER_PARTITION:
+                return AlterPartitionRequestDataJsonConverter.write(((AlterPartitionRequest) request).data(), request.version());
+            case ALTER_REPLICA_LOG_DIRS:
+                return AlterReplicaLogDirsRequestDataJsonConverter.write(((AlterReplicaLogDirsRequest) request).data(), request.version());
+            case ALTER_USER_SCRAM_CREDENTIALS:
+                return AlterUserScramCredentialsRequestDataJsonConverter.write(((AlterUserScramCredentialsRequest) request).data(), request.version());
+            case API_VERSIONS:
+                return ApiVersionsRequestDataJsonConverter.write(((ApiVersionsRequest) request).data(), request.version());
+            case ASSIGN_REPLICAS_TO_DIRS:
+                return AssignReplicasToDirsRequestDataJsonConverter.write(((AssignReplicasToDirsRequest) request).data(), request.version());
+            case BEGIN_QUORUM_EPOCH:
+                return BeginQuorumEpochRequestDataJsonConverter.write(((BeginQuorumEpochRequest) request).data(), request.version());
+            case BROKER_HEARTBEAT:
+                return BrokerHeartbeatRequestDataJsonConverter.write(((BrokerHeartbeatRequest) request).data(), request.version());
+            case BROKER_REGISTRATION:
+                return BrokerRegistrationRequestDataJsonConverter.write(((BrokerRegistrationRequest) request).data(), request.version());
+            case CONSUMER_GROUP_DESCRIBE:
+                return ConsumerGroupDescribeRequestDataJsonConverter.write(((ConsumerGroupDescribeRequest) request).data(), request.version());
+            case CONSUMER_GROUP_HEARTBEAT:
+                return ConsumerGroupHeartbeatRequestDataJsonConverter.write(((ConsumerGroupHeartbeatRequest) request).data(), request.version());
+            case CONTROLLED_SHUTDOWN:
+                return ControlledShutdownRequestDataJsonConverter.write(((ControlledShutdownRequest) request).data(), request.version());
+            case CONTROLLER_REGISTRATION:
+                return ControllerRegistrationRequestDataJsonConverter.write(((ControllerRegistrationRequest) request).data(), request.version());
+            case CREATE_ACLS:
+                return CreateAclsRequestDataJsonConverter.write(((CreateAclsRequest) request).data(), request.version());
+            case CREATE_DELEGATION_TOKEN:
+                return CreateDelegationTokenRequestDataJsonConverter.write(((CreateDelegationTokenRequest) request).data(), request.version());
+            case CREATE_PARTITIONS:
+                return CreatePartitionsRequestDataJsonConverter.write(((CreatePartitionsRequest) request).data(), request.version());
+            case CREATE_TOPICS:
+                return CreateTopicsRequestDataJsonConverter.write(((CreateTopicsRequest) request).data(), request.version());
+            case DELETE_ACLS:
+                return DeleteAclsRequestDataJsonConverter.write(((DeleteAclsRequest) request).data(), request.version());
+            case DELETE_GROUPS:
+                return DeleteGroupsRequestDataJsonConverter.write(((DeleteGroupsRequest) request).data(), request.version());
+            case DELETE_RECORDS:
+                return DeleteRecordsRequestDataJsonConverter.write(((DeleteRecordsRequest) request).data(), request.version());
+            case DELETE_SHARE_GROUP_STATE:
+                return DeleteShareGroupStateRequestDataJsonConverter.write(((DeleteShareGroupStateRequest) request).data(), request.version());
+            case DELETE_TOPICS:
+                return DeleteTopicsRequestDataJsonConverter.write(((DeleteTopicsRequest) request).data(), request.version());
+            case DESCRIBE_ACLS:
+                return DescribeAclsRequestDataJsonConverter.write(((DescribeAclsRequest) request).data(), request.version());
+            case DESCRIBE_CLIENT_QUOTAS:
+                return DescribeClientQuotasRequestDataJsonConverter.write(((DescribeClientQuotasRequest) request).data(), request.version());
+            case DESCRIBE_CLUSTER:
+                return DescribeClusterRequestDataJsonConverter.write(((DescribeClusterRequest) request).data(), request.version());
+            case DESCRIBE_CONFIGS:
+                return DescribeConfigsRequestDataJsonConverter.write(((DescribeConfigsRequest) request).data(), request.version());
+            case DESCRIBE_DELEGATION_TOKEN:
+                return DescribeDelegationTokenRequestDataJsonConverter.write(((DescribeDelegationTokenRequest) request).data(), request.version());
+            case DESCRIBE_GROUPS:
+                return DescribeGroupsRequestDataJsonConverter.write(((DescribeGroupsRequest) request).data(), request.version());
+            case DESCRIBE_LOG_DIRS:
+                return DescribeLogDirsRequestDataJsonConverter.write(((DescribeLogDirsRequest) request).data(), request.version());
+            case DESCRIBE_PRODUCERS:
+                return DescribeProducersRequestDataJsonConverter.write(((DescribeProducersRequest) request).data(), request.version());
+            case DESCRIBE_QUORUM:
+                return DescribeQuorumRequestDataJsonConverter.write(((DescribeQuorumRequest) request).data(), request.version());
+            case DESCRIBE_TOPIC_PARTITIONS:
+                return DescribeTopicPartitionsRequestDataJsonConverter.write(((DescribeTopicPartitionsRequest) request).data(), request.version());
+            case DESCRIBE_TRANSACTIONS:
+                return DescribeTransactionsRequestDataJsonConverter.write(((DescribeTransactionsRequest) request).data(), request.version());
+            case DESCRIBE_USER_SCRAM_CREDENTIALS:
+                return DescribeUserScramCredentialsRequestDataJsonConverter.write(((DescribeUserScramCredentialsRequest) request).data(), request.version());
+            case ELECT_LEADERS:
+                return ElectLeadersRequestDataJsonConverter.write(((ElectLeadersRequest) request).data(), request.version());
+            case END_QUORUM_EPOCH:
+                return EndQuorumEpochRequestDataJsonConverter.write(((EndQuorumEpochRequest) request).data(), request.version());
+            case END_TXN:
+                return EndTxnRequestDataJsonConverter.write(((EndTxnRequest) request).data(), request.version());
+            case ENVELOPE:
+                return EnvelopeRequestDataJsonConverter.write(((EnvelopeRequest) request).data(), request.version());
+            case EXPIRE_DELEGATION_TOKEN:
+                return ExpireDelegationTokenRequestDataJsonConverter.write(((ExpireDelegationTokenRequest) request).data(), request.version());
+            case FETCH:
+                return FetchRequestDataJsonConverter.write(((FetchRequest) request).data(), request.version());
+            case FETCH_SNAPSHOT:
+                return FetchSnapshotRequestDataJsonConverter.write(((FetchSnapshotRequest) request).data(), request.version());
+            case FIND_COORDINATOR:
+                return FindCoordinatorRequestDataJsonConverter.write(((FindCoordinatorRequest) request).data(), request.version());
+            case GET_TELEMETRY_SUBSCRIPTIONS:
+                return GetTelemetrySubscriptionsRequestDataJsonConverter.write(((GetTelemetrySubscriptionsRequest) request).data(), request.version());
+            case HEARTBEAT:
+                return HeartbeatRequestDataJsonConverter.write(((HeartbeatRequest) request).data(), request.version());
+            case INCREMENTAL_ALTER_CONFIGS:
+                return IncrementalAlterConfigsRequestDataJsonConverter.write(((IncrementalAlterConfigsRequest) request).data(), request.version());
+            case INITIALIZE_SHARE_GROUP_STATE:
+                return InitializeShareGroupStateRequestDataJsonConverter.write(((InitializeShareGroupStateRequest) request).data(), request.version());
+            case INIT_PRODUCER_ID:
+                return InitProducerIdRequestDataJsonConverter.write(((InitProducerIdRequest) request).data(), request.version());
+            case JOIN_GROUP:
+                return JoinGroupRequestDataJsonConverter.write(((JoinGroupRequest) request).data(), request.version());
+            case LEADER_AND_ISR:
+                return LeaderAndIsrRequestDataJsonConverter.write(((LeaderAndIsrRequest) request).data(), request.version());
+            case LEAVE_GROUP:
+                return LeaveGroupRequestDataJsonConverter.write(((LeaveGroupRequest) request).data(), request.version());
+            case LIST_CLIENT_METRICS_RESOURCES:
+                return ListClientMetricsResourcesRequestDataJsonConverter.write(((ListClientMetricsResourcesRequest) request).data(), request.version());
+            case LIST_GROUPS:
+                return ListGroupsRequestDataJsonConverter.write(((ListGroupsRequest) request).data(), request.version());
+            case LIST_OFFSETS:
+                return ListOffsetsRequestDataJsonConverter.write(((ListOffsetsRequest) request).data(), request.version());
+            case LIST_PARTITION_REASSIGNMENTS:
+                return ListPartitionReassignmentsRequestDataJsonConverter.write(((ListPartitionReassignmentsRequest) request).data(), request.version());
+            case LIST_TRANSACTIONS:
+                return ListTransactionsRequestDataJsonConverter.write(((ListTransactionsRequest) request).data(), request.version());
+            case METADATA:
+                return MetadataRequestDataJsonConverter.write(((MetadataRequest) request).data(), request.version());
+            case OFFSET_COMMIT:
+                return OffsetCommitRequestDataJsonConverter.write(((OffsetCommitRequest) request).data(), request.version());
+            case OFFSET_DELETE:
+                return OffsetDeleteRequestDataJsonConverter.write(((OffsetDeleteRequest) request).data(), request.version());
+            case OFFSET_FETCH:
+                return OffsetFetchRequestDataJsonConverter.write(((OffsetFetchRequest) request).data(), request.version());
+            case OFFSET_FOR_LEADER_EPOCH:
+                return OffsetForLeaderEpochRequestDataJsonConverter.write(((OffsetsForLeaderEpochRequest) request).data(), request.version());
+            case PRODUCE:
+                return ProduceRequestDataJsonConverter.write(((ProduceRequest) request).data(), request.version(), false);
+            case PUSH_TELEMETRY:
+                return PushTelemetryRequestDataJsonConverter.write(((PushTelemetryRequest) request).data(), request.version());
+            case READ_SHARE_GROUP_STATE:
+                return ReadShareGroupStateRequestDataJsonConverter.write(((ReadShareGroupStateRequest) request).data(), request.version());
+            case READ_SHARE_GROUP_STATE_SUMMARY:
+                return ReadShareGroupStateSummaryRequestDataJsonConverter.write(((ReadShareGroupStateSummaryRequest) request).data(), request.version());
+            case RENEW_DELEGATION_TOKEN:
+                return RenewDelegationTokenRequestDataJsonConverter.write(((RenewDelegationTokenRequest) request).data(), request.version());
+            case SASL_AUTHENTICATE:
+                return SaslAuthenticateRequestDataJsonConverter.write(((SaslAuthenticateRequest) request).data(), request.version());
+            case SASL_HANDSHAKE:
+                return SaslHandshakeRequestDataJsonConverter.write(((SaslHandshakeRequest) request).data(), request.version());
+            case SHARE_ACKNOWLEDGE:
+                return ShareAcknowledgeRequestDataJsonConverter.write(((ShareAcknowledgeRequest) request).data(), request.version());
+            case SHARE_FETCH:
+                return ShareFetchRequestDataJsonConverter.write(((ShareFetchRequest) request).data(), request.version());
+            case SHARE_GROUP_DESCRIBE:
+                return ShareGroupDescribeRequestDataJsonConverter.write(((ShareGroupDescribeRequest) request).data(), request.version());
+            case SHARE_GROUP_HEARTBEAT:
+                return ShareGroupHeartbeatRequestDataJsonConverter.write(((ShareGroupHeartbeatRequest) request).data(), request.version());
+            case STOP_REPLICA:
+                return StopReplicaRequestDataJsonConverter.write(((StopReplicaRequest) request).data(), request.version());
+            case SYNC_GROUP:
+                return SyncGroupRequestDataJsonConverter.write(((SyncGroupRequest) request).data(), request.version());
+            case TXN_OFFSET_COMMIT:
+                return TxnOffsetCommitRequestDataJsonConverter.write(((TxnOffsetCommitRequest) request).data(), request.version());
+            case UNREGISTER_BROKER:
+                return UnregisterBrokerRequestDataJsonConverter.write(((UnregisterBrokerRequest) request).data(), request.version());
+            case UPDATE_FEATURES:
+                return UpdateFeaturesRequestDataJsonConverter.write(((UpdateFeaturesRequest) request).data(), request.version());
+            case UPDATE_METADATA:
+                return UpdateMetadataRequestDataJsonConverter.write(((UpdateMetadataRequest) request).data(), request.version());
+            case VOTE:
+                return VoteRequestDataJsonConverter.write(((VoteRequest) request).data(), request.version());
+            case WRITE_SHARE_GROUP_STATE:
+                return WriteShareGroupStateRequestDataJsonConverter.write(((WriteShareGroupStateRequest) request).data(), request.version());
+            case WRITE_TXN_MARKERS:
+                return WriteTxnMarkersRequestDataJsonConverter.write(((WriteTxnMarkersRequest) request).data(), request.version());
+            case ADD_RAFT_VOTER:
+                return AddRaftVoterRequestDataJsonConverter.write(((AddRaftVoterRequest) request).data(), request.version());
+            case REMOVE_RAFT_VOTER:
+                return RemoveRaftVoterRequestDataJsonConverter.write(((RemoveRaftVoterRequest) request).data(), request.version());
+            case UPDATE_RAFT_VOTER:
+                return UpdateRaftVoterRequestDataJsonConverter.write(((UpdateRaftVoterRequest) request).data(), request.version());
+            default:
+                throw new IllegalStateException("ApiKey " + request.apiKey() + " is not currently handled in `request`, the " +
+                    "code should be updated to do so.");
         }
     }
 
     public static JsonNode response(AbstractResponse response, short version) {
-        if (response instanceof AddOffsetsToTxnResponse) {
-            return AddOffsetsToTxnResponseDataJsonConverter.write(((AddOffsetsToTxnResponse) response).data(), version);
-        } else if (response instanceof AddPartitionsToTxnResponse) {
-            return AddPartitionsToTxnResponseDataJsonConverter.write(((AddPartitionsToTxnResponse) response).data(), version);
-        } else if (response instanceof AllocateProducerIdsResponse) {
-            return AllocateProducerIdsResponseDataJsonConverter.write(((AllocateProducerIdsResponse) response).data(), version);
-        } else if (response instanceof AlterClientQuotasResponse) {
-            return AlterClientQuotasResponseDataJsonConverter.write(((AlterClientQuotasResponse) response).data(), version);
-        } else if (response instanceof AlterConfigsResponse) {
-            return AlterConfigsResponseDataJsonConverter.write(((AlterConfigsResponse) response).data(), version);
-        } else if (response instanceof AlterPartitionReassignmentsResponse) {
-            return AlterPartitionReassignmentsResponseDataJsonConverter.write(((AlterPartitionReassignmentsResponse) response).data(), version);
-        } else if (response instanceof AlterPartitionResponse) {
-            return AlterPartitionResponseDataJsonConverter.write(((AlterPartitionResponse) response).data(), version);
-        } else if (response instanceof AlterReplicaLogDirsResponse) {
-            return AlterReplicaLogDirsResponseDataJsonConverter.write(((AlterReplicaLogDirsResponse) response).data(), version);
-        } else if (response instanceof AlterUserScramCredentialsResponse) {
-            return AlterUserScramCredentialsResponseDataJsonConverter.write(((AlterUserScramCredentialsResponse) response).data(), version);
-        } else if (response instanceof ApiVersionsResponse) {
-            return ApiVersionsResponseDataJsonConverter.write(((ApiVersionsResponse) response).data(), version);
-        } else if (response instanceof AssignReplicasToDirsResponse) {
-            return AssignReplicasToDirsResponseDataJsonConverter.write(((AssignReplicasToDirsResponse) response).data(), version);
-        } else if (response instanceof BeginQuorumEpochResponse) {
-            return BeginQuorumEpochResponseDataJsonConverter.write(((BeginQuorumEpochResponse) response).data(), version);
-        } else if (response instanceof BrokerHeartbeatResponse) {
-            return BrokerHeartbeatResponseDataJsonConverter.write(((BrokerHeartbeatResponse) response).data(), version);
-        } else if (response instanceof BrokerRegistrationResponse) {
-            return BrokerRegistrationResponseDataJsonConverter.write(((BrokerRegistrationResponse) response).data(), version);
-        } else if (response instanceof ConsumerGroupDescribeResponse) {
-            return ConsumerGroupDescribeResponseDataJsonConverter.write(((ConsumerGroupDescribeResponse) response).data(), version);
-        } else if (response instanceof ConsumerGroupHeartbeatResponse) {
-            return ConsumerGroupHeartbeatResponseDataJsonConverter.write(((ConsumerGroupHeartbeatResponse) response).data(), version);
-        } else if (response instanceof ControlledShutdownResponse) {
-            return ControlledShutdownResponseDataJsonConverter.write(((ControlledShutdownResponse) response).data(), version);
-        } else if (response instanceof ControllerRegistrationResponse) {
-            return ControllerRegistrationResponseDataJsonConverter.write(((ControllerRegistrationResponse) response).data(), version);
-        } else if (response instanceof CreateAclsResponse) {
-            return CreateAclsResponseDataJsonConverter.write(((CreateAclsResponse) response).data(), version);
-        } else if (response instanceof CreateDelegationTokenResponse) {
-            return CreateDelegationTokenResponseDataJsonConverter.write(((CreateDelegationTokenResponse) response).data(), version);
-        } else if (response instanceof CreatePartitionsResponse) {
-            return CreatePartitionsResponseDataJsonConverter.write(((CreatePartitionsResponse) response).data(), version);
-        } else if (response instanceof CreateTopicsResponse) {
-            return CreateTopicsResponseDataJsonConverter.write(((CreateTopicsResponse) response).data(), version);
-        } else if (response instanceof DeleteAclsResponse) {
-            return DeleteAclsResponseDataJsonConverter.write(((DeleteAclsResponse) response).data(), version);
-        } else if (response instanceof DeleteGroupsResponse) {
-            return DeleteGroupsResponseDataJsonConverter.write(((DeleteGroupsResponse) response).data(), version);
-        } else if (response instanceof DeleteRecordsResponse) {
-            return DeleteRecordsResponseDataJsonConverter.write(((DeleteRecordsResponse) response).data(), version);
-        } else if (response instanceof DeleteShareGroupStateResponse) {
-            return DeleteShareGroupStateResponseDataJsonConverter.write(((DeleteShareGroupStateResponse) response).data(), version);
-        } else if (response instanceof DeleteTopicsResponse) {
-            return DeleteTopicsResponseDataJsonConverter.write(((DeleteTopicsResponse) response).data(), version);
-        } else if (response instanceof DescribeAclsResponse) {
-            return DescribeAclsResponseDataJsonConverter.write(((DescribeAclsResponse) response).data(), version);
-        } else if (response instanceof DescribeClientQuotasResponse) {
-            return DescribeClientQuotasResponseDataJsonConverter.write(((DescribeClientQuotasResponse) response).data(), version);
-        } else if (response instanceof DescribeClusterResponse) {
-            return DescribeClusterResponseDataJsonConverter.write(((DescribeClusterResponse) response).data(), version);
-        } else if (response instanceof DescribeConfigsResponse) {
-            return DescribeConfigsResponseDataJsonConverter.write(((DescribeConfigsResponse) response).data(), version);
-        } else if (response instanceof DescribeDelegationTokenResponse) {
-            return DescribeDelegationTokenResponseDataJsonConverter.write(((DescribeDelegationTokenResponse) response).data(), version);
-        } else if (response instanceof DescribeGroupsResponse) {
-            return DescribeGroupsResponseDataJsonConverter.write(((DescribeGroupsResponse) response).data(), version);
-        } else if (response instanceof DescribeLogDirsResponse) {
-            return DescribeLogDirsResponseDataJsonConverter.write(((DescribeLogDirsResponse) response).data(), version);
-        } else if (response instanceof DescribeProducersResponse) {
-            return DescribeProducersResponseDataJsonConverter.write(((DescribeProducersResponse) response).data(), version);
-        } else if (response instanceof DescribeQuorumResponse) {
-            return DescribeQuorumResponseDataJsonConverter.write(((DescribeQuorumResponse) response).data(), version);
-        } else if (response instanceof DescribeTopicPartitionsResponse) {
-            return DescribeTopicPartitionsResponseDataJsonConverter.write(((DescribeTopicPartitionsResponse) response).data(), version);
-        } else if (response instanceof DescribeTransactionsResponse) {
-            return DescribeTransactionsResponseDataJsonConverter.write(((DescribeTransactionsResponse) response).data(), version);
-        } else if (response instanceof DescribeUserScramCredentialsResponse) {
-            return DescribeUserScramCredentialsResponseDataJsonConverter.write(((DescribeUserScramCredentialsResponse) response).data(), version);
-        } else if (response instanceof ElectLeadersResponse) {
-            return ElectLeadersResponseDataJsonConverter.write(((ElectLeadersResponse) response).data(), version);
-        } else if (response instanceof EndQuorumEpochResponse) {
-            return EndQuorumEpochResponseDataJsonConverter.write(((EndQuorumEpochResponse) response).data(), version);
-        } else if (response instanceof EndTxnResponse) {
-            return EndTxnResponseDataJsonConverter.write(((EndTxnResponse) response).data(), version);
-        } else if (response instanceof EnvelopeResponse) {
-            return EnvelopeResponseDataJsonConverter.write(((EnvelopeResponse) response).data(), version);
-        } else if (response instanceof ExpireDelegationTokenResponse) {
-            return ExpireDelegationTokenResponseDataJsonConverter.write(((ExpireDelegationTokenResponse) response).data(), version);
-        } else if (response instanceof FetchResponse) {
-            return FetchResponseDataJsonConverter.write(((FetchResponse) response).data(), version, false);
-        } else if (response instanceof FetchSnapshotResponse) {
-            return FetchSnapshotResponseDataJsonConverter.write(((FetchSnapshotResponse) response).data(), version);
-        } else if (response instanceof FindCoordinatorResponse) {
-            return FindCoordinatorResponseDataJsonConverter.write(((FindCoordinatorResponse) response).data(), version);
-        } else if (response instanceof GetTelemetrySubscriptionsResponse) {
-            return GetTelemetrySubscriptionsResponseDataJsonConverter.write(((GetTelemetrySubscriptionsResponse) response).data(), version);
-        } else if (response instanceof HeartbeatResponse) {
-            return HeartbeatResponseDataJsonConverter.write(((HeartbeatResponse) response).data(), version);
-        } else if (response instanceof IncrementalAlterConfigsResponse) {
-            return IncrementalAlterConfigsResponseDataJsonConverter.write(((IncrementalAlterConfigsResponse) response).data(), version);
-        } else if (response instanceof InitializeShareGroupStateResponse) {
-            return InitializeShareGroupStateResponseDataJsonConverter.write(((InitializeShareGroupStateResponse) response).data(), version);
-        } else if (response instanceof InitProducerIdResponse) {
-            return InitProducerIdResponseDataJsonConverter.write(((InitProducerIdResponse) response).data(), version);
-        } else if (response instanceof JoinGroupResponse) {
-            return JoinGroupResponseDataJsonConverter.write(((JoinGroupResponse) response).data(), version);
-        } else if (response instanceof LeaderAndIsrResponse) {
-            return LeaderAndIsrResponseDataJsonConverter.write(((LeaderAndIsrResponse) response).data(), version);
-        } else if (response instanceof LeaveGroupResponse) {
-            return LeaveGroupResponseDataJsonConverter.write(((LeaveGroupResponse) response).data(), version);
-        } else if (response instanceof ListClientMetricsResourcesResponse) {
-            return ListClientMetricsResourcesResponseDataJsonConverter.write(((ListClientMetricsResourcesResponse) response).data(), version);
-        } else if (response instanceof ListGroupsResponse) {
-            return ListGroupsResponseDataJsonConverter.write(((ListGroupsResponse) response).data(), version);
-        } else if (response instanceof ListOffsetsResponse) {
-            return ListOffsetsResponseDataJsonConverter.write(((ListOffsetsResponse) response).data(), version);
-        } else if (response instanceof ListPartitionReassignmentsResponse) {
-            return ListPartitionReassignmentsResponseDataJsonConverter.write(((ListPartitionReassignmentsResponse) response).data(), version);
-        } else if (response instanceof ListTransactionsResponse) {
-            return ListTransactionsResponseDataJsonConverter.write(((ListTransactionsResponse) response).data(), version);
-        } else if (response instanceof MetadataResponse) {
-            return MetadataResponseDataJsonConverter.write(((MetadataResponse) response).data(), version);
-        } else if (response instanceof OffsetCommitResponse) {
-            return OffsetCommitResponseDataJsonConverter.write(((OffsetCommitResponse) response).data(), version);
-        } else if (response instanceof OffsetDeleteResponse) {
-            return OffsetDeleteResponseDataJsonConverter.write(((OffsetDeleteResponse) response).data(), version);
-        } else if (response instanceof OffsetFetchResponse) {
-            return OffsetFetchResponseDataJsonConverter.write(((OffsetFetchResponse) response).data(), version);
-        } else if (response instanceof OffsetsForLeaderEpochResponse) {
-            return OffsetForLeaderEpochResponseDataJsonConverter.write(((OffsetsForLeaderEpochResponse) response).data(), version);
-        } else if (response instanceof ProduceResponse) {
-            return ProduceResponseDataJsonConverter.write(((ProduceResponse) response).data(), version);
-        } else if (response instanceof PushTelemetryResponse) {
-            return PushTelemetryResponseDataJsonConverter.write(((PushTelemetryResponse) response).data(), version);
-        } else if (response instanceof ReadShareGroupStateResponse) {
-            return ReadShareGroupStateResponseDataJsonConverter.write(((ReadShareGroupStateResponse) response).data(), version);
-        } else if (response instanceof ReadShareGroupStateSummaryResponse) {
-            return ReadShareGroupStateSummaryResponseDataJsonConverter.write(((ReadShareGroupStateSummaryResponse) response).data(), version);
-        } else if (response instanceof RenewDelegationTokenResponse) {
-            return RenewDelegationTokenResponseDataJsonConverter.write(((RenewDelegationTokenResponse) response).data(), version);
-        } else if (response instanceof SaslAuthenticateResponse) {
-            return SaslAuthenticateResponseDataJsonConverter.write(((SaslAuthenticateResponse) response).data(), version);
-        } else if (response instanceof SaslHandshakeResponse) {
-            return SaslHandshakeResponseDataJsonConverter.write(((SaslHandshakeResponse) response).data(), version);
-        } else if (response instanceof ShareAcknowledgeResponse) {
-            return ShareAcknowledgeResponseDataJsonConverter.write(((ShareAcknowledgeResponse) response).data(), version);
-        } else if (response instanceof ShareFetchResponse) {
-            return ShareFetchResponseDataJsonConverter.write(((ShareFetchResponse) response).data(), version);
-        } else if (response instanceof ShareGroupDescribeResponse) {
-            return ShareGroupDescribeResponseDataJsonConverter.write(((ShareGroupDescribeResponse) response).data(), version);
-        } else if (response instanceof ShareGroupHeartbeatResponse) {
-            return ShareGroupHeartbeatResponseDataJsonConverter.write(((ShareGroupHeartbeatResponse) response).data(), version);
-        } else if (response instanceof StopReplicaResponse) {
-            return StopReplicaResponseDataJsonConverter.write(((StopReplicaResponse) response).data(), version);
-        } else if (response instanceof SyncGroupResponse) {
-            return SyncGroupResponseDataJsonConverter.write(((SyncGroupResponse) response).data(), version);
-        } else if (response instanceof TxnOffsetCommitResponse) {
-            return TxnOffsetCommitResponseDataJsonConverter.write(((TxnOffsetCommitResponse) response).data(), version);
-        } else if (response instanceof UnregisterBrokerResponse) {
-            return UnregisterBrokerResponseDataJsonConverter.write(((UnregisterBrokerResponse) response).data(), version);
-        } else if (response instanceof UpdateFeaturesResponse) {
-            return UpdateFeaturesResponseDataJsonConverter.write(((UpdateFeaturesResponse) response).data(), version);
-        } else if (response instanceof UpdateMetadataResponse) {
-            return UpdateMetadataResponseDataJsonConverter.write(((UpdateMetadataResponse) response).data(), version);
-        } else if (response instanceof VoteResponse) {
-            return VoteResponseDataJsonConverter.write(((VoteResponse) response).data(), version);
-        } else if (response instanceof WriteShareGroupStateResponse) {
-            return WriteShareGroupStateResponseDataJsonConverter.write(((WriteShareGroupStateResponse) response).data(), version);
-        } else if (response instanceof WriteTxnMarkersResponse) {
-            return WriteTxnMarkersResponseDataJsonConverter.write(((WriteTxnMarkersResponse) response).data(), version);
-        } else if (response instanceof AddRaftVoterResponse) {
-            return AddRaftVoterResponseDataJsonConverter.write(((AddRaftVoterResponse) response).data(), version);
-        } else if (response instanceof RemoveRaftVoterResponse) {
-            return RemoveRaftVoterResponseDataJsonConverter.write(((RemoveRaftVoterResponse) response).data(), version);
-        } else if (response instanceof UpdateRaftVoterResponse) {
-            return UpdateRaftVoterResponseDataJsonConverter.write(((UpdateRaftVoterResponse) response).data(), version);
-        } else {
-            throw new IllegalStateException("ApiKey " + response.apiKey() + " is not currently handled in `response`, the " +
-                "code should be updated to do so.");
+        switch (response.apiKey()) {
+            case ADD_OFFSETS_TO_TXN:
+                return AddOffsetsToTxnResponseDataJsonConverter.write(((AddOffsetsToTxnResponse) response).data(), version);
+            case ADD_PARTITIONS_TO_TXN:
+                return AddPartitionsToTxnResponseDataJsonConverter.write(((AddPartitionsToTxnResponse) response).data(), version);
+            case ALLOCATE_PRODUCER_IDS:
+                return AllocateProducerIdsResponseDataJsonConverter.write(((AllocateProducerIdsResponse) response).data(), version);
+            case ALTER_CLIENT_QUOTAS:
+                return AlterClientQuotasResponseDataJsonConverter.write(((AlterClientQuotasResponse) response).data(), version);
+            case ALTER_CONFIGS:
+                return AlterConfigsResponseDataJsonConverter.write(((AlterConfigsResponse) response).data(), version);
+            case ALTER_PARTITION_REASSIGNMENTS:
+                return AlterPartitionReassignmentsResponseDataJsonConverter.write(((AlterPartitionReassignmentsResponse) response).data(), version);
+            case ALTER_PARTITION:
+                return AlterPartitionResponseDataJsonConverter.write(((AlterPartitionResponse) response).data(), version);
+            case ALTER_REPLICA_LOG_DIRS:
+                return AlterReplicaLogDirsResponseDataJsonConverter.write(((AlterReplicaLogDirsResponse) response).data(), version);
+            case ALTER_USER_SCRAM_CREDENTIALS:
+                return AlterUserScramCredentialsResponseDataJsonConverter.write(((AlterUserScramCredentialsResponse) response).data(), version);
+            case API_VERSIONS:
+                return ApiVersionsResponseDataJsonConverter.write(((ApiVersionsResponse) response).data(), version);
+            case ASSIGN_REPLICAS_TO_DIRS:
+                return AssignReplicasToDirsResponseDataJsonConverter.write(((AssignReplicasToDirsResponse) response).data(), version);
+            case BEGIN_QUORUM_EPOCH:
+                return BeginQuorumEpochResponseDataJsonConverter.write(((BeginQuorumEpochResponse) response).data(), version);
+            case BROKER_HEARTBEAT:
+                return BrokerHeartbeatResponseDataJsonConverter.write(((BrokerHeartbeatResponse) response).data(), version);
+            case BROKER_REGISTRATION:
+                return BrokerRegistrationResponseDataJsonConverter.write(((BrokerRegistrationResponse) response).data(), version);
+            case CONSUMER_GROUP_DESCRIBE:
+                return ConsumerGroupDescribeResponseDataJsonConverter.write(((ConsumerGroupDescribeResponse) response).data(), version);
+            case CONSUMER_GROUP_HEARTBEAT:
+                return ConsumerGroupHeartbeatResponseDataJsonConverter.write(((ConsumerGroupHeartbeatResponse) response).data(), version);
+            case CONTROLLED_SHUTDOWN:
+                return ControlledShutdownResponseDataJsonConverter.write(((ControlledShutdownResponse) response).data(), version);
+            case CONTROLLER_REGISTRATION:
+                return ControllerRegistrationResponseDataJsonConverter.write(((ControllerRegistrationResponse) response).data(), version);
+            case CREATE_ACLS:
+                return CreateAclsResponseDataJsonConverter.write(((CreateAclsResponse) response).data(), version);
+            case CREATE_DELEGATION_TOKEN:
+                return CreateDelegationTokenResponseDataJsonConverter.write(((CreateDelegationTokenResponse) response).data(), version);
+            case CREATE_PARTITIONS:
+                return CreatePartitionsResponseDataJsonConverter.write(((CreatePartitionsResponse) response).data(), version);
+            case CREATE_TOPICS:
+                return CreateTopicsResponseDataJsonConverter.write(((CreateTopicsResponse) response).data(), version);
+            case DELETE_ACLS:
+                return DeleteAclsResponseDataJsonConverter.write(((DeleteAclsResponse) response).data(), version);
+            case DELETE_GROUPS:
+                return DeleteGroupsResponseDataJsonConverter.write(((DeleteGroupsResponse) response).data(), version);
+            case DELETE_RECORDS:
+                return DeleteRecordsResponseDataJsonConverter.write(((DeleteRecordsResponse) response).data(), version);
+            case DELETE_SHARE_GROUP_STATE:
+                return DeleteShareGroupStateResponseDataJsonConverter.write(((DeleteShareGroupStateResponse) response).data(), version);
+            case DELETE_TOPICS:
+                return DeleteTopicsResponseDataJsonConverter.write(((DeleteTopicsResponse) response).data(), version);
+            case DESCRIBE_ACLS:
+                return DescribeAclsResponseDataJsonConverter.write(((DescribeAclsResponse) response).data(), version);
+            case DESCRIBE_CLIENT_QUOTAS:
+                return DescribeClientQuotasResponseDataJsonConverter.write(((DescribeClientQuotasResponse) response).data(), version);
+            case DESCRIBE_CLUSTER:
+                return DescribeClusterResponseDataJsonConverter.write(((DescribeClusterResponse) response).data(), version);
+            case DESCRIBE_CONFIGS:
+                return DescribeConfigsResponseDataJsonConverter.write(((DescribeConfigsResponse) response).data(), version);
+            case DESCRIBE_DELEGATION_TOKEN:
+                return DescribeDelegationTokenResponseDataJsonConverter.write(((DescribeDelegationTokenResponse) response).data(), version);
+            case DESCRIBE_GROUPS:
+                return DescribeGroupsResponseDataJsonConverter.write(((DescribeGroupsResponse) response).data(), version);
+            case DESCRIBE_LOG_DIRS:
+                return DescribeLogDirsResponseDataJsonConverter.write(((DescribeLogDirsResponse) response).data(), version);
+            case DESCRIBE_PRODUCERS:
+                return DescribeProducersResponseDataJsonConverter.write(((DescribeProducersResponse) response).data(), version);
+            case DESCRIBE_QUORUM:
+                return DescribeQuorumResponseDataJsonConverter.write(((DescribeQuorumResponse) response).data(), version);
+            case DESCRIBE_TOPIC_PARTITIONS:
+                return DescribeTopicPartitionsResponseDataJsonConverter.write(((DescribeTopicPartitionsResponse) response).data(), version);
+            case DESCRIBE_TRANSACTIONS:
+                return DescribeTransactionsResponseDataJsonConverter.write(((DescribeTransactionsResponse) response).data(), version);
+            case DESCRIBE_USER_SCRAM_CREDENTIALS:
+                return DescribeUserScramCredentialsResponseDataJsonConverter.write(((DescribeUserScramCredentialsResponse) response).data(), version);
+            case ELECT_LEADERS:
+                return ElectLeadersResponseDataJsonConverter.write(((ElectLeadersResponse) response).data(), version);
+            case END_QUORUM_EPOCH:
+                return EndQuorumEpochResponseDataJsonConverter.write(((EndQuorumEpochResponse) response).data(), version);
+            case END_TXN:
+                return EndTxnResponseDataJsonConverter.write(((EndTxnResponse) response).data(), version);
+            case ENVELOPE:
+                return EnvelopeResponseDataJsonConverter.write(((EnvelopeResponse) response).data(), version);
+            case EXPIRE_DELEGATION_TOKEN:
+                return ExpireDelegationTokenResponseDataJsonConverter.write(((ExpireDelegationTokenResponse) response).data(), version);
+            case FETCH:
+                return FetchResponseDataJsonConverter.write(((FetchResponse) response).data(), version, false);
+            case FETCH_SNAPSHOT:
+                return FetchSnapshotResponseDataJsonConverter.write(((FetchSnapshotResponse) response).data(), version);
+            case FIND_COORDINATOR:
+                return FindCoordinatorResponseDataJsonConverter.write(((FindCoordinatorResponse) response).data(), version);
+            case GET_TELEMETRY_SUBSCRIPTIONS:
+                return GetTelemetrySubscriptionsResponseDataJsonConverter.write(((GetTelemetrySubscriptionsResponse) response).data(), version);
+            case HEARTBEAT:
+                return HeartbeatResponseDataJsonConverter.write(((HeartbeatResponse) response).data(), version);
+            case INCREMENTAL_ALTER_CONFIGS:
+                return IncrementalAlterConfigsResponseDataJsonConverter.write(((IncrementalAlterConfigsResponse) response).data(), version);
+            case INITIALIZE_SHARE_GROUP_STATE:
+                return InitializeShareGroupStateResponseDataJsonConverter.write(((InitializeShareGroupStateResponse) response).data(), version);
+            case INIT_PRODUCER_ID:
+                return InitProducerIdResponseDataJsonConverter.write(((InitProducerIdResponse) response).data(), version);
+            case JOIN_GROUP:
+                return JoinGroupResponseDataJsonConverter.write(((JoinGroupResponse) response).data(), version);
+            case LEADER_AND_ISR:
+                return LeaderAndIsrResponseDataJsonConverter.write(((LeaderAndIsrResponse) response).data(), version);
+            case LEAVE_GROUP:
+                return LeaveGroupResponseDataJsonConverter.write(((LeaveGroupResponse) response).data(), version);
+            case LIST_CLIENT_METRICS_RESOURCES:
+                return ListClientMetricsResourcesResponseDataJsonConverter.write(((ListClientMetricsResourcesResponse) response).data(), version);
+            case LIST_GROUPS:
+                return ListGroupsResponseDataJsonConverter.write(((ListGroupsResponse) response).data(), version);
+            case LIST_OFFSETS:
+                return ListOffsetsResponseDataJsonConverter.write(((ListOffsetsResponse) response).data(), version);
+            case LIST_PARTITION_REASSIGNMENTS:
+                return ListPartitionReassignmentsResponseDataJsonConverter.write(((ListPartitionReassignmentsResponse) response).data(), version);
+            case LIST_TRANSACTIONS:
+                return ListTransactionsResponseDataJsonConverter.write(((ListTransactionsResponse) response).data(), version);
+            case METADATA:
+                return MetadataResponseDataJsonConverter.write(((MetadataResponse) response).data(), version);
+            case OFFSET_COMMIT:
+                return OffsetCommitResponseDataJsonConverter.write(((OffsetCommitResponse) response).data(), version);
+            case OFFSET_DELETE:
+                return OffsetDeleteResponseDataJsonConverter.write(((OffsetDeleteResponse) response).data(), version);
+            case OFFSET_FETCH:
+                return OffsetFetchResponseDataJsonConverter.write(((OffsetFetchResponse) response).data(), version);
+            case OFFSET_FOR_LEADER_EPOCH:
+                return OffsetForLeaderEpochResponseDataJsonConverter.write(((OffsetsForLeaderEpochResponse) response).data(), version);
+            case PRODUCE:
+                return ProduceResponseDataJsonConverter.write(((ProduceResponse) response).data(), version);
+            case PUSH_TELEMETRY:
+                return PushTelemetryResponseDataJsonConverter.write(((PushTelemetryResponse) response).data(), version);
+            case READ_SHARE_GROUP_STATE:
+                return ReadShareGroupStateResponseDataJsonConverter.write(((ReadShareGroupStateResponse) response).data(), version);
+            case READ_SHARE_GROUP_STATE_SUMMARY:
+                return ReadShareGroupStateSummaryResponseDataJsonConverter.write(((ReadShareGroupStateSummaryResponse) response).data(), version);
+            case RENEW_DELEGATION_TOKEN:
+                return RenewDelegationTokenResponseDataJsonConverter.write(((RenewDelegationTokenResponse) response).data(), version);
+            case SASL_AUTHENTICATE:
+                return SaslAuthenticateResponseDataJsonConverter.write(((SaslAuthenticateResponse) response).data(), version);
+            case SASL_HANDSHAKE:
+                return SaslHandshakeResponseDataJsonConverter.write(((SaslHandshakeResponse) response).data(), version);
+            case SHARE_ACKNOWLEDGE:
+                return ShareAcknowledgeResponseDataJsonConverter.write(((ShareAcknowledgeResponse) response).data(), version);
+            case SHARE_FETCH:
+                return ShareFetchResponseDataJsonConverter.write(((ShareFetchResponse) response).data(), version);
+            case SHARE_GROUP_DESCRIBE:
+                return ShareGroupDescribeResponseDataJsonConverter.write(((ShareGroupDescribeResponse) response).data(), version);
+            case SHARE_GROUP_HEARTBEAT:
+                return ShareGroupHeartbeatResponseDataJsonConverter.write(((ShareGroupHeartbeatResponse) response).data(), version);
+            case STOP_REPLICA:
+                return StopReplicaResponseDataJsonConverter.write(((StopReplicaResponse) response).data(), version);
+            case SYNC_GROUP:
+                return SyncGroupResponseDataJsonConverter.write(((SyncGroupResponse) response).data(), version);
+            case TXN_OFFSET_COMMIT:
+                return TxnOffsetCommitResponseDataJsonConverter.write(((TxnOffsetCommitResponse) response).data(), version);
+            case UNREGISTER_BROKER:
+                return UnregisterBrokerResponseDataJsonConverter.write(((UnregisterBrokerResponse) response).data(), version);
+            case UPDATE_FEATURES:
+                return UpdateFeaturesResponseDataJsonConverter.write(((UpdateFeaturesResponse) response).data(), version);
+            case UPDATE_METADATA:
+                return UpdateMetadataResponseDataJsonConverter.write(((UpdateMetadataResponse) response).data(), version);
+            case VOTE:
+                return VoteResponseDataJsonConverter.write(((VoteResponse) response).data(), version);
+            case WRITE_SHARE_GROUP_STATE:
+                return WriteShareGroupStateResponseDataJsonConverter.write(((WriteShareGroupStateResponse) response).data(), version);
+            case WRITE_TXN_MARKERS:
+                return WriteTxnMarkersResponseDataJsonConverter.write(((WriteTxnMarkersResponse) response).data(), version);
+            case ADD_RAFT_VOTER:
+                return AddRaftVoterResponseDataJsonConverter.write(((AddRaftVoterResponse) response).data(), version);
+            case REMOVE_RAFT_VOTER:
+                return RemoveRaftVoterResponseDataJsonConverter.write(((RemoveRaftVoterResponse) response).data(), version);
+            case UPDATE_RAFT_VOTER:
+                return UpdateRaftVoterResponseDataJsonConverter.write(((UpdateRaftVoterResponse) response).data(), version);
+            default:
+                throw new IllegalStateException("ApiKey " + response.apiKey() + " is not currently handled in `response`, the " +
+                    "code should be updated to do so.");
         }
     }
 
