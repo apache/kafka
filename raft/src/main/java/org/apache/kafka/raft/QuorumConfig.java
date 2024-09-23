@@ -109,34 +109,56 @@ public class QuorumConfig {
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, null, MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, null, LOW, QUORUM_RETRY_BACKOFF_MS_DOC);
 
-    private final AbstractConfig config;
+    private final List<String> voters;
+    private final List<String> bootstrapServers;
+    private final int requestTimeoutMs;
+    private final int retryBackoffMs;
+    private final int electionTimeoutMs;
+    private final int electionBackoffMaxMs;
+    private final int fetchTimeoutMs;
+    private final int appendLingerMs;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
-        this.config = abstractConfig;
+        this.voters = abstractConfig.getList(QUORUM_VOTERS_CONFIG);
+        this.bootstrapServers = abstractConfig.getList(QUORUM_BOOTSTRAP_SERVERS_CONFIG);
+        this.requestTimeoutMs = abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
+        this.retryBackoffMs = abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
+        this.electionTimeoutMs = abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
+        this.electionBackoffMaxMs = abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
+        this.fetchTimeoutMs = abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
+        this.appendLingerMs = abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG);
+    }
+
+    public List<String> voters() {
+        return voters;
+    }
+
+    public List<String> bootstrapServers() {
+        return bootstrapServers;
     }
 
     public int requestTimeoutMs() {
-        return config.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
+        return requestTimeoutMs;
     }
 
     public int retryBackoffMs() {
-        return config.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
+        return retryBackoffMs;
     }
 
     public int electionTimeoutMs() {
-        return config.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
+        return electionTimeoutMs;
     }
 
     public int electionBackoffMaxMs() {
-        return config.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
+        return electionBackoffMaxMs;
     }
 
     public int fetchTimeoutMs() {
-        return config.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
+        return fetchTimeoutMs;
     }
 
     public int appendLingerMs() {
-        return config.getInt(QUORUM_LINGER_MS_CONFIG);
+        return appendLingerMs;
     }
 
     private static Integer parseVoterId(String idString) {
