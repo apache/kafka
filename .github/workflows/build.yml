@@ -163,11 +163,38 @@ jobs:
           path: ~/.gradle/build-scan-data
           compression-level: 9
           if-no-files-found: ignore
-      - name: Extract tests
+      - name: Archive tests run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-run-${{ matrix.java }}
+          path: |
+            **/build/all-tests.txt
+          compression-level: 9
+          if-no-files-found: ignore
+
+  update-test-data:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r .github/scripts/requirements.txt
+      - name: Download tests run
+        uses: actions/download-artifact@v4
+        with:
+          name: tests-run-21
+      - name: Update test data
         if: always()
         run: |
           git fetch origin test-metrics
           git switch test-metrics
+          git checkout trunk -- .github/scripts/format-all-tests.py
           python .github/scripts/format-all-tests.py
           git add --all data/all-tests
           git commit -m 'Update all-tests data for Run ${{ github.run_id }}'
