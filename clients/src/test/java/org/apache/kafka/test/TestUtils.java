@@ -268,7 +268,6 @@ public class TestUtils {
         } catch (final IOException ex) {
             throw new RuntimeException("Failed to create a temp dir", ex);
         }
-        file.deleteOnExit();
 
         Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
             try {
