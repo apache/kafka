@@ -153,6 +153,9 @@ jobs:
           ALL_TESTS_FILES_SORTED=$(find . | grep all-tests.txt-sorted)
           sort -o all-tests-merged.txt --merge $ALL_TESTS_FILES_SORTED
           wc -l all-tests-merged.txt
+          git checkout test-metrics
+          mv all-tests-merged.txt all-tests.txt
+          git add -a -m
       - name: Archive tests
         uses: actions/upload-artifact@v4
         with:
