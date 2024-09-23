@@ -177,8 +177,11 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                                            self.kafka, self.topic,
                                            throughput=self.producer_throughput,
                                            enable_idempotence=True,
+                                           # This test aims to verify the reassignment without failure, assuming that all partitions have data.
                                            # To avoid the reassignment behavior being affected by `partitioner.ignore.keys=true`,
-                                           # we set a key for the message to ensure the message order is preserved within the partition.
+                                           # which might cause some partitions to have no data after reassignment,
+                                           # we set a key for the message to ensure both even data distribution across all partitions
+                                           # and that the message order is preserved within each partition.
                                            repeating_keys=100)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers,
                                         self.kafka, self.topic,
