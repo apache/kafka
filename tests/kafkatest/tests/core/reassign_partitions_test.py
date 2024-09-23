@@ -176,7 +176,10 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.producer = VerifiableProducer(self.test_context, self.num_producers,
                                            self.kafka, self.topic,
                                            throughput=self.producer_throughput,
-                                           enable_idempotence=True, repeating_keys=100)
+                                           enable_idempotence=True,
+                                           # To avoid the reassignment behavior being affected by `partitioner.ignore.keys=true`,
+                                           # we set a key for the message to ensure the message order is preserved within the partition.
+                                           repeating_keys=100)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers,
                                         self.kafka, self.topic,
                                         consumer_timeout_ms=60000,
