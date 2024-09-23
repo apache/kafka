@@ -97,7 +97,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @Timeout(600)
 @Tag("integration")
 public class NamedTopologyIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     private static final String TOPOLOGY_1 = "topology-1";
     private static final String TOPOLOGY_2 = "topology-2";

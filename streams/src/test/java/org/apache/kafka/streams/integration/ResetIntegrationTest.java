@@ -68,7 +68,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
         brokerProps.put(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, -1L);
-        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+        CLUSTER = new EmbeddedKafkaCluster(3, brokerProps);
     }
 
     @BeforeAll
