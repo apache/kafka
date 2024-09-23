@@ -234,8 +234,7 @@ class OffsetFetcherUtils {
         Set<TopicPartition> partitions = subscriptionState.partitionsNeedingReset(time.milliseconds());
         final Map<TopicPartition, Long> offsetResetTimestamps = new HashMap<>();
         for (final TopicPartition partition : partitions) {
-            long timestamp = offsetResetStrategyTimestamp(partition);
-            offsetResetTimestamps.put(partition, timestamp);
+            offsetResetTimestamps.put(partition, offsetResetStrategyTimestamp(partition));
         }
 
         return offsetResetTimestamps;
