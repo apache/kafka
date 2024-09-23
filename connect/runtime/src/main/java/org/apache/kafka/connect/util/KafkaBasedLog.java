@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -567,13 +568,12 @@ public class KafkaBasedLog<K, V> {
         public WorkThread() {
             super("KafkaBasedLog Work Thread - " + topic);
         }
-
         @Override
         public void run() {
-            try {
-                log.trace("{} started execution", this);
-                while (true) {
-                    int numCallbacks;
+            log.trace("{} started execution", this);
+            while (true) {
+                int numCallbacks = 0;
+                try {
                     synchronized (KafkaBasedLog.this) {
                         if (stopRequested)
                             break;
@@ -586,11 +586,11 @@ public class KafkaBasedLog<K, V> {
                             log.trace("Finished read to end log for topic {}", topic);
                         } catch (TimeoutException e) {
                             log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +
-                                     "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
+                                "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
                             log.warn("Retriable error while reading log to end for topic '{}'. Retrying automatically. " +
-                                     "Reason: {}", topic, e.getMessage());
+                                "Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (WakeupException e) {
                             // Either received another get() call and need to retry reading to end of log or stop() was
@@ -614,9 +614,18 @@ public class KafkaBasedLog<K, V> {
                         // See previous comment, both possible causes of this wakeup are handled by starting this loop again
                         continue;
                     }
+                } catch (Throwable t) {
+                    log.error("Unexpected exception in {}", this, t);
+                    synchronized (KafkaBasedLog.this) {
+                        // Only fail exactly the number of callbacks we found before triggering the read to log end
+                        // since it is possible for another write + readToEnd to sneak in the meantime which we don't
+                        // want to fail.
+                        for (int i = 0; i < numCallbacks; i++) {
+                            Callback<Void> cb = readLogEndOffsetCallbacks.poll();
+                            cb.onCompletion(t, null);
+                        }
+                    }
                 }
-            } catch (Throwable t) {
-                log.error("Unexpected exception in {}", this, t);
             }
         }
     }

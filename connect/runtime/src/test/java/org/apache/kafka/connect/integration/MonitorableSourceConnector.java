@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -28,6 +28,7 @@ import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.server.util.ThroughputThrottler;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -17,19 +17,19 @@ from functools import partial
 import time
 
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, matrix
 from ducktape.mark.resource import cluster
 from ducktape.errors import TimeoutError
 
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, config_property
 from kafkatest.services.kafka.config_property import CLUSTER_ID
 from kafkatest.services.kafka.quorum import isolated_kraft, ServiceQuorumInfo, zk
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import DEV_BRANCH, LATEST_3_4
+from kafkatest.version import DEV_BRANCH, LATEST_3_4, LATEST_3_7, LATEST_3_8, KafkaVersion
 
 
 class TestMigration(ProduceConsumeValidateTest):
@@ -51,10 +51,10 @@ class TestMigration(ProduceConsumeValidateTest):
             wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.replication_factor, timeout_sec=60,
                        backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
-    def do_migration(self, roll_controller = False, downgrade_to_zk = False):
+    def do_migration(self, roll_controller=False, downgrade_to_zk=False, from_kafka_version=str(DEV_BRANCH)):
         # Start up KRaft controller in migration mode
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
-        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
+        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=KafkaVersion(from_kafka_version),
                                   allow_zk_with_kraft=True,
                                   isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
@@ -86,20 +86,23 @@ class TestMigration(ProduceConsumeValidateTest):
                 controller.start_node(node)
 
     @cluster(num_nodes=7)
-    @parametrize(roll_controller = True)
-    @parametrize(roll_controller = False)
-    def test_online_migration(self, roll_controller):
+    @matrix(roll_controller=[True, False], from_kafka_version=[str(DEV_BRANCH), str(LATEST_3_7), str(LATEST_3_8)])
+    def test_online_migration(self, roll_controller, from_kafka_version):
         zk_quorum = partial(ServiceQuorumInfo, zk)
         self.zk = ZookeeperService(self.test_context, num_nodes=1, version=DEV_BRANCH)
+
+        server_prop_overrides = [["zookeeper.metadata.migration.enable", "false"]]
+
+        if from_kafka_version != str(DEV_BRANCH):
+            server_prop_overrides.append([config_property.INTER_BROKER_PROTOCOL_VERSION, from_kafka_version])
+
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
                                   zk=self.zk,
                                   version=DEV_BRANCH,
                                   quorum_info_provider=zk_quorum,
                                   allow_zk_with_kraft=True,
-                                  server_prop_overrides=[
-                                      ["zookeeper.metadata.migration.enable", "false"],
-                                  ])
+                                  server_prop_overrides=server_prop_overrides)
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = "PLAINTEXT"
         self.zk.start()
@@ -128,7 +131,7 @@ class TestMigration(ProduceConsumeValidateTest):
                                         self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=DEV_BRANCH)
 
-        self.run_produce_consume_validate(core_test_action=partial(self.do_migration, roll_controller = roll_controller))
+        self.run_produce_consume_validate(core_test_action=partial(self.do_migration, roll_controller=roll_controller, from_kafka_version=from_kafka_version))
         self.kafka.stop()
 
     @cluster(num_nodes=7)
@@ -202,84 +205,6 @@ class TestMigration(ProduceConsumeValidateTest):
                     continue
 
         assert saw_expected_error, "Did not see expected ERROR log in the controller logs"
-
-    @cluster(num_nodes=5)
-    def test_upgrade_after_3_4_migration(self):
-        """
-        Perform a migration on version 3.4.0. Then do a rolling upgrade to 3.5+ and ensure we see
-        the correct migration state in the log.
-        """
-        zk_quorum = partial(ServiceQuorumInfo, zk)
-        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=LATEST_3_4)
-        self.kafka = KafkaService(self.test_context,
-                                  num_nodes=3,
-                                  zk=self.zk,
-                                  version=LATEST_3_4,
-                                  quorum_info_provider=zk_quorum,
-                                  allow_zk_with_kraft=True,
-                                  server_prop_overrides=[
-                                      ["zookeeper.metadata.migration.enable", "true"],
-                                  ])
-
-        remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
-        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=LATEST_3_4,
-                                  allow_zk_with_kraft=True,
-                                  isolated_kafka=self.kafka,
-                                  server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
-                                                         ["zookeeper.metadata.migration.enable", "true"]],
-                                  quorum_info_provider=remote_quorum)
-
-        self.kafka.security_protocol = "PLAINTEXT"
-        self.kafka.interbroker_security_protocol = "PLAINTEXT"
-        self.zk.start()
-
-        controller.start()
-
-        self.logger.info("Pre-generating clusterId for ZK.")
-        cluster_id_json = """{"version": "1", "id": "%s"}""" % CLUSTER_ID
-        self.zk.create(path="/cluster")
-        self.zk.create(path="/cluster/id", value=cluster_id_json)
-        self.kafka.reconfigure_zk_for_migration(controller)
-        self.kafka.start()
-
-        topic_cfg = {
-            "topic": self.topic,
-            "partitions": self.partitions,
-            "replication-factor": self.replication_factor,
-            "configs": {"min.insync.replicas": 2}
-        }
-        self.kafka.create_topic(topic_cfg)
-
-        # Now we're in dual-write mode. The 3.4 controller will have written a PRE_MIGRATION record (1) into the log.
-        # We now upgrade the controller to 3.5+ where 1 is redefined as MIGRATION.
-        for node in controller.nodes:
-            self.logger.info("Stopping controller node %s" % node.account.hostname)
-            self.kafka.controller_quorum.stop_node(node)
-            node.version = DEV_BRANCH
-            self.logger.info("Restarting controller node %s" % node.account.hostname)
-            self.kafka.controller_quorum.start_node(node)
-            self.wait_until_rejoin()
-            self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
-
-        # Check the controller's logs for the INFO message that we're still in the migration state
-        saw_expected_log = False
-        for node in self.kafka.controller_quorum.nodes:
-            with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
-                monitor.offset = 0
-                try:
-                    # Shouldn't have to wait too long to see this log message after startup
-                    monitor.wait_until(
-                        "Staying in ZK migration",
-                        timeout_sec=10.0, backoff_sec=.25,
-                        err_msg=""
-                    )
-                    saw_expected_log = True
-                    break
-                except TimeoutError:
-                    continue
-
-        assert saw_expected_log, "Did not see expected INFO log after upgrading from a 3.4 migration"
-        self.kafka.stop()
 
     @cluster(num_nodes=5)
     def test_reconcile_kraft_to_zk(self):

@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Set;
-import java.util.function.Function;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+
+import java.util.Set;
+import java.util.function.Function;
 
 class SynchronizedPartitionGroup extends AbstractPartitionGroup {
 

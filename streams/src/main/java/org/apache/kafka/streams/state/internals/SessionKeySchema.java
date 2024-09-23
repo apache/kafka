@@ -23,10 +23,10 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 
-import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
-
 import java.nio.ByteBuffer;
 import java.util.List;
+
+import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
 
 public class SessionKeySchema implements SegmentedBytesStore.KeySchema {

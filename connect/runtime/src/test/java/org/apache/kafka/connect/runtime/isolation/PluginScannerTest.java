@@ -17,18 +17,17 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,21 +36,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PluginScannerTest {
 
-    private enum ScannerType { Reflection, ServiceLoader }
-
     @TempDir
     File pluginDir;
 
-    private Map<ScannerType, PluginScanner> scannerMap;
-
     static Stream<PluginScanner> parameters() {
         return Stream.of(new ReflectionScanner(), new ServiceLoaderScanner());
-    }
-
-    @BeforeAll
-    public static void setUp() {
-        // Work around a circular-dependency in TestPlugins.
-        TestPlugins.pluginPath();
     }
 
     @ParameterizedTest
@@ -146,7 +135,6 @@ public class PluginScannerTest {
                 TestPlugins.pluginPath(TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1));
         assertFalse(versionedPluginResult.isEmpty());
         versionedPluginResult.forEach(pluginDesc -> assertEquals("1.0.0", pluginDesc.version()));
-
     }
 
     private PluginScanResult scan(PluginScanner scanner, Set<Path> pluginLocations) {

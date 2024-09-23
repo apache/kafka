@@ -43,6 +43,7 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

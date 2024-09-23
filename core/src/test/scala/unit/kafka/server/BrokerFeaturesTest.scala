@@ -18,9 +18,11 @@
 package kafka.server
 
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
-import org.apache.kafka.server.common.{Features => ServerFeatures, MetadataVersion}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.apache.kafka.server.common.{MetadataVersion, Features => ServerFeatures}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -95,10 +97,21 @@ class BrokerFeaturesTest {
 
     val expectedFeatures = Map[String, Short](
       MetadataVersion.FEATURE_NAME -> MetadataVersion.latestTesting().featureLevel(),
+      ServerFeatures.TRANSACTION_VERSION.featureName() -> ServerFeatures.TRANSACTION_VERSION.latestTesting(),
       ServerFeatures.GROUP_VERSION.featureName() -> ServerFeatures.GROUP_VERSION.latestTesting(),
+      "kraft.version" -> 0,
       "test_feature_1" -> 4,
       "test_feature_2" -> 3,
       "test_feature_3" -> 7)
     assertEquals(expectedFeatures, brokerFeatures.defaultFinalizedFeatures)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def ensureDefaultSupportedFeaturesRangeMaxNotZero(unstableVersionsEnabled: Boolean): Unit = {
+    val brokerFeatures = BrokerFeatures.createDefault(unstableVersionsEnabled)
+    brokerFeatures.supportedFeatures.features().values().forEach { supportedVersionRange =>
+      assertNotEquals(0, supportedVersionRange.max())
+    }
   }
 }

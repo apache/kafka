@@ -90,6 +90,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
     @AfterAll
     public static void closeCluster() {
+        Utils.closeQuietly(adminClient, "admin");
         CLUSTER.stop();
     }
 

@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Arrays;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-
-import java.nio.ByteBuffer;
-import java.util.List;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;

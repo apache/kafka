@@ -144,7 +144,7 @@ public class PartitionChangeBuilder {
         return setTargetIsr(
             targetIsrWithEpoch
               .stream()
-              .map(brokerState -> brokerState.brokerId())
+              .map(BrokerState::brokerId)
               .collect(Collectors.toList())
         );
     }
@@ -285,7 +285,7 @@ public class PartitionChangeBuilder {
         if (election == Election.UNCLEAN) {
             // Attempt unclean leader election
             Optional<Integer> uncleanLeader = targetReplicas.stream()
-                .filter(replica -> isAcceptableLeader.test(replica))
+                .filter(isAcceptableLeader::test)
                 .findFirst();
             if (uncleanLeader.isPresent()) {
                 return new ElectionResult(uncleanLeader.get(), true);
@@ -422,9 +422,6 @@ public class PartitionChangeBuilder {
         }
     }
 
-    /**
-     * @return true if the reassignment was completed; false otherwise.
-     */
     private void completeReassignmentIfNeeded() {
         PartitionReassignmentReplicas reassignmentReplicas =
             new PartitionReassignmentReplicas(
@@ -572,7 +569,7 @@ public class PartitionChangeBuilder {
         // To do that, we first union the current ISR and current elr, then filter out the target ISR and unclean shutdown
         // Replicas.
         Set<Integer> candidateSet = new HashSet<>(targetElr);
-        Arrays.stream(partition.isr).forEach(ii -> candidateSet.add(ii));
+        Arrays.stream(partition.isr).forEach(candidateSet::add);
         targetElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> uncleanShutdownReplicas == null || !uncleanShutdownReplicas.contains(replica))
@@ -580,7 +577,7 @@ public class PartitionChangeBuilder {
 
         // Calculate the new last known ELR. Includes any ISR members since the ISR size drops below min ISR.
         // In order to reduce the metadata usage, the last known ELR excludes the members in ELR and current ISR.
-        targetLastKnownElr.forEach(ii -> candidateSet.add(ii));
+        candidateSet.addAll(targetLastKnownElr);
         targetLastKnownElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> !targetElr.contains(replica))

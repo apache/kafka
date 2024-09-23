@@ -28,7 +28,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol, SslAuthenticationContext}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.common.network.Mode
+import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -284,7 +284,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   // Override the CN to create a principal based on it
   override def superuserSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, certAlias, SslAdminIntegrationTest.superuserCn,
+    val props = TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, certAlias, SslAdminIntegrationTest.superuserCn,
       clientSaslProperties)
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
@@ -292,7 +292,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   // Override the CN to create a principal based on it
   override def clientSecurityProps(certAlias: String): Properties = {
-    val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, certAlias, SslAdminIntegrationTest.clientCn,
+    val props = TestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, trustStoreFile, certAlias, SslAdminIntegrationTest.clientCn,
       clientSaslProperties)
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props

@@ -28,6 +28,7 @@ import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -103,7 +104,7 @@ public class RocksDBBlockCacheMetricsTest {
     }
 
     public <T> void assertMetric(final StateStoreContext context, final String group, final String metricName, final T expected) {
-        final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
+        final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
         final MetricName name = metrics.metricsRegistry().metricName(
                 metricName,
                 group,

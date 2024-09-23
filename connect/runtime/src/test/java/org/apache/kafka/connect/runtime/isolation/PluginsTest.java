@@ -17,26 +17,18 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import java.io.File;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Map.Entry;
-
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -54,24 +46,33 @@ import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class PluginsTest {
 
@@ -593,6 +594,25 @@ public class PluginsTest {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(Plugins.class)) {
             Plugins.maybeReportHybridDiscoveryIssue(PluginDiscoveryMode.SERVICE_LOAD, nonEmpty, nonEmpty);
             assertTrue(logCaptureAppender.getEvents().stream().noneMatch(e -> e.getLevel().contains("ERROR") || e.getLevel().equals("WARN")));
+        }
+    }
+
+    @Test
+    public void testAliasesInConverters() throws ClassNotFoundException {
+        ClassLoader connectorLoader = plugins.connectorLoader(TestPlugin.SAMPLING_CONNECTOR.className());
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
+            String configKey = "config.key";
+            String alias = "SamplingConverter";
+            assertTrue(TestPlugin.SAMPLING_CONVERTER.className().contains(alias));
+            ConfigDef def = new ConfigDef().define(configKey, ConfigDef.Type.CLASS, ConfigDef.Importance.HIGH, "docstring");
+            AbstractConfig config = new AbstractConfig(def, Collections.singletonMap(configKey, alias));
+
+            assertNotNull(config.getClass(configKey));
+            assertNotNull(config.getConfiguredInstance(configKey, Converter.class));
+            assertNotNull(plugins.newConverter(config, configKey, ClassLoaderUsage.CURRENT_CLASSLOADER));
+            assertNotNull(plugins.newConverter(config, configKey, ClassLoaderUsage.PLUGINS));
+
+            assertNotNull(Utils.newInstance(alias, Converter.class));
         }
     }
 

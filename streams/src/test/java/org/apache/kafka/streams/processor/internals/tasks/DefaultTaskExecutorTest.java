@@ -24,6 +24,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
+import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,9 +33,9 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.Collections;
 
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,8 +46,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 public class DefaultTaskExecutorTest {
 
@@ -118,7 +118,7 @@ public class DefaultTaskExecutorTest {
 
         taskExecutor.start();
 
-        verify(taskManager, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).awaitProcessableTasks();
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT).atLeastOnce()).awaitProcessableTasks(any());
     }
 
     @Test
@@ -230,7 +230,9 @@ public class DefaultTaskExecutorTest {
         taskExecutor.start();
 
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
-        assertNotNull(taskExecutor.currentTask());
+        TestUtils.waitForCondition(() -> taskExecutor.currentTask() != null,
+                VERIFICATION_TIMEOUT,
+                "Task reassign take too much time");
 
         final KafkaFuture<StreamTask> future = taskExecutor.unassign();
 

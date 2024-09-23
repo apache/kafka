@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.connect.util.LoggingContext.Scope;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

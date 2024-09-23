@@ -20,7 +20,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
@@ -75,7 +75,7 @@ public class JaasOptionsUtils {
 
     public SSLSocketFactory createSSLSocketFactory() {
         Map<String, ?> sslClientConfig = getSslClientConfig();
-        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
         sslFactory.configure(sslClientConfig);
         SSLSocketFactory socketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
         log.debug("Created SSLSocketFactory: {}", sslClientConfig);

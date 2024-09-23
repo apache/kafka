@@ -17,8 +17,9 @@
 package org.apache.kafka.streams.processor.assignment;
 
 
-import java.util.Set;
 import org.apache.kafka.streams.processor.TaskId;
+
+import java.util.Set;
 
 /**
  * A simple container class corresponding to a given {@link TaskId}.

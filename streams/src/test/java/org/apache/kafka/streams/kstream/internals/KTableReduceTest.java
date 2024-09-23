@@ -23,6 +23,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.GenericInMemoryTimestampedKeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;

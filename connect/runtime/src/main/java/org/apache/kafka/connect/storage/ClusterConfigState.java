@@ -18,8 +18,8 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.runtime.SessionKey;
-import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.ArrayList;

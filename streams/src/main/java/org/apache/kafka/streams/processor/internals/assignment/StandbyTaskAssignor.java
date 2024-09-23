@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
+
+import java.util.Map;
+import java.util.Set;
 
 interface StandbyTaskAssignor extends LegacyTaskAssignor {
     default boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {

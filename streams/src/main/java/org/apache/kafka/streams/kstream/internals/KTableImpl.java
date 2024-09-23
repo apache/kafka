@@ -39,27 +39,27 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKey;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchema;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignTableJoinProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionSendProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionJoinProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionJoinProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionReceiveProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapper;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerde;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionReceiveProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionSendProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerde;
-import org.apache.kafka.streams.kstream.internals.graph.ForeignTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ForeignJoinSubscriptionSendNode;
+import org.apache.kafka.streams.kstream.internals.graph.ForeignTableJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
-import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.kstream.internals.graph.TableSuppressNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableFilterNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableRepartitionMapNode;
+import org.apache.kafka.streams.kstream.internals.graph.TableSuppressNode;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
@@ -75,6 +75,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,8 +84,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -572,7 +573,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> storeBuilder;
 
         if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
-            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getLogConfig();
+            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().logConfig();
             storeBuilder = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(
                 storeName,
                 keySerde,
@@ -915,22 +916,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final Function<V, KO> foreignKeyExtractor,
-                                           final ValueJoiner<V, VO, VR> joiner,
-                                           final Named named) {
-        return doJoinOnForeignKey(
-            other,
-            foreignKeyExtractor,
-            joiner,
-            TableJoined.as(new NamedInternal(named).name()),
-            Materialized.with(null, null),
-            false
-        );
-    }
-
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
                                            final Function<V, KO> foreignKeyExtractor,
@@ -952,23 +937,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final ValueJoiner<V, VO, VR> joiner,
                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, TableJoined.with(null, null), materialized, false);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final Function<V, KO> foreignKeyExtractor,
-                                           final ValueJoiner<V, VO, VR> joiner,
-                                           final Named named,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
-        return doJoinOnForeignKey(
-            other,
-            foreignKeyExtractor,
-            joiner,
-            TableJoined.as(new NamedInternal(named).name()),
-            materialized,
-            false
-        );
     }
 
     @Override
@@ -1001,22 +969,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final Function<V, KO> foreignKeyExtractor,
-                                               final ValueJoiner<V, VO, VR> joiner,
-                                               final Named named) {
-        return doJoinOnForeignKey(
-            other,
-            foreignKeyExtractor,
-            joiner,
-            TableJoined.as(new NamedInternal(named).name()),
-            Materialized.with(null, null),
-            true
-        );
-    }
-
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
                                                final Function<V, KO> foreignKeyExtractor,
@@ -1030,22 +982,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             Materialized.with(null, null),
             true
         );
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final Function<V, KO> foreignKeyExtractor,
-                                               final ValueJoiner<V, VO, VR> joiner,
-                                               final Named named,
-                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
-        return doJoinOnForeignKey(
-            other,
-            foreignKeyExtractor,
-            joiner,
-            TableJoined.as(new NamedInternal(named).name()),
-            materialized,
-            true);
     }
 
     @Override
@@ -1071,14 +1007,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, TableJoined.with(null, null), materialized, true);
     }
 
-    private final Function<Optional<Set<Integer>>, Integer> getPartition = maybeMulticastPartitions -> {
+    private final Function<Optional<Set<Integer>>, Optional<Set<Integer>>> getPartition = maybeMulticastPartitions -> {
         if (!maybeMulticastPartitions.isPresent()) {
-            return null;
+            return Optional.empty();
         }
         if (maybeMulticastPartitions.get().size() != 1) {
             throw new IllegalArgumentException("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set");
         }
-        return maybeMulticastPartitions.get().iterator().next();
+        return maybeMulticastPartitions;
     };
 
 
@@ -1227,9 +1163,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String finalRepartitionTopicName = renamed.suffixWithOrElseGet("-subscription-response", builder, SUBSCRIPTION_RESPONSE) + TOPIC_SUFFIX;
         builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
 
+        final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner =
+                (topic, key, subscriptionResponseWrapper, numPartitions) -> {
+                    final Integer partition = subscriptionResponseWrapper.primaryPartition();
+                    return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
+                };
+
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> foreignResponseSinkPartitioner =
                 tableJoinedInternal.partitioner() == null
-                        ? (topic, key, subscriptionResponseWrapper, numPartitions) -> subscriptionResponseWrapper.getPrimaryPartition()
+                        ? defaultForeignResponseSinkPartitioner
                         : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =

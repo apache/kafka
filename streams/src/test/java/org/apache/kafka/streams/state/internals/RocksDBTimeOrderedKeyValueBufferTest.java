@@ -32,19 +32,24 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBTimeOrderedKeyValueBufferTest {
     public RocksDBTimeOrderedKeyValueBuffer<String, String> buffer;
     @Mock
@@ -55,7 +60,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     public Sensor sensor;
     public long offset;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         when(serdeGetter.keySerde()).thenReturn(new Serdes.StringSerde());
         when(serdeGetter.valueSerde()).thenReturn(new Serdes.StringSerde());

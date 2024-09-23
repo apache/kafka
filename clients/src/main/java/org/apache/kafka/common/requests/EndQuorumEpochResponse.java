@@ -17,14 +17,12 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -76,27 +74,6 @@ public class EndQuorumEpochResponse extends AbstractResponse {
     @Override
     public void maybeSetThrottleTimeMs(int throttleTimeMs) {
         // Not supported by the response schema
-    }
-
-    public static EndQuorumEpochResponseData singletonResponse(
-        Errors topLevelError,
-        TopicPartition topicPartition,
-        Errors partitionLevelError,
-        int leaderEpoch,
-        int leaderId
-    ) {
-        return new EndQuorumEpochResponseData()
-                   .setErrorCode(topLevelError.code())
-                   .setTopics(Collections.singletonList(
-                       new EndQuorumEpochResponseData.TopicData()
-                           .setTopicName(topicPartition.topic())
-                           .setPartitions(Collections.singletonList(
-                               new EndQuorumEpochResponseData.PartitionData()
-                                   .setErrorCode(partitionLevelError.code())
-                                   .setLeaderId(leaderId)
-                                   .setLeaderEpoch(leaderEpoch)
-                           )))
-                   );
     }
 
     public static EndQuorumEpochResponse parse(ByteBuffer buffer, short version) {

@@ -34,4 +34,18 @@ public class CommandUtilsTest {
         assertEquals(Arrays.asList("alpha", "beta"),
             CommandUtils.splitPath("//alpha/beta/"));
     }
+
+    @Test
+    public void testStripDotPathComponents() {
+
+        //double dots
+        assertEquals(Arrays.asList("keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList("..", "keep", "keep2")));
+        //single dots
+        assertEquals(Arrays.asList("keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList(".", "keep", "keep2")));
+
+        assertEquals(Arrays.asList(".keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList(".", ".keep", "keep2")));
+
+        assertEquals(Arrays.asList(".keep", "keep2"), CommandUtils.stripDotPathComponents(Arrays.asList("..", ".keep", "keep2")));
+
+    }
 }

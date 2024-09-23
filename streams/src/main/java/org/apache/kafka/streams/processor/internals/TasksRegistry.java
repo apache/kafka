@@ -37,6 +37,8 @@ public interface TasksRegistry {
 
     Set<Task> drainPendingTasksToInit();
 
+    Set<Task> drainPendingActiveTasksToInit();
+
     Set<Task> pendingTasksToInit();
 
     void addPendingTasksToInit(final Collection<Task> tasks);
@@ -48,6 +50,8 @@ public interface TasksRegistry {
     void addStandbyTasks(final Collection<Task> tasks);
 
     void addTask(final Task task);
+
+    void addFailedTask(final Task task);
 
     void removeTask(final Task taskToRemove);
 
@@ -70,6 +74,8 @@ public interface TasksRegistry {
     Collection<Task> activeTasks();
 
     Set<Task> allTasks();
+
+    Set<Task> allNonFailedTasks();
 
     Map<TaskId, Task> allTasksPerId();
 

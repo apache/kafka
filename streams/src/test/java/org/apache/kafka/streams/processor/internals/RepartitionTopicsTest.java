@@ -28,11 +28,13 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.Topi
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,19 +48,19 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
-
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RepartitionTopicsTest {
 
     private static final String SOURCE_TOPIC_NAME1 = "source1";
@@ -105,7 +107,7 @@ public class RepartitionTopicsTest {
     @Mock
     Cluster clusterMetadata;
 
-    @Before
+    @BeforeEach
     public void setup() {
         when(internalTopologyBuilder.hasNamedTopology()).thenReturn(false);
         when(internalTopologyBuilder.topologyName()).thenReturn(null);
@@ -125,7 +127,7 @@ public class RepartitionTopicsTest {
                 mkEntry(REPARTITION_TOPIC_NAME2, REPARTITION_TOPIC_CONFIG2)
             ))
         ).thenReturn(Collections.emptySet());
-        setupCluster();
+        setupCluster(false);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
@@ -157,7 +159,7 @@ public class RepartitionTopicsTest {
         final Set<String> missingSourceTopics = mkSet(SOURCE_TOPIC_NAME1);
         when(internalTopologyBuilder.subtopologyToTopicsInfo())
             .thenReturn(mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1), mkEntry(SUBTOPOLOGY_1, TOPICS_INFO2)));
-        setupClusterWithMissingTopics(missingSourceTopics);
+        setupClusterWithMissingTopics(missingSourceTopics, false);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
@@ -186,7 +188,7 @@ public class RepartitionTopicsTest {
                 mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1),
                 mkEntry(SUBTOPOLOGY_1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
             ));
-        setupCluster();
+        setupCluster(false);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
@@ -218,7 +220,7 @@ public class RepartitionTopicsTest {
                 mkEntry(SUBTOPOLOGY_0, topicsInfo),
                 mkEntry(SUBTOPOLOGY_1, setupTopicInfoWithRepartitionTopicWithoutPartitionCount(repartitionTopicConfigWithoutPartitionCount))
             ));
-        setupClusterWithMissingPartitionCounts(mkSet(SOURCE_TOPIC_NAME1));
+        setupClusterWithMissingPartitionCounts(mkSet(SOURCE_TOPIC_NAME1), true);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
@@ -263,7 +265,7 @@ public class RepartitionTopicsTest {
                 mkEntry(REPARTITION_WITHOUT_PARTITION_COUNT, repartitionTopicConfigWithoutPartitionCount)
             ))
         ).thenReturn(Collections.emptySet());
-        setupCluster();
+        setupCluster(true);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
@@ -317,7 +319,7 @@ public class RepartitionTopicsTest {
                 mkEntry(REPARTITION_WITHOUT_PARTITION_COUNT, repartitionTopicConfigWithoutPartitionCount)
             ))
         ).thenReturn(Collections.emptySet());
-        setupCluster();
+        setupCluster(true);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
@@ -355,7 +357,7 @@ public class RepartitionTopicsTest {
         );
         when(internalTopologyBuilder.subtopologyToTopicsInfo())
             .thenReturn(mkMap(mkEntry(SUBTOPOLOGY_0, topicsInfo)));
-        setupCluster();
+        setupCluster(false);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
             new TopologyMetadata(internalTopologyBuilder, config),
             internalTopicManager,
@@ -387,20 +389,23 @@ public class RepartitionTopicsTest {
         assertThat(repartitionTopicInfo.replicas(), is(new Node[0]));
     }
 
-    private void setupCluster() {
-        setupClusterWithMissingTopicsAndMissingPartitionCounts(Collections.emptySet(), Collections.emptySet());
+    private void setupCluster(final boolean mockPartitionCount) {
+        setupClusterWithMissingTopicsAndMissingPartitionCounts(Collections.emptySet(), Collections.emptySet(), mockPartitionCount);
     }
 
-    private void setupClusterWithMissingTopics(final Set<String> missingTopics) {
-        setupClusterWithMissingTopicsAndMissingPartitionCounts(missingTopics, Collections.emptySet());
+    private void setupClusterWithMissingTopics(final Set<String> missingTopics, final boolean mockPartitionCount) {
+        setupClusterWithMissingTopicsAndMissingPartitionCounts(missingTopics, Collections.emptySet(), mockPartitionCount);
     }
 
-    private void setupClusterWithMissingPartitionCounts(final Set<String> topicsWithMissingPartitionCounts) {
-        setupClusterWithMissingTopicsAndMissingPartitionCounts(Collections.emptySet(), topicsWithMissingPartitionCounts);
+    private void setupClusterWithMissingPartitionCounts(final Set<String> topicsWithMissingPartitionCounts, final boolean mockPartitionCount) {
+        setupClusterWithMissingTopicsAndMissingPartitionCounts(Collections.emptySet(),
+            topicsWithMissingPartitionCounts,
+            mockPartitionCount);
     }
 
     private void setupClusterWithMissingTopicsAndMissingPartitionCounts(final Set<String> missingTopics,
-                                                                        final Set<String> topicsWithMissingPartitionCounts) {
+                                                                        final Set<String> topicsWithMissingPartitionCounts,
+                                                                        final boolean mockPartitionCount) {
         final Set<String> topics = mkSet(
             SOURCE_TOPIC_NAME1,
             SOURCE_TOPIC_NAME2,
@@ -415,8 +420,10 @@ public class RepartitionTopicsTest {
         );
         topics.removeAll(missingTopics);
         when(clusterMetadata.topics()).thenReturn(topics);
-        when(clusterMetadata.partitionCountForTopic(SOURCE_TOPIC_NAME1))
-            .thenReturn(topicsWithMissingPartitionCounts.contains(SOURCE_TOPIC_NAME1) ? null : 3);
+        if (mockPartitionCount) {
+            when(clusterMetadata.partitionCountForTopic(SOURCE_TOPIC_NAME1))
+                .thenReturn(topicsWithMissingPartitionCounts.contains(SOURCE_TOPIC_NAME1) ? null : 3);
+        }
     }
 
     private TopicsInfo setupTopicInfoWithRepartitionTopicWithoutPartitionCount(final RepartitionTopicConfig repartitionTopicConfigWithoutPartitionCount) {

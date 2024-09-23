@@ -29,6 +29,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -42,14 +43,20 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.StringConverter;
-import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.ConnectAssertions;
+import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.test.NoRetryException;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -79,8 +86,8 @@ import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENC
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.CUSTOM_TRANSACTION_BOUNDARIES_CONFIG;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.MESSAGES_PER_POLL_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.MAX_MESSAGES_PER_SECOND_CONFIG;
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.MESSAGES_PER_POLL_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
@@ -101,10 +108,10 @@ import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.POL
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 @Tag("integration")
 public class ExactlyOnceSourceIntegrationTest {
@@ -115,6 +122,7 @@ public class ExactlyOnceSourceIntegrationTest {
 
     private static final int CONSUME_RECORDS_TIMEOUT_MS = 60_000;
     private static final int SOURCE_TASK_PRODUCE_TIMEOUT_MS = 30_000;
+    private static final int ACL_PROPAGATION_TIMEOUT_MS = 30_000;
     private static final int DEFAULT_NUM_WORKERS = 3;
 
     // Tests require that a minimum but not unreasonably large number of records are sourced.
@@ -139,7 +147,7 @@ public class ExactlyOnceSourceIntegrationTest {
         brokerProps.put("transaction.state.log.replication.factor", "1");
         brokerProps.put("transaction.state.log.min.isr", "1");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by Kafka
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .numWorkers(DEFAULT_NUM_WORKERS)
                 .numBrokers(1)
@@ -158,7 +166,7 @@ public class ExactlyOnceSourceIntegrationTest {
     @AfterEach
     public void close() {
         try {
-            // stop all Connect, Kafka and Zk threads.
+            // stop the Connect cluster and its backing Kafka cluster.
             connect.stop();
         } finally {
             // Clear the handle for the connector. Fun fact: if you don't do this, your tests become quite flaky.
@@ -623,17 +631,18 @@ public class ExactlyOnceSourceIntegrationTest {
      */
     @Test
     public void testTasksFailOnInabilityToFence() throws Exception {
-        brokerProps.put("authorizer.class.name", "kafka.security.authorizer.AclAuthorizer");
-        brokerProps.put("sasl.enabled.mechanisms", "PLAIN");
-        brokerProps.put("sasl.mechanism.inter.broker.protocol", "PLAIN");
-        brokerProps.put("security.inter.broker.protocol", "SASL_PLAINTEXT");
-        brokerProps.put("listeners", "SASL_PLAINTEXT://localhost:0");
-        brokerProps.put("listener.name.sasl_plaintext.plain.sasl.jaas.config",
-                "org.apache.kafka.common.security.plain.PlainLoginModule required "
-                        + "username=\"super\" "
-                        + "password=\"super_pwd\" "
-                        + "user_connector=\"connector_pwd\" "
-                        + "user_super=\"super_pwd\";");
+        brokerProps.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT");
+        brokerProps.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, "org.apache.kafka.metadata.authorizer.StandardAuthorizer");
+        brokerProps.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
+        brokerProps.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
+        brokerProps.put(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
+        String listenerSaslJaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required "
+                + "username=\"super\" "
+                + "password=\"super_pwd\" "
+                + "user_connector=\"connector_pwd\" "
+                + "user_super=\"super_pwd\";";
+        brokerProps.put("listener.name.external.plain.sasl.jaas.config", listenerSaslJaasConfig);
+        brokerProps.put("listener.name.controller.plain.sasl.jaas.config", listenerSaslJaasConfig);
         brokerProps.put("super.users", "User:super");
 
         Map<String, String> superUserClientConfig = new HashMap<>();
@@ -693,12 +702,30 @@ public class ExactlyOnceSourceIntegrationTest {
             )).all().get();
         }
 
-        StartAndStopLatch connectorStart = connectorAndTaskStart(tasksMax);
-
         log.info("Bringing up connector with fresh slate; fencing should not be necessary");
         connect.configureConnector(CONNECTOR_NAME, props);
-        assertConnectorStarted(connectorStart);
-        // Verify that the connector and its tasks have been able to start successfully
+
+        // Hack: There is a small chance that our recent ACL updates for the connector have
+        // not yet been propagated across the entire Kafka cluster, and that our connector
+        // will fail on startup when it tries to list the end offsets of the worker's offsets topic
+        // So, we implement some retry logic here to add a layer of resiliency in that case
+        waitForCondition(
+                () -> {
+                    ConnectorStateInfo status = connect.connectorStatus(CONNECTOR_NAME);
+                    if ("RUNNING".equals(status.connector().state())) {
+                        return true;
+                    } else if ("FAILED".equals(status.connector().state())) {
+                        log.debug("Restarting failed connector {}", CONNECTOR_NAME);
+                        connect.restartConnector(CONNECTOR_NAME);
+                    }
+                    return false;
+                },
+                ACL_PROPAGATION_TIMEOUT_MS,
+                "Connector was not able to start in time, "
+                        + "or ACL updates were not propagated across the Kafka cluster soon enough"
+        );
+
+        // Also verify that the connector's tasks have been able to start successfully
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, tasksMax, "Connector and task should have started successfully");
 
         log.info("Reconfiguring connector; fencing should be necessary, and tasks should fail to start");
@@ -724,8 +751,39 @@ public class ExactlyOnceSourceIntegrationTest {
 
         log.info("Restarting connector after tweaking its ACLs; fencing should succeed this time");
         connect.restartConnectorAndTasks(CONNECTOR_NAME, false, true, false);
+
         // Verify that the connector and its tasks have been able to restart successfully
-        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, tasksMax, "Connector and task should have restarted successfully");
+        // Use the same retry logic as above, in case there is a delay in the propagation of our ACL updates
+        waitForCondition(
+                () -> {
+                    ConnectorStateInfo status = connect.connectorStatus(CONNECTOR_NAME);
+                    boolean connectorRunning = "RUNNING".equals(status.connector().state());
+                    boolean allTasksRunning = status.tasks().stream()
+                            .allMatch(t -> "RUNNING".equals(t.state()));
+                    boolean expectedNumTasks = status.tasks().size() == tasksMax;
+                    if (connectorRunning && allTasksRunning && expectedNumTasks) {
+                        return true;
+                    } else {
+                        if (!connectorRunning) {
+                            if ("FAILED".equals(status.connector().state())) {
+                                // Only task failures are expected ;if the connector has failed, something
+                                // else is wrong and we should fail the test immediately
+                                throw new NoRetryException(
+                                        new AssertionError("Connector " + CONNECTOR_NAME + " has failed unexpectedly")
+                                );
+                            }
+                        }
+                        // Restart all failed tasks
+                        status.tasks().stream()
+                                .filter(t -> "FAILED".equals(t.state()))
+                                .map(ConnectorStateInfo.TaskState::id)
+                                .forEach(t -> connect.restartTask(CONNECTOR_NAME, t));
+                        return false;
+                    }
+                },
+                ConnectAssertions.CONNECTOR_SETUP_DURATION_MS,
+                "Connector and task should have restarted successfully"
+        );
     }
 
     /**

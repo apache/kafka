@@ -19,6 +19,7 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -86,7 +87,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         Properties brokerProps = new Properties();
         brokerProps.put("auto.create.topics.enable", "false");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -102,7 +103,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
     @AfterEach
     public void close(TestInfo testInfo) {
         log.info("Finished test {}", testInfo.getDisplayName());
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 

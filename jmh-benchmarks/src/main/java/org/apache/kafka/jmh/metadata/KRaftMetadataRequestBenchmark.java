@@ -21,7 +21,6 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
@@ -59,10 +58,13 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.FinalizedFeatures;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -99,7 +101,7 @@ import scala.Option;
 
 public class KRaftMetadataRequestBenchmark {
     private final RequestChannel requestChannel = Mockito.mock(RequestChannel.class, Mockito.withSettings().stubOnly());
-    private final RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
+    private final RequestChannelMetrics requestChannelMetrics = Mockito.mock(RequestChannelMetrics.class);
     private final ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
     private final GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
     private final TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
@@ -107,7 +109,7 @@ public class KRaftMetadataRequestBenchmark {
     private final Metrics metrics = new Metrics();
     private final int brokerId = 1;
     private final ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
-    private final KRaftMetadataCache metadataCache = MetadataCache.kRaftMetadataCache(brokerId);
+    private final KRaftMetadataCache metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () -> KRaftVersion.KRAFT_VERSION_1);
     private final ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private final ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private final ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
@@ -198,6 +200,7 @@ public class KRaftMetadataRequestBenchmark {
                 setAuthorizer(Optional.empty()).
                 setQuotas(quotaManagers).
                 setFetchManager(fetchManager).
+                setSharePartitionManager(Optional.empty()).
                 setBrokerTopicStats(brokerTopicStats).
                 setClusterId("clusterId").
                 setTime(Time.SYSTEM).

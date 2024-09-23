@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -31,7 +32,6 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -41,14 +41,16 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.Matchers;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -75,20 +77,21 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ProcessorStateManagerTest {
 
     private final String applicationId = "test-application";
@@ -129,7 +132,7 @@ public class ProcessorStateManagerTest {
     @Mock
     private InternalProcessorContext context;
 
-    @Before
+    @BeforeEach
     public void setup() {
         baseDir = TestUtils.tempDirectory();
 
@@ -144,7 +147,7 @@ public class ProcessorStateManagerTest {
         checkpoint = new OffsetCheckpoint(checkpointFile);
     }
 
-    @After
+    @AfterEach
     public void cleanup() throws IOException {
         Utils.delete(baseDir);
     }
@@ -335,7 +338,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.recycle();
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-        assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
 
         stateMgr.registerStateStores(singletonList(store), context);
 
@@ -358,7 +361,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.recycle();
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-        assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        assertThat(stateMgr.store(persistentStoreName), equalTo(store));
 
         verify(store).clearCache();
     }
@@ -497,9 +500,9 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback, null);
 
-            assertNull(stateMgr.getStore("noSuchStore"));
-            assertEquals(persistentStore, stateMgr.getStore(persistentStoreName));
-            assertEquals(nonPersistentStore, stateMgr.getStore(nonPersistentStoreName));
+            assertNull(stateMgr.store("noSuchStore"));
+            assertEquals(persistentStore, stateMgr.store(persistentStoreName));
+            assertEquals(nonPersistentStore, stateMgr.store(nonPersistentStoreName));
         } finally {
             stateMgr.close();
         }
@@ -520,11 +523,11 @@ public class ProcessorStateManagerTest {
     public void shouldThrowIfStateStoreIsNotRegistered() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
-        assertThrows("State store " + persistentStoreName
+        assertThrows(IllegalStateException.class,
+            () -> stateMgr.registeredChangelogPartitionFor(persistentStoreName),
+            "State store " + persistentStoreName
             + " for which the registered changelog partition should be"
-            + " retrieved has not been registered",
-            IllegalStateException.class,
-            () -> stateMgr.registeredChangelogPartitionFor(persistentStoreName)
+            + " retrieved has not been registered"
         );
     }
 
@@ -535,11 +538,11 @@ public class ProcessorStateManagerTest {
         final MockKeyValueStore storeWithLoggingDisabled = new MockKeyValueStore(storeName, true);
         stateMgr.registerStore(storeWithLoggingDisabled, null, null);
 
-        assertThrows("Registered state store " + storeName
+        assertThrows(IllegalStateException.class,
+            () -> stateMgr.registeredChangelogPartitionFor(storeName),
+            "Registered state store " + storeName
                 + " does not have a registered changelog partition."
-                + " This may happen if logging is disabled for the state store.",
-            IllegalStateException.class,
-            () -> stateMgr.registeredChangelogPartitionFor(storeName)
+                + " This may happen if logging is disabled for the state store."
         );
     }
 
@@ -870,7 +873,7 @@ public class ProcessorStateManagerTest {
             stateManager.flush();
         } catch (final ProcessorStateException expected) { /* ignore */ }
 
-        Assert.assertTrue(flushedStore.get());
+        assertTrue(flushedStore.get());
     }
 
     @Test
@@ -898,7 +901,7 @@ public class ProcessorStateManagerTest {
             stateManager.close();
         } catch (final ProcessorStateException expected) { /* ignore */ }
 
-        Assert.assertTrue(closedStore.get());
+        assertTrue(closedStore.get());
     }
 
     @Test

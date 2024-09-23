@@ -16,32 +16,30 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.BufferedWriter;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
-import java.util.List;
-import java.util.UUID;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -49,25 +47,27 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.PROCESS_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.toTaskDirString;
-
-import static java.util.Collections.emptyList;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -75,13 +75,13 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class StateDirectoryTest {
 
@@ -108,12 +108,12 @@ public class StateDirectoryTest {
         appDir = new File(stateDir, applicationId);
     }
 
-    @Before
+    @BeforeEach
     public void before() throws IOException {
         initializeStateDirectory(true, false);
     }
 
-    @After
+    @AfterEach
     public void cleanup() throws IOException {
         Utils.delete(stateDir);
     }
@@ -445,6 +445,22 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldBackoffRetryIfStateDirLockedByAnotherThread() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
+        final Thread thread = new Thread(() -> directory.lock(taskId));
+        thread.start();
+        thread.join(30000);
+
+        assertTrue(directory.canTryLock(taskId, System.currentTimeMillis()));
+
+        assertFalse(directory.lock(taskId));
+        assertFalse(directory.lock(taskId));
+        assertFalse(directory.lock(taskId));
+        // after 3 unsuccessful retries, backoff time is > 0
+        assertFalse(directory.canTryLock(taskId, System.currentTimeMillis()));
+    }
+
+    @Test
     public void shouldNotUnLockStateDirLockedByAnotherThread() throws Exception {
         final TaskId taskId = new TaskId(0, 0);
         final CountDownLatch lockLatch = new CountDownLatch(1);
@@ -463,14 +479,14 @@ public class StateDirectoryTest {
         thread.start();
         lockLatch.await(5, TimeUnit.SECONDS);
 
-        assertNull("should not have had an exception on other thread", exceptionOnThread.get());
+        assertNull(exceptionOnThread.get(), "should not have had an exception on other thread");
         directory.unlock(taskId);
         assertFalse(directory.lock(taskId));
 
         unlockLatch.countDown();
         thread.join(30000);
 
-        assertNull("should not have had an exception on other thread", exceptionOnThread.get());
+        assertNull(exceptionOnThread.get(), "should not have had an exception on other thread");
         assertTrue(directory.lock(taskId));
     }
 

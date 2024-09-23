@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -235,7 +236,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.stateRestoreListener = stateRestoreListener;
         this.standbyUpdateListener = standbyUpdateListener;
 
-        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
+        this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
 
         this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));

@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.tasks;
 
-import java.time.Duration;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
@@ -31,10 +27,16 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 import org.apache.kafka.streams.processor.internals.TasksRegistry;
 import org.apache.kafka.test.StreamsTestUtils.TaskBuilder;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Collections;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -113,7 +115,7 @@ public class DefaultTaskManagerTest {
         public void run() {
             while (!shutdownRequested.get()) {
                 try {
-                    taskManager.awaitProcessableTasks();
+                    taskManager.awaitProcessableTasks(shutdownRequested::get);
                 } catch (final InterruptedException ignored) {
                 }
                 awaitDone.countDown();

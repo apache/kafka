@@ -38,6 +38,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -46,7 +47,6 @@ import org.junit.jupiter.api.function.Executable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Response;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -63,10 +63,11 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import javax.ws.rs.core.Response;
+
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
-import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -92,10 +93,10 @@ public class BlockingConnectorTest {
 
     private static final String CONNECTOR_INITIALIZE = "Connector::initialize";
     private static final String CONNECTOR_INITIALIZE_WITH_TASK_CONFIGS = "Connector::initializeWithTaskConfigs";
-    private static final String CONNECTOR_START = "Connector::start";
+    static final String CONNECTOR_START = "Connector::start";
     private static final String CONNECTOR_RECONFIGURE = "Connector::reconfigure";
     private static final String CONNECTOR_TASK_CLASS = "Connector::taskClass";
-    private static final String CONNECTOR_TASK_CONFIGS = "Connector::taskConfigs";
+    static final String CONNECTOR_TASK_CONFIGS = "Connector::taskConfigs";
     private static final String CONNECTOR_STOP = "Connector::stop";
     private static final String CONNECTOR_VALIDATE = "Connector::validate";
     private static final String CONNECTOR_CONFIG = "Connector::config";
@@ -122,7 +123,7 @@ public class BlockingConnectorTest {
 
     @BeforeEach
     public void setup() throws Exception {
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -137,7 +138,7 @@ public class BlockingConnectorTest {
 
     @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
         // unblock everything so that we don't leak threads after each test run
         Block.reset();
@@ -376,7 +377,7 @@ public class BlockingConnectorTest {
             );
         }
         // Reset the REST request timeout so that other requests aren't impacted
-        connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        connect.resetRequestTimeout();
     }
 
     public static class Block {

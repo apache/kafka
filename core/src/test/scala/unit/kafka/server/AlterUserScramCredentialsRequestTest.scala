@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 /**
@@ -56,7 +57,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     if (TestInfoUtils.isKRaft(testInfo)) {
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
       if (testInfo.getDisplayName.contains("quorum=kraft-IBP_3_4")) {
         testMetadataVersion = MetadataVersion.IBP_3_4_IV0
       }
@@ -68,6 +69,13 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     this.serverConfig.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
 
     super.setUp(testInfo)
+  }
+
+  override def kraftControllerConfigs(testInfo: TestInfo): collection.Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs(testInfo)
+    controllerConfigs.head.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
+    controllerConfigs.head.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
+    controllerConfigs
   }
 
   private val saltedPasswordBytes = "saltedPassword".getBytes(StandardCharsets.UTF_8)
@@ -472,6 +480,17 @@ object AlterCredentialsTest {
   val AuthorizedPrincipal = KafkaPrincipal.ANONYMOUS
 
   class TestAuthorizer extends AclAuthorizer {
+    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+      actions.asScala.map { _ =>
+        if (requestContext.requestType == ApiKeys.ALTER_USER_SCRAM_CREDENTIALS.id && requestContext.principal == UnauthorizedPrincipal)
+          AuthorizationResult.DENIED
+        else
+          AuthorizationResult.ALLOWED
+      }.asJava
+    }
+  }
+
+  class TestStandardAuthorizer extends StandardAuthorizer {
     override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
       actions.asScala.map { _ =>
         if (requestContext.requestType == ApiKeys.ALTER_USER_SCRAM_CREDENTIALS.id && requestContext.principal == UnauthorizedPrincipal)

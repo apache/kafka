@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -46,7 +47,6 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -60,12 +60,15 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.io.IOException;
@@ -84,12 +87,13 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class StreamThreadStateStoreProviderTest {
 
     private StreamTask taskOne;
@@ -101,7 +105,7 @@ public class StreamThreadStateStoreProviderTest {
     private StreamThread threadMock;
     private Map<TaskId, Task> tasks;
 
-    @Before
+    @BeforeEach
     public void before() {
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("the-source", topicName);
@@ -185,7 +189,7 @@ public class StreamThreadStateStoreProviderTest {
 
     }
 
-    @After
+    @AfterEach
     public void cleanUp() throws IOException {
         Utils.delete(stateDir);
     }
@@ -312,7 +316,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() {
         mockThread(true);
-        taskOne.getStore("kv-store").close();
+        taskOne.store("kv-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("kv-store",
                 QueryableStoreTypes.keyValueStore())));
     }
@@ -320,7 +324,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfTsKVStoreClosed() {
         mockThread(true);
-        taskOne.getStore("timestamped-kv-store").close();
+        taskOne.store("timestamped-kv-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("timestamped-kv-store",
                 QueryableStoreTypes.timestampedKeyValueStore())));
     }
@@ -328,7 +332,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() {
         mockThread(true);
-        taskOne.getStore("window-store").close();
+        taskOne.store("window-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("window-store",
                 QueryableStoreTypes.windowStore())));
     }
@@ -336,7 +340,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfTsWindowStoreClosed() {
         mockThread(true);
-        taskOne.getStore("timestamped-window-store").close();
+        taskOne.store("timestamped-window-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("timestamped-window-store",
                 QueryableStoreTypes.timestampedWindowStore())));
     }
@@ -344,7 +348,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldThrowInvalidStoreExceptionIfSessionStoreClosed() {
         mockThread(true);
-        taskOne.getStore("session-store").close();
+        taskOne.store("session-store").close();
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("session-store",
                 QueryableStoreTypes.sessionStore())));
     }
@@ -397,7 +401,7 @@ public class StreamThreadStateStoreProviderTest {
 
     @Test
     public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() {
-        mockThread(false);
+        when(threadMock.state()).thenReturn(StreamThread.State.PARTITIONS_ASSIGNED);
         assertThrows(InvalidStateStoreException.class, () -> provider.stores(StoreQueryParameters.fromNameAndType("kv-store",
                 QueryableStoreTypes.keyValueStore())));
     }
@@ -433,17 +437,16 @@ public class StreamThreadStateStoreProviderTest {
                 streamsConfig,
                 "threadId",
                 clientSupplier,
-                new TaskId(0, 0),
                 UUID.randomUUID(),
                 logContext,
                 Time.SYSTEM
             ),
-            streamsConfig.defaultProductionExceptionHandler(),
+            streamsConfig.productionExceptionHandler(),
             new MockStreamsMetrics(metrics),
             topology
         );
         final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
-        final InternalProcessorContext context = new ProcessorContextImpl(
+        final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
             taskId,
             streamsConfig,
             stateManager,

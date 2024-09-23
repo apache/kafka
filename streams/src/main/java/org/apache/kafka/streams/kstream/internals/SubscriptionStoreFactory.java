@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper;
@@ -27,6 +25,9 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class SubscriptionStoreFactory<K> extends AbstractConfigurableStoreFactory {
     private final String name;

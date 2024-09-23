@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.connect.converters;
 
-import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.storage.ConverterConfig;
+
+import java.util.Map;
 
 /**
  * Configuration options for {@link BooleanConverter} instances.

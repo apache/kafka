@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -147,7 +148,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
     // The broker metrics for all topics should be greedily registered
     assertTrue(topicMetrics(None).nonEmpty, "General topic metrics don't exist")
-    assertEquals(brokers.head.brokerTopicStats.allTopicsStats.metricMap.size, topicMetrics(None).size)
+    assertEquals(brokers.head.brokerTopicStats.allTopicsStats.metricMapKeySet().size, topicMetrics(None).size)
     assertEquals(0, brokers.head.brokerTopicStats.allTopicsStats.metricGaugeMap.size)
     // topic metrics should be lazily registered
     assertTrue(topicMetricGroups(topic).isEmpty, "Topic metrics aren't lazily registered")
@@ -169,10 +170,10 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @ValueSource(strings = Array("zk", "kraft"))
   def testBrokerTopicMetricsBytesInOut(quorum: String): Unit = {
     val topic = "test-bytes-in-out"
-    val replicationBytesIn = BrokerTopicStats.ReplicationBytesInPerSec
-    val replicationBytesOut = BrokerTopicStats.ReplicationBytesOutPerSec
-    val bytesIn = s"${BrokerTopicStats.BytesInPerSec},topic=$topic"
-    val bytesOut = s"${BrokerTopicStats.BytesOutPerSec},topic=$topic"
+    val replicationBytesIn = BrokerTopicMetrics.REPLICATION_BYTES_IN_PER_SEC
+    val replicationBytesOut = BrokerTopicMetrics.REPLICATION_BYTES_OUT_PER_SEC
+    val bytesIn = s"${BrokerTopicMetrics.BYTES_IN_PER_SEC},topic=$topic"
+    val bytesOut = s"${BrokerTopicMetrics.BYTES_OUT_PER_SEC},topic=$topic"
 
     val topicConfig = new Properties
     topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")

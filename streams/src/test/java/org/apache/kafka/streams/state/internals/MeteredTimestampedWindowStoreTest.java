@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -40,19 +39,22 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class MeteredTimestampedWindowStoreTest {
 
     private static final String STORE_NAME = "mocked-store";
@@ -74,7 +76,6 @@ public class MeteredTimestampedWindowStoreTest {
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private MeteredTimestampedWindowStore<String, String> store;
 
-    @Before
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
@@ -103,28 +104,35 @@ public class MeteredTimestampedWindowStoreTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        @SuppressWarnings("unchecked")
-        final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
-        final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
-            inner,
-            WINDOW_SIZE_MS, // any size
-            STORE_TYPE,
-            new MockTime(),
-            Serdes.String(),
-            new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
+    public void setUpWithoutContextName() {
+        final StreamsMetricsImpl streamsMetrics =
+                new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
+
+        context = new InternalMockProcessorContext<>(
+                TestUtils.tempDirectory(),
+                Serdes.String(),
+                Serdes.Long(),
+                streamsMetrics,
+                new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+                MockRecordCollector::new,
+                new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
+                Time.SYSTEM,
+                taskId
         );
-        when(inner.name()).thenReturn("store");
 
-        outer.init((ProcessorContext) context, outer);
-
-        verify(inner).init((ProcessorContext) context, outer);
+        store = new MeteredTimestampedWindowStore<>(
+                innerStoreMock,
+                WINDOW_SIZE_MS, // any size
+                STORE_TYPE,
+                new MockTime(),
+                Serdes.String(),
+                new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
+        );
     }
 
     @Test
     public void shouldDelegateInit() {
+        setUpWithoutContextName();
         @SuppressWarnings("unchecked")
         final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
         final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
@@ -144,12 +152,14 @@ public class MeteredTimestampedWindowStoreTest {
 
     @Test
     public void shouldPassChangelogTopicNameToStateStoreSerde() {
+        setUp();
         context.addChangelogForStore(STORE_NAME, CHANGELOG_TOPIC);
         doShouldPassChangelogTopicNameToStateStoreSerde(CHANGELOG_TOPIC);
     }
 
     @Test
     public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
+        setUp();
         final String defaultChangelogTopicName =
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), STORE_NAME, taskId.topologyName());
         doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
@@ -192,6 +202,7 @@ public class MeteredTimestampedWindowStoreTest {
 
     @Test
     public void shouldCloseUnderlyingStore() {
+        setUp();
         store.init((StateStoreContext) context, store);
         store.close();
 
@@ -200,6 +211,7 @@ public class MeteredTimestampedWindowStoreTest {
 
     @Test
     public void shouldNotExceptionIfFetchReturnsNull() {
+        setUp();
         when(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).thenReturn(null);
 
         store.init((StateStoreContext) context, store);
@@ -208,6 +220,7 @@ public class MeteredTimestampedWindowStoreTest {
 
     @Test
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
+        setUp();
         when(innerStoreMock.name()).thenReturn("mocked-store");
         final MeteredTimestampedWindowStore<String, Long> store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,
@@ -231,6 +244,7 @@ public class MeteredTimestampedWindowStoreTest {
 
     @Test
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
+        setUp();
         when(innerStoreMock.name()).thenReturn("mocked-store");
         final MeteredTimestampedWindowStore<String, Long> store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,

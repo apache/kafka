@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import java.util.List;
-import java.util.OptionalInt;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.streams.StreamsConfig;
+
+import java.util.List;
+import java.util.OptionalInt;
 
 /**
  * Assignment related configs for the Kafka Streams {@link TaskAssignor}.

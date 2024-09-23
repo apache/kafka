@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +30,6 @@ import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +39,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import javax.ws.rs.core.Response;
 
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -117,7 +119,6 @@ public class ConnectorRestartApiIntegrationTest {
 
     @AfterAll
     public static void close() {
-        // stop all Connect, Kafka and Zk threads.
         CONNECT_CLUSTERS.values().forEach(EmbeddedConnectCluster::stop);
     }
 
@@ -125,7 +126,7 @@ public class ConnectorRestartApiIntegrationTest {
     public void testRestartUnknownConnectorNoParams() throws Exception {
         String connectorName = "Unknown";
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         startOrReuseConnectWithNumWorkers(ONE_WORKER);
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
@@ -146,7 +147,7 @@ public class ConnectorRestartApiIntegrationTest {
     private void restartUnknownConnector(boolean onlyFailed, boolean includeTasks) throws Exception {
         String connectorName = "Unknown";
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         startOrReuseConnectWithNumWorkers(ONE_WORKER);
         // Call the Restart API
         String restartEndpoint = connect.endpointForResource(
@@ -297,7 +298,7 @@ public class ConnectorRestartApiIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         props.put("connector.start.inject.error", "true");
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         startOrReuseConnectWithNumWorkers(ONE_WORKER);
 
         // Try to start the connector and its single task.
@@ -328,7 +329,7 @@ public class ConnectorRestartApiIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         tasksToFail.forEach(taskId -> props.put("task-" + taskId + ".start.inject.error", "true"));
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         startOrReuseConnectWithNumWorkers(ONE_WORKER);
 
         // Try to start the connector and its single task.

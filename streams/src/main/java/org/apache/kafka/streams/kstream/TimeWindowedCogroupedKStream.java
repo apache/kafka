@@ -23,8 +23,8 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.time.Duration;
 
@@ -181,7 +181,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
-     * provide store name defined in {@link Materialized}, and "-changelog" is a fixed suffix.
+     * name of the store defined in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -239,7 +239,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
-     * provide store name defined in {@link Materialized}, and "-changelog" is a fixed suffix.
+     * name of the store defined in {@link Materialized}, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *

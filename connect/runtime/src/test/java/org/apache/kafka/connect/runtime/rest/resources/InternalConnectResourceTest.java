@@ -16,15 +16,18 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.util.Callback;
-import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -33,15 +36,16 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Stubber;
 
-import javax.crypto.Mac;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.UriInfo;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import javax.crypto.Mac;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.UriInfo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -66,6 +70,10 @@ public class InternalConnectResourceTest {
     }
     private static final String FENCE_PATH = "/connectors/" + CONNECTOR_NAME + "/fence";
     private static final String TASK_CONFIGS_PATH = "/connectors/" + CONNECTOR_NAME + "/tasks";
+    private static final RestRequestTimeout REST_REQUEST_TIMEOUT = RestRequestTimeout.constant(
+            RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS,
+            RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+    );
 
     @Mock
     private UriInfo uriInfo;
@@ -78,7 +86,7 @@ public class InternalConnectResourceTest {
 
     @BeforeEach
     public void setup() {
-        internalResource = new InternalConnectResource(herder, restClient, () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        internalResource = new InternalConnectResource(herder, restClient, REST_REQUEST_TIMEOUT);
         internalResource.uriInfo = uriInfo;
     }
 

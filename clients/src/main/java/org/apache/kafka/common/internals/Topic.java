@@ -28,6 +28,7 @@ public class Topic {
 
     public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
     public static final String TRANSACTION_STATE_TOPIC_NAME = "__transaction_state";
+    public static final String SHARE_GROUP_STATE_TOPIC_NAME = "__share_group_state";
     public static final String CLUSTER_METADATA_TOPIC_NAME = "__cluster_metadata";
     public static final TopicPartition CLUSTER_METADATA_TOPIC_PARTITION = new TopicPartition(
         CLUSTER_METADATA_TOPIC_NAME,
@@ -36,7 +37,7 @@ public class Topic {
     public static final String LEGAL_CHARS = "[a-zA-Z0-9._-]";
 
     private static final Set<String> INTERNAL_TOPICS = Collections.unmodifiableSet(
-            Utils.mkSet(GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME));
+            Utils.mkSet(GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME));
 
     private static final int MAX_NAME_LENGTH = 249;
 

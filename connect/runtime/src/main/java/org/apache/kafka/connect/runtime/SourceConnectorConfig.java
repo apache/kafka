@@ -22,6 +22,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.source.SourceTask;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,9 +33,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.common.utils.Utils.enumOptions;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUESTED;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
@@ -46,7 +48,6 @@ import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CON
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.DEFAULT;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.INTERVAL;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.POLL;
-import static org.apache.kafka.common.utils.Utils.enumOptions;
 
 public class SourceConnectorConfig extends ConnectorConfig {
 

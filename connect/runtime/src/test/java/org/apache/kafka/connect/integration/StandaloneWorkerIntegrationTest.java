@@ -19,12 +19,16 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectStandalone;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,45 +36,65 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import javax.ws.rs.core.Response;
+
+import static org.apache.kafka.connect.integration.BlockingConnectorTest.Block.BLOCK_CONFIG;
+import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_START;
+import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_TASK_CONFIGS;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 public class StandaloneWorkerIntegrationTest {
 
+    private static final Logger log = LoggerFactory.getLogger(StandaloneWorkerIntegrationTest.class);
+
     private static final String CONNECTOR_NAME = "test-connector";
     private static final int NUM_TASKS = 4;
     private static final String TOPIC_NAME = "test-topic";
 
+    private EmbeddedConnectStandalone.Builder connectBuilder;
     private EmbeddedConnectStandalone connect;
 
     @BeforeEach
     public void setup() {
-        connect = new EmbeddedConnectStandalone.Builder()
-                .build();
-        connect.start();
+        connectBuilder = new EmbeddedConnectStandalone.Builder();
     }
 
     @AfterEach
     public void cleanup() {
-        connect.stop();
+        // Unblock everything so that we don't leak threads even if a test run fails
+        BlockingConnectorTest.Block.reset();
+
+        if (connect != null)
+            connect.stop();
+
+        BlockingConnectorTest.Block.join();
     }
 
     @Test
     public void testDynamicLogging() {
+        connect = connectBuilder.build();
+        connect.start();
+
         Map<String, LoggerLevel> initialLevels = connect.allLogLevels();
         assertFalse(initialLevels.isEmpty(), "Connect REST API did not list any known loggers");
         Map<String, LoggerLevel> invalidModifiedLoggers = Utils.filterMap(
@@ -218,6 +242,9 @@ public class StandaloneWorkerIntegrationTest {
 
     @Test
     public void testCreateConnectorWithStoppedInitialState() throws Exception {
+        connect = connectBuilder.build();
+        connect.start();
+
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
             defaultSourceConnectorProps(TOPIC_NAME),
@@ -242,9 +269,108 @@ public class StandaloneWorkerIntegrationTest {
         );
     }
 
+    @Test
+    public void testHealthCheck() throws Exception {
+        int numTasks = 1; // The blocking connector only generates a single task anyways
+
+        Map<String, String> blockedConnectorConfig = new HashMap<>();
+        blockedConnectorConfig.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingConnector.class.getName());
+        blockedConnectorConfig.put(NAME_CONFIG, CONNECTOR_NAME);
+        blockedConnectorConfig.put(TASKS_MAX_CONFIG, Integer.toString(numTasks));
+        blockedConnectorConfig.put(BLOCK_CONFIG, CONNECTOR_START);
+
+        connect = connectBuilder.withCommandLineConnector(blockedConnectorConfig).build();
+        Thread workerThread = new Thread(connect::start);
+        workerThread.setName("integration-test-standalone-connect-worker");
+        try {
+            workerThread.start();
+
+            AtomicReference<Response> healthCheckResponse = new AtomicReference<>();
+            connect.requestTimeout(1_000);
+            waitForCondition(
+                    () -> {
+                        Response response = connect.healthCheck();
+                        healthCheckResponse.set(response);
+                        return true;
+                    },
+                    60_000,
+                    "Health check endpoint for standalone worker was not available in time"
+            );
+            connect.resetRequestTimeout();
+
+            // Worker hasn't completed startup; should be serving 503 responses from the health check endpoint
+            try (Response response = healthCheckResponse.get()) {
+                assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), response.getStatus());
+                assertNotNull(response.getEntity());
+                String body = response.getEntity().toString();
+                assertTrue(
+                        body.contains("Worker is still starting up"),
+                        "Body did not contain expected message: " + body
+                );
+            }
+
+            BlockingConnectorTest.Block.reset();
+
+            // Worker has completed startup by this point; should serve 200 responses
+            try (Response response = connect.healthCheck()) {
+                assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+                assertNotNull(response.getEntity());
+                String body = response.getEntity().toString();
+                assertTrue(
+                        body.contains("Worker has completed startup and is ready to handle requests."),
+                        "Body did not contain expected message: " + body
+                );
+            }
+
+            // And, if the worker claims that it's healthy, it should have also been able to generate tasks
+            // for the now-unblocked connector
+            connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                    CONNECTOR_NAME,
+                    numTasks,
+                    "Connector or tasks did not start running healthily in time"
+            );
+
+            // Hack: if a connector blocks in its taskConfigs method, then the worker gets blocked
+            // If that bug is ever fixed, we can remove this section from the test (it's not worth keeping
+            // the bug just for the coverage it provides)
+            blockedConnectorConfig.put(BLOCK_CONFIG, CONNECTOR_TASK_CONFIGS);
+            connect.requestTimeout(1_000);
+            assertThrows(
+                    ConnectRestException.class,
+                    () -> connect.configureConnector(CONNECTOR_NAME, blockedConnectorConfig)
+            );
+
+            // Worker has completed startup but is now blocked; should serve 500 responses
+            try (Response response = connect.healthCheck()) {
+                assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), response.getStatus());
+                assertNotNull(response.getEntity());
+                String body = response.getEntity().toString();
+                assertTrue(
+                        body.contains("Worker was unable to handle this request and may be unable to handle other requests."),
+                        "Body did not contain expected message: " + body
+                );
+            }
+            connect.resetRequestTimeout();
+
+            BlockingConnectorTest.Block.reset();
+
+            connect.deleteConnector(CONNECTOR_NAME);
+        } finally {
+            if (workerThread.isAlive()) {
+                log.debug("Standalone worker startup not completed yet; interrupting and waiting for startup to finish");
+                workerThread.interrupt();
+                workerThread.join(TimeUnit.MINUTES.toMillis(1));
+                if (workerThread.isAlive()) {
+                    log.warn("Standalone worker startup never completed; abandoning thread");
+                }
+            }
+        }
+    }
+
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup props for the source connector
         Map<String, String> props = new HashMap<>();
+        props.put(NAME_CONFIG, CONNECTOR_NAME);
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);

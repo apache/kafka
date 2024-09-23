@@ -16,16 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-
-import java.util.Collections;
-import java.util.List;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -33,7 +23,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -41,14 +30,29 @@ import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.util.Collections;
+import java.util.List;
+
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("rawtypes")
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ChangeLoggingVersionedKeyValueBytesStoreTest {
 
     private static final Serializer<String> STRING_SERIALIZER = new StringSerializer();
@@ -61,7 +65,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     private VersionedBytesStore inner;
     private ChangeLoggingVersionedKeyValueBytesStore store;
 
-    @Before
+    @BeforeEach
     public void before() {
         inner = (VersionedBytesStore) new RocksDbVersionedKeyValueBytesStoreSupplier("bytes_store", HISTORY_RETENTION).get();
         store = new ChangeLoggingVersionedKeyValueBytesStore(inner);
@@ -81,7 +85,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
         );
     }
 
-    @After
+    @AfterEach
     public void after() {
         store.close();
     }
@@ -90,19 +94,6 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     public void shouldThrowIfInnerIsNotVersioned() {
         assertThrows(IllegalArgumentException.class,
             () -> new ChangeLoggingVersionedKeyValueBytesStore(new InMemoryKeyValueStore("kv")));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        // recreate store with mock inner
-        store.close();
-        final VersionedBytesStore mockInner = mock(VersionedBytesStore.class);
-        store = new ChangeLoggingVersionedKeyValueBytesStore(mockInner);
-
-        store.init((ProcessorContext) context, store);
-
-        verify(mockInner).init((ProcessorContext) context, store);
     }
 
     @Test

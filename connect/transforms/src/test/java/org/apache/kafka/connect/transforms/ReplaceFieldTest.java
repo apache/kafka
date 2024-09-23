@@ -24,15 +24,27 @@ import org.apache.kafka.connect.sink.SinkRecord;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ReplaceFieldTest {
+    private final ReplaceField<SinkRecord> xformKey = new ReplaceField.Key<>();
     private final ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
+
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, null),
+                Arguments.of(true, 42)
+        );
+    }
 
     @AfterEach
     public void teardown() {
@@ -175,5 +187,55 @@ public class ReplaceFieldTest {
     @Test
     public void testReplaceFieldVersionRetrievedFromAppInfoParser() {
         assertEquals(AppInfoParser.getVersion(), xform.version());
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testReplaceNullWithDefaultConfigOnValue(boolean replaceNullWithDefault, Object expectedValue) {
+        final Map<String, String> props = new HashMap<>();
+        props.put("include", "abc");
+        props.put("renames", "abc:optional_with_default");
+        props.put("replace.null.with.default", String.valueOf(replaceNullWithDefault));
+
+        xform.configure(props);
+
+        final Schema valueSchema = SchemaBuilder.struct()
+                .field("abc", SchemaBuilder.int32().optional().defaultValue(42).build())
+                .build();
+
+        final Struct value = new Struct(valueSchema).put("abc", null);
+
+        final SinkRecord record = new SinkRecord("test", 0, null, null, valueSchema, value, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        final Struct updatedValue = (Struct) transformedRecord.value();
+
+        assertEquals(1, updatedValue.schema().fields().size());
+        assertEquals(expectedValue, updatedValue.getWithoutDefault("optional_with_default"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testReplaceNullWithDefaultConfigOnKey(boolean replaceNullWithDefault, Object expectedValue) {
+        final Map<String, String> props = new HashMap<>();
+        props.put("include", "abc");
+        props.put("renames", "abc:optional_with_default");
+        props.put("replace.null.with.default", String.valueOf(replaceNullWithDefault));
+
+        xformKey.configure(props);
+
+        final Schema keySchema = SchemaBuilder.struct()
+                .field("abc", SchemaBuilder.int32().optional().defaultValue(42).build())
+                .build();
+
+        final Struct key = new Struct(keySchema).put("abc", null);
+
+        final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
+        final SinkRecord transformedRecord = xformKey.apply(record);
+
+        final Struct updatedKey = (Struct) transformedRecord.key();
+
+        assertEquals(1, updatedKey.schema().fields().size());
+        assertEquals(expectedValue, updatedKey.getWithoutDefault("optional_with_default"));
     }
 }

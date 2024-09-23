@@ -29,7 +29,7 @@ import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.common.utils.{Exit, Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.security.authorizer.{AclEntry, AuthorizerUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ZkConfigs
@@ -43,7 +43,7 @@ object AclCommand extends Logging {
 
   private val AuthorizerDeprecationMessage: String = "Warning: support for ACL configuration directly " +
     "through the authorizer is deprecated and will be removed in a future release. Please use " +
-    "--bootstrap-server instead to set ACLs through the admin client."
+    "--bootstrap-server or --bootstrap-controller instead to set ACLs through the admin client."
   private val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, PatternType.LITERAL)
 
   private val Newline = scala.util.Properties.lineSeparator
@@ -57,7 +57,7 @@ object AclCommand extends Logging {
     opts.checkArgs()
 
     val aclCommandService = {
-      if (opts.options.has(opts.bootstrapServerOpt)) {
+      if (opts.options.has(opts.bootstrapServerOpt) || opts.options.has(opts.bootstrapControllerOpt)) {
         new AdminClientService(opts)
       } else {
         val authorizerClassName = if (opts.options.has(opts.authorizerOpt))
@@ -97,7 +97,12 @@ object AclCommand extends Logging {
         Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
       else
         new Properties()
-      props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+
+      if (opts.options.has(opts.bootstrapServerOpt)) {
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+      } else {
+        props.put(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, opts.options.valueOf(opts.bootstrapControllerOpt))
+      }
       val adminClient = Admin.create(props)
 
       try {
@@ -115,8 +120,6 @@ object AclCommand extends Logging {
           val aclBindings = acls.map(acl => new AclBinding(resource, acl)).asJavaCollection
           adminClient.createAcls(aclBindings).all().get()
         }
-
-        listAcls(adminClient)
       }
     }
 
@@ -133,8 +136,6 @@ object AclCommand extends Logging {
               removeAcls(adminClient, acls, filter)
           }
         }
-
-        listAcls(adminClient)
       }
     }
 
@@ -238,8 +239,6 @@ object AclCommand extends Logging {
             }
           }
         }
-
-        listAcls()
       }
     }
 
@@ -256,8 +255,6 @@ object AclCommand extends Logging {
               removeAcls(authorizer, acls, filter)
           }
         }
-
-        listAcls()
       }
     }
 
@@ -501,6 +498,12 @@ object AclCommand extends Logging {
       .describedAs("server to connect to")
       .ofType(classOf[String])
 
+    val bootstrapControllerOpt: OptionSpec[String] = parser.accepts("bootstrap-controller", "A list of host/port pairs to use for establishing the connection to the Kafka cluster." +
+        " This list should be in the form host1:port1,host2:port2,... This config is required for acl management using admin client API.")
+      .withRequiredArg
+      .describedAs("controller to connect to")
+      .ofType(classOf[String])
+
     val commandConfigOpt: OptionSpec[String] = parser.accepts("command-config", CommandConfigDoc)
       .withOptionalArg()
       .describedAs("command-config")
@@ -634,18 +637,22 @@ object AclCommand extends Logging {
     options = parser.parse(args: _*)
 
     def checkArgs(): Unit = {
-      if (options.has(bootstrapServerOpt) && options.has(authorizerOpt))
-        CommandLineUtils.printUsageAndExit(parser, "Only one of --bootstrap-server or --authorizer must be specified")
+      if (options.has(bootstrapServerOpt) && options.has(bootstrapControllerOpt))
+        CommandLineUtils.printUsageAndExit(parser, "Only one of --bootstrap-server or --bootstrap-controller must be specified")
 
-      if (!options.has(bootstrapServerOpt)) {
+      val hasServerOrController = options.has(bootstrapServerOpt) || options.has(bootstrapControllerOpt)
+      if (hasServerOrController && options.has(authorizerOpt))
+        CommandLineUtils.printUsageAndExit(parser, "The --authorizer option can only be used without --bootstrap-server or --bootstrap-controller")
+
+      if (!hasServerOrController) {
         CommandLineUtils.checkRequiredArgs(parser, options, authorizerPropertiesOpt)
         System.err.println(AclCommand.AuthorizerDeprecationMessage)
       }
 
-      if (options.has(commandConfigOpt) && !options.has(bootstrapServerOpt))
-        CommandLineUtils.printUsageAndExit(parser, "The --command-config option can only be used with --bootstrap-server option")
+      if (options.has(commandConfigOpt) && (!hasServerOrController))
+        CommandLineUtils.printUsageAndExit(parser, "The --command-config option can only be used with --bootstrap-server or --bootstrap-controller option")
 
-      if (options.has(authorizerPropertiesOpt) && options.has(bootstrapServerOpt))
+      if (options.has(authorizerPropertiesOpt) && hasServerOrController)
         CommandLineUtils.printUsageAndExit(parser, "The --authorizer-properties option can only be used with --authorizer option")
 
       val actions = Seq(addOpt, removeOpt, listOpt).count(options.has)

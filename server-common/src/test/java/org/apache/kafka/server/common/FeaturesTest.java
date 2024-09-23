@@ -26,8 +26,16 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FeaturesTest {
+    @ParameterizedTest
+    @EnumSource(Features.class)
+    public void testV0SupportedInEarliestMV(Features feature) {
+        assertTrue(feature.featureVersions().length >= 1);
+        assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION,
+                feature.featureVersions()[0].bootstrapMetadataVersion());
+    }
 
     @ParameterizedTest
     @EnumSource(Features.class)
@@ -36,13 +44,13 @@ public class FeaturesTest {
         int numFeatures = featureImplementations.length;
         short latestProductionLevel = feature.latestProduction();
 
-        for (short i = 1; i < numFeatures; i++) {
+        for (short i = 0; i < numFeatures; i++) {
             short level = i;
             if (latestProductionLevel < i) {
-                assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(level, true));
+                assertEquals(featureImplementations[i], feature.fromFeatureLevel(level, true));
                 assertThrows(IllegalArgumentException.class, () -> feature.fromFeatureLevel(level, false));
             } else {
-                assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(level, false));
+                assertEquals(featureImplementations[i], feature.fromFeatureLevel(level, false));
             }
         }
     }
@@ -95,8 +103,13 @@ public class FeaturesTest {
     @EnumSource(Features.class)
     public void testDefaultValueAllFeatures(Features feature) {
         for (FeatureVersion featureImpl : feature.featureVersions()) {
-            assertEquals(feature.defaultValue(featureImpl.bootstrapMetadataVersion()), featureImpl.featureLevel(),
-                    "Failed to get the correct default for " + featureImpl);
+            // If features have the same bootstrapMetadataVersion, the highest level feature should be chosen.
+            short defaultLevel = feature.defaultValue(featureImpl.bootstrapMetadataVersion());
+            if (defaultLevel != featureImpl.featureLevel()) {
+                FeatureVersion otherFeature = feature.fromFeatureLevel(defaultLevel, true);
+                assertEquals(featureImpl.bootstrapMetadataVersion(), otherFeature.bootstrapMetadataVersion());
+                assertTrue(defaultLevel > featureImpl.featureLevel());
+            }
         }
     }
 
@@ -110,7 +123,7 @@ public class FeaturesTest {
     @EnumSource(MetadataVersion.class)
     public void testDefaultTestVersion(MetadataVersion metadataVersion) {
         short expectedVersion;
-        if (!metadataVersion.isLessThan(MetadataVersion.IBP_3_8_IV0)) {
+        if (!metadataVersion.isLessThan(MetadataVersion.latestTesting())) {
             expectedVersion = 2;
         } else if (!metadataVersion.isLessThan(MetadataVersion.IBP_3_7_IV0)) {
             expectedVersion = 1;

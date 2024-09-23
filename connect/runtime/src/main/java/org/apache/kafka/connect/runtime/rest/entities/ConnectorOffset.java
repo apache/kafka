@@ -76,4 +76,12 @@ public class ConnectorOffset {
     public int hashCode() {
         return Objects.hash(partition, offset);
     }
+
+    @Override
+    public String toString() {
+        return "{" +
+                "partition=" + partition +
+                ", offset=" + offset +
+                '}';
+    }
 }

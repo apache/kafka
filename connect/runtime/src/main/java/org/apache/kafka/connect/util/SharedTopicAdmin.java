@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.connect.errors.ConnectException;
+
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
@@ -24,9 +27,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
-
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.connect.errors.ConnectException;
 
 /**
  * A holder of a {@link TopicAdmin} object that is lazily and atomically created when needed by multiple callers.

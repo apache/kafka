@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -41,13 +42,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.threadProducerClientId;
 
 class ActiveTaskCreator {
     private final TopologyMetadata topologyMetadata;
@@ -110,7 +109,6 @@ class ActiveTaskCreator {
                 applicationConfig,
                 threadId,
                 clientSupplier,
-                null,
                 processId,
                 logContext,
                 time);
@@ -196,7 +194,6 @@ class ActiveTaskCreator {
                 applicationConfig,
                 threadId,
                 clientSupplier,
-                taskId,
                 null,
                 logContext,
                 time
@@ -210,7 +207,7 @@ class ActiveTaskCreator {
             logContext,
             taskId,
             streamsProducer,
-            applicationConfig.defaultProductionExceptionHandler(),
+            applicationConfig.productionExceptionHandler(),
             streamsMetrics,
             topology
         );
@@ -268,7 +265,7 @@ class ActiveTaskCreator {
             inputPartitions,
             topology,
             consumer,
-            topologyMetadata.getTaskConfigFor(taskId),
+            topologyMetadata.taskConfig(taskId),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -316,15 +313,8 @@ class ActiveTaskCreator {
         return ClientUtils.producerMetrics(producers);
     }
 
-    Set<String> producerClientIds() {
-        if (threadProducer != null) {
-            return Collections.singleton(getThreadProducerClientId(threadId));
-        } else {
-            return taskProducers.keySet()
-                                .stream()
-                                .map(taskId -> getTaskProducerClientId(threadId, taskId))
-                                .collect(Collectors.toSet());
-        }
+    String producerClientIds() {
+        return threadProducerClientId(threadId);
     }
 
     private LogContext getLogContext(final TaskId taskId) {

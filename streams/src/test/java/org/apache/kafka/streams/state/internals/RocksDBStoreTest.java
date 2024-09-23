@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.lang.reflect.Field;
-import java.util.Optional;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -61,14 +58,16 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.Matchers;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.jupiter.api.Assertions;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -80,6 +79,7 @@ import org.rocksdb.Statistics;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -87,6 +87,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -103,11 +104,11 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasEntry;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.notNull;
@@ -116,7 +117,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private static boolean enableBloomFilters = false;
     static final String DB_NAME = "db-name";
@@ -133,7 +135,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     InternalMockProcessorContext context;
     RocksDBStore rocksDBStore;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
@@ -147,7 +149,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore = getRocksDBStore();
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         rocksDBStore.close();
     }
@@ -323,12 +325,12 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig.class
         );
         assertThrows(
-            "The used block-based table format configuration does not expose the " +
-                "block cache. Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
-                "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
-                "the RocksDB options.",
             ProcessorStateException.class,
-            () -> rocksDBStore.openDB(context.appConfigs(), context.stateDir())
+            () -> rocksDBStore.openDB(context.appConfigs(), context.stateDir()),
+            "The used block-based table format configuration does not expose the " +
+                    "block cache. Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
+                    "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
+                    "the RocksDB options."
         );
     }
 
@@ -1066,10 +1068,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
             store.close();
 
-            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorOne.hasNext());
-            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorOne.next());
-            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.hasNext());
-            Assertions.assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.next());
+            assertThrows(InvalidStateStoreException.class, () -> iteratorOne.hasNext());
+            assertThrows(InvalidStateStoreException.class, () -> iteratorOne.next());
+            assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.hasNext());
+            assertThrows(InvalidStateStoreException.class, () -> iteratorTwo.next());
         }
     }
 

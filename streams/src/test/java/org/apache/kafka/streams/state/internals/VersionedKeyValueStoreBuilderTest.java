@@ -16,26 +16,30 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertThrows;
-import static org.mockito.Mockito.when;
-
-import java.util.Collections;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.util.Collections;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class VersionedKeyValueStoreBuilderTest {
 
     private static final String STORE_NAME = "versioned-store";
@@ -48,9 +52,7 @@ public class VersionedKeyValueStoreBuilderTest {
 
     private VersionedKeyValueStoreBuilder<String, String> builder;
 
-    @Before
-    public void setUp() {
-        when(supplier.get()).thenReturn(inner);
+    private void setUpWithoutInner() {
         when(supplier.name()).thenReturn(STORE_NAME);
         when(supplier.metricsScope()).thenReturn(METRICS_SCOPE);
 
@@ -62,8 +64,14 @@ public class VersionedKeyValueStoreBuilderTest {
         );
     }
 
+    private void setUp() {
+        when(supplier.get()).thenReturn(inner);
+        setUpWithoutInner();
+    }
+
     @Test
     public void shouldHaveMeteredStoreAsOuterStore() {
+        setUp();
         final VersionedKeyValueStore<String, String> store = builder.build();
 
         assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
@@ -71,6 +79,7 @@ public class VersionedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
+        setUp();
         final VersionedKeyValueStore<String, String> store = builder.build();
 
         assertThat(store, instanceOf(MeteredVersionedKeyValueStore.class));
@@ -80,6 +89,7 @@ public class VersionedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
+        setUp();
         final VersionedKeyValueStore<String, String> store = builder
             .withLoggingDisabled()
             .build();
@@ -92,6 +102,7 @@ public class VersionedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
+        setUp();
         final VersionedKeyValueStore<String, String> store = builder
             .withLoggingEnabled(Collections.emptyMap())
             .build();
@@ -104,34 +115,40 @@ public class VersionedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldThrowWhenCachingEnabled() {
+        setUpWithoutInner();
         assertThrows(IllegalStateException.class, () -> builder.withCachingEnabled());
     }
 
     @SuppressWarnings("all")
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
+        setUpWithoutInner();
         assertThrows(NullPointerException.class, () -> new VersionedKeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
     @Test
     public void shouldNotThrowNullPointerIfKeySerdeIsNull() {
+        setUpWithoutInner();
         // does not throw
         new VersionedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
     }
 
     @Test
     public void shouldNotThrowNullPointerIfValueSerdeIsNull() {
+        setUpWithoutInner();
         // does not throw
         new VersionedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
     }
 
     @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
+        setUpWithoutInner();
         assertThrows(NullPointerException.class, () -> new VersionedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
     @Test
     public void shouldThrowNullPointerIfNameIsNull() {
+        setUpWithoutInner();
         when(supplier.name()).thenReturn(null);
 
         assertThrows(NullPointerException.class, () -> new VersionedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
@@ -139,6 +156,7 @@ public class VersionedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
+        setUpWithoutInner();
         when(supplier.metricsScope()).thenReturn(null);
 
         assertThrows(NullPointerException.class, () -> new VersionedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));

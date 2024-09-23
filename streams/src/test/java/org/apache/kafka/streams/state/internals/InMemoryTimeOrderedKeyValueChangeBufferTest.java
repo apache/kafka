@@ -18,7 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;

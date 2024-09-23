@@ -16,19 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static java.util.Collections.unmodifiableMap;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import org.apache.kafka.streams.processor.assignment.TaskInfo;
-import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.ClientMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.ClientMetadata;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+import static java.util.Collections.unmodifiableMap;
 
 public class DefaultApplicationState implements ApplicationState {
 

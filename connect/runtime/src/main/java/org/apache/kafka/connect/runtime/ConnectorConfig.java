@@ -34,6 +34,7 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConcreteSubClassValidator;
 import org.apache.kafka.connect.util.InstantiableClassValidator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -228,21 +229,15 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     private static ConfigDef.CompositeValidator aliasValidator(String kind) {
-        return ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), new ConfigDef.Validator() {
-            @SuppressWarnings("unchecked")
-            @Override
-            public void ensureValid(String name, Object value) {
+        return ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ConfigDef.LambdaValidator.with(
+            (name, value) -> {
+                @SuppressWarnings("unchecked")
                 final List<String> aliases = (List<String>) value;
                 if (aliases.size() > new HashSet<>(aliases).size()) {
                     throw new ConfigException(name, value, "Duplicate alias provided.");
                 }
-            }
-
-            @Override
-            public String toString() {
-                return "unique " + kind + " aliases";
-            }
-        });
+            },
+            () -> "unique " + kind + " aliases"));
     }
 
     public ConnectorConfig(Plugins plugins) {

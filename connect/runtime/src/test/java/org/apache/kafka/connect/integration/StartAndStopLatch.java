@@ -17,12 +17,12 @@
 
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.utils.Time;
+
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-
-import org.apache.kafka.common.utils.Time;
 
 /**
  * A latch that can be used to count down the number of times a connector and/or tasks have

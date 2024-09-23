@@ -26,7 +26,6 @@ import org.apache.kafka.connect.runtime.isolation.ReflectionScanner;
 import org.apache.kafka.connect.runtime.isolation.ServiceLoaderScanner;
 import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,13 +80,6 @@ public class ConnectPluginPathTest {
 
     @TempDir
     public Path workspace;
-
-    @BeforeAll
-    public static void setUp() {
-        // Work around a circular-dependency in TestPlugins.
-        TestPlugins.pluginPath();
-    }
-
 
     @Test
     public void testNoArguments() {

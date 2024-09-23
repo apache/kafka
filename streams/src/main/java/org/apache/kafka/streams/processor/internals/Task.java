@@ -20,9 +20,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -246,7 +246,7 @@ public interface Task {
 
     // IQ related methods
 
-    StateStore getStore(final String name);
+    StateStore store(final String name);
 
     /**
      * @return the offsets of all the changelog partitions associated with this task,

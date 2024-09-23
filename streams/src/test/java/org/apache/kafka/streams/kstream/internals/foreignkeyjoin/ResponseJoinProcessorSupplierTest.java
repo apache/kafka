@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;

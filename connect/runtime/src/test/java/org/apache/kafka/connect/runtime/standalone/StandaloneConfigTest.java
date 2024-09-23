@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;

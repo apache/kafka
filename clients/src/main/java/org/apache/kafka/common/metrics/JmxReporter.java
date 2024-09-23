@@ -55,16 +55,12 @@ public class JmxReporter implements MetricsReporter {
     public static final String METRICS_CONFIG_PREFIX = "metrics.jmx.";
 
     public static final String EXCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "exclude";
-    public static final String EXCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "blacklist";
 
     public static final String INCLUDE_CONFIG = METRICS_CONFIG_PREFIX + "include";
-    public static final String INCLUDE_CONFIG_ALIAS = METRICS_CONFIG_PREFIX + "whitelist";
 
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(INCLUDE_CONFIG,
-                                                                         INCLUDE_CONFIG_ALIAS,
-                                                                         EXCLUDE_CONFIG,
-                                                                         EXCLUDE_CONFIG_ALIAS);
+                                                                         EXCLUDE_CONFIG);
 
     public static final String DEFAULT_INCLUDE = ".*";
     public static final String DEFAULT_EXCLUDE = "";
@@ -311,8 +307,8 @@ public class JmxReporter implements MetricsReporter {
 
     public static Predicate<String> compilePredicate(Map<String, ?> originalConfig) {
         Map<String, ?> configs = ConfigUtils.translateDeprecatedConfigs(
-            originalConfig, new String[][]{{INCLUDE_CONFIG, INCLUDE_CONFIG_ALIAS},
-                                           {EXCLUDE_CONFIG, EXCLUDE_CONFIG_ALIAS}});
+            originalConfig, new String[][]{{INCLUDE_CONFIG},
+                                           {EXCLUDE_CONFIG}});
         String include = (String) configs.get(INCLUDE_CONFIG);
         String exclude = (String) configs.get(EXCLUDE_CONFIG);
 

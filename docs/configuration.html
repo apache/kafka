@@ -308,6 +308,126 @@
   Below are the configuration properties for Tiered Storage.
   <!--#include virtual="generated/remote_log_manager_config.html" -->
   <!--#include virtual="generated/remote_log_metadata_manager_config.html" -->
-</script>
 
+  <h3 class="anchor-heading">
+    <a id="config_providers" class="anchor-link"></a>
+    <a href="#config_providers">3.11 Configuration Providers</a>
+  </h3>
+  
+  <p>
+    Use configuration providers to load configuration data from external sources. This might include sensitive information, such as passwords, API keys, or other credentials.
+  </p>
+  
+  <p>You have the following options:</p>
+  <ul>
+    <li>
+      Use a custom provider by creating a class implementing the
+      <a href="/{{version}}/javadoc/org/apache/kafka/common/config/provider/ConfigProvider.html"><code>ConfigProvider</code></a> interface and packaging it into a JAR file.
+    </li>
+    <li>Use a built-in provider:</li>
+    <ul>
+      <li><a href="/{{version}}/javadoc/org/apache/kafka/common/config/provider/DirectoryConfigProvider.html"><code>DirectoryConfigProvider</code></a></li>
+      <li><a href="/{{version}}/javadoc/org/apache/kafka/common/config/provider/EnvVarConfigProvider.html"><code>EnvVarConfigProvider</code></a></li>
+      <li><a href="/{{version}}/javadoc/org/apache/kafka/common/config/provider/FileConfigProvider.html"><code>FileConfigProvider</code></a></li>
+    </ul>
+  </ul>
+  
+  <p>
+    To use a configuration provider, specify it in your configuration using the <code>config.providers</code> property. 
+  </p>
+  
+  <h4 class="anchor-heading">
+    <a id="using_config_providers" class="anchor-link"></a>
+    <a href="#using_config_providers">Using Configuration Providers</a>
+  </h4>
+  <p>Configuration providers allow you to pass parameters and retrieve configuration data from various sources.</p>
+  <p>To specify configuration providers, you use a comma-separated list of aliases and the fully-qualified class names that implement the configuration providers:</p>
+  <pre><code>config.providers=provider1,provider2
+config.providers.provider1.class=com.example.Provider1
+config.providers.provider2.class=com.example.Provider2</code></pre>
+  <p>Each provider can have its own set of parameters, which are passed in a specific format:</p>
+  <pre><code>config.providers.&lt;provider_alias&gt;.param.&lt;name&gt;=&lt;value&gt;</code></pre>
+  <p>The <code>ConfigProvider</code> interface serves as a base for all configuration providers. 
+    Custom implementations of this interface can be created to retrieve configuration data from various sources. 
+    You can package the implementation as a JAR file, add the JAR to your classpath, and reference the provider's class in your configuration.</p>
+  <p><b>Example custom provider configuration</b></p>
+  <pre><code>config.providers=customProvider
+config.providers.customProvider.class=com.example.customProvider
+config.providers.customProvider.param.param1=value1
+config.providers.customProvider.param.param2=value2</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="directory_config_provider" class="anchor-link"></a>
+    <a href="#directory_config_provider">DirectoryConfigProvider</a>
+  </h4>
+  <p>The <code>DirectoryConfigProvider</code> retrieves configuration data from files stored in a specified directory.</p>
+  <p>Each file represents a key, and its content is the value. This provider is useful for loading multiple configuration files and for organizing configuration data into separate files.</p>
+  <p>To restrict the files that the <code>DirectoryConfigProvider</code> can access, use the <code>allowed.paths</code> parameter. 
+    This parameter accepts a comma-separated list of paths that the provider is allowed to access. If not set, all paths are allowed.</p>
+  <p><b>Example <code>DirectoryConfigProvider</code> configuration</b></p>
+<pre><code>config.providers=dirProvider
+config.providers.dirProvider.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider
+config.providers.dirProvider.param.allowed.paths=/path/to/dir1,/path/to/dir2</code></pre>
+  <p>
+    To reference a value supplied by the <code>DirectoryConfigProvider</code>, use the correct placeholder syntax:
+  </p>
+<pre><code>${dirProvider:&lt;path_to_file&gt;:&lt;file_name&gt;}</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="env_var_config_provider" class="anchor-link"></a>
+    <a href="#env_var_config_provider">EnvVarConfigProvider</a>
+  </h4>
+  <p>The <code>EnvVarConfigProvider</code> retrieves configuration data from environment variables.</p>
+  <p>No specific parameters are required, as it reads directly from the specified environment variables.</p>
+  <p>This provider is useful for configuring applications running in containers, for example, to load certificates or JAAS configuration from environment variables mapped from secrets.</p>
+  <p>To restrict which environment variables the <code>EnvVarConfigProvider</code> can access, use the <code>allowlist.pattern</code> parameter. This parameter accepts a regular expression that environment variable names must match to be used by the provider.</p>
+  <p><b>Example <code>EnvVarConfigProvider</code> configuration</b></p>
+<pre><code>config.providers=envVarProvider
+config.providers.envVarProvider.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider
+config.providers.envVarProvider.param.allowlist.pattern=^MY_ENVAR1_.*</code></pre>
+  <p>
+    To reference a value supplied by the <code>EnvVarConfigProvider</code>, use the correct placeholder syntax:
+  </p>
+<pre><code>${envVarProvider:&lt;enVar_name&gt;}</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="file_config_provider" class="anchor-link"></a>
+    <a href="#file_config_provider">FileConfigProvider</a>
+  </h4>
+  <p>The <code>FileConfigProvider</code> retrieves configuration data from a single properties file.</p>
+  <p>This provider is useful for loading configuration data from mounted files.</p>
+  <p>To restrict the file paths that the <code>FileConfigProvider</code> can access, use the <code>allowed.paths</code> parameter. This parameter accepts a comma-separated list of paths that the provider is allowed to access. If not set, all paths are allowed.</p>
+  <p><b>Example <code>FileConfigProvider</code> configuration</b></p>
+<pre><code>config.providers=fileProvider
+config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider
+config.providers.fileProvider.param.allowed.paths=/path/to/config1,/path/to/config2</code></pre>
+  <p>
+   To reference a value supplied by the <code>FileConfigProvider</code>, use the correct placeholder syntax:
+  </p>
+<pre><code>${fileProvider:&lt;path_and_filename&gt;:&lt;property&gt;}</code></pre>
+  
+  <h4 class="anchor-heading">
+    <a id="ref_config_provider" class="anchor-link"></a>
+    <a href="#ref_config_provider">Example: Referencing files</a>
+  </h4>
+  <p>
+    Here’s an example that uses a file configuration provider with Kafka Connect to provide authentication credentials to a database for a connector.
+  </p>
+  <p>
+    First, create a <code>connector-credentials.properties</code> configuration file with the following credentials:
+  </p>
+  <pre><code>dbUsername=my-username
+dbPassword=my-password</code></pre>
+  <p>
+    Specify a <code>FileConfigProvider</code> in the Kafka Connect configuration:
+  </p>
+  <p><b>Example Kafka Connect configuration with a <code>FileConfigProvider</code></b></p>
+  <pre><code>config.providers=fileProvider
+config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider</code></pre>
+  <p>Next, reference the properties from the file in the connector configuration.</p>
+  <p><b>Example connector configuration referencing file properties</b></p>
+  <pre><code>database.user=${fileProvider:/path/to/connector-credentials.properties:dbUsername}
+database.password=${fileProvider:/path/to/connector-credentials.properties:dbPassword}</code></pre>
+  <p>At runtime, the configuration provider reads and extracts the values from the properties file.</p>  
+</script>
 <div class="p-configuration"></div>

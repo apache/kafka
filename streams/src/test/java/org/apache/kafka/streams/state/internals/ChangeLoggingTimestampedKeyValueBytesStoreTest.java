@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -30,11 +29,14 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Arrays;
 
@@ -46,7 +48,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("rawtypes")
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
@@ -61,7 +64,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     // timestamp is 98 what is ASCII of 'b'
     private final byte[] rawWorld = "\0\0\0\0\0\0\0bworld".getBytes();
 
-    @Before
+    @BeforeEach
     public void before() {
         final InternalMockProcessorContext context = mockContext();
         context.setTime(0);
@@ -78,19 +81,9 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
         );
     }
 
-    @After
+    @AfterEach
     public void after() {
         store.close();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test

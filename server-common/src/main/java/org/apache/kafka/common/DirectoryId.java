@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,29 +68,6 @@ public class DirectoryId {
     public static boolean reserved(Uuid uuid) {
         return uuid.getMostSignificantBits() == 0 &&
             uuid.getLeastSignificantBits() < 100;
-    }
-
-    /**
-     * Calculate the new directory information based on an existing replica assignment.
-     * Replicas for which there already is a directory ID keep the same directory.
-     * All other replicas get {@link #UNASSIGNED}.
-     * @param currentReplicas               The current replicas, represented by the broker IDs
-     * @param currentDirectories            The current directory information
-     * @param newReplicas                   The new replica list
-     * @return                              The new directory list
-     * @throws IllegalArgumentException     If currentReplicas and currentDirectories have different lengths,
-     *                                      or if there are duplicate broker IDs in the replica lists
-     */
-    public static List<Uuid> createDirectoriesFrom(int[] currentReplicas, Uuid[] currentDirectories, List<Integer> newReplicas) {
-        if (currentReplicas == null) currentReplicas = new int[0];
-        if (currentDirectories == null) currentDirectories = new Uuid[0];
-        Map<Integer, Uuid> assignments = createAssignmentMap(currentReplicas, currentDirectories);
-        List<Uuid> consolidated = new ArrayList<>(newReplicas.size());
-        for (int newReplica : newReplicas) {
-            Uuid newDirectory = assignments.getOrDefault(newReplica, UNASSIGNED);
-            consolidated.add(newDirectory);
-        }
-        return consolidated;
     }
 
     /**
@@ -156,7 +132,7 @@ public class DirectoryId {
 
         // The only time we should have a size be 0 is if we were at a MV prior to 3.7-IV2
         // and the system was upgraded. In this case the original list of directories was purged
-        // during broker registration so we don't know if the directory is online. We assume
+        // during broker registration, so we don't know if the directory is online. We assume
         // that a broker will halt if all its log directories are down. Eventually the broker
         // will send another registration request with information about all log directories.
         // Refer KAFKA-16162 for more information

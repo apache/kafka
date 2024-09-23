@@ -14,35 +14,45 @@
 // limitations under the License.
 
 plugins {
-    id 'com.gradle.enterprise' version '3.14.1'
-    id 'com.gradle.common-custom-user-data-gradle-plugin' version '1.11.1'
+    id 'com.gradle.develocity' version '3.17.6'
+    id 'com.gradle.common-custom-user-data-gradle-plugin' version '2.0.2'
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
 def isJenkins = System.getenv('JENKINS_URL') != null
 def isCI = isGithubActions || isJenkins
+def currentJvm = JavaVersion.current()
 
-gradleEnterprise {
+develocity {
     server = "https://ge.apache.org"
+    projectId = "kafka"
     buildScan {
-        capture { taskInputFiles = true }
         uploadInBackground = !isCI
-        publishAlways()
-        publishIfAuthenticated()
+        publishing.onlyIf { it.authenticated }
         obfuscation {
             // This obfuscates the IP addresses of the build machine in the build scan.
             // Alternatively, the build scan will provide the hostname for troubleshooting host-specific issues.
             ipAddresses { addresses -> addresses.collect { address -> "0.0.0.0"} }
         }
+        if (isJenkins) {
+            tag "jenkins"
+        } else if (isGithubActions) {
+            tag "github"
+        } else {
+            tag "local"
+        }
+        tag "JDK$currentJvm"
     }
 }
 
 buildCache {
     local {
-        enabled = !isCI
+        // This allows the build cache to be used locally or on GitHub Actions.
+        // Using the cache on GH should be safe since each job is run on a new VM
+        enabled = !isJenkins
     }
 
-    remote(gradleEnterprise.buildCache) {
+    remote(develocity.buildCache) {
         enabled = false
     }
 }
@@ -57,6 +67,7 @@ include 'clients',
     'connect:runtime',
     'connect:test-plugins',
     'connect:transforms',
+    'coordinator-common',
     'core',
     'examples',
     'generator',
@@ -68,6 +79,8 @@ include 'clients',
     'raft',
     'server',
     'server-common',
+    'share',
+    'share-coordinator',
     'shell',
     'storage',
     'storage:api',
@@ -98,6 +111,7 @@ include 'clients',
     'streams:upgrade-system-tests-35',
     'streams:upgrade-system-tests-36',
     'streams:upgrade-system-tests-37',
+    'streams:upgrade-system-tests-38',
     'tools',
     'tools:tools-api',
     'transaction-coordinator',
@@ -105,3 +119,4 @@ include 'clients',
 
 project(":storage:api").name = "storage-api"
 rootProject.name = 'kafka'
+

@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.raft.internals.ReplicaKey;
 
 import java.util.List;
 import java.util.Objects;
@@ -33,7 +31,6 @@ import java.util.stream.Collectors;
 public final class ElectionState {
     private static final int UNKNOWN_LEADER_ID = -1;
     private static final int NOT_VOTED = -1;
-    private static final Uuid NO_VOTED_DIRECTORY_ID = Uuid.ZERO_UUID;
 
     private final int epoch;
     private final OptionalInt leaderId;
@@ -136,7 +133,9 @@ public final class ElectionState {
                 .collect(Collectors.toList());
             data.setCurrentVoters(dataVoters);
         } else if (version == 1) {
-            data.setVotedDirectoryId(votedKey.flatMap(ReplicaKey::directoryId).orElse(NO_VOTED_DIRECTORY_ID));
+            data.setVotedDirectoryId(
+                votedKey.flatMap(ReplicaKey::directoryId).orElse(ReplicaKey.NO_DIRECTORY_ID)
+            );
         } else {
             throw new IllegalStateException(
                 String.format(
@@ -199,13 +198,9 @@ public final class ElectionState {
     }
 
     public static ElectionState fromQuorumStateData(QuorumStateData data) {
-        Optional<Uuid> votedDirectoryId = data.votedDirectoryId().equals(NO_VOTED_DIRECTORY_ID) ?
-            Optional.empty() :
-            Optional.of(data.votedDirectoryId());
-
         Optional<ReplicaKey> votedKey = data.votedId() == NOT_VOTED ?
             Optional.empty() :
-            Optional.of(ReplicaKey.of(data.votedId(), votedDirectoryId));
+            Optional.of(ReplicaKey.of(data.votedId(), data.votedDirectoryId()));
 
         return new ElectionState(
             data.leaderEpoch(),

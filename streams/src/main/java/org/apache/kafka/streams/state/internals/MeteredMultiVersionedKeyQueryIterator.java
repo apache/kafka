@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.concurrent.atomic.LongAdder;
-import java.util.Set;
-import java.util.function.Function;
-
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
+
+import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Function;
 
 class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterator<V>, MeteredIterator {
 
@@ -80,5 +80,3 @@ class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterato
         return deserializeValue.apply(iterator.next());
     }
 }
-
-

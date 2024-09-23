@@ -73,4 +73,3 @@ public class StoreSerdeInitializer {
 interface PrepareFunc<T> {
     Serde<T> prepareSerde(Serde<T> serde, SerdeGetter getter);
 }
-

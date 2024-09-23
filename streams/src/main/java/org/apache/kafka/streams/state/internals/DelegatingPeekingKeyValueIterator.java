@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.NoSuchElementException;
@@ -54,7 +53,7 @@ public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator
     @Override
     public synchronized boolean hasNext() {
         if (!open) {
-            throw new InvalidStateStoreException(String.format("Store %s has closed", storeName));
+            throw new IllegalStateException(String.format("Iterator for store %s has already been closed.", storeName));
         }
         if (next != null) {
             return true;

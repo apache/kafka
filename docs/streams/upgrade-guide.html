@@ -127,18 +127,81 @@
         In deprecated <code>KStreamBuilder</code> class, when a <code>KTable</code> is created from a source topic via <code>KStreamBuilder.table()</code>, its materialized state store
         will reuse the source topic as its changelog topic for restoring, and will disable logging to avoid appending new updates to the source topic; in the <code>StreamsBuilder</code> class introduced in 1.0, this behavior was changed
         accidentally: we still reuse the source topic as the changelog topic for restoring, but will also create a separate changelog topic to append the update records from source topic to. In the 2.0 release, we have fixed this issue and now users
-        can choose whether or not to reuse the source topic based on the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>: if you are upgrading from the old <code>KStreamBuilder</code> class and hence you need to change your code to use
+        can choose whether or not to reuse the source topic based on the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG</code>: if you are upgrading from the old <code>KStreamBuilder</code> class and hence you need to change your code to use
         the new <code>StreamsBuilder</code>, you should set this config value to <code>StreamsConfig#OPTIMIZE</code> to continue reusing the source topic; if you are upgrading from 1.0 or 1.1 where you are already using <code>StreamsBuilder</code> and hence have already
         created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to {{fullDotVersion}} in order to use that changelog topic for restoring the state store.
-        More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
+        More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
-    <h4><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+    <h3><a id="streams_api_changes_400" href="#streams_api_changes_400">Streams API changes in 4.0.0</a></h3>
+
+    <p>
+        In this release two configs <code>default.deserialization.exception.handler</code> and <code>default.production.exception.handler</code> are deprecated, as they don't have any overwrites, which is described in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1056%3A+Remove+%60default.%60+prefix+for+exception+handler+StreamsConfig">KIP-1056</a>
+        You can refer to new configs via <code>deserialization.exception.handler</code> and <code>production.exception.handler</code>.
+    </p>
+
+    <p>
+        In previous release, a new version of the Processor API was introduced and the old Processor API was
+        incrementally replaced and deprecated.
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1070%3A+deprecate+MockProcessorContext">KIP-1070</a>
+        follow this path by deprecating <code>MockProcessorContext</code>, <code>Transformer</code>,
+        <code>TransformerSupplier</code>, <code>ValueTransformer</code>, and <code>ValueTransformerSupplier</code>.
+    </p>
+
+    <h3><a id="streams_api_changes_390" href="#streams_api_changes_390">Streams API changes in 3.9.0</a></h3>
+
+    <p>
+        The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1033%3A+Add+Kafka+Streams+exception+handler+for+exceptions+occurring+during+processing">KIP-1033</a>
+        enables you to provide a processing exception handler to manage exceptions during the processing of a record rather than throwing the exception all the way out of your streams application.
+        You can provide the configs via the <code>StreamsConfig</code> as <code>StreamsConfig#PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG</code>.
+        The specified handler must implement the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface.
+    </p>
+
+    <p>
+        Kafka Streams now allows to customize the logging interval of stream-thread runtime summary, via the newly added config <code>log.summary.interval.ms</code>.
+        By default, the summary is logged every 2 minutes. More details can be found in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1049%3A+Add+config+log.summary.interval.ms+to+Kafka+Streams">KIP-1049</a>.
+    </p>
+
+    <h3><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+
+    <p>
+        Kafka Streams now supports customizable task assignment strategies via the <code>task.assignor.class</code>
+        configuration. The configuration can be set to the fully qualified class name of a custom task assignor
+        implementation that has to extend the new
+        <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface.
+
+        The new configuration also allows users to bring back the behavior of the old task assignor
+        <code>StickyTaskAssignor</code> that was used before the introduction of the
+        <code>HighAvailabilityTaskAssignor</code>. If no custom task assignor is configured, the default task assignor
+        <code>HighAvailabilityTaskAssignor</code> is used.
+
+        If you were using the <code>internal.task.assignor.class</code> config, you should switch to using the new
+        <code>task.assignor.class</code> config instead, as the internal config will be removed in a future release.
+        If you were previously plugging in the <code>StickyTaskAssignor</code> via the legacy
+        <code>internal.task.assignor.class</code> config, you will need to make sure that you are importing
+        the new <code>org.apache.kafka.streams.processor.assignment.StickTaskAssignor</code> when you switch
+        over to the new <code>task.assignor.class</code> config, which is a version of the <code>StickyTaskAssignor</code>
+        that implements the new public <code>TaskAssignor</code> interface.
+
+        For more details, see the public interface section of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-924%3A+customizable+task+assignment+for+Streams">KIP-924</a>.
+    </p>
+
     <p>
         The Processor API now support so-called read-only state stores, added via 
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-813%3A+Shareable+State+Stores">KIP-813</a>.
-	These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
-	simlar to <code>KTables</code> with source-topic optimization enabled.
+        These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
+        similar to <code>KTables</code> with source-topic optimization enabled.
+    </p>
+
+    <p>
+        To improve detection of leaked state store iterators, we added new store-level metrics to track the number and
+        age of open iterators. The new metrics are <code>num-open-iterators</code>, <code>iterator-duration-avg</code>,
+        <code>iterator-duration-max</code> and <code>oldest-iterator-open-since-ms</code>. These metrics are available
+        for all state stores, including RocksDB, in-memory, and custom stores. More details can be found in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-989%3A+Improved+StateStore+Iterator+metrics+for+detecting+leaks">KIP-989</a>.
     </p>
 
     <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
@@ -871,7 +934,7 @@
 
     <p>
         As of 2.3.0 we've updated how to turn on optimizations. Now to enable optimizations, you need to do two things.
-        First add this line to your properties <code>properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);</code>, as you have done before.
+        First add this line to your properties <code>properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);</code>, as you have done before.
         Second, when constructing your <code>KafkaStreams</code> instance, you'll need to pass your configuration properties when building your
         topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
         For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
@@ -1028,9 +1091,9 @@
 
     <p>
         We've added an overloaded <code>StreamsBuilder#build</code> method that accepts an instance of <code>java.util.Properties</code> with the intent of using the
-        <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> config added in Kafka Streams 2.0. Before 2.1, when building a topology with
+        <code>StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG</code> config added in Kafka Streams 2.0. Before 2.1, when building a topology with
         the DSL, Kafka Streams writes the physical plan as the user makes calls on the DSL.  Now by providing a <code>java.util.Properties</code> instance when
-        executing a <code>StreamsBuilder#build</code> call, Kafka Streams can optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>
+        executing a <code>StreamsBuilder#build</code> call, Kafka Streams can optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG</code>
         config is set to <code>StreamsConfig#OPTIMIZE</code>.  By setting <code>StreamsConfig#OPTIMIZE</code> in addition to the <code>KTable</code> optimization of
         reusing the source topic as the changelog topic, the topology may be optimized to merge redundant repartition topics into one
         repartition topic.  The original no parameter version of <code>StreamsBuilder#build</code> is still available for those who wish to not

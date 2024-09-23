@@ -19,6 +19,8 @@ package org.apache.kafka.connect.util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
+
 public class Stage {
 
     private static final Logger log = LoggerFactory.getLogger(Stage.class);
@@ -57,6 +59,20 @@ public class Stage {
         }
 
         this.completed = time;
+    }
+
+    public String summarize() {
+        Long completed = this.completed;
+        if (completed != null) {
+            return "The last operation the worker completed was "
+                    + description() + ", which began at "
+                    + Instant.ofEpochMilli(started()) + " and completed at "
+                    + Instant.ofEpochMilli(completed()) + ".";
+        } else {
+            return "The worker is currently "
+                    + description() + ", which began at "
+                    + Instant.ofEpochMilli(started()) + ".";
+        }
     }
 
     @Override

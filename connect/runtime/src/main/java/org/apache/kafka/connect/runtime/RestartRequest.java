@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Objects;
-
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+
+import java.util.Objects;
 
 /**
  * A request to restart a connector and/or task instances.

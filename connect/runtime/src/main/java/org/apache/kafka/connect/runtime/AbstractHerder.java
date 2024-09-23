@@ -60,9 +60,10 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.log4j.Level;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.TemporaryStage;
+
+import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -131,8 +132,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final String kafkaClusterId;
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
+    private volatile boolean ready = false;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
-    protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
     private final Time time;
     protected final Loggers loggers;
@@ -179,9 +180,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Utils.closeQuietly(this.connectorClientConfigOverridePolicy, "connector client config override policy");
     }
 
+    protected void ready() {
+        this.ready = true;
+    }
+
     @Override
-    public boolean isRunning() {
-        return running;
+    public boolean isReady() {
+        return ready;
     }
 
     @Override

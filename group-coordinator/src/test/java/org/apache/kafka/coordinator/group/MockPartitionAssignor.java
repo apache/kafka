@@ -21,13 +21,14 @@ import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAss
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class MockPartitionAssignor implements ConsumerGroupPartitionAssignor {
+public class MockPartitionAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
     private final String name;
     private GroupAssignment prepareGroupAssignment = null;
 

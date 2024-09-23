@@ -123,8 +123,8 @@ public enum ApiKeys {
     SHARE_GROUP_DESCRIBE(ApiMessageType.SHARE_GROUP_DESCRIBE),
     SHARE_FETCH(ApiMessageType.SHARE_FETCH),
     SHARE_ACKNOWLEDGE(ApiMessageType.SHARE_ACKNOWLEDGE),
-    ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER),
-    REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER),
+    ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER, false, RecordBatch.MAGIC_VALUE_V0, true),
+    REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER, false, RecordBatch.MAGIC_VALUE_V0, true),
     UPDATE_RAFT_VOTER(ApiMessageType.UPDATE_RAFT_VOTER),
     INITIALIZE_SHARE_GROUP_STATE(ApiMessageType.INITIALIZE_SHARE_GROUP_STATE, true),
     READ_SHARE_GROUP_STATE(ApiMessageType.READ_SHARE_GROUP_STATE, true),
@@ -278,23 +278,25 @@ public enum ApiKeys {
         return messageType.listeners().contains(listener);
     }
 
-    private static String toHtml() {
+    static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : clientApis()) {
-            b.append("<tr>\n");
-            b.append("<td>");
-            b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
-            b.append("</td>");
-            b.append("<td>");
-            b.append(key.id);
-            b.append("</td>");
-            b.append("</tr>\n");
-        }
+        clientApis().stream()
+            .filter(apiKey -> apiKey.toApiVersion(false).isPresent())
+            .forEach(apiKey -> {
+                b.append("<tr>\n");
+                b.append("<td>");
+                b.append("<a href=\"#The_Messages_" + apiKey.name + "\">" + apiKey.name + "</a>");
+                b.append("</td>");
+                b.append("<td>");
+                b.append(apiKey.id);
+                b.append("</td>");
+                b.append("</tr>\n");
+            });
         b.append("</tbody></table>\n");
         return b.toString();
     }

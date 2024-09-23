@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.components.Versioned;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

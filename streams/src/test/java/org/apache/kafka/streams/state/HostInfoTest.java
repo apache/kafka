@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;

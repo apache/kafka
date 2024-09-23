@@ -20,8 +20,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -29,13 +30,13 @@ import java.util.Map;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 public class AssignorConfigurationTest {
     private final Map<String, Object> config = new HashMap<>();
 
-    @Before
+    @BeforeEach
     public void setup() {
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app.id");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");

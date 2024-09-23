@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
-import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
-
-import java.time.Duration;
-import java.util.Map;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.processor.StateStore;
@@ -38,6 +33,12 @@ import org.apache.kafka.streams.state.internals.ListValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
+
+import java.time.Duration;
+import java.util.Map;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 
 public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurableStoreFactory {
 

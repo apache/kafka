@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * A connector primarily intended for system tests.
  * @see VerifiableSourceTask
  */
 public class VerifiableSourceConnector extends SourceConnector {

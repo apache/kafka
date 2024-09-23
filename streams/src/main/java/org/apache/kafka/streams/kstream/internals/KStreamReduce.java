@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +75,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
             );
             store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store.getStore(),
+                store.store(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
@@ -164,4 +165,3 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, K,
         }
     }
 }
-

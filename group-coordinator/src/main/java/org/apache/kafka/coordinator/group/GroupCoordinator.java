@@ -36,6 +36,9 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -48,6 +51,7 @@ import org.apache.kafka.image.MetadataImage;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -58,6 +62,11 @@ import java.util.function.IntSupplier;
  * Group Coordinator's internal API.
  */
 public interface GroupCoordinator {
+
+    /**
+     * @return True if the new coordinator; False otherwise.
+     */
+    boolean isNewGroupCoordinator();
 
     /**
      * Heartbeat to a Consumer Group.
@@ -71,6 +80,20 @@ public interface GroupCoordinator {
     CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
         RequestContext context,
         ConsumerGroupHeartbeatRequestData request
+    );
+
+    /**
+     * Heartbeat to a Share Group.
+     *
+     * @param context           The request context.
+     * @param request           The ShareGroupHeartbeatResponse data.
+     *
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
+     */
+    CompletableFuture<ShareGroupHeartbeatResponseData> shareGroupHeartbeat(
+        RequestContext context,
+        ShareGroupHeartbeatRequestData request
     );
 
     /**
@@ -170,6 +193,19 @@ public interface GroupCoordinator {
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
+        RequestContext context,
+        List<String> groupIds
+    );
+
+    /**
+     * Describe share groups.
+     *
+     * @param context           The coordinator request context.
+     * @param groupIds          The group ids.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> shareGroupDescribe(
         RequestContext context,
         List<String> groupIds
     );
@@ -370,6 +406,23 @@ public interface GroupCoordinator {
      * @return Properties of the internal topic.
      */
     Properties groupMetadataTopicConfigs();
+
+    /**
+     * Return the configuration of the provided group.
+     *
+     * @param groupId       The group id.
+     * @return The group config.
+     */
+    Optional<GroupConfig> groupConfig(String groupId);
+
+    /**
+     * Update the configuration of the provided group.
+     *
+     * @param groupId           The group id.
+     * @param newGroupConfig    The new group config
+     * @return void
+     */
+    void updateGroupConfig(String groupId, Properties newGroupConfig);
 
     /**
      * Startup the group coordinator.

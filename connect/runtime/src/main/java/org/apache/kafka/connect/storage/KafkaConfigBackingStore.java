@@ -54,10 +54,10 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.spec.SecretKeySpec;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,6 +75,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+
+import javax.crypto.spec.SecretKeySpec;
 
 import static org.apache.kafka.connect.runtime.TargetState.PAUSED;
 import static org.apache.kafka.connect.runtime.TargetState.STOPPED;
@@ -1344,4 +1346,3 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     }
 
 }
-

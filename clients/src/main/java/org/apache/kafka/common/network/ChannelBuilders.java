@@ -42,7 +42,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 public class ChannelBuilders {
     private static final Logger log = LoggerFactory.getLogger(ChannelBuilders.class);
@@ -79,7 +79,7 @@ public class ChannelBuilders {
             if (clientSaslMechanism == null)
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
-        return create(securityProtocol, Mode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
+        return create(securityProtocol, ConnectionMode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
                 saslHandshakeRequestEnable, null, null, time, logContext, null);
     }
 
@@ -104,14 +104,14 @@ public class ChannelBuilders {
                                                       DelegationTokenCache tokenCache,
                                                       Time time,
                                                       LogContext logContext,
-                                                      Supplier<ApiVersionsResponse> apiVersionSupplier) {
-        return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName,
+                                                      Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+        return create(securityProtocol, ConnectionMode.SERVER, JaasContext.Type.SERVER, config, listenerName,
                 isInterBrokerListener, null, true, credentialCache,
                 tokenCache, time, logContext, apiVersionSupplier);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
-                                         Mode mode,
+                                         ConnectionMode connectionMode,
                                          JaasContext.Type contextType,
                                          AbstractConfig config,
                                          ListenerName listenerName,
@@ -122,21 +122,21 @@ public class ChannelBuilders {
                                          DelegationTokenCache tokenCache,
                                          Time time,
                                          LogContext logContext,
-                                         Supplier<ApiVersionsResponse> apiVersionSupplier) {
+                                         Function<Short, ApiVersionsResponse> apiVersionSupplier) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
         ChannelBuilder channelBuilder;
         switch (securityProtocol) {
             case SSL:
-                requireNonNullMode(mode, securityProtocol);
-                channelBuilder = new SslChannelBuilder(mode, listenerName, isInterBrokerListener, logContext);
+                requireNonNullMode(connectionMode, securityProtocol);
+                channelBuilder = new SslChannelBuilder(connectionMode, listenerName, isInterBrokerListener, logContext);
                 break;
             case SASL_SSL:
             case SASL_PLAINTEXT:
-                requireNonNullMode(mode, securityProtocol);
+                requireNonNullMode(connectionMode, securityProtocol);
                 Map<String, JaasContext> jaasContexts;
                 String sslClientAuthOverride = null;
-                if (mode == Mode.SERVER) {
+                if (connectionMode == ConnectionMode.SERVER) {
                     @SuppressWarnings("unchecked")
                     List<String> enabledMechanisms = (List<String>) configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
                     jaasContexts = new HashMap<>(enabledMechanisms.size());
@@ -169,7 +169,7 @@ public class ChannelBuilders {
                             JaasContext.loadServerContext(listenerName, clientSaslMechanism, configs);
                     jaasContexts = Collections.singletonMap(clientSaslMechanism, jaasContext);
                 }
-                channelBuilder = new SaslChannelBuilder(mode,
+                channelBuilder = new SaslChannelBuilder(connectionMode,
                         jaasContexts,
                         securityProtocol,
                         listenerName,
@@ -216,8 +216,8 @@ public class ChannelBuilders {
         return parsedConfigs;
     }
 
-    private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {
-        if (mode == null)
+    private static void requireNonNullMode(ConnectionMode connectionMode, SecurityProtocol securityProtocol) {
+        if (connectionMode == null)
             throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
     }
 

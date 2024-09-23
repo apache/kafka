@@ -23,6 +23,7 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

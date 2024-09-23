@@ -17,7 +17,6 @@
 package kafka.controller
 
 import java.util.Properties
-import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -31,7 +30,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_10_2_IV0, IBP_0_9_0, IBP_1_0_IV0, IBP_2_2_IV0, IBP_2_4_IV0, IBP_2_4_IV1, IBP_2_6_IV0, IBP_2_8_IV1, IBP_3_2_IV0, IBP_3_4_IV0}
 import org.apache.kafka.server.config.{ServerConfigs, ZkConfigs}
@@ -56,9 +55,9 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
-      new TopicPartition("foo", 0) -> LeaderAndIsr(1, List(1, 2)),
-      new TopicPartition("foo", 1) -> LeaderAndIsr(2, List(2, 3)),
-      new TopicPartition("bar", 1) -> LeaderAndIsr(3, List(1, 3))
+      new TopicPartition("foo", 0) -> new LeaderAndIsr(1, List(1, 2).map(Int.box).asJava),
+      new TopicPartition("foo", 1) -> new LeaderAndIsr(2, List(2, 3).map(Int.box).asJava),
+      new TopicPartition("bar", 1) -> new LeaderAndIsr(3, List(1, 3).map(Int.box).asJava)
     )
 
     batch.newBatch()
@@ -84,7 +83,7 @@ class ControllerChannelManagerTest {
     assertEquals(partitions.map { case (k, v) => (k, v.leader) },
       leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex) -> p.leader).toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
-      leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex) -> p.isr.asScala).toMap)
+      leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex) -> p.isr).toMap)
 
     applyLeaderAndIsrResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
     assertEquals(1, batch.sentEvents.size)
@@ -104,7 +103,7 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partition = new TopicPartition("foo", 0)
-    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    val leaderAndIsr = new LeaderAndIsr(1, List(1, 2).map(Int.box).asJava)
 
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     context.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
@@ -136,7 +135,7 @@ class ControllerChannelManagerTest {
     context.removeLiveBrokers(Set(3))
 
     val partition = new TopicPartition("foo", 0)
-    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    val leaderAndIsr = new LeaderAndIsr(1, List(1, 2).map(Int.box).asJava)
 
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     context.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
@@ -186,9 +185,15 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
     val partition = new TopicPartition("foo", 0)
-    var leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    var leaderAndIsr = new LeaderAndIsr(1, List(1, 2).map(Int.box).asJava)
     if (interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)) {
-      leaderAndIsr = leaderAndIsr.copy(leaderRecoveryState = LeaderRecoveryState.RECOVERING)
+      leaderAndIsr = new LeaderAndIsr(
+        leaderAndIsr.leader(),
+        leaderAndIsr.leaderEpoch(),
+        leaderAndIsr.isr(),
+        LeaderRecoveryState.RECOVERING,
+        leaderAndIsr.partitionEpoch()
+      )
     }
 
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
@@ -239,9 +244,9 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
-      new TopicPartition("foo", 0) -> LeaderAndIsr(1, List(1, 2)),
-      new TopicPartition("foo", 1) -> LeaderAndIsr(2, List(2, 3)),
-      new TopicPartition("bar", 1) -> LeaderAndIsr(3, List(1, 3))
+      new TopicPartition("foo", 0) -> new LeaderAndIsr(1, List(1, 2).map(Int.box).asJava),
+      new TopicPartition("foo", 1) -> new LeaderAndIsr(2, List(2, 3).map(Int.box).asJava),
+      new TopicPartition("bar", 1) -> new LeaderAndIsr(3, List(1, 3).map(Int.box).asJava)
     )
 
     partitions.foreach { case (partition, leaderAndIsr) =>
@@ -261,7 +266,7 @@ class ControllerChannelManagerTest {
     assertEquals(partitions.map { case (k, v) => (k, v.leader) },
       partitionStates.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.leader)).toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
-      partitionStates.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)).toMap)
+      partitionStates.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr)).toMap)
 
     val topicStates = updateMetadataRequest.topicStates()
     assertEquals(2, topicStates.size)
@@ -316,9 +321,9 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
-      new TopicPartition("foo", 0) -> LeaderAndIsr(1, List(1, 2)),
-      new TopicPartition("foo", 1) -> LeaderAndIsr(2, List(2, 3)),
-      new TopicPartition("bar", 1) -> LeaderAndIsr(3, List(1, 3))
+      new TopicPartition("foo", 0) -> new LeaderAndIsr(1, List(1, 2).map(Int.box).asJava),
+      new TopicPartition("foo", 1) -> new LeaderAndIsr(2, List(2, 3).map(Int.box).asJava),
+      new TopicPartition("bar", 1) -> new LeaderAndIsr(3, List(1, 3).map(Int.box).asJava)
     )
 
     partitions.foreach { case (partition, leaderAndIsr) =>
@@ -340,13 +345,13 @@ class ControllerChannelManagerTest {
     assertTrue(updateMetadataRequest.partitionStates.asScala
       .filter(_.topicName == "foo")
       .map(_.leader)
-      .forall(leaderId => leaderId == LeaderAndIsr.LeaderDuringDelete))
+      .forall(leaderId => leaderId == LeaderAndIsr.LEADER_DURING_DELETE))
 
     assertEquals(partitions.filter { case (k, _) => k.topic == "bar" }.map { case (k, v) => (k, v.leader) },
       updateMetadataRequest.partitionStates.asScala.filter(ps => ps.topicName == "bar").map { ps =>
         (new TopicPartition(ps.topicName, ps.partitionIndex), ps.leader) }.toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
-      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)).toMap)
+      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr)).toMap)
 
     assertEquals(3, updateMetadataRequest.liveBrokers.size)
     assertEquals(Set(1, 2, 3), updateMetadataRequest.liveBrokers.asScala.map(_.id).toSet)
@@ -459,7 +464,7 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partition = new TopicPartition("foo", 0)
-    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    val leaderAndIsr = new LeaderAndIsr(1, List(1, 2).map(Int.box).asJava)
     context.putPartitionLeadershipInfo(partition, LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch))
 
     batch.newBatch()
@@ -471,7 +476,7 @@ class ControllerChannelManagerTest {
     assertEquals(1, sentStopReplicaRequests.size)
 
     val stopReplicaRequest = sentStopReplicaRequests.head
-    assertEquals(partitionStates(Map(partition -> LeaderAndDelete(leaderAndIsr, true))),
+    assertEquals(partitionStates(Map(partition -> new LeaderAndDelete(leaderAndIsr, true))),
       stopReplicaRequest.partitionStates().asScala)
   }
 
@@ -799,7 +804,7 @@ class ControllerChannelManagerTest {
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
     val partition = new TopicPartition("foo", 0)
-    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+    val leaderAndIsr = new LeaderAndIsr(1, List(1, 2).map(Int.box).asJava)
 
     context.putPartitionLeadershipInfo(partition, LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch))
 
@@ -822,7 +827,7 @@ class ControllerChannelManagerTest {
 
   private object LeaderAndDelete {
     def apply(leader: Int, deletePartition: Boolean): LeaderAndDelete =
-      new LeaderAndDelete(LeaderAndIsr(leader, List()), deletePartition)
+      new LeaderAndDelete(new LeaderAndIsr(leader, List().map(Int.box).asJava), deletePartition)
   }
 
   private def partitionStates(partitions: Map[TopicPartition, LeaderAndDelete],
@@ -836,7 +841,7 @@ class ControllerChannelManagerTest {
 
         if (version >= 3) {
           partitionState.setLeaderEpoch(if (topicsQueuedForDeletion.contains(topicPartition.topic))
-            LeaderAndIsr.EpochDuringDelete
+            LeaderAndIsr.EPOCH_DURING_DELETE
           else
             leaderAndIsr.leaderEpoch)
         }
