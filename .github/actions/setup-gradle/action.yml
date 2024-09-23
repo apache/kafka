@@ -19,6 +19,8 @@
 name: "Gradle Setup"
 description: "Setup Java and Gradle"
 inputs:
+  # Composite actions do not support typed parameters. Everything is treated as a string
+  # See: https://github.com/actions/runner/issues/2238
   java-version:
     description: "Java version to use"
     default: "17"
