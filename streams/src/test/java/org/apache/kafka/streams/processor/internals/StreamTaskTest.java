@@ -53,7 +53,6 @@ import org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
-import org.apache.kafka.streams.errors.ProcessingExceptionHandler.ProcessingHandlerResponse;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -1323,9 +1322,14 @@ public class StreamTaskTest {
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition2, 0L, 0));
         consumer.poll(Duration.ZERO);
 
-        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition1, 0L, 0)), new OffsetAndMetadata(3, Optional.of(2), ""));
-        task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition2, 0L, 0)), new OffsetAndMetadata(1, Optional.of(0), ""));
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition1, 0L, 0)));
+        task.addRecords(partition2, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition2, 0L, 0)));
+
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(3, Optional.of(2), ""));
+        task.updateNextOffsets(partition2, new OffsetAndMetadata(1, Optional.of(0), ""));
+
         task.process(0L);
+
 
         final TopicPartitionMetadata metadata = new TopicPartitionMetadata(0, new ProcessorMetadata());
 
@@ -1374,8 +1378,11 @@ public class StreamTaskTest {
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition2, 1L, 1));
         consumer.poll(Duration.ZERO);
 
-        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition1, 0L, 0)), new OffsetAndMetadata(2, Optional.of(1), ""));
-        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition1, 1L, 1)), new OffsetAndMetadata(2, Optional.of(1), ""));
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition1, 0L, 0)));
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestampWithLeaderEpoch(partition1, 1L, 1)));
+
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(2, Optional.of(1), ""));
+        task.updateNextOffsets(partition2, new OffsetAndMetadata(2, Optional.of(1), ""));
 
         task.updateLags();
 
@@ -1918,6 +1925,9 @@ public class StreamTaskTest {
         task.addRecords(partition1, records.get(partition1));
         task.addRecords(repartition, records.get(repartition));
 
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(6, Optional.empty(), ""));
+        task.updateNextOffsets(repartition, new OffsetAndMetadata(11, Optional.empty(), ""));
+
         task.resumePollingForPartitionsWithAvailableSpace();
         task.updateLags();
 
@@ -2179,6 +2189,7 @@ public class StreamTaskTest {
                 mkEntry(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 5L)))
         );
         task.addRecords(partition1, record.get(partition1));
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(6, Optional.empty(), ""));
         task.process(100L);
         assertTrue(task.commitNeeded());
 
@@ -2208,6 +2219,7 @@ public class StreamTaskTest {
         final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> record = mkMap(
                 mkEntry(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, offset))));
         task.addRecords(partition1, record.get(partition1));
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(offset + 1, Optional.empty(), ""));
         task.process(100L);
         assertTrue(task.commitNeeded());
 
@@ -2268,6 +2280,8 @@ public class StreamTaskTest {
         final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> record = mkMap(
                 mkEntry(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, offset))));
         task.addRecords(partition1, record.get(partition1));
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(offset + 1, Optional.empty(), ""));
+
         task.process(100L);
         assertTrue(task.commitNeeded());
 
@@ -2571,6 +2585,7 @@ public class StreamTaskTest {
         task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(offset + 1, Optional.empty(), ""));
         task.updateLags();
 
         assertTrue(task.process(offset));
@@ -2605,6 +2620,7 @@ public class StreamTaskTest {
         task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(offset + 1, Optional.empty(), ""));
         task.updateLags();
 
         assertTrue(task.process(offset));
@@ -2636,6 +2652,8 @@ public class StreamTaskTest {
         task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(offset + 1, Optional.empty(), ""));
+
         task.updateLags();
 
         assertTrue(task.process(offset));

@@ -1115,8 +1115,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records, final OffsetAndMetadata offsetAndMetadata) {
-        addRecords(partition, records);
+    public void updateNextOffsets(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
         nextOffsetsAndMetadataToBeConsumed.put(partition, offsetAndMetadata);
     }
 

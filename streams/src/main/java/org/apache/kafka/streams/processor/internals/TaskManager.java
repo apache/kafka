@@ -1819,10 +1819,10 @@ public class TaskManager {
                 throw new NullPointerException("Task was unexpectedly missing for partition " + partition);
             }
 
+            activeTask.addRecords(partition, records.records(partition));
+
             if (activeTask instanceof StreamTask)
-                ((StreamTask) activeTask).addRecords(partition, records.records(partition), records.nextOffsets().get(partition));
-            else
-                activeTask.addRecords(partition, records.records(partition));
+                ((StreamTask) activeTask).updateNextOffsets(partition, records.nextOffsets().get(partition));
         }
     }
 
