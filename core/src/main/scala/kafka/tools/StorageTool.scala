@@ -36,7 +36,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 
 import java.util
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.{CollectionHasAsScala, MapHasAsScala}
+import scala.jdk.CollectionConverters.{ListHasAsScala, MapHasAsScala}
 
 object StorageTool extends Logging {
 
@@ -176,7 +176,7 @@ object StorageTool extends Logging {
     namespace: Namespace,
     printStream: PrintStream
   ): Unit = {
-    val featureArgs = namespace.getList[String]("feature").asScala
+    val featureArgs = Option(namespace.getList[String]("feature")).map(_.asScala.toList).getOrElse(List.empty)
 
     // Iterate over each feature specified with --feature
     if (featureArgs != null) {
@@ -334,7 +334,7 @@ object StorageTool extends Logging {
 
     featureDependenciesParser.addArgument("--feature", "-f")
       .required(true)
-      .help("The features and their versions to look up dependencies for, in feature=level format." +
+      .help("The features and their versions to look up dependencies for, in feature=version format." +
         " For example: `metadata.version=5`."
       )
       .action(append())

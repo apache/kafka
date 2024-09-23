@@ -195,12 +195,12 @@ public class FeatureCommand {
     private static void addFeatureDependenciesParser(Subparsers subparsers) {
         Subparser featureDependenciesParser = subparsers.addParser("feature-dependencies")
                 .help("Look up dependencies for a given feature version. " +
-                    "If the feature is not known or the version not yet defined, an error is thrown. " +
-                     "Multiple features can be specified. "
+                        "If the feature is not known or the version not yet defined, an error is thrown. " +
+                        "Multiple features can be specified."
                 );
         featureDependenciesParser.addArgument("--feature")
-                .help("The feature and version to look up dependencies for, in feature=level format. " +
-                    "For example: `metadata.version=5`."
+                .help("The feature and version to look up dependencies for, in feature=version format. " +
+                        "For example: `metadata.version=5`."
                 )
                 .required(true)
                 .action(append());
