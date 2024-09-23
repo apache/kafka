@@ -1231,51 +1231,51 @@ public class StreamTaskTest {
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10);
     }
 
-//    @Test
-//    public void shouldRespectCommitNeeded() {
-//        when(stateManager.taskId()).thenReturn(taskId);
-//        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-//        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
-//        task.initializeIfNeeded();
-//        task.completeRestoration(noOpResetter -> { });
-//
-//        assertFalse(task.commitNeeded());
-//
-//        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> record = mkMap(
-//                mkEntry(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)))
-//        );
-//        task.addRecords(partition1, record.get(partition1));
-//        task.setNextOffsetsAndMetadata(new ConsumerRecords<>(record).nextOffsets());
-//        assertTrue(task.process(0L));
-//        assertTrue(task.commitNeeded());
-//
-//        task.prepareCommit();
-//        assertTrue(task.commitNeeded());
-//
-//        task.postCommit(true);
-//        assertFalse(task.commitNeeded());
-//
-//        assertTrue(task.canPunctuateStreamTime());
-//        assertTrue(task.maybePunctuateStreamTime());
-//        assertTrue(task.commitNeeded());
-//
-//        task.prepareCommit();
-//        assertTrue(task.commitNeeded());
-//
-//        task.postCommit(true);
-//        assertFalse(task.commitNeeded());
-//
-//        time.sleep(10);
-//        assertTrue(task.canPunctuateSystemTime());
-//        assertTrue(task.maybePunctuateSystemTime());
-//        assertTrue(task.commitNeeded());
-//
-//        task.prepareCommit();
-//        assertTrue(task.commitNeeded());
-//
-//        task.postCommit(true);
-//        assertFalse(task.commitNeeded());
-//    }
+    @Test
+    public void shouldRespectCommitNeeded() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        assertFalse(task.commitNeeded());
+
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> record = mkMap(
+                mkEntry(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)))
+        );
+        task.addRecords(partition1, record.get(partition1));
+        task.updateNextOffsets(partition1, new OffsetAndMetadata(1, Optional.empty(), ""));
+        assertTrue(task.process(0L));
+        assertTrue(task.commitNeeded());
+
+        task.prepareCommit();
+        assertTrue(task.commitNeeded());
+
+        task.postCommit(true);
+        assertFalse(task.commitNeeded());
+
+        assertTrue(task.canPunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime());
+        assertTrue(task.commitNeeded());
+
+        task.prepareCommit();
+        assertTrue(task.commitNeeded());
+
+        task.postCommit(true);
+        assertFalse(task.commitNeeded());
+
+        time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
+        assertTrue(task.maybePunctuateSystemTime());
+        assertTrue(task.commitNeeded());
+
+        task.prepareCommit();
+        assertTrue(task.commitNeeded());
+
+        task.postCommit(true);
+        assertFalse(task.commitNeeded());
+    }
 
     @Test
     public void shouldCommitNextOffsetAndProcessorMetadataFromQueueIfAvailable() {

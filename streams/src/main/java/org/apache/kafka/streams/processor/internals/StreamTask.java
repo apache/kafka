@@ -475,9 +475,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     leaderEpoch = offsetAndMetadata.leaderEpoch();
                 } else {
                     // This indicates a bug and thus we rethrow it as fatal `IllegalStateException`
-                    final String errorMsg = String.format("Stream task " + id + " does not know the partition: " + partition);
-                    log.error(errorMsg);
-                    throw new IllegalStateException(errorMsg, new NullPointerException());
+                    throw new IllegalStateException("Stream task " + id + " does not know the partition: " + partition);
                 }
             } catch (final KafkaException fatal) {
                 throw new StreamsException(fatal);
