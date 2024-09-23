@@ -528,29 +528,16 @@ public class LogSegmentTest {
         short producerEpoch,
         long offset) {
 
-        return endTxnRecords(controlRecordType, producerId, producerEpoch, offset, 0, 0, RecordBatch.NO_TIMESTAMP);
-    }
-
-    private MemoryRecords endTxnRecords(
-        ControlRecordType controlRecordType,
-        long producerId,
-        short producerEpoch,
-        long offset,
-        int partitionLeaderEpoch,
-        int coordinatorEpoch,
-        long timestamp) {
-
-        EndTransactionMarker marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch);
+        EndTransactionMarker marker = new EndTransactionMarker(controlRecordType, 0);
         return MemoryRecords.withEndTransactionMarker(
             offset,
-            timestamp,
-            partitionLeaderEpoch,
+            RecordBatch.NO_TIMESTAMP,
+            0,
             producerId,
             producerEpoch,
             marker
         );
     }
-
 
     /**
      * Create a segment with some data and an index. Then corrupt the index,
@@ -607,25 +594,18 @@ public class LogSegmentTest {
         }
     }
 
-    private LogSegment createSegment(long baseOffset, boolean fileAlreadyExists, int initFileSize,
-                                     boolean preallocate) throws IOException {
+    /* create a segment with   pre allocate, put message to it and verify */
+    @Test
+    public void testCreateWithInitFileSizeAppendMessage() throws IOException {
         File tempDir = TestUtils.tempDirectory();
         Map<String, Object> configMap = new HashMap<>();
         configMap.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 10);
         configMap.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000);
         configMap.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, 0);
         LogConfig logConfig = new LogConfig(configMap);
-
-        LogSegment seg = LogSegment.open(tempDir, baseOffset, logConfig,
-            Time.SYSTEM, fileAlreadyExists, initFileSize, preallocate, "");
-        segments.add(seg);
-        return seg;
-    }
-
-    /* create a segment with   pre allocate, put message to it and verify */
-    @Test
-    public void testCreateWithInitFileSizeAppendMessage() throws IOException {
-        try (LogSegment seg = createSegment(40, false, 512 * 1024 * 1024, true)) {
+        try (LogSegment seg = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM, false,
+            512 * 1024 * 1024, true, "")) {
+            segments.add(seg);
             MemoryRecords ms = records(50, "hello", "there");
             seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms);
             MemoryRecords ms2 = records(60, "alpha", "beta");
