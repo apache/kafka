@@ -361,48 +361,50 @@ object ConfigCommand extends Logging {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
     val entityTypeHead = entityTypes.head
-    val entityNameHead = entityNames.head
     val configsToBeAddedMap = parseConfigsToBeAdded(opts).asScala.toMap // no need for mutability
     val configsToBeAdded = configsToBeAddedMap.map { case (k, v) => (k, new ConfigEntry(k, v)) }
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
 
     entityTypeHead match {
       case ConfigType.TOPIC =>
-        alterResourceConfig(adminClient, entityTypeHead, entityNameHead, configsToBeDeleted, configsToBeAdded, ConfigResource.Type.TOPIC)
-
+        entityNames.foreach { entityName =>
+          alterResourceConfig(adminClient, entityTypeHead, entityName, configsToBeDeleted, configsToBeAdded, ConfigResource.Type.TOPIC)
+        }
       case ConfigType.BROKER =>
-        val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false)
-          .map { entry => (entry.name, entry) }.toMap
+        entityNames.foreach { entityName =>
+          val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityName, includeSynonyms = false, describeAll = false)
+            .map { entry => (entry.name, entry) }.toMap
 
-        // fail the command if any of the configs to be deleted does not exist
-        val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
-        if (invalidConfigs.nonEmpty)
-          throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+          // fail the command if any of the configs to be deleted does not exist
+          val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+          if (invalidConfigs.nonEmpty)
+            throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-        val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
-        val sensitiveEntries = newEntries.filter(_._2.value == null)
-        if (sensitiveEntries.nonEmpty)
-          throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
-        val newConfig = new JConfig(newEntries.asJava.values)
+          val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
+          val sensitiveEntries = newEntries.filter(_._2.value == null)
+          if (sensitiveEntries.nonEmpty)
+            throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
+          val newConfig = new JConfig(newEntries.asJava.values)
 
-        val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityNameHead)
-        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-        adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
-
+          val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
+          val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+          adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+        }
       case BrokerLoggerConfigType =>
-        val validLoggers = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = true, describeAll = false).map(_.name)
-        // fail the command if any of the configured broker loggers do not exist
-        val invalidBrokerLoggers = configsToBeDeleted.filterNot(validLoggers.contains) ++ configsToBeAdded.keys.filterNot(validLoggers.contains)
-        if (invalidBrokerLoggers.nonEmpty)
-          throw new InvalidConfigurationException(s"Invalid broker logger(s): ${invalidBrokerLoggers.mkString(",")}")
+        entityNames.foreach { entityName =>
+          val validLoggers = getResourceConfig(adminClient, entityTypeHead, entityName, includeSynonyms = true, describeAll = false).map(_.name)
+          // fail the command if any of the configured broker loggers do not exist
+          val invalidBrokerLoggers = configsToBeDeleted.filterNot(validLoggers.contains) ++ configsToBeAdded.keys.filterNot(validLoggers.contains)
+          if (invalidBrokerLoggers.nonEmpty)
+            throw new InvalidConfigurationException(s"Invalid broker logger(s): ${invalidBrokerLoggers.mkString(",")}")
 
-        val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityNameHead)
-        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-        val alterLogLevelEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
-          ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
-        ).asJavaCollection
-        adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
-
+          val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName)
+          val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+          val alterLogLevelEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
+            ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
+            ).asJavaCollection
+          adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+        }
       case ConfigType.USER | ConfigType.CLIENT =>
         val hasQuotaConfigsToAdd = configsToBeAdded.keys.exists(QuotaConfigs.isClientOrUserQuotaConfig)
         val scramConfigsToAddMap = configsToBeAdded.filter(entry => ScramMechanism.isScram(entry._1))
@@ -446,17 +448,22 @@ object ConfigCommand extends Logging {
         alterQuotaConfigs(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeDeleted)
 
       case ConfigType.CLIENT_METRICS =>
-        alterResourceConfig(adminClient, entityTypeHead, entityNameHead, configsToBeDeleted, configsToBeAdded, ConfigResource.Type.CLIENT_METRICS)
+        entityNames.foreach { entityName =>
+          alterResourceConfig(adminClient, entityTypeHead, entityName, configsToBeDeleted, configsToBeAdded, ConfigResource.Type.CLIENT_METRICS)
+        }
 
       case ConfigType.GROUP =>
-        alterResourceConfig(adminClient, entityTypeHead, entityNameHead, configsToBeDeleted, configsToBeAdded, ConfigResource.Type.GROUP)
-
+        entityNames.foreach { entityName =>
+          alterResourceConfig(adminClient, entityTypeHead, entityName, configsToBeDeleted, configsToBeAdded, ConfigResource.Type.GROUP)
+        }
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")
     }
 
-    if (entityNameHead.nonEmpty)
-      println(s"Completed updating config for ${entityTypeHead.dropRight(1)} $entityNameHead.")
-    else
+    if (entityNames.nonEmpty) {
+      entityNames.foreach(
+        entityName => println(s"Completed updating config for ${entityTypeHead.dropRight(1)} $entityName.")
+      )
+    } else
       println(s"Completed updating default config for $entityTypeHead in the cluster.")
   }
 
