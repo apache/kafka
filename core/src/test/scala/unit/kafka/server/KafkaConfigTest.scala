@@ -1890,7 +1890,7 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     assertEquals(
-      "requirement failed: broker id generation is incompatible with migration to ZK. Please disable it before enabling migration",
+      "requirement failed: broker.id generation is incompatible with ZooKeeper migration. Please stop using it before enabling migration (set broker.id to a value greater or equal to 0).",
       assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
   }
 
