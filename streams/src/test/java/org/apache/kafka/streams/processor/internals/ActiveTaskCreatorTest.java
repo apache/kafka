@@ -45,7 +45,6 @@ import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -57,7 +56,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
-import static org.hamcrest.core.IsNot.not;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -96,9 +94,9 @@ public class ActiveTaskCreatorTest {
     public void shouldConstructClientIdWithEosDisabled() {
         createTasks();
 
-        final Set<String> clientIds = activeTaskCreator.producerClientIds();
+        final String clientIds = activeTaskCreator.producerClientIds();
 
-        assertThat(clientIds, is(Collections.singleton("clientId-StreamThread-0-producer")));
+        assertThat(clientIds, is("clientId-StreamThread-0-producer"));
     }
 
     @Test
@@ -201,9 +199,9 @@ public class ActiveTaskCreatorTest {
         mockClientSupplier.setApplicationIdForProducer("appId");
         createTasks();
 
-        final Set<String> clientIds = activeTaskCreator.producerClientIds();
+        final String clientIds = activeTaskCreator.producerClientIds();
 
-        assertThat(clientIds, is(Collections.singleton("clientId-StreamThread-0-producer")));
+        assertThat(clientIds, is("clientId-StreamThread-0-producer"));
     }
 
     @Test
@@ -261,44 +259,6 @@ public class ActiveTaskCreatorTest {
 
         assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-    }
-
-    private void shouldReturnStreamsProducerPerTask() {
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        final StreamsProducer streamsProducer1 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 0));
-        final StreamsProducer streamsProducer2 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 1));
-
-        assertThat(streamsProducer1, not(is(streamsProducer2)));
-    }
-
-    private void shouldConstructProducerMetricsPerTask() {
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        final MetricName testMetricName1 = new MetricName("test_metric_1", "", "", new HashMap<>());
-        final Metric testMetric1 = new KafkaMetric(
-            new Object(),
-            testMetricName1,
-            (Measurable) (config, now) -> 0,
-            null,
-            new MockTime());
-        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName1, testMetric1);
-        final MetricName testMetricName2 = new MetricName("test_metric_2", "", "", new HashMap<>());
-        final Metric testMetric2 = new KafkaMetric(
-            new Object(),
-            testMetricName2,
-            (Measurable) (config, now) -> 0,
-            null,
-            new MockTime());
-        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName2, testMetric2);
-
-        final Map<MetricName, Metric> producerMetrics = activeTaskCreator.producerMetrics();
-
-        assertThat(producerMetrics, is(mkMap(mkEntry(testMetricName1, testMetric1), mkEntry(testMetricName2, testMetric2))));
     }
 
     private void shouldConstructThreadProducerMetric() {

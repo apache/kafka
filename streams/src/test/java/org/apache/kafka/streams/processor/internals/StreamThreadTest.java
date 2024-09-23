@@ -1129,7 +1129,7 @@ public class StreamThreadTest {
         final Task task = mock(Task.class);
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.singleton(task));
-        when(activeTaskCreator.producerClientIds()).thenReturn(Collections.singleton("producerClientId"));
+        when(activeTaskCreator.producerClientIds()).thenReturn("producerClientId");
 
         final StandbyTaskCreator standbyTaskCreator = mock(StandbyTaskCreator.class);
 

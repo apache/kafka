@@ -2054,7 +2054,7 @@ public class TaskManager {
         return activeTaskCreator.producerMetrics();
     }
 
-    Set<String> producerClientIds() {
+    String producerClientIds() {
         return activeTaskCreator.producerClientIds();
     }
 
