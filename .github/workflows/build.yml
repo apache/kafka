@@ -202,6 +202,6 @@ jobs:
           git checkout ${{ github.sha }} -- .github/scripts/format-all-tests.py
           git restore --staged .github/scripts/format-all-tests.py
           python .github/scripts/format-all-tests.py to-yaml
-          git add data/all-tests
+          git add data/module-tests
           git commit -m 'Update all-tests data for Run ${{ github.run_id }}'
           git push
