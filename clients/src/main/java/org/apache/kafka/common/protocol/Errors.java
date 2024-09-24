@@ -73,6 +73,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidRequiredAcksException;
 import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidShareSessionEpochException;
+import org.apache.kafka.common.errors.InvalidSubscriptionRegex;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -146,7 +147,6 @@ import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.VoterNotFoundException;
-import org.apache.kafka.common.errors.InvalidSubscriptionRegex;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
