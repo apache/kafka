@@ -65,6 +65,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -1780,13 +1781,24 @@ public class StreamsConfig extends AbstractConfig {
      * @return Map of the producer configuration.
      */
     @SuppressWarnings("WeakerAccess")
-    public Map<String, Object> getProducerConfigs(final String clientId) {
+    public Map<String, Object> getProducerConfigs(final String clientId,
+                                                  final UUID processId,
+                                                  final int threadIdx) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
 
         // generate producer configs from original properties and overridden maps
-        final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
+        final Map<String, Object> props;
+        if (eosEnabled) {
+            props = new HashMap<>(PRODUCER_EOS_OVERRIDES);
+            props.put(
+                ProducerConfig.TRANSACTIONAL_ID_CONFIG,
+                getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + processId + "-" + threadIdx
+            );
+        } else {
+            props = new HashMap<>(PRODUCER_DEFAULT_OVERRIDES);
+        }
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 

@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -55,6 +54,7 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExce
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.SerializationExceptionOrigin;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -77,7 +77,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -140,7 +139,6 @@ public class RecordCollectorTest {
 
     private final StringSerializer stringSerializer = new StringSerializer();
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
-    private final UUID processId = UUID.randomUUID();
 
     private final StreamPartitioner<String, Object> streamPartitioner =
         (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Integer.parseInt(key) % numPartitions));
@@ -156,15 +154,13 @@ public class RecordCollectorTest {
     public void setup() {
         final MockClientSupplier clientSupplier = new MockClientSupplier();
         clientSupplier.setCluster(cluster);
+        mockProducer = (MockProducer<byte[], byte[]>) clientSupplier.getProducer(config.originals());
         streamsProducer = new StreamsProducer(
-            config,
-            processId + "-StreamThread-1",
-            clientSupplier,
-            processId,
+            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+            mockProducer,
             logContext,
             Time.SYSTEM
         );
-        mockProducer = clientSupplier.producers.get(0);
         final SinkNode<?, ?> sinkNode = new SinkNode<>(
             sinkNodeName,
             new StaticTopicNameExtractor<>(topic),
@@ -1387,20 +1383,13 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                eosConfig,
-                "-StreamThread-1",
-                new MockClientSupplier() {
+                StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
+                new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
                     @Override
-                    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
-                            @Override
-                            public void abortTransaction() {
-                                functionCalled.set(true);
-                            }
-                        };
+                    public void abortTransaction() {
+                        functionCalled.set(true);
                     }
                 },
-                processId,
                 logContext,
                 Time.SYSTEM
             ),
@@ -1419,20 +1408,13 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                config,
-                processId + "-StreamThread-1",
-                new MockClientSupplier() {
+                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+                new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
                     @Override
-                    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
-                            @Override
-                            public List<PartitionInfo> partitionsFor(final String topic) {
-                                return Collections.emptyList();
-                            }
-                        };
+                    public List<PartitionInfo> partitionsFor(final String topic) {
+                        return Collections.emptyList();
                     }
                 },
-                null,
                 logContext,
                 Time.SYSTEM
             ),
@@ -1459,15 +1441,8 @@ public class RecordCollectorTest {
             logContext,
             taskId,
             new StreamsProducer(
-                eosConfig,
-                processId + "-StreamThread-1",
-                new MockClientSupplier() {
-                    @Override
-                    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return mockProducer;
-                    }
-                },
-                processId,
+                StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2,
+                mockProducer,
                 logContext,
                 Time.SYSTEM
             ),
@@ -1862,21 +1837,14 @@ public class RecordCollectorTest {
 
     private StreamsProducer getExceptionalStreamsProducerOnSend(final Exception exception) {
         return new StreamsProducer(
-            config,
-            processId + "-StreamThread-1",
-            new MockClientSupplier() {
+            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+            new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
                 @Override
-                public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                    return new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
-                        @Override
-                        public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                            callback.onCompletion(null, exception);
-                            return null;
-                        }
-                    };
+                public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                    callback.onCompletion(null, exception);
+                    return null;
                 }
             },
-            null,
             logContext,
             Time.SYSTEM
         );
@@ -1884,20 +1852,13 @@ public class RecordCollectorTest {
 
     private StreamsProducer getExceptionalStreamProducerOnPartitionsFor(final RuntimeException exception) {
         return new StreamsProducer(
-            config,
-            processId + "-StreamThread-1",
-            new MockClientSupplier() {
+            StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+            new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
                 @Override
-                public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                    return new MockProducer<byte[], byte[]>(cluster, true, byteArraySerializer, byteArraySerializer) {
-                        @Override
-                        public synchronized List<PartitionInfo> partitionsFor(final String topic) {
-                            throw exception;
-                        }
-                    };
+                public synchronized List<PartitionInfo> partitionsFor(final String topic) {
+                    throw exception;
                 }
             },
-            null,
             logContext,
             Time.SYSTEM
         );
@@ -1986,6 +1947,7 @@ public class RecordCollectorTest {
             return response.orElse(null);
         }
 
+        @SuppressWarnings("rawtypes")
         @Override
         public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                                final ProducerRecord record,

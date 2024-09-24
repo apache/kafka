@@ -347,28 +347,8 @@ public class TopologyTestDriver implements Closeable {
             }
         };
         testDriverProducer = new TestDriverProducer(
-            streamsConfig,
-            new KafkaClientSupplier() {
-                @Override
-                public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                    return producer;
-                }
-
-                @Override
-                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-                    throw new IllegalStateException();
-                }
-
-                @Override
-                public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
-                    throw new IllegalStateException();
-                }
-
-                @Override
-                public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
-                    throw new IllegalStateException();
-                }
-            },
+            StreamsConfigUtils.processingMode(streamsConfig),
+            producer,
             logContext,
             mockWallClockTime
         );
@@ -1374,11 +1354,11 @@ public class TopologyTestDriver implements Closeable {
 
     private static class TestDriverProducer extends StreamsProducer {
 
-        public TestDriverProducer(final StreamsConfig config,
-                                  final KafkaClientSupplier clientSupplier,
+        public TestDriverProducer(final StreamsConfigUtils.ProcessingMode processingMode,
+                                  final Producer<byte[], byte[]> producer,
                                   final LogContext logContext,
                                   final Time time) {
-            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, UUID.randomUUID(), logContext, time);
+            super(processingMode, producer, logContext, time);
         }
 
         @Override
