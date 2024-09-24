@@ -27,7 +27,7 @@ import java.util.TreeSet;
 /**
  * Contains structure data for Kafka MessageData classes.
  */
-final public class StructRegistry {
+public final class StructRegistry {
     private final Map<String, StructInfo> structs;
     private final Set<String> commonStructNames;
 

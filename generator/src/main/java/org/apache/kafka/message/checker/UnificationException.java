@@ -28,4 +28,3 @@ public class UnificationException extends RuntimeException {
         this(message, null);
     }
 }
-

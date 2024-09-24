@@ -48,7 +48,7 @@ public class MetadataSchemaCheckerTool {
         parseParser.addArgument("--path", "-p").
             required(true).
             help("The path to a schema JSON file.");
-        Subparser evolutionVerifierParser = subparsers.addParser("verifyEvolution").
+        Subparser evolutionVerifierParser = subparsers.addParser("verify-evolution").
             help("Verify that an evolution of a JSON file is valid.");
         evolutionVerifierParser.addArgument("--path1", "-1").
             required(true).
@@ -70,7 +70,7 @@ public class MetadataSchemaCheckerTool {
                 writer.println("Successfully parsed file as MessageSpec: " + path);
                 break;
             }
-            case "verifyEvolution": {
+            case "verify-evolution": {
                 String path1 = namespace.getString("path1");
                 String path2 = namespace.getString("path2");
                 EvolutionVerifier verifier = new EvolutionVerifier(

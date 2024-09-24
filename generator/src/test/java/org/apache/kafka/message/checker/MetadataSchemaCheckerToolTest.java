@@ -45,7 +45,7 @@ public class MetadataSchemaCheckerToolTest {
                 "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
                 "'validVersions': '0-2', 'flexibleVersions': '0+', " +
                 "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}");
-            MetadataSchemaCheckerTool.run(new String[] {"verifyEvolution",
+            MetadataSchemaCheckerTool.run(new String[] {"verify-evolution",
                 "--path1", path, "--path2", path}, new PrintStream(stream));
             assertEquals("Successfully verified evolution of path1: " + path + ", and path2: " + path,
                 stream.toString().trim());

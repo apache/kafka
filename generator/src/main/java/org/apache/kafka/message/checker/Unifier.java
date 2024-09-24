@@ -32,7 +32,9 @@ import static org.apache.kafka.message.checker.CheckerUtils.max;
 import static org.apache.kafka.message.checker.CheckerUtils.min;
 
 /**
- * The unifier attempts to unify the types of two KRPC messages.
+ * The unifier attempts to unify the types of two KRPC messages. In other words, to see them as
+ * two different points in the evolution of a single message
+ * specification.
  */
 class Unifier {
     private final MessageSpec topLevelMessage1;
@@ -201,4 +203,3 @@ class Unifier {
         return struct.fields();
     }
 }
-

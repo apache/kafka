@@ -19,6 +19,7 @@ package org.apache.kafka.message.checker;
 
 import org.apache.kafka.message.MessageSpec;
 import org.apache.kafka.message.MessageSpecType;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -48,15 +49,15 @@ public class UnifierTest {
                 "]}")).unify();
     }
 
-    final static MessageSpec TOP_LEVEL_MESSAGE_1 = new MessageSpec("TopLevelMessage",
+    static final MessageSpec TOP_LEVEL_MESSAGE_1 = new MessageSpec("TopLevelMessage",
             "0-2", null, null, null, MessageSpecType.DATA, Collections.emptyList(),
             "0+", Collections.emptyList(), false);
 
-    final static MessageSpec TOP_LEVEL_MESSAGE_2 = new MessageSpec("TopLevelMessage",
+    static final MessageSpec TOP_LEVEL_MESSAGE_2 = new MessageSpec("TopLevelMessage",
             "0-4", null, null, null, MessageSpecType.DATA, Collections.emptyList(),
             "0+", Collections.emptyList(), false);
 
-    final static MessageSpec TOP_LEVEL_MESSAGE_2_DROPPING_V0 = new MessageSpec("TopLevelMessage",
+    static final MessageSpec TOP_LEVEL_MESSAGE_2_DROPPING_V0 = new MessageSpec("TopLevelMessage",
             "1-4", null, null, null, MessageSpecType.DATA, Collections.emptyList(),
             "0+", Collections.emptyList(), false);
 

@@ -18,6 +18,7 @@
 package org.apache.kafka.message.checker;
 
 import org.apache.kafka.message.Versions;
+
 import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.message.checker.CheckerTestUtils.field;
