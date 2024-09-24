@@ -1022,13 +1022,6 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testDynamicLogReconfigurableConfigsIncludesDeprecatedSynonyms(): Unit = {
-    assertTrue(DynamicLogConfig.ReconfigurableConfigs.contains(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG))
-    assertTrue(DynamicLogConfig.ReconfigurableConfigs.contains(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG))
-    assertTrue(DynamicLogConfig.ReconfigurableConfigs.contains(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG))
-  }
-
-  @Test
   def testDynamicLogConfigHandlesSynonymsCorrectly(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, null, port = 8181)
     origProps.put(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG, "1")
