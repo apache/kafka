@@ -17,8 +17,13 @@
 
 package org.apache.kafka.message.checker;
 
+import com.fasterxml.jackson.databind.exc.ValueInstantiationException;
+import org.apache.kafka.message.MessageGenerator;
+import org.apache.kafka.message.MessageSpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.Arrays;
 
 import static org.apache.kafka.message.checker.CheckerTestUtils.toMessage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -138,5 +143,60 @@ public class EvolutionVerifierTest {
                 "{'name': 'UserId', 'type': 'int64', 'versions': '2+'}" +
                 "]}")).
             verify();
+    }
+
+
+    @Test
+    public void testFieldVersionsMustBeInsideTopLevelVersion() {
+        assertEquals("Field field2 in  message1 has versions 1+, but the message versions are only 0.",
+            assertThrows(EvolutionException.class,
+                () -> EvolutionVerifier.verifyVersionsMatchTopLevelMessage("message1",
+                    MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"LeaderAndIsrRequest\",",
+                    "  \"validVersions\": \"0\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
+                    "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"1+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class))).getMessage());
+    }
+
+    @Test
+    public void testFieldNullableVersionsMustBeInsideTopLevelVersion() {
+        assertEquals("Field field1 in  message1 has nullableVersions 1+, but the message versions are only 0.",
+            assertThrows(EvolutionException.class,
+                () -> EvolutionVerifier.verifyVersionsMatchTopLevelMessage("message1",
+                    MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"LeaderAndIsrRequest\",",
+                    "  \"validVersions\": \"0\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", \"nullableVersions\": \"1+\"},",
+                    "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"0+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class))).getMessage());
+    }
+
+    @Test
+    public void testFieldTaggedVersionsMustBeInsideTopLevelVersion() {
+        assertEquals("Field field1 in  message1 has taggedVersions 1+, but the message versions are only 0.",
+            assertThrows(EvolutionException.class,
+                () -> EvolutionVerifier.verifyVersionsMatchTopLevelMessage("message1",
+                    MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                    "{",
+                    "  \"type\": \"request\",",
+                    "  \"name\": \"LeaderAndIsrRequest\",",
+                    "  \"validVersions\": \"0\",",
+                    "  \"flexibleVersions\": \"0+\",",
+                    "  \"fields\": [",
+                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", \"taggedVersions\": \"1+\", \"tag\": 0},",
+                    "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"0+\" }",
+                    "  ]",
+                    "}")), MessageSpec.class))).getMessage());
     }
 }

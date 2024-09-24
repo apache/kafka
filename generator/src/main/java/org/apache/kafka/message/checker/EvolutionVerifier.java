@@ -17,7 +17,9 @@
 
 package org.apache.kafka.message.checker;
 
+import org.apache.kafka.message.FieldSpec;
 import org.apache.kafka.message.MessageSpec;
+import org.apache.kafka.message.StructSpec;
 
 public class EvolutionVerifier {
     private final MessageSpec topLevelMessage1;
@@ -33,6 +35,8 @@ public class EvolutionVerifier {
 
     public void verify() throws Exception {
         verifyTopLevelMessages(topLevelMessage1, topLevelMessage2);
+        verifyVersionsMatchTopLevelMessage("message1", topLevelMessage1);
+        verifyVersionsMatchTopLevelMessage("message2", topLevelMessage2);
         Unifier unifier = new Unifier(topLevelMessage1, topLevelMessage2);
         unifier.unify();
     }
@@ -59,6 +63,57 @@ public class EvolutionVerifier {
             throw new EvolutionException("Initial minimum valid version " +
                 topLevelMessage1.validVersions().lowest() + " must not be higher than final " +
                 "minimum valid version " + topLevelMessage2.validVersions().lowest());
+        }
+    }
+
+    static void verifyVersionsMatchTopLevelMessage(
+        String what,
+        MessageSpec topLevelMessage
+    ) {
+        for (FieldSpec field : topLevelMessage.fields()) {
+            verifyVersionsMatchTopLevelMessage(what, topLevelMessage, field);
+        }
+        for (StructSpec struct : topLevelMessage.commonStructs()) {
+            for (FieldSpec field : topLevelMessage.fields()) {
+                verifyVersionsMatchTopLevelMessage(what, topLevelMessage, field);
+            }
+        }
+    }
+
+    static void verifyVersionsMatchTopLevelMessage(
+        String what,
+        MessageSpec topLevelMessage,
+        FieldSpec field
+    ) {
+        if (topLevelMessage.validVersions().intersect(field.versions()).empty()) {
+            throw new EvolutionException("Field " + field.name() + " in  " + what + " has versions " +
+                field.versions() + ", but the message versions are only " +
+                topLevelMessage.validVersions() + ".");
+        }
+        if (!field.nullableVersions().empty()) {
+            if (topLevelMessage.validVersions().intersect(field.nullableVersions()).empty()) {
+                throw new EvolutionException("Field " + field.name() + " in  " + what +
+                    " has nullableVersions " + field.nullableVersions() + ", but the message " +
+                    "versions are only " + topLevelMessage.validVersions() + ".");
+            }
+        }
+        if (field.tag().isPresent()) {
+            if (topLevelMessage.validVersions().intersect(field.taggedVersions()).empty()) {
+                throw new EvolutionException("Field " + field.name() + " in  " + what +
+                    " has taggedVersions " + field.taggedVersions() + ", but the message " +
+                    "versions are only " + topLevelMessage.validVersions() + ".");
+            }
+        }
+        field.flexibleVersions().ifPresent(v -> {
+            if (topLevelMessage.validVersions().intersect(v).empty()) {
+                throw new EvolutionException("Field " + field.name() + " in  " + what +
+                    " has flexibleVersions " + v + ", but the message versions are only " +
+                    topLevelMessage.validVersions() + ".");
+            }
+
+        });
+        for (FieldSpec child : field.fields()) {
+            verifyVersionsMatchTopLevelMessage(what, topLevelMessage, child);
         }
     }
 }
