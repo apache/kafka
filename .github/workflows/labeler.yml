@@ -35,11 +35,10 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        repo=origin
-        base_branch=${{ github.event.pull_request.base.ref }}
-        git fetch $repo $base_branch
+        BASE_COMMIT="${{ github.event.pull_request.base.sha }}"
+        HEAD_COMMIT="${{ github.event.pull_request.head.sha }}"
 
-        summary=$(git diff --stat $repo/$base_branch..HEAD | tail -n 1)
+        summary=$(git diff --stat $BASE_COMMIT $HEAD_COMMIT | tail -n 1)
         echo "summary $summary"
 
         min_size=100
