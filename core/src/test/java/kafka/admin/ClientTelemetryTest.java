@@ -113,6 +113,7 @@ public class ClientTelemetryTest {
                 consumerClientId = consumer.clientInstanceId(Duration.ofSeconds(3));
                 assertNotNull(consumerClientId);
                 assertEquals(consumerClientId, consumer.clientInstanceId(Duration.ofSeconds(3)));
+                consumer.close(Duration.ofSeconds(3));
             }
             Uuid uuid = admin.clientInstanceId(Duration.ofSeconds(3));
             assertNotNull(uuid);
