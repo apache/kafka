@@ -981,10 +981,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val groupResource = new ConfigResource(ConfigResource.Type.GROUP, "none_group")
     val groupResult = client.describeConfigs(Seq(groupResource).asJava).all().get().get(groupResource)
     assertNotEquals(0, groupResult.entries().size())
-
-    val metricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "none_metric")
-    val metricResult = client.describeConfigs(Seq(metricResource).asJava).all().get().get(metricResource)
-    assertEquals(0, metricResult.entries().size())
   }
 
   @ParameterizedTest

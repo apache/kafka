@@ -372,7 +372,7 @@ public class ConfigCommandIntegrationTest {
             alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs);
 
             // Delete config
-            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet());
+            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs);
 
             // Unknown config configured should fail
             assertThrows(ExecutionException.class,
@@ -695,13 +695,12 @@ public class ConfigCommandIntegrationTest {
 
     private void deleteAndVerifyClientMetricsConfigValue(Admin client,
                                                          String clientMetricsName,
-                                                         Set<String> defaultConfigs) throws Exception {
+                                                         Map<String, String> defaultConfigs) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
             new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", clientMetricsName),
-                asList("--delete-config", String.join(",", defaultConfigs))));
+                asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
         ConfigCommand.alterConfig(client, deleteOpts);
-        // There are no default configs returned for client metrics
-        verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
+        verifyClientMetricsConfig(client, clientMetricsName, defaultConfigs);
     }
 
     private void verifyPerBrokerConfigValue(Admin client,
