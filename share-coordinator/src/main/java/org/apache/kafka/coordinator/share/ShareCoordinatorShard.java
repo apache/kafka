@@ -47,8 +47,8 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
-import org.apache.kafka.server.group.share.PartitionFactory;
-import org.apache.kafka.server.group.share.SharePartitionKey;
+import org.apache.kafka.server.share.PartitionFactory;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
