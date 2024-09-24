@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.group.share;
+package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 

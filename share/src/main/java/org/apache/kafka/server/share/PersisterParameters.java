@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.group.share;
+package org.apache.kafka.server.share;
 
 /**
  * Marker interface for parameter classes related to the {@link Persister} result classes.

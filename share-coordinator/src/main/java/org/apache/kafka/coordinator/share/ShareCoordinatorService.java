@@ -43,8 +43,8 @@ import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
-import org.apache.kafka.server.group.share.SharePartitionKey;
 import org.apache.kafka.server.record.BrokerCompressionType;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.timer.Timer;
 
 import org.slf4j.Logger;

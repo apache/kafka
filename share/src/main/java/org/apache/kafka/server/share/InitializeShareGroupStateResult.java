@@ -15,20 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.group.share;
+package org.apache.kafka.server.share;
 
-import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
+import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * This class contains the result from {@link Persister#deleteState(DeleteShareGroupStateParameters)}.
+ * This class contains the result from {@link Persister#initializeState(InitializeShareGroupStateParameters)}.
  */
-public class DeleteShareGroupStateResult implements PersisterResult {
+public class InitializeShareGroupStateResult implements PersisterResult {
     private final List<TopicData<PartitionErrorData>> topicsData;
 
-    private DeleteShareGroupStateResult(List<TopicData<PartitionErrorData>> topicsData) {
+    private InitializeShareGroupStateResult(List<TopicData<PartitionErrorData>> topicsData) {
         this.topicsData = topicsData;
     }
 
@@ -36,12 +36,13 @@ public class DeleteShareGroupStateResult implements PersisterResult {
         return topicsData;
     }
 
-    public static DeleteShareGroupStateResult from(DeleteShareGroupStateResponseData data) {
+    public static InitializeShareGroupStateResult from(InitializeShareGroupStateResponseData data) {
         return new Builder()
                 .setTopicsData(data.results().stream()
-                        .map(deleteStateResult -> new TopicData<>(deleteStateResult.topicId(), deleteStateResult.partitions().stream()
-                                .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
-                                .collect(Collectors.toList())))
+                        .map(initializeStateResult -> new TopicData<>(initializeStateResult.topicId(),
+                                initializeStateResult.partitions().stream()
+                                        .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
+                                        .collect(Collectors.toList())))
                         .collect(Collectors.toList()))
                 .build();
     }
@@ -54,8 +55,8 @@ public class DeleteShareGroupStateResult implements PersisterResult {
             return this;
         }
 
-        public DeleteShareGroupStateResult build() {
-            return new DeleteShareGroupStateResult(topicsData);
+        public InitializeShareGroupStateResult build() {
+            return new InitializeShareGroupStateResult(topicsData);
         }
     }
 }

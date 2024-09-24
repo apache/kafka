@@ -15,12 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.group.share;
+package org.apache.kafka.server.share;
 
 /**
- * This interface is implemented by classes used to contain the data for a partition with its leader epoch
- * in the interface to {@link Persister}.
+ * Marker interface for result classes related to the {@link Persister} result classes.
  */
-public interface PartitionIdLeaderEpochData extends PartitionInfoData, PartitionIdData {
-    int leaderEpoch();
+public interface PersisterResult {
 }
