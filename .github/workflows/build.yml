@@ -203,5 +203,5 @@ jobs:
           git restore --staged .github/scripts/format-all-tests.py
           python .github/scripts/format-all-tests.py to-yaml
           git add data/module-tests
-          git commit -m 'Update all-tests data for Run ${{ github.run_id }}'
+          git diff --quiet && git diff --staged --quiet || git commit -m 'Update all-tests data for Run ${{ github.run_id }}'
           git push
