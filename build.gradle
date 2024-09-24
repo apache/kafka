@@ -473,7 +473,7 @@ subprojects {
     ext {
       isGithubActions = System.getenv('GITHUB_ACTIONS') != null
       hadFailure = false  // Used to track if any tests failed, see afterSuite below
-      doneFile = project.layout.buildDirectory.file("all-tests.txt").get().asFile
+      doneFile = project.layout.buildDirectory.file("module-tests.txt").get().asFile
     }
 
     maxParallelForks = maxTestForks

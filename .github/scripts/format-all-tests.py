@@ -76,26 +76,23 @@ def yaml_to_all_tests(glob_path: str, out_file: str):
                         fp.write(f"{clazz}#{method}\n")
 
 
-
 if __name__ == "__main__":
-    """
-    """
     parser = argparse.ArgumentParser(description="Convert test suite to and from YAML.")
     subparsers = parser.add_subparsers(dest="command")
     to_yaml_parser = subparsers.add_parser("to-yaml", help="Convert the module test suite data to YAML files")
     to_yaml_parser.add_argument("--path",
                                 required=False,
-                                default="**/build/all-tests.txt",
-                                help="Path to all-tests.txt files. Glob patterns are supported.")
+                                default="**/build/module-tests.txt",
+                                help="Path to module-tests.txt files. Glob patterns are supported.")
     to_yaml_parser.add_argument("--yaml-output-dir",
                                 required=False,
-                                default="data/all-tests",
+                                default="data/module-tests",
                                 help="Directory to output YAML files")
 
     from_yaml_parser = subparsers.add_parser("from-yaml", help="Convert the YAML files to a test suite descriptor")
     from_yaml_parser.add_argument("--path",
                                   required=False,
-                                  default="data/all-tests/*.yaml",
+                                  default="data/module-tests/*.yaml",
                                   help="Path to module YAML files. Glob patterns are supported.")
     from_yaml_parser.add_argument("--output-file",
                                   required=False,

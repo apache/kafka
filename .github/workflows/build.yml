@@ -163,17 +163,18 @@ jobs:
           path: ~/.gradle/build-scan-data
           compression-level: 9
           if-no-files-found: ignore
-      - name: Archive tests run
+      - name: Archive Tests Run
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tests-run-${{ matrix.java }}
+          name: module-tests-run-${{ matrix.java }}
           path: |
-            **/build/all-tests.txt
+            **/build/module-tests.txt
           compression-level: 9
           if-no-files-found: ignore
 
   update-test-data:
+    if: github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -190,7 +191,7 @@ jobs:
       - name: Download tests run
         uses: actions/download-artifact@v4
         with:
-          name: tests-run-17
+          name: module-tests-run-17
       - name: Update test data
         if: always()
         run: |

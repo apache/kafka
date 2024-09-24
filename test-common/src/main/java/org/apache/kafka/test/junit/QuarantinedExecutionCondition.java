@@ -7,7 +7,11 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 public class QuarantinedExecutionCondition implements ExecutionCondition {
     @Override
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext extensionContext) {
-        System.err.println("#### " + extensionContext.getDisplayName());
+        extensionContext.getTestMethod().ifPresent(method -> {
+            Class<?> clazz = extensionContext.getRequiredTestClass();
+
+        });
+
         return ConditionEvaluationResult.enabled("default");
     }
 }
