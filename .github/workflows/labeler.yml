@@ -17,7 +17,6 @@ name: "Pull Request Labeler"
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
-  
 
 jobs:
   label_PRs:
@@ -29,3 +28,54 @@ jobs:
     - uses: actions/labeler@v5
       with:
         configuration-path: .github/configs/labeler.yml
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Compare trunk and PR
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        repo=origin
+        base_branch=${{ github.event.pull_request.base.ref }}
+
+        echo "kkkk $(git rev-parse HEAD)"
+        git fetch $repo $base_branch
+
+        echo "git rev-parse HEAD $(git rev-parse HEAD)"
+        echo "github.event.pull_request.head.sha $base_branch"
+        echo "$repo/$base_branch $(git rev-parse $repo/$base_branch)"
+        echo "git remote -v $(git remote -v)"
+        summary=$(git diff --stat $repo/$base_branch..HEAD | tail -n 1)
+        echo "summary $summary"
+
+        min_size=100
+        insertions=0
+        deletions=0
+
+        if [[ $summary =~ ([0-9]+)\ files?\ changed(,)?\ ([0-9]+)\ insertions?\(\+\)(,)?\ ([0-9]+)\ deletions?\(-\) ]]; then
+            files_changed=${BASH_REMATCH[1]}
+            insertions=${BASH_REMATCH[3]}
+            deletions=${BASH_REMATCH[5]}
+        elif [[ $summary =~ ([0-9]+)\ files?\ changed(,)?\ ([0-9]+)\ insertions?\(\+\) ]]; then
+            files_changed=${BASH_REMATCH[1]}
+            insertions=${BASH_REMATCH[3]}
+        elif [[ $summary =~ ([0-9]+)\ files?\ changed(,)?\ ([0-9]+)\ deletions?\(-\) ]]; then
+            files_changed=${BASH_REMATCH[1]}
+            deletions=${BASH_REMATCH[3]}
+        fi
+
+        echo "Insertions: $insertions"
+        echo "Deletions: $deletions"
+
+        echo "token $GH_TOKEN"
+        echo " inputs.repository ${{ inputs.repository }}"
+        echo "github.event.number  ${{ github.event.number }}"
+        echo "Full repository name: $GITHUB_REPOSITORY"
+
+        total_changes=$((insertions + deletions))
+        if [ "$total_changes" -lt "$min_size" ]; then
+            gh api   -H "Accept: application/vnd.github+json"  \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/$GITHUB_REPOSITORY/issues/${{ github.event.number }}/labels -f "labels[]=mirror"
+        fi
+        
